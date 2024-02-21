@@ -2,6 +2,7 @@
 \usepackage{amsmath}
 \usepackage{hyperref}
 \usepackage{tikz}
+\usetikzlibrary{arrows}
 \usepackage{float}
 
 \begin{document}
@@ -11,9 +12,9 @@
 
 Given a vector of vocoder features $\bf{f}$, use an autoencoder $E$ to map them to a dimension $d$ latent vector $\bf{z}$ where $d$ is even.  The magnitude of each element $z_i$ of $\bf{z}$ is constrained to a maximum of 1, but unlike digital modulation is continuously valued and not constrained to a discrete set of points. For bandwidth efficient transmission over the channel the elements of $\bf{z}$ are mapped to $d/2$ complex symbols $\bf{q}$. Compared to classical digital modulation, the elements of $\bf{z}$ can be considered BPSK symbols (continuously valued, analog bits), and the elements of $\bf{q}$ analog QPSK symbols.
 
-Our goal is to determine if reasonable speech quality can be obtained over a channel of bandwidth $B<3000$ Hz and SNR between 0 and 6dB, roughly the lower limit of Single Side Band (SSB) - a common power and bandwidth efficient form of analog radio communication.
+Our goal is to determine if reasonable speech quality can be obtained over a channel of bandwidth $B<3000$ Hz and SNR (measured in $B=3000$ Hz) of between 0 and 6dB, roughly the lower limit of Single Side Band (SSB) - a common power and bandwidth efficient form of analog radio communication.
 
-\section{Noise Simulation}
+\section{Simulation of AWGN Channels}
 
 The autoencoder output $\bf{z}$ is updated every $T_z=1/R_z$ seconds, giving a BPSK symbol rate of:
 \begin{equation}
@@ -25,7 +26,34 @@ R_q = \frac{d}{2T_z}
 \end{equation}
 For example with $T_z=0.04, d=80, R_q=1000$ symbols/s.
 
-We wish to simulate a channel with a user-defined $E_b/N_0$, where $E_b$ is the energy of each BPSK symbol, and $N_0$ is the noise power per unit bandwidth.  We will follow the digital PSK models and treat the signal and noise as bandpass or ``single sided".  Thus the signal and noise will be complex valued.  The energy of each BPSK symbol $E_b$ is the signal power $S$ divided by the symbol rate $R_b=1/T_b$.  The noise per unit bandwidth is the total noise power $N$ divided by the bandwidth $B$ of the system.  If we are simulating at one sample per symbol, $B=R_b$:
+\begin{figure}[H]
+\caption{Real sampled off-air signal.  We are interested in the blue bandpass interval of bandwidth $B$, which is single sided and hence complex valued. After shifting to baseband, it's power is unchanged, and it remains complex valued.}
+\vspace{5mm}
+\label{fig:bandpass}
+\begin{center}
+\begin{tikzpicture}[>=triangle 45,x=1.0cm,y=1.0cm]
+\draw[thick,->] (-6,0) -- (6,0) node [below, align=left, text width=3cm]{Frequency};
+\draw[thick,->] (0,0) -- (0,3);
+\draw (-3,0) -- (-3,2) -- (-1,2) -- (-1,0);
+\draw[blue] (1,0) -- (1,2) -- (3,2) -- (3,0);
+\draw[<->] (1,1) -- node [above]{$B$}(3,1); 
+\draw[->] (2,-0.5)  node [below]{$\omega$} -- (2,0);
+\end{tikzpicture}
+\begin{tikzpicture}[>=triangle 45,x=1.0cm,y=1.0cm]
+\draw[thick,->] (-6,0) -- (6,0) node [below, align=left, text width=3cm]{Frequency};
+\draw[thick,->] (0,0) -- (0,3);
+\draw (-5,0) -- (-5,2) -- (-3,2) -- (-3,0);
+\draw[blue] (-1,0) -- (-1,2) -- (1,2) -- (1,0);
+\draw[->] (0,-0.5)  node [below]{$\omega=0$} -- (0,0);
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
+We wish to simulate an AWGN channel with a user-defined $E_b/N_0$, where $E_b$ is the energy of each BPSK symbol, and $N_0$ is the noise power per unit bandwidth.  Consider a real valued signal sampled off air (Figure \ref{fig:bandpass}).  We will follow convention and define signal and noise power in the ``single sided" bandpass interval of the frequency spectrum with bandwidth B centered on $\omega$.  As the interval is single sided, we must use complex valued quantities to represent it.
+
+We wish to simulate a bandpass AWGN channel at baseband ($\omega=0$).  This implies a frequency shift of the complex valued signal, but the signal remains complex valued and it's power is unchanged. Note that even at baseband we must use complex valued quantities for the signal and noise.  We cannot represent a bandpass baseband signal with real valued quantities. The negative frequency component is redundant and after frequency shifting can be removed by filtering.  
+
+The energy of each BPSK symbol $E_b$ is the signal power $S$ divided by the symbol rate $R_b=1/T_b$.  The noise per unit bandwidth is the total noise power $N$ divided by the bandwidth $B$ of the system.  If we are simulating at one sample per symbol, $B=R_b$:
 \begin{equation}
 \begin{split}
 \frac{E_b}{N_0} &= \frac{S/R_b}{N/R_b} \\
@@ -33,24 +61,30 @@ We wish to simulate a channel with a user-defined $E_b/N_0$, where $E_b$ is the 
                 &= \frac{A^2}{\sigma^2}
 \end{split}
 \end{equation}
-where $A$ is the amplitude of each BPSK symbol and $\sigma^2=N$ is the variance of the complex noise (mean noise energy per sample).  Given a set point $E_b/N_0$:
+where $A$ is the amplitude of each BPSK symbol and $\sigma^2=N$ is the variance of the complex valued noise (mean noise energy per sample).  Given a set point $E_b/N_0$:
 \begin{equation}
 \label{eq:noise_sigma}
 \sigma = \frac{A}{\sqrt{E_b/N_0}}
+\end{equation}
+The complex noise sample $r_i$ can be generated as:
+\begin{equation}
+r_i = \frac{\sigma}{\sqrt{2}}(\mathcal{N}_{2i}(0,1) + j\mathcal{N}_{2i+1}(0,1))
+\end{equation}
+where $\mathcal{N}_i(0,1)$ is the $i-th$ sample of a unit variance, zero mean, real Gaussian noise source.  Note the noise power is split evenly between the real and imaginary arms. Our symbol spassing through an AWGN channel can be simulated at complex baseband as:
+\begin{equation}
+\begin{split}
+\hat{z}_i &= z_i + r_i \\
+\hat{q}_i &= q_i + r_i
+\end{split}
 \end{equation}
 If the noise is zero mean, we can estimate $\sigma^2$ over $K$ noise samples $r_i$ as:
 \begin{equation}
 \sigma^2 = E[|r_i|^2] = \frac{1}{K}\sum_{i=0}^{K-1}|r_i|^2 
 \end{equation}
-The noise sample $r_i$ an be generated as:
-\begin{equation}
-r_i = \frac{\sigma}{\sqrt{2}}(\mathcal{N}_{2i}(0,1) + j\mathcal{N}_{2i+1}(0,1))
-\end{equation}
-where $\mathcal{N}_i(0,1)$ is the $i-th$ sample of a unit variance, zero mean, real Gaussian noise source.
 
 \section{SNR Measurement}
 
-In order to compare with other methods of speech communication, it is useful to formulate expressions for estimating SNR from the BPSK and QPSK symbols.  The Signal to Noise ratio (SNR) is given by:
+In order to compare with other methods of speech communication that have varying bandwidths $B$, it is useful to formulate expressions for estimating SNR from the BPSK and QPSK symbols.  The Signal to Noise ratio (SNR) is given by:
 \begin{equation}
 \label{eq:snr_theory}
 \begin{split}
@@ -58,7 +92,7 @@ In order to compare with other methods of speech communication, it is useful to 
             &= \frac{E_qR_q}{N_0B}
 \end{split}
 \end{equation}
-A noise bandwidth $B$ needs to be selected; common choices for HF radio are $B=3000$ Hz to compare with existing analog and digital voice modes, and $B=1$ to obtain a normalised $C/N_0$ carrier power to noise density ratio.
+A noise bandwidth $B$ needs to be selected; common choices are $B=R_b$, in which case $S/N=E_b/N_0$; or for HF radio are $B=3000$ Hz to compare with existing analog and digital voice waveforms; or $B=1$ to obtain a normalised $C/N_0$ carrier power to noise density ratio.
  
 At one sample per symbol, the power, the mean energy of each QPSK symbol over a window of $K$ samples is given by:
 \begin{equation}
@@ -70,7 +104,7 @@ E_b = E_q/2
 \end{equation}
 For example if the symbol amplitude is $A=1, E_b=A^2=1$, then $E_q=1+1=2$.
 
-To simulate transmission over multipath channels we arrange the QPSK symbols as $N_c$ parallel carriers, each running at a symbol rate of $R_s=R_q/N_c$ symbols/s, where $R_s$ is chosen based on delay spread considerations.  Typical values for HF modems are $N_c=20$ and $R_s=50$ Hz. However the OFDM carriers are arranged such that the total symbol rate over the channel remains constant.  So for a given signal power $E_q$ and $E_b$ remain constant (Table \ref{tab:constant_eb}).
+To model transmission over multipath channels using OFDM we arrange the QPSK symbols as $N_c$ parallel carriers, each running at a symbol rate of $R_s=R_q/N_c$ symbols/s, where $R_s$ is chosen based on delay spread considerations.  Typical values for HF modems are $N_c=20$ and $R_s=50$ Hz. However the OFDM carriers are arranged such that the total symbol rate over the channel remains constant.  So for a given signal power $E_q$ and $E_b$ remain constant (Table \ref{tab:constant_eb}).
 
 \begin{table} [H]
 \centering
