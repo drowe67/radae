@@ -373,7 +373,7 @@ class RADAE(nn.Module):
         tx_sym = z[:,:,::2] + 1j*z[:,:,1::2]
         qpsk_shape = tx_sym.shape
         
-        # reshape into sequence of OFDM frames
+        # reshape into sequence of OFDM modem frames
         tx_sym = torch.reshape(tx_sym,(num_batches,num_timesteps_at_rate_Rs,self.Nc))
 
         tx = None
@@ -385,6 +385,10 @@ class RADAE(nn.Module):
             tx = torch.matmul(tx_sym, self.Winv)
             
             # TODO Add cyclic prefix, reshape to (batch,timessteps*M), time domain multipath simulation
+
+            # simulate Power Amplifier (PA) that saturates at abs(tx) ~ 1
+            tx_norm = tx/torch.abs(tx)
+            tx = torch.tanh(torch.abs(tx)) * tx_norm
 
             rx = tx + sigma*torch.randn_like(tx)/m.sqrt(self.M)
 

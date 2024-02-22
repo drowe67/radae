@@ -48,8 +48,8 @@ mkdir -p ${out_dir}
 rx=$(mktemp).f32
 
 ./inference.sh ${model} ${fullfile} ${out_dir}/${filename}_${EbNodB}dB.wav --EbNodB ${EbNodB} --write_rx ${rx} --rate_Fs
-# spectrogram
-echo "pkg load signal; rx=load_f32('${rx}',1); plot_specgram(rx, Fs=8000, 0, 2000); print('-dpng','${out_dir}/${filename}_${EbNodB}dB_spec.png'); quit" | octave-cli -qf
+# spectrogram 
+echo "pkg load signal; rx=load_f32('${rx}',1); plot_specgram(rx(1:2:end), Fs=8000, 0, 2000); print('-dpng','${out_dir}/${filename}_${EbNodB}dB_spec.png'); quit" | octave-cli -qf
 # listen to the modem signal
 sox -r 8k -e float -b 32 -c 1 ${rx} ${out_dir}/${filename}_${EbNodB}dB_rx.wav sinc 0.3-2.7k
 

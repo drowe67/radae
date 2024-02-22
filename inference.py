@@ -147,11 +147,13 @@ if __name__ == '__main__':
    features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
    features_hat.tofile(args.features_hat)
 
+   # write real valued latent vectors
    if len(args.write_latent):
       z_hat = output["z_hat"].cpu().detach().numpy().flatten().astype('float32')
       z_hat.tofile(args.write_latent)
    
+   # write complex valued rate Fs time domain rx samples
    if len(args.write_rx):
-      rx = output["rx"].cpu().detach().numpy().flatten().astype('float32')
+      rx = output["rx"].cpu().detach().numpy().flatten().astype('csingle')
       rx.tofile(args.write_rx)
    
