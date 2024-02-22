@@ -23,7 +23,7 @@ fi
 # Approximation of Hilbert clipper type compressor.  
 # TODO: modify to make PAPR constant, indep of input level. Best run this on single
 # samples rather than files from many speakers with different levels
-
+# TODO: maybe some HF enhancement (but note possibilities are endless here - there is no standard)
 function analog_compressor {
     input_file=$1
     output_file=$2
@@ -62,5 +62,5 @@ analog_compressor $speech_8k $speech_comp
 # TODO: check this is not speech sample specific, we want same SNR (C/No) as radae signal
 ch $speech_comp - --No $((-EbNodB-16)) | sox -t .s16 -r 8000 -c 1 - ${out_dir}/${filename}_${EbNodB}dB_ssb.wav
 
-#TODO ssb spectrogram
+# TODO ssb spectrogram
 

@@ -70,7 +70,7 @@ The complex noise sample $r_i$ can be generated as:
 \begin{equation}
 r_i = \frac{\sigma}{\sqrt{2}}(\mathcal{N}_{2i}(0,1) + j\mathcal{N}_{2i+1}(0,1))
 \end{equation}
-where $\mathcal{N}_i(0,1)$ is the $i-th$ sample of a unit variance, zero mean, real Gaussian noise source.  Note the noise power is split evenly between the real and imaginary arms. Our symbol spassing through an AWGN channel can be simulated at complex baseband as:
+where $\mathcal{N}_i(0,1)$ is the $i-th$ sample of a unit variance, zero mean, real Gaussian noise source.  Note the noise power is split evenly between the real and imaginary arms. Our symbols passing through an AWGN channel can be simulated at complex baseband as:
 \begin{equation}
 \begin{split}
 \hat{z}_i &= z_i + r_i \\
@@ -92,7 +92,7 @@ In order to compare with other methods of speech communication that have varying
             &= \frac{E_qR_q}{N_0B}
 \end{split}
 \end{equation}
-A noise bandwidth $B$ needs to be selected; common choices are $B=R_b$, in which case $S/N=E_b/N_0$; or for HF radio are $B=3000$ Hz to compare with existing analog and digital voice waveforms; or $B=1$ to obtain a normalised $C/N_0$ carrier power to noise density ratio.
+A noise bandwidth $B$ needs to be selected; common choices are $B=R_b$, in which case $S/N=E_b/N_0$; for HF radio $B=3000$ Hz to compare with existing analog and digital voice waveforms; or $B=1$ to obtain a normalised $C/N_0$ carrier power to noise density ratio.
  
 At one sample per symbol, the power, the mean energy of each QPSK symbol over a window of $K$ samples is given by:
 \begin{equation}
