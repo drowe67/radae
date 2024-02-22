@@ -45,6 +45,7 @@ parser.add_argument('--latent-dim', type=int, help="number of symbols produced b
 parser.add_argument('--EbNodB', type=float, default=0, help='BPSK Eb/No in dB')
 parser.add_argument('--range_EbNo', action='store_true', help='Use a range of Eb/No during training')
 parser.add_argument('--mp_file', type=str, default="", help='path to multipath file, rate Rs time steps by Nc carriers .f32 format')
+parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 
 training_group = parser.add_argument_group(title="training parameters")
 training_group.add_argument('--batch-size', type=int, help="batch size, default: 32", default=32)
@@ -101,8 +102,8 @@ num_features = 20
 feature_file = args.features
 
 # model
-checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_EbNo)
-model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo)
+checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_EbNo, args.rate_Fs)
+model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, rate_Fs = args.rate_Fs)
 
 if type(args.initial_checkpoint) != type(None):
     checkpoint = torch.load(args.initial_checkpoint, map_location='cpu')

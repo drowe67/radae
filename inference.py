@@ -129,14 +129,27 @@ if __name__ == '__main__':
 
    # Lets check actual Eq/No, Eb/No and SNR, and monitor assumption |z| ~ 1, especially for multipath.
    # If |z| ~ 1, Eb ~ 1, Eq ~ 2, and the measured SNR should match the set point SNR. 
-   tx_sym = output["tx_sym"].cpu().detach().numpy()
-   Eq_meas = np.var(tx_sym)
-   No = model.get_sigma()**2
-   EqNodB_meas = 10*np.log10(Eq_meas/No)
-   Rq = Rs*Nc
    B = 3000
-   SNRdB_meas = EqNodB_meas + 10*np.log10(Rq/B)
-   print(f"Measured: Eq: {Eq_meas:5.2f} EqNodB: {EqNodB_meas:5.2f} EbNodB: {EqNodB_meas-3:5.2f} SNR3kdB: {SNRdB_meas:5.2f}")
+   if args.rate_Fs:
+      # rate Fs simulation
+      tx = output["tx"].cpu().detach().numpy()
+      S = np.var(tx)
+      N = output["sigma"]**2                            # noise power in B=Fs
+      CNodB_meas = 10*np.log10(S*model.get_Fs()/N)
+      EbNodB_meas = CNodB_meas - 10*np.log10(model.get_Rb())
+      SNRdB_meas = CNodB_meas - 10*np.log10(B)          # SNR in B=3000
+      PAPRdB = 20*np.log10(np.max(np.abs(tx))/np.std(tx))
+      print(f"EbNodB: {EbNodB_meas-3:5.2f} CNodB: {CNodB_meas:5.2f} SNR3kdB: {SNRdB_meas:5.2f} PAPRdB: {PAPRdB:5.2f}")
+   else:
+      # rate Rs simulation
+      tx_sym = output["tx_sym"].cpu().detach().numpy()
+      Eq_meas = np.var(tx_sym)
+      No = output["sigma"]**2
+      EqNodB_meas = 10*np.log10(Eq_meas/No)
+      Rq = Rs*Nc
+      SNRdB_meas = EqNodB_meas + 10*np.log10(Rq/B)
+      print(f"Measured: Eq: {Eq_meas:5.2f} EqNodB: {EqNodB_meas:5.2f} EbNodB: {EqNodB_meas-3:5.2f} SNR3kdB: {SNRdB_meas:5.2f}")
+
    if output["tx"] != None:
       tx = output["tx"].cpu().detach().numpy()
       PAPRdB = 20*np.log10(np.max(np.abs(tx))/np.std(tx))
@@ -153,7 +166,7 @@ if __name__ == '__main__':
       z_hat.tofile(args.write_latent)
    
    # write complex valued rate Fs time domain rx samples
-   if len(args.write_rx):
+   if len(args.write_rx) and args.rate_Fs:
       rx = output["rx"].cpu().detach().numpy().flatten().astype('csingle')
       rx.tofile(args.write_rx)
    

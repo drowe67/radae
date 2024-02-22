@@ -267,6 +267,7 @@ class RADAE(nn.Module):
 
         self.feature_dim = feature_dim
         self.latent_dim  = latent_dim
+        self.EbNodB = EbNodB
         self.range_EbNo = range_EbNo
         self.ber_test = ber_test
         self.multipath_delay = multipath_delay # Multipath Poor (MPP) path delay (s)
@@ -289,19 +290,16 @@ class RADAE(nn.Module):
         self.Rz = 1/self.Tz
         self.Rb =  latent_dim/self.Tz                  # BPSK symbol rate (symbols/s or Hz)
 
-        # set up noise sigma if doing a fixed Eb/No run (e.g. inference)
+        # SNR calcs for a fixed Eb/No run (e.g. inference)
+        # TODO: maybe move this to inference.sh
         if self.range_EbNo == False:
-            self.A = 1                                 # Amplitude of BPSK symbols ~ 1 due to encoder tanh()
-            self.Eb = self.A**2                        # Energy of BPSK symbols
             EbNo = 10**(EbNodB/10)                     # linear Eb/No
-            self.sigma  = self.A/m.sqrt(EbNo)          # AWGN simulation noise std dev, power spread between real and imag
-
-            # SNR calcs
-            B = 3000                                   # bandwidth for measuring noise power (Hz)
+            B = 3000                                   # (kinda arbitrary) bandwidth for measuring noise power (Hz)
             SNR = (EbNo)*(self.Rb/B)
             SNRdB = 10*m.log10(SNR)
-            print(f"EbNodB.: {EbNodB:5.2f}  sigma: {self.sigma:5.2f}")
-            print(f"SNR3kdB: {SNRdB:5.2f}  Rb...:  {self.Rb:7.2f}")
+            CNodB = 10*m.log10(EbNo*self.Rb)
+            print(f"EbNodB.: {EbNodB:5.2f}  C/No dB: {CNodB:5.2f}")
+            print(f"SNR3kdB: {SNRdB:5.2f}  Rb.....:  {self.Rb:7.2f}")
 
         # set up OFDM "modem frame" parameters to support multipath simulation.  Modem frame is Nc carriers 
         # wide in frequency and Ns symbols in duration 
@@ -315,7 +313,7 @@ class RADAE(nn.Module):
         self.Rs = Rs
         self.Ns = Ns
         self.Nc = Nc
-        print(f"Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d}")
+        print(f"Nsmf...: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d}")
 
         # DFT matrices for Nc freq samples, M time samples (could be a FFT but matrix convenient for small, non power of 2 DFTs)
         self.Fs = 8000                                               # sample rate of modem signal 
@@ -327,23 +325,18 @@ class RADAE(nn.Module):
            self.Winv[c,:] = torch.exp( 1j*torch.arange(self.M)*self.w[c])/self.M
            self.Wfwd[:,c] = torch.exp(-1j*torch.arange(self.M)*self.w[c])
 
-    def get_sigma(self):
-        return self.sigma
-    
     def get_Rs(self):
         return self.Rs
-    
     def get_Rb(self):
         return self.Rb
-
     def get_Nc(self):
         return self.Nc
-    
     def get_enc_stride(self):
         return self.enc_stride
-    
     def get_Ns(self):
         return self.Ns
+    def get_Fs(self):
+        return self.Fs
     
     def forward(self, features, H):
         
@@ -351,17 +344,16 @@ class RADAE(nn.Module):
         num_timesteps_at_rate_Rs = int((num_ten_ms_timesteps // self.enc_stride)*self.Ns)
 
         # For every OFDM modem time step, we need one channel sample for each carrier
-        print(features.shape,H.shape, features.device, H.device)
+        #print(features.shape,H.shape, features.device, H.device)
         assert (H.shape[0] == num_batches)
         assert (H.shape[1] == num_timesteps_at_rate_Rs)
         assert (H.shape[2] == self.Nc)
 
-        # complex AWGN noise
+        # AWGN noise
         if self.range_EbNo:
             EbNodB = -2 + 15*torch.rand(num_batches, 1, 1, device=z.device)
-            sigma = 10**(-EbNodB/20)
         else:
-            sigma = self.sigma
+            EbNodB = self.EbNodB
 
         # run encoder, outputs sequence of latents that each describe 40ms of speech
         z = self.core_encoder(features)
@@ -384,14 +376,18 @@ class RADAE(nn.Module):
             # IDFT to transform Nc carriers to M time domain samples
             tx = torch.matmul(tx_sym, self.Winv)
             
-            # TODO Add cyclic prefix, reshape to (batch,timessteps*M), time domain multipath simulation
+            # TODO Add cyclic prefix, reshape to (batch,timesteps*M), time domain multipath simulation
 
             # simulate Power Amplifier (PA) that saturates at abs(tx) ~ 1
             tx_norm = tx/torch.abs(tx)
             tx = torch.tanh(torch.abs(tx)) * tx_norm
 
-            rx = tx + sigma*torch.randn_like(tx)/m.sqrt(self.M)
-
+            # determine sigma assuming rms power var(tx) = 1 (will be a few dB less due to PA backoff)
+            S = 1
+            EbNo = 10**(EbNodB/10)
+            sigma = m.sqrt(S*self.Fs/(EbNo*self.Rb))
+            rx = tx + sigma*torch.randn_like(tx)
+            
             # DFT to transform M time domain samples to Nc carriers
             rx_sym = torch.matmul(rx, self.Wfwd)
         else:
@@ -402,6 +398,7 @@ class RADAE(nn.Module):
             tx_sym = tx_sym * H
 
             # note noise power sigma**2 is split between real and imag channels
+            sigma = 10**(-EbNodB/20)
             n = sigma*torch.randn_like(tx_sym)   
             rx_sym = tx_sym + n
 
@@ -425,5 +422,6 @@ class RADAE(nn.Module):
             "z_hat"  : z_hat,
             "tx_sym" : tx_sym,
             "tx"     : tx,
-            "rx"     : rx
+            "rx"     : rx,
+            "sigma" : sigma
        }
