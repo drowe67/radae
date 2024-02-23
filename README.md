@@ -22,13 +22,25 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
 ```
 
 ## Training
-```
-python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 --plot_loss training_features_file.f32 model_dir_name
-```
+
+1. Vanilla fixed Eb/No:
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 --plot_loss training_features_file.f32 model_dir_name
+   ```
+
+1. Rate Rs with multipath, over range of Eb/No:
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 moedel05 --mp_file h_mpp.f32 --range_EbNo --plot_loss
+   ```
+
+1. Rate Fs with simulated PA:
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model06 --plot_loss --rate_Fs --range_EbNo
+   ```
 
 ## Inference
 
-`inference.py` is used for inference, which has been wrapped up in a helper script `inferences.sh`.  It runs by default on the CPU, but will run on the GPU with the `--cuda-visible-devices 0` option.
+`inference.py` is used for inference, which has been wrapped up in a helper script `inference.sh`.  Inference runs by default on the CPU, but will run on the GPU with the `--cuda-visible-devices 0` option.
 
 1. Generate `out.wav` at Eb/No = 10 dB:
    ```
@@ -69,12 +81,13 @@ python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 5
 | model03 | --range_EbNo -2 ... 13 dB, modified sqrt loss |
 | model04 | --range_EbNo -2 ... 13 dB, orginal loss, noise might be 3dB less after calibration |
 | model05 | --range_EbNo, --mp_file h_mpp.f32, sounds good on MPP and AWGN at a range of SNR - no pops |
+| model06 | --range_EbNo, --rate_Fs, trained on AWGN with PA model, PAPR about 1dB, OK at a range of Eb/No |
 
 # Notes
 
 1. Issue: ~We would like smooth degredation from high SNR to low SNR, rather than training and operating at one SNR.  Currently if trained at 10dB, not as good as model trained at 0dB when tested at 0dB.  Also, if trained at 0dB, quality is reduced when tested on high SNR channel, compared to model trained at high SNR.~  This has been dealt with by training at a range of SNRs.
 
-1. Issue: occasional pops in output speech (e.g. model01/03/04, vk5dgr_test 0 and 100dB, model03 all 100dB).  Speaker depedence, e.g. predictor struggling with uneven pitch tracks of some speakers?  Network encountering data it hasn't seen before? Some bug unrealted to training? (note model05 with multipath in loop is pop free)
+1. Issue: ~occasional pops in output speech (e.g. model01/03/04, vk5dgr_test 0 and 100dB, model03 all 100dB).  Speaker depedence, e.g. predictor struggling with uneven pitch tracks of some speakers?  Network encountering data it hasn't seen before? Some bug unrealted to training?~ model05 with multipath in loop is pop free
 
 1. Issue: vk5dgr_test.wav sounds poorer than LPCNet/wav/all.wav - same speaker, but former much louder.
 
@@ -97,7 +110,7 @@ python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 5
 
 1. ~Ability to inject different levels of noise at test time.~
 
-1. Using OFDM matrix, simulate symbol by symbol fading channel.  This is a key test.  Need an efficient way to generate fading data, maybe create using Octave for now, an hours worth, or rotate around different channels while training.
+1. ~Using OFDM matrix, simulate symbol by symbol fading channel.  This is a key test.  Need an efficient way to generate fading data, maybe create using Octave for now, an hours worth, or rotate around different channels while training.~
 
 1. ~Confirm SNR calculations, maybe print them, or have SNR3k | Es/No as cmd line options~
 
