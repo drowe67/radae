@@ -38,8 +38,8 @@ function analog_compressor {
 
 model=$1
 fullfile=$2
-EbNodB=$3
-out_dir=$4
+out_dir=$3
+EbNodB=$4
 
 filename=$(basename -- "$fullfile")
 filename="${filename%.*}"
@@ -49,9 +49,9 @@ rx=$(mktemp).f32
 
 ./inference.sh ${model} ${fullfile} ${out_dir}/${filename}_${EbNodB}dB.wav --EbNodB ${EbNodB} --write_rx ${rx} --rate_Fs
 # spectrogram 
-echo "pkg load signal; rx=load_f32('${rx}',1); plot_specgram(rx(1:2:end), Fs=8000, 0, 2000); print('-dpng','${out_dir}/${filename}_${EbNodB}dB_spec.png'); quit" | octave-cli -qf
-# listen to the modem signal
-sox -r 8k -e float -b 32 -c 1 ${rx} ${out_dir}/${filename}_${EbNodB}dB_rx.wav sinc 0.3-2.7k
+echo "pkg load signal; rx=load_f32('${rx}',1); plot_specgram(rx, Fs=8000, 0, 2000); print('-dpng','${out_dir}/${filename}_${EbNodB}dB_spec.png'); quit" | octave-cli -qf
+# listen to the modem signal (treat IQ as stereo)
+sox -r 8k -e float -b 32 -c 2 ${rx} ${out_dir}/${filename}_${EbNodB}dB_rx.wav sinc 0.3-2.7k
 
 # SSB simulation
 speech_8k=$(mktemp).s16

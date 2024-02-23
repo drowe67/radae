@@ -124,14 +124,15 @@ class CoreEncoder(nn.Module):
     FRAMES_PER_STEP = 4
     CONV_KERNEL_SIZE = 4
 
-    def __init__(self, feature_dim, output_dim):
+    def __init__(self, feature_dim, output_dim, rate_Fs=False):
 
         super(CoreEncoder, self).__init__()
 
         # hyper parameters
         self.feature_dim        = feature_dim
         self.output_dim         = output_dim
-         
+        self.rate_Fs            = rate_Fs
+
         # derived parameters
         self.input_dim = self.FRAMES_PER_STEP * self.feature_dim
 
@@ -164,9 +165,6 @@ class CoreEncoder(nn.Module):
         # fewer vectors than the input has because of that
         x = torch.reshape(features, (features.size(0), features.size(1) // self.FRAMES_PER_STEP, self.FRAMES_PER_STEP * features.size(2)))
 
-        batch = x.size(0)
-        device = x.device
-
         # run encoding layer stack
         x = n(torch.tanh(self.dense_1(x)))
         x = torch.cat([x, n(self.gru1(x)[0])], -1)
@@ -179,7 +177,12 @@ class CoreEncoder(nn.Module):
         x = torch.cat([x, n(self.conv4(x))], -1)
         x = torch.cat([x, n(self.gru5(x)[0])], -1)
         x = torch.cat([x, n(self.conv5(x))], -1)
-        z = torch.tanh(self.z_dense(x))
+
+        if self.rate_Fs:
+            # power unconstrained here, constrained in time domain forward() instead
+            z = self.z_dense(x)
+        else:
+            z = torch.tanh(self.z_dense(x))
 
         return z
 
@@ -274,7 +277,7 @@ class RADAE(nn.Module):
         self.rate_Fs = rate_Fs
 
         # TODO: nn.DataParallel() shouldn't be needed
-        self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim))
+        self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, rate_Fs=rate_Fs))
         self.core_decoder =  nn.DataParallel(CoreDecoder(latent_dim, feature_dim))
         #self.core_encoder = CoreEncoder(feature_dim, latent_dim)
         #self.core_decoder = CoreDecoder(latent_dim, feature_dim)
@@ -325,6 +328,10 @@ class RADAE(nn.Module):
            self.Winv[c,:] = torch.exp( 1j*torch.arange(self.M)*self.w[c])/self.M
            self.Wfwd[:,c] = torch.exp(-1j*torch.arange(self.M)*self.w[c])
 
+    def move_device(self, device):
+        # TODO: work out why we need this step
+        self.Winv = self.Winv.to(device)
+        self.Wfwd = self.Wfwd.to(device)
     def get_Rs(self):
         return self.Rs
     def get_Rb(self):
@@ -351,7 +358,7 @@ class RADAE(nn.Module):
 
         # AWGN noise
         if self.range_EbNo:
-            EbNodB = -2 + 15*torch.rand(num_batches, 1, 1, device=z.device)
+            EbNodB = -2 + 15*torch.rand(num_batches, 1, 1, device=features.device)
         else:
             EbNodB = self.EbNodB
 
@@ -364,10 +371,10 @@ class RADAE(nn.Module):
         # assuming |z| ~ 1 after training
         tx_sym = z[:,:,::2] + 1j*z[:,:,1::2]
         qpsk_shape = tx_sym.shape
-        
+
         # reshape into sequence of OFDM modem frames
         tx_sym = torch.reshape(tx_sym,(num_batches,num_timesteps_at_rate_Rs,self.Nc))
-
+   
         tx = None
         rx = None
         if self.rate_Fs:
@@ -385,7 +392,7 @@ class RADAE(nn.Module):
             # determine sigma assuming rms power var(tx) = 1 (will be a few dB less due to PA backoff)
             S = 1
             EbNo = 10**(EbNodB/10)
-            sigma = m.sqrt(S*self.Fs/(EbNo*self.Rb))
+            sigma = torch.sqrt(torch.tensor(S*self.Fs/(EbNo*self.Rb)))
             rx = tx + sigma*torch.randn_like(tx)
             
             # DFT to transform M time domain samples to Nc carriers

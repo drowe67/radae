@@ -140,7 +140,8 @@ if __name__ == '__main__':
 
     # push model to device
     model.to(device)
-
+    model.move_device(device)
+    
     # Main training loop
     if args.plot_loss:
         plt.figure(1)

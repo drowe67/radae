@@ -139,7 +139,7 @@ if __name__ == '__main__':
       EbNodB_meas = CNodB_meas - 10*np.log10(model.get_Rb())
       SNRdB_meas = CNodB_meas - 10*np.log10(B)          # SNR in B=3000
       PAPRdB = 20*np.log10(np.max(np.abs(tx))/np.std(tx))
-      print(f"EbNodB: {EbNodB_meas-3:5.2f} CNodB: {CNodB_meas:5.2f} SNR3kdB: {SNRdB_meas:5.2f} PAPRdB: {PAPRdB:5.2f}")
+      print(f"Measured: EbNodB: {EbNodB_meas-3:5.2f} CNodB: {CNodB_meas:5.2f} SNR3kdB: {SNRdB_meas:5.2f} PAPRdB: {PAPRdB:5.2f}")
    else:
       # rate Rs simulation
       tx_sym = output["tx_sym"].cpu().detach().numpy()
@@ -149,11 +149,6 @@ if __name__ == '__main__':
       Rq = Rs*Nc
       SNRdB_meas = EqNodB_meas + 10*np.log10(Rq/B)
       print(f"Measured: Eq: {Eq_meas:5.2f} EqNodB: {EqNodB_meas:5.2f} EbNodB: {EqNodB_meas-3:5.2f} SNR3kdB: {SNRdB_meas:5.2f}")
-
-   if output["tx"] != None:
-      tx = output["tx"].cpu().detach().numpy()
-      PAPRdB = 20*np.log10(np.max(np.abs(tx))/np.std(tx))
-      print(f"PAPRdB: {PAPRdB:5.2f}")
 
    features_hat = output["features_hat"]
    features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
