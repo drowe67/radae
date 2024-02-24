@@ -1,4 +1,7 @@
 """
+/* Copyright (c) 2024 modifications for radio autoencoder project
+   by David Rowe */
+   
 /* Copyright (c) 2022 Amazon
    Written by Jan Buethe */
 /*

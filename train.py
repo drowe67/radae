@@ -1,4 +1,7 @@
 """
+/* Copyright (c) 2024 modifications for radio autoencoder project
+   by David Rowe */
+
 /* Copyright (c) 2022 Amazon
    Written by Jan Buethe */
 /*
@@ -141,7 +144,7 @@ if __name__ == '__main__':
     # push model to device
     model.to(device)
     model.move_device(device)
-    
+
     # Main training loop
     if args.plot_loss:
         plt.figure(1)
@@ -165,9 +168,6 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 features = features.to(device)
                 H = H.to(device)
-                #H_ = H.cpu().numpy().flatten().astype('float32')
-                #H_.tofile("h_test.f32")
-                #quit()
                 output = model(features,H)
                 total_loss = distortion_loss(features, output["features_hat"])
                 total_loss.backward()
