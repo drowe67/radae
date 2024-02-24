@@ -4,13 +4,14 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows}
 \usepackage{float}
+\usepackage{array}
 
 \begin{document}
 
-\title{Analog Transmission of Vocoder Features}
+\title{Analog Transmission of Vocoder Features over Radio Channels}
 \maketitle
 
-Given a vector of vocoder features $\bf{f}$, use an autoencoder $E$ to map them to a dimension $d$ latent vector $\bf{z}$ where $d$ is even.  The magnitude of each element $z_i$ of $\bf{z}$ is constrained to a maximum of 1, but unlike digital modulation is continuously valued and not constrained to a discrete set of points. For bandwidth efficient transmission over the channel the elements of $\bf{z}$ are mapped to $d/2$ complex symbols $\bf{q}$. Compared to classical digital modulation, the elements of $\bf{z}$ can be considered BPSK symbols (continuously valued, analog bits), and the elements of $\bf{q}$ analog QPSK symbols.
+Given a vector of vocoder features $\bf{f}$, use an autoencoder $E$ to map them to a dimension $d$ latent vector $\bf{z}$ where $d$ is even.  Unlike digital modulation, each element $z_i$ of $\bf{z}$ is continuously valued and not constrained to a discrete set of points.  For bandwidth efficient transmission over the channel the elements of $\bf{z}$ are mapped to $d/2$ complex symbols $\bf{q}$. Compared to classical digital modulation, the elements of $\bf{z}$ can be considered BPSK symbols (continuously valued, analog bits), and the elements of $\bf{q}$ analog QPSK symbols.
 
 Our goal is to determine if reasonable speech quality can be obtained over a channel of bandwidth $B<3000$ Hz and SNR (measured in $B=3000$ Hz) of between 0 and 6dB, roughly the lower limit of Single Side Band (SSB) - a common power and bandwidth efficient form of analog radio communication.
 
@@ -82,7 +83,7 @@ If the noise is zero mean, we can estimate $\sigma^2$ over $K$ noise samples $r_
 \sigma^2 = E[|r_i|^2] = \frac{1}{K}\sum_{i=0}^{K-1}|r_i|^2 
 \end{equation}
 
-\section{SNR Measurement}
+\subsection{SNR Measurement}
 
 In order to compare with other methods of speech communication that have varying bandwidths $B$, it is useful to formulate expressions for estimating SNR from the BPSK and QPSK symbols.  The Signal to Noise ratio (SNR) is given by:
 \begin{equation}
@@ -92,7 +93,7 @@ In order to compare with other methods of speech communication that have varying
             &= \frac{E_qR_q}{N_0B}
 \end{split}
 \end{equation}
-A noise bandwidth $B$ needs to be selected; common choices are $B=R_b$, in which case $S/N=E_b/N_0$; for HF radio $B=3000$ Hz to compare with existing analog and digital voice waveforms; or $B=1$ to obtain a normalised $C/N_0$ carrier power to noise density ratio.
+A noise bandwidth $B$ needs to be selected; common choices are $B=R_b$, in which case $S/N=E_b/N_0$; for HF radio $B=3000$ Hz to compare with existing analog and digital voice waveforms; or $B=1$ to obtain a normalised $C/N_0$ carrier power to noise density ratio - useful for comparing waveforms with different bandwidths.
  
 At one sample per symbol, the power, the mean energy of each QPSK symbol over a window of $K$ samples is given by:
 \begin{equation}
@@ -121,6 +122,8 @@ To model transmission over multipath channels using OFDM we arrange the QPSK sym
 \label{tab:constant_eb}
 \end{table}
 
+\subsection{Calibration and Testing}
+
 In order to evaluate the ML system early in the development process it is important to ensure the noise is correctly calibrated. The expressions above can be used to check the noise injection process:
 \begin{enumerate}
 \item Set a target $E_b/N_0$ for the simulation run, and calculate $\sigma$ using (\ref{eq:noise_sigma}).
@@ -129,13 +132,81 @@ In order to evaluate the ML system early in the development process it is import
 \item Calculate measured SNR using (\ref{eq:snr_theory}) and compare.
 \end{enumerate}
 
-The calibration of the noise injection can be checked by replacing the encoder output $z_i$ with discrete PSK symbols to create a digital modem, then measuring the BER at $E_b/N_0$ points, and comparing to the theoretical BER given by:
+The calibration of the noise injection can be checked by replacing the encoder output $z_i$ with discrete PSK symbols to create a digital modem, then measuring the BER at $E_b/N_0$ points. The theoretical BER over an AWGN channel is:
 \begin{equation}
-\begin{split}
-BER_{awgn} &= 0.5erfc(\sqrt{E_b/N_0}) \\
-BER_{multipath} &= 0.5 \left(1-\sqrt{\frac{E_b/N_0}{E_b/N_0+1}} \right)
-\end{split}
+\label{eq:ber_awgn}
+BER = 0.5erfc(\sqrt{E_b/N_0})
 \end{equation}
+For a multipath channel:
+\begin{equation}
+\label{eq:ber_multipath}
+BER = 0.5 \left(1-\sqrt{\frac{E_b/N_0}{E_b/N_0+1}} \right)
+\end{equation}
+
+\section{Comparison with Other Speech Waveforms}
+
+We wish to compare our radio autoencoder with existing waveforms used for speech transmission over radio channels.  We start with the assumption that we have a transmitter of $S$ watts, and an AWGN channel with a spectral noise density of $N_0$ watts/Hz. As the speech waveforms being considered vary in bandwidth we will choose $C/N_0$ as the SNR metric.
+
+The $C/N_0$ at the demodulator input of a terrestrial radio receiver is given by:
+\begin{equation}
+\frac{C}{N_0} = P - PAPR - L_{path} - NF + 174
+\end{equation}
+where $P$ is the peak power of the transmitter power amplifier, $PAPR$ is the Peak to Average Power Ratio of the waveform, $L_{path}$ is the path loss, $NF$ is the noise figure of the receiver.  For example consider a 400 MHz FM hand held radio over a 1km urban (non line of site) path.  The radio has a 1W (30 dBm) power output, $L_{path}=120$ dB, with noise dominated by ambient EMI such that $NF=10$ dB. $C/N_0 = 30 - 0 - 120 - 10 + 174 = 74$ dB/Hz, sufficient for good quality speech (Table \ref{tab:waveforms_good}).
+
+Note that $C/N_0$ in the demodulator is a function of PAPR.  A high PAPR reduces the $C/N_0$ at the receiver.  We effectively ``back off" the transmitter power from the potential peak power $P$ by the PAPR.  As PAPR varies by waveform, this should be included in any metric for comparsion of waveforms.  We define $P/N_0$ as:
+\begin{equation}
+P/N_0 = C/N_0 + PAPR
+\end{equation} 
+A waveform that delivers intelligable speech at a low $P/N_0$ is the target.  A low PAPR waveform has other desirable properties, such as greater PA efficiency, longer battery life, and low cost semiconductors.
+
+\begin{table} [H]
+\centering
+\begin{tabular}{  m{3.5cm} | m{7cm}  }
+ \hline
+ Waveform             & Threshold \\
+ \hline
+ Single Sideband      & 0dB SNR in a 3000 Hz, Tx speech compressor \\
+ Frequency Modulation & -120 dBm quoted for many NBFM radios, 54dB above thermal noise floor \\
+ FreeDV 700D          & 10\% PER theshold at -2dB SNR in 3000 Hz \\
+ Radio Autoencoder    & Intelligable speech at $E_b/N_0=-8$ dB, $R_b=2000$ Hz\\
+ \hline
+\end{tabular}
+\caption{Thresholds for speech link closure for each waveform. The link is considered closed when the speech is barely intelligable to a trained listener.}
+\label{tab:waveforms_thresh}
+\end{table}
+
+\begin{table} [H]
+\centering
+\begin{tabular}{l l r r r r r}
+ \hline
+ Waveform             & Abbr  & Bandwidth & PAPR & $C/N_0$ & $P/N_0$ & $\Delta$ \\
+ \hline
+ Single Sideband      & SSB   & 2000  &  6 & 35 & 41 & -15 \\
+ Frequency Modulation & NBFM  & 16000 &  0 & 50 & 50 & -24 \\
+ FreeDV 700D          & 700D  & 1100  &  4 & 32 & 36 & -10 \\
+ Radio Autoencoder    & radAE & 1200  &  1 & 25 & 26 &  0 \\
+ \hline
+\end{tabular}
+\caption{Comparison of link closure by waveform over AWGN channels. Bandwidth refers to the RF bandwidth in Hz required over the radio channel.}
+\label{tab:waveforms_linkclosure}
+\end{table}
+
+\begin{table} [H]
+\centering
+\begin{tabular}{l l r r r}
+ \hline
+ Waveform             & Audio BW & $C/N_0$ & $P/N_0$ & $\Delta$ \\
+ \hline
+ Radio Autoencoder    & 8000 & 30 & 31 &  0  \\
+ Frequency Modulation & 3000 & 60 & 60 & -29 \\
+ Single Sideband      & 2000 & 55 & 62 & -31 \\
+ FreeDV 700D          & 3500 & 34 & 38 & -7  \\
+ \hline
+\end{tabular}
+\caption{Comparison of good quality ``arm chair copy" by speech waveform over AWGN channels. They are ranked in terms of maximum achievable speech quality. The radio autoencoder delivers wideband (8000 Hz) audio.}
+\label{tab:waveforms_good}
+\end{table}
+
 \section{Glossary}
 
 \begin{table} [H]
@@ -145,11 +216,15 @@ BER_{multipath} &= 0.5 \left(1-\sqrt{\frac{E_b/N_0}{E_b/N_0+1}} \right)
  Symbol & Explanation & Units \\
  \hline
  $B$ & noise or signal bandwidth & Hz \\
+ $C$ & Carrier (transmitter) power $C=S$ for this study \\
+ $C/N_0$ & Carrier power/spectral noise density \\
  $d$ & dimension of latent vector $\bf{z}$ \\
  $E_b/N_0$ & energy per BPSK symbol on spectral noise density \\
  $E_q/N_0$ & energy per QPSK symbol on spectral noise density \\
  $N$ & total noise power & Watts \\
  $N_c$ & Number of carriers  \\
+ $N_0$ & Noise power in 1 Hz of bandwidth  \\
+ $P/N_0$ & Peak trasnmitter power/spectral noise density \\
  $\bf{q}$ & vector of QPSK symbols \\ 
  $q_i$ & single QPSK symbol, element of $\bf{q}$ \\ 
  $R_b$ & BPSK symbol rate & symbols/second \\
