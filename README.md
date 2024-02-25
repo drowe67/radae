@@ -1,6 +1,12 @@
-# Setup
+# Attributions and License
 
-## LPCNet
+This software was derived from RDOVAE Python source (Github xiph/opus.git opus-ng branch opus/dnn/torch/rdovae):
+
+J.-M. Valin, J. Büthe, A. Mustafa, [Low-Bitrate Redundancy Coding of Speech Using a Rate-Distortion-Optimized Variational Autoencoder](https://jmvalin.ca/papers/valin_dred.pdf), *Proc. ICASSP*, arXiv:2212.04453, 2023. ([blog post](https://www.amazon.science/blog/neural-encoding-enables-more-efficient-recovery-of-lost-audio-packets))
+
+The RDOVAE derived Python source code is released under the two-clause BSD license.
+
+# LPCNet setup
 
 ```
 git clone git@github.com:xiph/opus.git
@@ -21,7 +27,7 @@ Playing on a remote machine:
 scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
 ```
 
-## Training
+# Training
 
 1. Vanilla fixed Eb/No:
    ```
@@ -38,7 +44,7 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
    python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model06 --plot_loss --rate_Fs --range_EbNo
    ```
 
-## Inference
+# Inference
 
 `inference.py` is used for inference, which has been wrapped up in a helper script `inference.sh`.  Inference runs by default on the CPU, but will run on the GPU with the `--cuda-visible-devices 0` option.
 
@@ -67,7 +73,7 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
    octave:91> analog_plots; do_plots('z_hat.f32') 
    ```
 
-## Tests
+# Tests
 
 1. BER test to check simulation modem calibration `--ber_test`
 2. Fixed multipath channel test `--mp_test`.
