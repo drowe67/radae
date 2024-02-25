@@ -41,8 +41,7 @@ import sys
 import os
 from torch.nn.utils import weight_norm
 
-# Quantization and rate related utily functions
-
+# Quantization and loss utility functions
 
 def noise_quantize(x):
     """ simulates quantization with addition of random uniform noise """
@@ -50,7 +49,7 @@ def noise_quantize(x):
 
 
 # loss functions for vocoder features
-def distortion_loss(y_true, y_pred, rate_lambda=None):
+def distortion_loss(y_true, y_pred):
 
     if y_true.size(-1) != 20:
         raise ValueError('distortion loss is designed to work with 20 features')
@@ -61,7 +60,8 @@ def distortion_loss(y_true, y_pred, rate_lambda=None):
     pitch_weight = torch.relu(y_true[..., 19:] + 0.5) ** 2
 
     loss = torch.mean(ceps_error ** 2 + 3. * (10/18) * torch.abs(pitch_error) * pitch_weight + (1/18) * corr_error ** 2, dim=-1)
-    loss = torch.mean(loss)
+    loss = torch.mean(loss, dim=-1)
+
     # reduce bias towards lower Eb/No when training over a range of Eb/No
     #loss = torch.mean(torch.sqrt(torch.mean(loss, dim=1)))
 
@@ -276,7 +276,7 @@ class RADAE(nn.Module):
         self.EbNodB = EbNodB
         self.range_EbNo = range_EbNo
         self.ber_test = ber_test
-        self.multipath_delay = multipath_delay # Multipath Poor (MPP) path delay (s)
+        self.multipath_delay = multipath_delay  # two path multipath model path delay (s)
         self.rate_Fs = rate_Fs
 
         # TODO: nn.DataParallel() shouldn't be needed
@@ -395,7 +395,7 @@ class RADAE(nn.Module):
             # determine sigma assuming rms power var(tx) = 1 (will be a few dB less due to PA backoff)
             S = 1
             EbNo = 10**(EbNodB/10)
-            sigma = torch.sqrt(torch.tensor(S*self.Fs/(EbNo*self.Rb)))
+            sigma = (S*self.Fs/(EbNo*self.Rb))**(0.5)
             rx = tx + sigma*torch.randn_like(tx)
             
             # DFT to transform M time domain samples to Nc carriers
@@ -409,7 +409,7 @@ class RADAE(nn.Module):
 
             # note noise power sigma**2 is split between real and imag channels
             sigma = 10**(-EbNodB/20)
-            n = sigma*torch.randn_like(tx_sym)   
+            n = sigma*torch.randn_like(tx_sym)
             rx_sym = tx_sym + n
 
         # demap QPSK symbols
@@ -433,5 +433,6 @@ class RADAE(nn.Module):
             "tx_sym" : tx_sym,
             "tx"     : tx,
             "rx"     : rx,
-            "sigma" : sigma
+            "sigma"  : sigma,
+            "EbNodB" : EbNodB
        }

@@ -60,7 +60,7 @@ class RADAEDataset(torch.utils.data.Dataset):
                 quit()
         else:
             self.H = np.ones((self.num_sequences*self.mp_sequence_length,Nc))
-        print(f"dataloader: sequence_length: {self.sequence_length:d} num_sequences: {self.sequence_length:d} mp_sequence_length: {mp_sequence_length:d}")
+        print(f"dataloader: sequence_length: {self.sequence_length:d} num_sequences: {self.num_sequences:d} mp_sequence_length: {mp_sequence_length:d}")
         print(self.features.shape, self.H.shape)
 
     def __len__(self):

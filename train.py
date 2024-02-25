@@ -58,8 +58,8 @@ training_group.add_argument('--sequence-length', type=int, help='sequence length
 training_group.add_argument('--lr-decay-factor', type=float, help='learning rate decay factor, default: 2.5e-5', default=2.5e-5)
 
 training_group.add_argument('--initial-checkpoint', type=str, help='initial checkpoint to start training from, default: None', default=None)
-training_group.add_argument('--train-decoder-only', action='store_true', help='freeze encoder and statistical model and train decoder only')
 training_group.add_argument('--plot_loss', action='store_true', help='plot loss versus epoch as we train')
+training_group.add_argument('--plot_EbNo', action='store_true', help='plot loss versus EbNo for final epoch')
 
 args = parser.parse_args()
 
@@ -94,7 +94,7 @@ log_interval = 10
 
 # device
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-print(device)
+
 # model parameters
 latent_dim = args.latent_dim
 
@@ -109,20 +109,11 @@ checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_Eb
 model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, rate_Fs = args.rate_Fs)
 
 if type(args.initial_checkpoint) != type(None):
+    print(f"Loading from checkpoint: {args.initial_checkpoint}")
     checkpoint = torch.load(args.initial_checkpoint, map_location='cpu')
     model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 checkpoint['state_dict']    = model.state_dict()
-
-if args.train_decoder_only:
-    if args.initial_checkpoint is None:
-        print("warning: training decoder only without providing initial checkpoint")
-
-    for p in model.core_encoder.module.parameters():
-        p.requires_grad = False
-
-    for p in model.statistical_model.parameters():
-        p.requires_grad = False
 
 # dataloader
 Nc = model.get_Nc()
@@ -145,11 +136,14 @@ if __name__ == '__main__':
     model.to(device)
     model.move_device(device)
 
-    # Main training loop
     if args.plot_loss:
         plt.figure(1)
         loss_epoch=np.zeros((args.epochs+1))
+    
+    # loss v EbNo stats
+    EbNodB_loss = np.zeros((dataloader.__len__()*batch_size,2))
 
+    # Main training loop
     for epoch in range(1, epochs + 1):
 
         print(f"training epoch {epoch}...")
@@ -169,13 +163,16 @@ if __name__ == '__main__':
                 features = features.to(device)
                 H = H.to(device)
                 output = model(features,H)
-                total_loss = distortion_loss(features, output["features_hat"])
+                loss_by_batch = distortion_loss(features, output["features_hat"])
+                total_loss = torch.mean(loss_by_batch)
                 total_loss.backward()
                 optimizer.step()
                 scheduler.step()
 
                 # collect running stats
                 running_total_loss += float(total_loss.detach().cpu())
+                EbNodB_loss[i*batch_size:(i+1)*batch_size,0] = output["EbNodB"].reshape(batch_size).cpu()
+                EbNodB_loss[i*batch_size:(i+1)*batch_size,1] = loss_by_batch.cpu().detach().numpy()
 
                 if (i + 1) % log_interval == 0:
                     current_loss = (running_total_loss - previous_total_loss) / log_interval
@@ -191,6 +188,7 @@ if __name__ == '__main__':
             plt.clf()
             plt.semilogy(range(1,epoch+1),loss_epoch[1:epoch+1])
             plt.grid()
+            plt.axis([1,epoch+1,0.01,2])
             plt.show(block=False)
             plt.pause(0.01)
 
@@ -202,5 +200,30 @@ if __name__ == '__main__':
         torch.save(checkpoint, checkpoint_path)
 
         if args.plot_loss:
-           plt.savefig(args.output + '_loss.png')
- 
+            plt.savefig(args.output + '_loss.png')
+            np.savetxt(args.output + '_loss' + '.txt', loss_epoch[1:epoch+1])
+
+    # optionally plot loss against EbNodB for final epoch
+    if args.plot_EbNo:
+        EbNodB_min = int(np.floor(np.min(EbNodB_loss[:,0])))
+        EbNodB_max = int(np.ceil(np.max(EbNodB_loss[:,0])))
+        EbNodB_mean_loss = np.zeros((EbNodB_max-EbNodB_min,2))
+        # group the losses from training into 1dB wide bins
+        r = np.arange(EbNodB_min,EbNodB_max)
+        for i in np.arange(len(r)):
+            EbNodB = r[i]
+            x = np.where(np.abs(EbNodB_loss[:,0] - EbNodB) < 0.5)
+            EbNodB_mean_loss[i,0] = EbNodB
+            EbNodB_mean_loss[i,1] = np.mean(EbNodB_loss[x,1])
+            #print(EbNodB, EbNodB_mean_loss[EbNodB])
+        plt.figure(2)
+        plt.plot(EbNodB_mean_loss[:,0],EbNodB_mean_loss[:,1],'b+-')
+        plt.axis([EbNodB_min-1,EbNodB_max,0.1,0.35])
+        plt.grid()
+        plt.xlabel('Eb/No (dB)')
+        plt.ylabel('Loss')
+        plt.show(block=False)
+        plt.savefig(args.output + '_loss_EbNodB.png')
+
+        np.savetxt(args.output + '_loss_EbNodB' + '.txt', EbNodB_mean_loss)
+
