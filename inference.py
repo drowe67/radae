@@ -54,6 +54,7 @@ parser.add_argument('--ber_test', action='store_true', help='send random PSK bit
 parser.add_argument('--mp_file', type=str, default="", help='path to multipath file, rate Rs time steps by Nc carriers .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--write_rx', type=str, default="", help='path to output file of rate Fs rx samples in ..IQIQ...f32 format')
+parser.add_argument('--phase_offset', action='store_true', help='random phase offset for each sequence')
 args = parser.parse_args()
 
 # set visible devices
@@ -70,7 +71,7 @@ num_features = 20
 num_used_features = 20
 
 # load model from a checkpoint file
-model = RADAE(num_features, latent_dim, args.EbNodB, ber_test = args.ber_test, rate_Fs = args.rate_Fs)
+model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rate_Fs=args.rate_Fs, phase_offset=args.phase_offset)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
@@ -138,6 +139,7 @@ if __name__ == '__main__':
       tx = output["tx"].cpu().detach().numpy()
       S = np.var(tx)
       N = output["sigma"]**2                            # noise power in B=Fs
+      print(S,N)
       CNodB_meas = 10*np.log10(S*model.get_Fs()/N)
       EbNodB_meas = CNodB_meas - 10*np.log10(model.get_Rb())
       SNRdB_meas = CNodB_meas - 10*np.log10(B)          # SNR in B=3000

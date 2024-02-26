@@ -127,14 +127,14 @@ class CoreEncoder(nn.Module):
     FRAMES_PER_STEP = 4
     CONV_KERNEL_SIZE = 4
 
-    def __init__(self, feature_dim, output_dim, rate_Fs=False):
+    def __init__(self, feature_dim, output_dim, papr_opt=False):
 
         super(CoreEncoder, self).__init__()
 
         # hyper parameters
         self.feature_dim        = feature_dim
         self.output_dim         = output_dim
-        self.rate_Fs            = rate_Fs
+        self.papr_opt           = papr_opt
 
         # derived parameters
         self.input_dim = self.FRAMES_PER_STEP * self.feature_dim
@@ -181,7 +181,7 @@ class CoreEncoder(nn.Module):
         x = torch.cat([x, n(self.gru5(x)[0])], -1)
         x = torch.cat([x, n(self.conv5(x))], -1)
 
-        if self.rate_Fs:
+        if self.papr_opt:
             # power unconstrained here, constrained in time domain forward() instead
             z = self.z_dense(x)
         else:
@@ -266,7 +266,9 @@ class RADAE(nn.Module):
                  multipath_delay = 0.002,
                  range_EbNo = False,
                  ber_test = False,
-                 rate_Fs = False
+                 rate_Fs = False,
+                 papr_opt = False,
+                 phase_offset = False
                 ):
 
         super(RADAE, self).__init__()
@@ -278,9 +280,11 @@ class RADAE(nn.Module):
         self.ber_test = ber_test
         self.multipath_delay = multipath_delay  # two path multipath model path delay (s)
         self.rate_Fs = rate_Fs
+        self.papr_opt = papr_opt
+        self.phase_offset = phase_offset
 
         # TODO: nn.DataParallel() shouldn't be needed
-        self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, rate_Fs=rate_Fs))
+        self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, papr_opt=papr_opt))
         self.core_decoder =  nn.DataParallel(CoreDecoder(latent_dim, feature_dim))
         #self.core_encoder = CoreEncoder(feature_dim, latent_dim)
         #self.core_decoder = CoreDecoder(latent_dim, feature_dim)
@@ -374,7 +378,7 @@ class RADAE(nn.Module):
         # assuming |z| ~ 1 after training
         tx_sym = z[:,:,::2] + 1j*z[:,:,1::2]
         qpsk_shape = tx_sym.shape
-
+ 
         # reshape into sequence of OFDM modem frames
         tx_sym = torch.reshape(tx_sym,(num_batches,num_timesteps_at_rate_Rs,self.Nc))
    
@@ -385,20 +389,35 @@ class RADAE(nn.Module):
 
             # IDFT to transform Nc carriers to M time domain samples
             tx = torch.matmul(tx_sym, self.Winv)
+            tx = torch.reshape(tx,(num_batches,num_timesteps_at_rate_Rs*self.M))
             
-            # TODO Add cyclic prefix, reshape to (batch,timesteps*M), time domain multipath simulation
+            # TODO Add cyclic prefix, time domain multipath simulation
 
             # simulate Power Amplifier (PA) that saturates at abs(tx) ~ 1
-            tx_norm = tx/torch.abs(tx)
-            tx = torch.tanh(torch.abs(tx)) * tx_norm
+            # TODO: this has problems when magnitude goes thru 0 (e.g. QPSK), change formulation
+            if self.papr_opt:
+                tx_norm = tx/torch.abs(tx)
+                tx = torch.tanh(torch.abs(tx)) * tx_norm
 
-            # determine sigma assuming rms power var(tx) = 1 (will be a few dB less due to PA backoff)
-            S = 1
+            # insert per batch phase offset
+            if self.phase_offset:
+                phase = 2.0*torch.pi*torch.rand(num_batches)
+                print(phase[:10])
+                tx = tx*torch.exp(1j*phase)
+
+            # AWGN noise
             EbNo = 10**(EbNodB/10)
-            sigma = (S*self.Fs/(EbNo*self.Rb))**(0.5)
+            if self.papr_opt:
+                # determine sigma assuming rms power var(tx) = 1 (will be a few dB less due to PA backoff)
+                S = 1
+                sigma = (S*self.Fs/(EbNo*self.Rb))**(0.5)
+            else:
+                # similar to rate Rs, but scale noise by M samples/symbol
+                sigma = (EbNo*self.M)**(-0.5)
             rx = tx + sigma*torch.randn_like(tx)
-            
+                        
             # DFT to transform M time domain samples to Nc carriers
+            rx = torch.reshape(rx,(num_batches,num_timesteps_at_rate_Rs,self.M))
             rx_sym = torch.matmul(rx, self.Wfwd)
         else:
             # Simulate channel at one sample per QPSK symbol (Fs=Rs) --------------------------------
