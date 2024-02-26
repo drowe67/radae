@@ -145,15 +145,15 @@ BER = 0.5 \left(1-\sqrt{\frac{E_b/N_0}{E_b/N_0+1}} \right)
 
 \section{Comparison with Other Speech Waveforms}
 
-We wish to compare our radio autoencoder with existing waveforms used for speech transmission over radio channels.  We start with the assumption that we have a transmitter of $S$ watts, and an AWGN channel with a spectral noise density of $N_0$ watts/Hz. As the speech waveforms being considered vary in bandwidth we will choose $C/N_0$ as the SNR metric.
+We wish to compare our radio autoencoder with existing waveforms used for speech transmission over radio channels.  We start with the assumption that we have a transmitter of $C$ watts, and an AWGN channel with a spectral noise density of $N_0$ watts/Hz. As the speech waveforms being considered vary in bandwidth we will choose $C/N_0$ as the SNR metric.
 
-The $C/N_0$ at the demodulator input of a terrestrial radio receiver is given by:
+The $C/N_0$ (in dBHz) at the demodulator input of a terrestrial radio receiver is given by:
 \begin{equation}
 \frac{C}{N_0} = P - PAPR - L_{path} - NF + 174
 \end{equation}
-where $P$ is the peak power of the transmitter power amplifier, $PAPR$ is the Peak to Average Power Ratio of the waveform, $L_{path}$ is the path loss, $NF$ is the noise figure of the receiver.  For example consider a 400 MHz FM hand held radio over a 1km urban (non line of site) path.  The radio has a 1W (30 dBm) power output, $L_{path}=120$ dB, with noise dominated by ambient EMI such that $NF=10$ dB. $C/N_0 = 30 - 0 - 120 - 10 + 174 = 74$ dB/Hz, sufficient for good quality speech (Table \ref{tab:waveforms_good}).
+where $P$ is the peak power of the transmitter power amplifier, $PAPR$ is the Peak to Average Power Ratio of the waveform, $L_{path}$ is the path loss, $NF$ is the noise figure of the receiver.  For example consider a 400 MHz FM hand held radio over a 1km urban (non line of site) path.  The radio has a 1W (30 dBm) power output, $L_{path}=120$ dB, with noise dominated by ambient EMI such that $NF=10$ dB. $C/N_0 = 30 - 0 - 120 - 10 + 174 = 74$ dBHz, sufficient for good quality speech (Table \ref{tab:waveforms_good}).
 
-Note that $C/N_0$ in the demodulator is a function of PAPR.  A high PAPR reduces the $C/N_0$ at the receiver.  We effectively ``back off" the transmitter power from the potential peak power $P$ by the PAPR.  As PAPR varies by waveform, this should be included in any metric for comparsion of waveforms.  We define $P/N_0$ as:
+Note that $C/N_0$ in the demodulator is a function of PAPR.  A high PAPR reduces the $C/N_0$ at the receiver.  We effectively ``back off" the transmitter power from the potential peak power $P$ by the PAPR.  As PAPR varies by waveform, this should be included in any metric for comparison of waveforms.  We define $P/N_0$ as:
 \begin{equation}
 P/N_0 = C/N_0 + PAPR
 \end{equation} 
