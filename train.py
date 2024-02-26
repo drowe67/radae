@@ -49,6 +49,8 @@ parser.add_argument('--EbNodB', type=float, default=0, help='BPSK Eb/No in dB')
 parser.add_argument('--range_EbNo', action='store_true', help='Use a range of Eb/No during training')
 parser.add_argument('--mp_file', type=str, default="", help='path to multipath file, rate Rs time steps by Nc carriers .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
+parser.add_argument('--phase_offset', action='store_true', help='random phase offset for each sequence')
+parser.add_argument('--freq_offset', action='store_true', help='random freq offset for each sequence')
 
 training_group = parser.add_argument_group(title="training parameters")
 training_group.add_argument('--batch-size', type=int, help="batch size, default: 32", default=32)
@@ -106,7 +108,8 @@ feature_file = args.features
 
 # model
 checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_EbNo, args.rate_Fs)
-model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, rate_Fs = args.rate_Fs)
+model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, rate_Fs=args.rate_Fs, 
+              phase_offset=args.phase_offset, freq_offset=args.freq_offset)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
@@ -171,7 +174,7 @@ if __name__ == '__main__':
 
                 # collect running stats
                 running_total_loss += float(total_loss.detach().cpu())
-                EbNodB_loss[i*batch_size:(i+1)*batch_size,0] = output["EbNodB"].reshape(batch_size).cpu()
+                EbNodB_loss[i*batch_size:(i+1)*batch_size,0] = output["EbNodB"].reshape(batch_size)
                 EbNodB_loss[i*batch_size:(i+1)*batch_size,1] = loss_by_batch.cpu().detach().numpy()
 
                 if (i + 1) % log_interval == 0:
@@ -188,7 +191,6 @@ if __name__ == '__main__':
             plt.clf()
             plt.semilogy(range(1,epoch+1),loss_epoch[1:epoch+1])
             plt.grid()
-            plt.axis([1,epoch+1,0.01,2])
             plt.show(block=False)
             plt.pause(0.01)
 

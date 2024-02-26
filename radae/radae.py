@@ -268,7 +268,8 @@ class RADAE(nn.Module):
                  ber_test = False,
                  rate_Fs = False,
                  papr_opt = False,
-                 phase_offset = False
+                 phase_offset = False,
+                 freq_offset = False
                 ):
 
         super(RADAE, self).__init__()
@@ -282,6 +283,7 @@ class RADAE(nn.Module):
         self.rate_Fs = rate_Fs
         self.papr_opt = papr_opt
         self.phase_offset = phase_offset
+        self.freq_offset = freq_offset
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, papr_opt=papr_opt))
@@ -365,9 +367,9 @@ class RADAE(nn.Module):
 
         # AWGN noise
         if self.range_EbNo:
-            EbNodB = -2 + 15*torch.rand(num_batches, 1, 1, device=features.device)
+            EbNodB = -2 + 15*torch.rand(num_batches,1,1,device=features.device)
         else:
-            EbNodB = self.EbNodB
+            EbNodB = torch.tensor(self.EbNodB)
 
         # run encoder, outputs sequence of latents that each describe 40ms of speech
         z = self.core_encoder(features)
@@ -385,28 +387,43 @@ class RADAE(nn.Module):
         tx = None
         rx = None
         if self.rate_Fs:
+            num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*self.M
+
             # Simulate channel at M=Fs/Rs samples per QPSK symbol ---------------------------------
 
             # IDFT to transform Nc carriers to M time domain samples
             tx = torch.matmul(tx_sym, self.Winv)
-            tx = torch.reshape(tx,(num_batches,num_timesteps_at_rate_Rs*self.M))
-            
+            tx = torch.reshape(tx,(num_batches,num_timesteps_at_rate_Fs))
+           
             # TODO Add cyclic prefix, time domain multipath simulation
 
             # simulate Power Amplifier (PA) that saturates at abs(tx) ~ 1
-            # TODO: this has problems when magnitude goes thru 0 (e.g. QPSK), change formulation
+            # TODO: this has problems when magnitude goes thru 0 (e.g. --ber_test), change formulation
             if self.papr_opt:
                 tx_norm = tx/torch.abs(tx)
                 tx = torch.tanh(torch.abs(tx)) * tx_norm
 
-            # insert per batch phase offset
+            # insert per batch phase and freq offset
             if self.phase_offset:
-                phase = 2.0*torch.pi*torch.rand(num_batches)
-                print(phase[:10])
-                tx = tx*torch.exp(1j*phase)
+                phase = torch.zeros_like(tx)
+                phase[:,] = 2.0*torch.pi*torch.rand(num_batches,1,device=tx.device)
+                phase = torch.exp(1j*phase)
+                tx = tx*phase
+            if self.freq_offset:
+                freq_offset = 20*(torch.rand(num_batches,1) - 0.5)
+                #freq_offset= -15*torch.ones(num_batches,1)
+                #print(freq_offset)
+                omega = freq_offset*2*torch.pi/self.Fs
+                lin_phase = torch.zeros_like(tx)
+                lin_phase[:,] = omega*torch.arange(num_timesteps_at_rate_Fs)
+                lin_phase = torch.exp(1j*lin_phase)
+                #print(freq_offset[:3], lin_phase.shape, lin_phase[:2,:4])
+                tx = tx*lin_phase
 
             # AWGN noise
+            EbNodB = torch.reshape(EbNodB,(num_batches,1))
             EbNo = 10**(EbNodB/10)
+            #print(EbNo.shape)
             if self.papr_opt:
                 # determine sigma assuming rms power var(tx) = 1 (will be a few dB less due to PA backoff)
                 S = 1
@@ -415,7 +432,8 @@ class RADAE(nn.Module):
                 # similar to rate Rs, but scale noise by M samples/symbol
                 sigma = (EbNo*self.M)**(-0.5)
             rx = tx + sigma*torch.randn_like(tx)
-                        
+            #print(rx.shape)
+            
             # DFT to transform M time domain samples to Nc carriers
             rx = torch.reshape(rx,(num_batches,num_timesteps_at_rate_Rs,self.M))
             rx_sym = torch.matmul(rx, self.Wfwd)
@@ -452,6 +470,6 @@ class RADAE(nn.Module):
             "tx_sym" : tx_sym,
             "tx"     : tx,
             "rx"     : rx,
-            "sigma"  : sigma,
-            "EbNodB" : EbNodB
+            "sigma"  : sigma.cpu().numpy(),
+            "EbNodB" : EbNodB.cpu().numpy()
        }

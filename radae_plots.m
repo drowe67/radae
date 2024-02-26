@@ -2,7 +2,7 @@
 # Octave helper script to generate some plots form inference.py outputs
 
 1;
-pkg load statistics;
+pkg load statistics signal;
 
 function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
     z=load_f32(z_fn,1);

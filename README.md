@@ -44,6 +44,11 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
    python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model06 --plot_loss --rate_Fs --range_EbNo
    ```
 
+1. Rate Fs with phase and freq offsets:
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model07 --mp_file h_mpp.f32 --range_EbNo --plot_loss --rate_Fs --phase_offset --freq_offset
+   ```
+
 # Inference
 
 `inference.py` is used for inference, which has been wrapped up in a helper script `inference.sh`.  Inference runs by default on the CPU, but will run on the GPU with the `--cuda-visible-devices 0` option.
@@ -70,7 +75,7 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
    ```
    Then use Octave to plot scatter diagram using z_hat latents from channel:
    ```
-   octave:91> analog_plots; do_plots('z_hat.f32') 
+   octave:91> radae_plots; do_plots('z_hat.f32') 
    ```
 
 # Tests
@@ -88,6 +93,7 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
 | model04 | --range_EbNo -2 ... 13 dB, orginal loss, noise might be 3dB less after calibration |
 | model05 | --range_EbNo, --mp_file h_mpp.f32, sounds good on MPP and AWGN at a range of SNR - no pops |
 | model06 | --range_EbNo, --rate_Fs, trained on AWGN with PA model, PAPR about 1dB, OK at a range of Eb/No |
+| model07 | --range_EbNo, --rate_Fs, trained on AWGN freq and phase offsets, OK donw to Eb/No -3, some pops |
 
 # Notes
 

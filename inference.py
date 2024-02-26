@@ -54,7 +54,8 @@ parser.add_argument('--ber_test', action='store_true', help='send random PSK bit
 parser.add_argument('--mp_file', type=str, default="", help='path to multipath file, rate Rs time steps by Nc carriers .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--write_rx', type=str, default="", help='path to output file of rate Fs rx samples in ..IQIQ...f32 format')
-parser.add_argument('--phase_offset', action='store_true', help='random phase offset for each sequence')
+parser.add_argument('--phase_offset', action='store_true', help='random phase and freq offset for each sequence')
+parser.add_argument('--freq_offset', action='store_true', help='random freq offset for each sequence')
 args = parser.parse_args()
 
 # set visible devices
@@ -71,7 +72,8 @@ num_features = 20
 num_used_features = 20
 
 # load model from a checkpoint file
-model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rate_Fs=args.rate_Fs, phase_offset=args.phase_offset)
+model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rate_Fs=args.rate_Fs, 
+              phase_offset=args.phase_offset, freq_offset=args.freq_offset)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
@@ -138,13 +140,14 @@ if __name__ == '__main__':
       # rate Fs simulation
       tx = output["tx"].cpu().detach().numpy()
       S = np.var(tx)
-      N = output["sigma"]**2                            # noise power in B=Fs
-      print(S,N)
+      N = output["sigma"]**2                          # noise power in B=Fs
+      N = N.item()
+      #print(S, N)
       CNodB_meas = 10*np.log10(S*model.get_Fs()/N)
       EbNodB_meas = CNodB_meas - 10*np.log10(model.get_Rb())
-      SNRdB_meas = CNodB_meas - 10*np.log10(B)          # SNR in B=3000
+      SNRdB_meas = CNodB_meas - 10*np.log10(B)               # SNR in B=3000
       PAPRdB = 20*np.log10(np.max(np.abs(tx))/np.std(tx))
-      print(f"Measured: EbNodB: {EbNodB_meas-3:5.2f} CNodB: {CNodB_meas:5.2f} SNR3kdB: {SNRdB_meas:5.2f} PAPRdB: {PAPRdB:5.2f}")
+      print(f"Measured: EbNodB: {EbNodB_meas:5.2f} CNodB: {CNodB_meas:5.2f} SNR3kdB: {SNRdB_meas:5.2f} PAPRdB: {PAPRdB:5.2f}")
    else:
       # rate Rs simulation
       tx_sym = output["tx_sym"].cpu().detach().numpy()
