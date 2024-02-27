@@ -46,7 +46,7 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
 
 1. Rate Fs with phase and freq offsets:
    ```
-   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model07 --mp_file h_mpp.f32 --range_EbNo --plot_loss --rate_Fs --phase_offset --freq_offset
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model07 --range_EbNo --plot_loss --rate_Fs --freq_rand
    ```
 
 # Inference

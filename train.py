@@ -49,8 +49,7 @@ parser.add_argument('--EbNodB', type=float, default=0, help='BPSK Eb/No in dB')
 parser.add_argument('--range_EbNo', action='store_true', help='Use a range of Eb/No during training')
 parser.add_argument('--mp_file', type=str, default="", help='path to multipath file, rate Rs time steps by Nc carriers .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
-parser.add_argument('--phase_offset', action='store_true', help='random phase offset for each sequence')
-parser.add_argument('--freq_offset', action='store_true', help='random freq offset for each sequence')
+parser.add_argument('--freq_rand', action='store_true', help='random phase and freq offset for each sequence')
 
 training_group = parser.add_argument_group(title="training parameters")
 training_group.add_argument('--batch-size', type=int, help="batch size, default: 32", default=32)
@@ -61,7 +60,7 @@ training_group.add_argument('--lr-decay-factor', type=float, help='learning rate
 
 training_group.add_argument('--initial-checkpoint', type=str, help='initial checkpoint to start training from, default: None', default=None)
 training_group.add_argument('--plot_loss', action='store_true', help='plot loss versus epoch as we train')
-training_group.add_argument('--plot_EbNo', action='store_true', help='plot loss versus EbNo for final epoch')
+training_group.add_argument('--plot_EbNo', type=str, default="", help='plot loss versus EbNo for final epoch')
 
 args = parser.parse_args()
 
@@ -108,8 +107,7 @@ feature_file = args.features
 
 # model
 checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_EbNo, args.rate_Fs)
-model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, rate_Fs=args.rate_Fs, 
-              phase_offset=args.phase_offset, freq_offset=args.freq_offset)
+model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, rate_Fs=args.rate_Fs, freq_rand=args.freq_rand)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
@@ -206,7 +204,7 @@ if __name__ == '__main__':
             np.savetxt(args.output + '_loss' + '.txt', loss_epoch[1:epoch+1])
 
     # optionally plot loss against EbNodB for final epoch
-    if args.plot_EbNo:
+    if len(args.plot_EbNo):
         EbNodB_min = int(np.floor(np.min(EbNodB_loss[:,0])))
         EbNodB_max = int(np.ceil(np.max(EbNodB_loss[:,0])))
         EbNodB_mean_loss = np.zeros((EbNodB_max-EbNodB_min,2))
@@ -220,12 +218,11 @@ if __name__ == '__main__':
             #print(EbNodB, EbNodB_mean_loss[EbNodB])
         plt.figure(2)
         plt.plot(EbNodB_mean_loss[:,0],EbNodB_mean_loss[:,1],'b+-')
-        plt.axis([EbNodB_min-1,EbNodB_max,0.1,0.35])
         plt.grid()
         plt.xlabel('Eb/No (dB)')
         plt.ylabel('Loss')
         plt.show(block=False)
-        plt.savefig(args.output + '_loss_EbNodB.png')
+        plt.savefig(args.plot_EbNo + '_loss_EbNodB.png')
 
-        np.savetxt(args.output + '_loss_EbNodB' + '.txt', EbNodB_mean_loss)
+        np.savetxt(args.plot_EbNo + '_loss_EbNodB' + '.txt', EbNodB_mean_loss)
 
