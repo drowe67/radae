@@ -54,8 +54,9 @@ parser.add_argument('--ber_test', action='store_true', help='send random PSK bit
 parser.add_argument('--mp_file', type=str, default="", help='path to multipath file, rate Rs time steps by Nc carriers .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--write_rx', type=str, default="", help='path to output file of rate Fs rx samples in ..IQIQ...f32 format')
-parser.add_argument('--phase_offset', action='store_true', help='random phase and freq offset for each sequence')
-parser.add_argument('--freq_offset', action='store_true', help='random freq offset for each sequence')
+parser.add_argument('--phase_offset', type=float, default=0, help='phase offset in rads')
+parser.add_argument('--freq_offset', type=float, help='freq offset in Hz')
+parser.add_argument('--df_dt', type=float, default=0, help='rate of change of freq offset in Hz/s')
 args = parser.parse_args()
 
 # set visible devices
@@ -73,7 +74,7 @@ num_used_features = 20
 
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rate_Fs=args.rate_Fs, 
-              phase_offset=args.phase_offset, freq_offset=args.freq_offset)
+              phase_offset=args.phase_offset, freq_offset=args.freq_offset, df_dt=args.df_dt)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()

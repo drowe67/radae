@@ -268,8 +268,10 @@ class RADAE(nn.Module):
                  ber_test = False,
                  rate_Fs = False,
                  papr_opt = False,
-                 phase_offset = False,
-                 freq_offset = False
+                 phase_offset = 0,
+                 freq_offset = 0,
+                 df_dt = 0,
+                 freq_rand = False,
                 ):
 
         super(RADAE, self).__init__()
@@ -284,6 +286,8 @@ class RADAE(nn.Module):
         self.papr_opt = papr_opt
         self.phase_offset = phase_offset
         self.freq_offset = freq_offset
+        self.df_dt = df_dt
+        self.freq_rand = freq_rand
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, papr_opt=papr_opt))
@@ -403,22 +407,29 @@ class RADAE(nn.Module):
                 tx_norm = tx/torch.abs(tx)
                 tx = torch.tanh(torch.abs(tx)) * tx_norm
 
-            # insert per batch phase and freq offset
+            # user supplied phase and freq offsets (used at inference time)
             if self.phase_offset:
-                phase = torch.zeros_like(tx)
-                phase[:,] = 2.0*torch.pi*torch.rand(num_batches,1,device=tx.device)
+                phase = self.phase_offset*torch.ones_like(tx)
                 phase = torch.exp(1j*phase)
                 tx = tx*phase
             if self.freq_offset:
-                freq_offset = 20*(torch.rand(num_batches,1) - 0.5)
-                #freq_offset= -15*torch.ones(num_batches,1)
-                #print(freq_offset)
-                omega = freq_offset*2*torch.pi/self.Fs
-                lin_phase = torch.zeros_like(tx)
-                lin_phase[:,] = omega*torch.arange(num_timesteps_at_rate_Fs)
+                freq = torch.zeros(num_batches, num_timesteps_at_rate_Fs)
+                freq[:,] = self.freq_offset*torch.ones(num_timesteps_at_rate_Fs) + self.df_dt*torch.arange(num_timesteps_at_rate_Fs)/self.Fs
+                omega = freq*2*torch.pi/self.Fs
+                lin_phase = torch.cumsum(omega,dim=1)
                 lin_phase = torch.exp(1j*lin_phase)
-                #print(freq_offset[:3], lin_phase.shape, lin_phase[:2,:4])
                 tx = tx*lin_phase
+
+            # insert per batch random phase and freq offset
+            if self.freq_rand:
+                phase = torch.zeros(num_batches, num_timesteps_at_rate_Fs)
+                phase[:,] = 2.0*torch.pi*torch.rand(num_batches,1,device=tx.device)
+                # TODO maybe this should be +/- Rs/2
+                freq_offset = 20*(torch.rand(num_batches,1) - 0.5)
+                omega = freq_offset*2*torch.pi/self.Fs
+                lin_phase = torch.zeros(num_batches, num_timesteps_at_rate_Fs)
+                lin_phase[:,] = omega*torch.arange(num_timesteps_at_rate_Fs)
+                tx = tx*torch.exp(1j*(phase+lin_phase))
 
             # AWGN noise
             EbNodB = torch.reshape(EbNodB,(num_batches,1))
