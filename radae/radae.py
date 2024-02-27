@@ -272,6 +272,7 @@ class RADAE(nn.Module):
                  freq_offset = 0,
                  df_dt = 0,
                  freq_rand = False,
+                 pilots = False
                 ):
 
         super(RADAE, self).__init__()
@@ -288,6 +289,7 @@ class RADAE(nn.Module):
         self.freq_offset = freq_offset
         self.df_dt = df_dt
         self.freq_rand = freq_rand
+        self.pilots = pilots
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, papr_opt=papr_opt))
@@ -388,6 +390,23 @@ class RADAE(nn.Module):
         # reshape into sequence of OFDM modem frames
         tx_sym = torch.reshape(tx_sym,(num_batches,num_timesteps_at_rate_Rs,self.Nc))
    
+        # optionally insert pilot symbols, at the start of each modem frame
+        if self.pilots:
+            num_modem_frames = num_timesteps_at_rate_Rs // self.Ns
+            #print(tx_sym.dtype)
+            #quit()
+            tx_sym = torch.reshape(tx_sym,(num_batches, num_modem_frames, self.Ns, self.Nc))
+            tx_sym_pilots = torch.ones(num_batches, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64)
+            tx_sym_pilots[:,:,1:self.Ns+1,:] = tx_sym
+            #print(tx_sym.shape, tx_sym_pilots.shape)
+            #print(tx_sym[0,0,:,:])
+            #print(tx_sym_pilots[0,0,:,:])
+            num_timesteps_at_rate_Rs = num_timesteps_at_rate_Rs + num_modem_frames
+            tx_sym = torch.reshape(tx_sym_pilots,(num_batches, num_timesteps_at_rate_Rs, self.Nc))
+            #print(tx_sym[0,:6,:])
+            #print(tx_sym.dtype)
+            #quit()
+
         tx = None
         rx = None
         if self.rate_Fs:
@@ -459,6 +478,12 @@ class RADAE(nn.Module):
             sigma = 10**(-EbNodB/20)
             n = sigma*torch.randn_like(tx_sym)
             rx_sym = tx_sym + n
+
+        # strip out the pilots if present (TODO pass to decoder network, lots of useful information)
+        if self.pilots:
+            rx_sym_pilots = torch.reshape(rx_sym,(num_batches, num_modem_frames, self.Ns+1, self.Nc))
+            rx_sym = torch.ones(num_batches, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
+            rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
 
         # demap QPSK symbols
         rx_sym = torch.reshape(rx_sym,qpsk_shape)
