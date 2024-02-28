@@ -368,6 +368,27 @@ class RADAE(nn.Module):
     def get_Fs(self):
         return self.Fs
     
+    # rate Fs receiver
+    def receiver(self, rx):
+        # integer number of modem frames
+        num_timesteps_at_rate_Rs = len(rx) // self.M
+        num_timesteps_at_rate_Rs = self.Ns * (num_timesteps_at_rate_Rs // self.Ns)
+        print(num_timesteps_at_rate_Rs)
+
+        # DFT to transform M time domain samples to Nc carriers
+        rx = torch.reshape(rx,(1,num_timesteps_at_rate_Rs,self.M))
+        rx_sym = torch.matmul(rx, self.Wfwd)
+        print(rx.shape, rx_sym.shape)
+
+        # demap QPSK symbols
+        rx_sym = torch.reshape(rx_sym, (1, -1, self.dim/2))
+        z_hat = torch.zeros(1,rx_sym.shape[1],self.dim)
+        z_hat[:,:,::2] = rx_sym.real
+        z_hat[:,:,1::2] = rx_sym.imag
+            
+        features_hat = self.core_decoder(z_hat)
+
+
     def forward(self, features, H):
         
         (num_batches, num_ten_ms_timesteps, num_features) = features.shape
