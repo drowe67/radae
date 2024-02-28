@@ -60,19 +60,55 @@ model.load_state_dict(checkpoint['state_dict'], strict=False)
 # load rx rate Fs samples
 rx = torch.tensor(np.fromfile(args.rx, dtype=np.csingle))
 
-if __name__ == '__main__':
+# acquisition - coarse & fine timing
 
-   # push model to device and run test
-   model.to(device)
-   rx = rx.to(device)
-   features_hat = model.receive(rx)
+Nmf = model.Ns*model.M    # number of samples in one modem frame
+p = model.p               # pilot sequence
+D = np.zeros(2*Nmf)       # correlation at various time offsets
+Dtmax = 0
+tmax = 0
+Pthresh = 0.9
+acquired = False
+while not acquired and len(rx) >= Nsf+M:
+   # search modem frame for maxima
+   for t in range(Nmf):
+      D[t] = rx[t:t+model.M].H*p
+      if np.abs(D[t]) > Dtmax:
+         Dtmax = np.abs(D[t])
+         tmax = t
+   
+   sigma_est = np.std(D)
+   Dthresh = sigma_est*np.sqrt(-np.log(Pthresh))
+   print(f"Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:d}")
+   if Dtmax > Dthresh:
+      acquired = True
+      print("Acquired!")
+   else
+      # advance one frame and search again
+      rx = rx[Nsf:-1]
+if not acquired:
+   print("Acquisition failed....")
+   quit()
 
-   features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
-   features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
-   features_hat.tofile(args.features_hat)
+rx = rx[tmax:-1]
 
-   # write real valued latent vectors
-   if len(args.write_latent):
-      z_hat = output["z_hat"].cpu().detach().numpy().flatten().astype('float32')
-      z_hat.tofile(args.write_latent)
-  
+# magnitude normalisation
+r = rx[:M]
+g = r.H*r/(p.H*p)
+print(f"g: {g:f}")
+rx = rx/g
+
+# push model to device and run receiver
+model.to(device)
+rx = rx.to(device)
+features_hat = model.receive(rx)
+
+features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
+features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
+features_hat.tofile(args.features_hat)
+
+# write real valued latent vectors
+if len(args.write_latent):
+   z_hat = output["z_hat"].cpu().detach().numpy().flatten().astype('float32')
+   z_hat.tofile(args.write_latent)
+
