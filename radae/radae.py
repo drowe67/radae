@@ -82,6 +82,14 @@ def init_weights(module):
 def n(x):
     return torch.clamp(x + (1./127.)*(torch.rand_like(x)-.5), min=-1., max=1.)
 
+# Generate pilots using Barker codes which have good correlation properties
+def barker_pilots(Nc):
+    P_barker_8  = torch.tensor([1., 1., 1., -1., -1., 1., -1.])
+    # repeating length 8 Barker code 
+    P = torch.zeros(Nc)
+    for i in range(Nc):
+        P[i] = P_barker_8[i % len(P_barker_8)]
+    return P
 
 #Wrapper for 1D conv layer
 class MyConv(nn.Module):
@@ -396,8 +404,10 @@ class RADAE(nn.Module):
             #print(tx_sym.dtype)
             #quit()
             tx_sym = torch.reshape(tx_sym,(num_batches, num_modem_frames, self.Ns, self.Nc))
-            tx_sym_pilots = torch.ones(num_batches, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64)
+            tx_sym_pilots = torch.zeros(num_batches, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64)
             tx_sym_pilots[:,:,1:self.Ns+1,:] = tx_sym
+            tx_sym_pilots[:,:,0,:] = barker_pilots(self.Nc)
+            #print(barker_pilots(self.Nc))
             #print(tx_sym.shape, tx_sym_pilots.shape)
             #print(tx_sym[0,0,:,:])
             #print(tx_sym_pilots[0,0,:,:])

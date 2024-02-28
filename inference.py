@@ -143,7 +143,7 @@ if __name__ == '__main__':
       # rate Fs simulation
       tx = output["tx"].cpu().detach().numpy()
       S = np.var(tx)
-      N = output["sigma"]**2                          # noise power in B=Fs
+      N = output["sigma"]**2                                 # noise power in B=Fs
       N = N.item()
       #print(S, N)
       CNodB_meas = 10*np.log10(S*model.get_Fs()/N)
