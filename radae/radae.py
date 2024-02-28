@@ -370,23 +370,36 @@ class RADAE(nn.Module):
     
     # rate Fs receiver
     def receiver(self, rx):
+        Ns = self.Ns
+        if self.pilots:
+            Ns = Ns + 1
         # integer number of modem frames
         num_timesteps_at_rate_Rs = len(rx) // self.M
-        num_timesteps_at_rate_Rs = self.Ns * (num_timesteps_at_rate_Rs // self.Ns)
+        num_modem_frames = num_timesteps_at_rate_Rs // Ns 
+        num_timesteps_at_rate_Rs = Ns * num_modem_frames
         print(num_timesteps_at_rate_Rs)
 
         # DFT to transform M time domain samples to Nc carriers
         rx = torch.reshape(rx,(1,num_timesteps_at_rate_Rs,self.M))
         rx_sym = torch.matmul(rx, self.Wfwd)
         print(rx.shape, rx_sym.shape)
+        
+        if self.pilots:
+            rx_sym_pilots = torch.reshape(rx_sym,(1, num_modem_frames, self.Ns+1, self.Nc))
+            rx_sym = torch.ones(1, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
+            rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
 
         # demap QPSK symbols
-        rx_sym = torch.reshape(rx_sym, (1, -1, self.dim/2))
-        z_hat = torch.zeros(1,rx_sym.shape[1],self.dim)
+        rx_sym = torch.reshape(rx_sym, (1, -1, self.latent_dim//2))
+        z_hat = torch.zeros(1,rx_sym.shape[1], self.latent_dim)
+        print(rx_sym.shape,z_hat.shape, z_hat.device)
+        
         z_hat[:,:,::2] = rx_sym.real
         z_hat[:,:,1::2] = rx_sym.imag
             
         features_hat = self.core_decoder(z_hat)
+        
+        return features_hat,z_hat
 
 
     def forward(self, features, H):
