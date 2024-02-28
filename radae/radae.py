@@ -351,6 +351,9 @@ class RADAE(nn.Module):
            self.Winv[c,:] = torch.exp( 1j*torch.arange(self.M)*self.w[c])/self.M
            self.Wfwd[:,c] = torch.exp(-1j*torch.arange(self.M)*self.w[c])
 
+        self.P = torch.tensor(barker_pilots(self.Nc), dtype=torch.complex64)
+        self.p = torch.matmul(self.P,self.Winv)
+
     def move_device(self, device):
         # TODO: work out why we need this step
         self.Winv = self.Winv.to(device)
@@ -375,8 +378,9 @@ class RADAE(nn.Module):
             Ns = Ns + 1
         # integer number of modem frames
         num_timesteps_at_rate_Rs = len(rx) // self.M
-        num_modem_frames = num_timesteps_at_rate_Rs // Ns 
+        num_modem_frames = num_timesteps_at_rate_Rs // Ns
         num_timesteps_at_rate_Rs = Ns * num_modem_frames
+        rx = rx[:num_timesteps_at_rate_Rs*self.M]
         print(num_timesteps_at_rate_Rs)
 
         # DFT to transform M time domain samples to Nc carriers
@@ -440,7 +444,7 @@ class RADAE(nn.Module):
             tx_sym = torch.reshape(tx_sym,(num_batches, num_modem_frames, self.Ns, self.Nc))
             tx_sym_pilots = torch.zeros(num_batches, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64)
             tx_sym_pilots[:,:,1:self.Ns+1,:] = tx_sym
-            tx_sym_pilots[:,:,0,:] = barker_pilots(self.Nc)
+            tx_sym_pilots[:,:,0,:] = self.P
             #print(barker_pilots(self.Nc))
             #print(tx_sym.shape, tx_sym_pilots.shape)
             #print(tx_sym[0,0,:,:])

@@ -78,6 +78,18 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
    octave:91> radae_plots; do_plots('z_hat.f32') 
    ```
 
+# OTA/OTC
+
+1. Generate Fs=8KHz complex samples with pilot symbols and AWGNnoise:
+   ```
+   ./inference.sh model07/checkpoints/checkpoint_epoch_100.pth wav/david.wav tmp.wav --write_latent z_hat.f32 --write_rx rx.f32  --rate_Fs --EbNodB 10 --pilots
+   ```
+
+1. Demodulate with stand alone receiver `rx.py`:
+   ```
+   ./rx.sh model07/checkpoints/checkpoint_epoch_100.pth rx.f32 - --pilots
+   ```
+
 # Tests
 
 1. BER test to check simulation modem calibration `--ber_test`

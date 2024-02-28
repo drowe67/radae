@@ -33,6 +33,7 @@
 import os
 import argparse
 import numpy as np
+from matplotlib import pyplot as plt
 import torch
 from radae import RADAE
 
@@ -63,47 +64,56 @@ model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 # load rx rate Fs samples
 rx = torch.tensor(np.fromfile(args.rx, dtype=np.csingle))
+# TODO an input BPF might help low Eb/No performance here
 
 # acquisition - coarse & fine timing
-"""
-M = model.get_M()
-Ns = model.get_Ns()
-Nmf = Ns*M                # number of samples in one modem frame
-p = model.p               # pilot sequence
-D = np.zeros(2*Nmf)       # correlation at various time offsets
-Dtmax = 0
-tmax = 0
-Pthresh = 0.9
-acquired = False
-while not acquired and len(rx) >= Nmf+M:
-   # search modem frame for maxima
-   for t in range(Nmf):
-      D[t] = rx[t:t+model.M].H*p
-      if np.abs(D[t]) > Dtmax:
-         Dtmax = np.abs(D[t])
-         tmax = t
-   
-   sigma_est = np.std(D)
-   Dthresh = sigma_est*np.sqrt(-np.log(Pthresh))
-   print(f"Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:d}")
-   if Dtmax > Dthresh:
-      acquired = True
-      print("Acquired!")
-   else:
-      # advance one frame and search again
-      rx = rx[Nmf:-1]
-if not acquired:
-   print("Acquisition failed....")
-   quit()
 
-rx = rx[tmax:-1]
+if args.pilots:
+   M = int(model.get_Fs()/model.get_Rs())
+   Ns = (model.get_Ns()+1)
+   Nmf = int(Ns*M)                                  # number of samples in one modem frame
+   p = model.p                                      # pilot sequence
+   D = torch.zeros(Nmf, dtype=torch.complex64)      # correlation at various time offsets
+   Dtmax = 0
+   tmax = 0
+   Pthresh = 0.9
+   acquired = False
+   while not acquired and len(rx) >= Nmf+M:
+      # search modem frame for maxima
+      for t in range(Nmf):
+         D[t] = torch.dot(torch.conj(rx[t:t+model.M]),p)
+         if torch.abs(D[t]) > Dtmax:
+            Dtmax = np.abs(D[t])
+            tmax = t
+      
+      sigma_est = torch.std(D)
+      Dthresh = sigma_est*np.sqrt(-np.log(Pthresh))
+      print(f"Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:d}")
+      if Dtmax > Dthresh:
+         acquired = True
+         print("Acquired!")
+      else:
+         # advance one frame and search again
+         rx = rx[Nmf:-1]
+   if not acquired:
+      print("Acquisition failed....")
+      quit()
+   #plt.figure(1)
+   #plt.plot(D.real, D.imag,'b+')
+   #plt.show()
 
-# magnitude normalisation
-r = rx[:M]
-g = r.H*r/(p.H*p)
-print(f"g: {g:f}")
-rx = rx/g
-"""
+   print(len(rx))
+   rx = rx[tmax:]
+   print(len(rx))
+
+   # magnitude normalisation
+
+   r = rx[:M]
+   g = torch.dot(torch.conj(r),r)/torch.dot(torch.conj(p),p)
+   print(f"g: {g:f}")
+   #rx = rx/g
+   #quit()
+
 # push model to device and run receiver
 model.to(device)
 rx = rx.to(device)
