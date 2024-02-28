@@ -46,6 +46,7 @@ parser.add_argument('--latent-dim', type=int, help="number of symbols produces b
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
 parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
 parser.add_argument('--ber_test', action='store_true', help='send random PSK bits through channel model, measure BER')
+parser.add_argument('--plot_Dt', action='store_true', help='Plot acquisition metric Dt')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -62,33 +63,48 @@ model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 
-# load rx rate Fs samples
-rx = torch.tensor(np.fromfile(args.rx, dtype=np.csingle))
-# TODO an input BPF might help low Eb/No performance here
+def complex_bpf(Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
+   B = 2*np.pi*bandwidth_Hz/Fs_Hz
+   alpha = 2*np.pi*centre_freq_Hz/Fs_Hz
+   Ntap=100
+   h = np.zeros(Ntap, dtype=np.csingle)
+   for i in range(Ntap):
+      n = i-(Ntap-1)/2
+      h[i] = np.sin(n*B/2)/(np.pi*n)*np.exp(1j*i*alpha)
+   return np.convolve(x,h)
+
+# load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
+rx = np.fromfile(args.rx, dtype=np.csingle)
+rx = complex_bpf(8000,1200,900,rx)
+
+# TODO: fix contrast of spectrogram
+#plt.specgram(rx,NFFT=256,Fs=model.get_Fs())
+#plt.axis([0,len(rx)/model.get_Fs(),0,2000])
+#plt.show()
 
 # acquisition - coarse & fine timing
 
 if args.pilots:
    M = int(model.get_Fs()/model.get_Rs())
    Ns = (model.get_Ns()+1)
-   Nmf = int(Ns*M)                                  # number of samples in one modem frame
-   p = model.p                                      # pilot sequence
-   D = torch.zeros(Nmf, dtype=torch.complex64)      # correlation at various time offsets
+   Nmf = int(Ns*M)                             # number of samples in one modem frame
+   p = model.p                                 # pilot sequence
+   D = np.zeros(Nmf, dtype=np.csingle)         # correlation at various time offsets
    Dtmax = 0
    tmax = 0
-   Pthresh = 0.9
+   Pacq_error = 0.001
    acquired = False
    while not acquired and len(rx) >= Nmf+M:
       # search modem frame for maxima
       for t in range(Nmf):
-         D[t] = torch.dot(torch.conj(rx[t:t+model.M]),p)
-         if torch.abs(D[t]) > Dtmax:
+         D[t] = np.dot(np.conj(rx[t:t+model.M]),p)
+         if np.abs(D[t]) > Dtmax:
             Dtmax = np.abs(D[t])
             tmax = t
       
-      sigma_est = torch.std(D)
-      Dthresh = sigma_est*np.sqrt(-np.log(Pthresh))
-      print(f"Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:d}")
+      sigma_est = np.std(D)
+      Dthresh = sigma_est*np.sqrt(-np.log(Pacq_error))
+      print(f"sigma: {sigma_est:f} Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:d}")
       if Dtmax > Dthresh:
          acquired = True
          print("Acquired!")
@@ -98,9 +114,13 @@ if args.pilots:
    if not acquired:
       print("Acquisition failed....")
       quit()
-   #plt.figure(1)
-   #plt.plot(D.real, D.imag,'b+')
-   #plt.show()
+   if args.plot_Dt:
+      fig, ax = plt.subplots(2, 1,figsize=(6,12))
+      ax[0].plot(D.real, D.imag,'b+')
+      circle1 = plt.Circle((0,0), radius=Dthresh, color='r')
+      ax[0].add_patch(circle1)
+      ax[1].hist(np.abs(D))
+      plt.show()
 
    print(len(rx))
    rx = rx[tmax:]
@@ -109,12 +129,13 @@ if args.pilots:
    # magnitude normalisation
 
    r = rx[:M]
-   g = torch.dot(torch.conj(r),r)/torch.dot(torch.conj(p),p)
+   g = np.dot(np.conj(r),r)/np.dot(np.conj(p),p)
    print(f"g: {g:f}")
    #rx = rx/g
    #quit()
 
 # push model to device and run receiver
+rx = torch.tensor(rx)
 model.to(device)
 rx = rx.to(device)
 features_hat, z_hat = model.receiver(rx)
