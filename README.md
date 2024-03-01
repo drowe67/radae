@@ -78,6 +78,17 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
    octave:91> radae_plots; do_plots('z_hat.f32') 
    ```
 
+1. Generate `loss` versus Eb/No curves for a model:
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 1 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 tmp --range_EbNo --plot_EbNo model05 --rate_Fs --initial-checkpoint model05/checkpoints/checkpoint_epoch_100.pth
+   ```
+   This runs another training epoch (results not used so saved in `tmp` folder), but the results won't change much as the network has converged.  While training across a range of Eb/No, it gathers stats on `loss` against Eb/No, and plots them in a PNG and dumps a text file.  The text output is useful for plotting curves from different training runs together. One weakness is it doesn't measure actual Eb/No - Eb may vary as different networks have slightly different symbol magnitudes (TODO improve this).
+
+   Octave can be used to plot several loss curves together:
+   ```
+   octave:120> radae_plots; loss_EbNo_plot("loss_models",'model05_loss_EbNodB.txt','m5_Rs_mp','model07_loss_EbNodB.txt','m7_Fs_offets','model08_loss_EbNodB.txt','m8_Fs')
+   ```
+   
 # OTA/OTC
 
 1. Generate Fs=8KHz complex samples with pilot symbols and AWGNnoise:
@@ -97,15 +108,18 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
 
 # Models
 
-| Model | Description |
+| Model | Description | Train at | Samples |
 | ---- | ---- |
-| model01 | trained at Eb/No 0 dB |
-| model02 | trained at Eb/No 10 dB |
-| model03 | --range_EbNo -2 ... 13 dB, modified sqrt loss |
-| model04 | --range_EbNo -2 ... 13 dB, orginal loss, noise might be 3dB less after calibration |
-| model05 | --range_EbNo, --mp_file h_mpp.f32, sounds good on MPP and AWGN at a range of SNR - no pops |
-| model06 | --range_EbNo, --rate_Fs, trained on AWGN with PA model, PAPR about 1dB, OK at a range of Eb/No |
-| model07 | --range_EbNo, --rate_Fs, trained on AWGN freq and phase offsets, OK donw to Eb/No -3, some pops |
+| model01 | trained at Eb/No 0 dB | Rs | - |
+| model02 | trained at Eb/No 10 dB | Rs | - |
+| model03 | --range_EbNo -2 ... 13 dB, modified sqrt loss |Rs | - |
+| model04 | --range_EbNo -2 ... 13 dB, orginal loss, noise might be 3dB less after calibration | Rs | - | 
+| model05 | --range_EbNo, --mp_file h_mpp.f32, sounds good on MPP and AWGN at a range of SNR - no pops | Rs | 240221_m5_Rs_mp |
+| model06 | --range_EbNo, --rate_Fs, trained on AWGN with PA model, PAPR about 1dB, OK at a range of Eb/No | Fs |240223_m6_Fs_papr |
+| model07 | --range_EbNo, -6 ... 14, --rate_Fs, AWGN freq, phase, gain offsets, some degredation at 0dB | 240301_m7_Fs_offets | Fs |
+| model08 | --range_EbNo, -6 ... 14, --rate_Fs, AWGN no offsets (vanilla rate Fs), similar to model 05 | 240301_m8_Fs | Fs |
+
+Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
 # Notes
 

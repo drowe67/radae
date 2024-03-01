@@ -57,6 +57,7 @@ parser.add_argument('--write_rx', type=str, default="", help='path to output fil
 parser.add_argument('--phase_offset', type=float, default=0, help='phase offset in rads')
 parser.add_argument('--freq_offset', type=float, help='freq offset in Hz')
 parser.add_argument('--df_dt', type=float, default=0, help='rate of change of freq offset in Hz/s')
+parser.add_argument('--gain', type=float, default=1.0, help='rx gain (defaul 1.0)')
 parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
 args = parser.parse_args()
 
@@ -76,7 +77,7 @@ num_used_features = 20
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rate_Fs=args.rate_Fs, 
               phase_offset=args.phase_offset, freq_offset=args.freq_offset, df_dt=args.df_dt,
-              pilots=args.pilots)
+              gain=args.gain, pilots=args.pilots)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()

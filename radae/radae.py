@@ -279,7 +279,9 @@ class RADAE(nn.Module):
                  phase_offset = 0,
                  freq_offset = 0,
                  df_dt = 0,
+                 gain = 1,
                  freq_rand = False,
+                 gain_rand = False,
                  pilots = False
                 ):
 
@@ -296,7 +298,9 @@ class RADAE(nn.Module):
         self.phase_offset = phase_offset
         self.freq_offset = freq_offset
         self.df_dt = df_dt
+        self.gain = gain
         self.freq_rand = freq_rand
+        self.gain_rand = gain_rand
         self.pilots = pilots
 
         # TODO: nn.DataParallel() shouldn't be needed
@@ -419,7 +423,7 @@ class RADAE(nn.Module):
 
         # AWGN noise
         if self.range_EbNo:
-            EbNodB = -2 + 15*torch.rand(num_batches,1,1,device=features.device)
+            EbNodB = -6 + 20*torch.rand(num_batches,1,1,device=features.device)
         else:
             EbNodB = torch.tensor(self.EbNodB)
 
@@ -442,7 +446,7 @@ class RADAE(nn.Module):
             #print(tx_sym.dtype)
             #quit()
             tx_sym = torch.reshape(tx_sym,(num_batches, num_modem_frames, self.Ns, self.Nc))
-            tx_sym_pilots = torch.zeros(num_batches, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64)
+            tx_sym_pilots = torch.zeros(num_batches, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64,device=tx_sym.device)
             tx_sym_pilots[:,:,1:self.Ns+1,:] = tx_sym
             tx_sym_pilots[:,:,0,:] = self.P
             #print(barker_pilots(self.Nc))
@@ -489,15 +493,15 @@ class RADAE(nn.Module):
 
             # insert per batch random phase and freq offset
             if self.freq_rand:
-                phase = torch.zeros(num_batches, num_timesteps_at_rate_Fs)
-                phase[:,] = 2.0*torch.pi*torch.rand(num_batches,1,device=tx.device)
+                phase = torch.zeros(num_batches, num_timesteps_at_rate_Fs,device=tx.device)
+                phase[:,] = 2.0*torch.pi*torch.rand(num_batches,1)
                 # TODO maybe this should be +/- Rs/2
-                freq_offset = 20*(torch.rand(num_batches,1) - 0.5)
+                freq_offset = 40*(torch.rand(num_batches,1) - 0.5)
                 omega = freq_offset*2*torch.pi/self.Fs
-                lin_phase = torch.zeros(num_batches, num_timesteps_at_rate_Fs)
+                lin_phase = torch.zeros(num_batches, num_timesteps_at_rate_Fs,device=tx.device)
                 lin_phase[:,] = omega*torch.arange(num_timesteps_at_rate_Fs)
                 tx = tx*torch.exp(1j*(phase+lin_phase))
-
+            
             # AWGN noise
             EbNodB = torch.reshape(EbNodB,(num_batches,1))
             EbNo = 10**(EbNodB/10)
@@ -510,6 +514,18 @@ class RADAE(nn.Module):
                 # similar to rate Rs, but scale noise by M samples/symbol
                 sigma = (EbNo*self.M)**(-0.5)
             rx = tx + sigma*torch.randn_like(tx)
+
+            # insert per batch random gain variations, -20 ... +20 dB
+            if self.gain_rand:
+                gain = torch.zeros(num_batches, num_timesteps_at_rate_Fs,device=tx.device)
+                gain[:,] = -20 + 40*torch.rand(num_batches,1)
+                #print(gain[0,:3])
+                gain = 10 ** (gain/20)
+                rx = rx * gain
+
+            # user supplied gain    
+            rx = rx * self.gain
+
             #print(rx.shape)
             
             # DFT to transform M time domain samples to Nc carriers

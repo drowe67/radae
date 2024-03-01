@@ -50,6 +50,8 @@ parser.add_argument('--range_EbNo', action='store_true', help='Use a range of Eb
 parser.add_argument('--mp_file', type=str, default="", help='path to multipath file, rate Rs time steps by Nc carriers .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--freq_rand', action='store_true', help='random phase and freq offset for each sequence')
+parser.add_argument('--gain_rand', action='store_true', help='random rx gain -20 .. +20dB, SNR unchanged')
+parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
 
 training_group = parser.add_argument_group(title="training parameters")
 training_group.add_argument('--batch-size', type=int, help="batch size, default: 32", default=32)
@@ -107,7 +109,8 @@ feature_file = args.features
 
 # model
 checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_EbNo, args.rate_Fs)
-model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, rate_Fs=args.rate_Fs, freq_rand=args.freq_rand)
+model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, rate_Fs=args.rate_Fs,
+             freq_rand=args.freq_rand,gain_rand=args.gain_rand, pilots=args.pilots)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")

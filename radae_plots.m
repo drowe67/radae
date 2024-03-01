@@ -36,3 +36,20 @@ function multipath_example()
     xlabel('Freq (Hz)'); ylabel('|H(f)|');
     print("-dpng","multipath_h.png")
 endfunction
+
+% Plots loss v EbNo curves from text files dumped by train.py, pass in pairs of text_file.txt,legend
+function loss_EbNo_plot(png_fn, varargin)
+    figure(1); clf; hold on;
+    i = 1;
+    while i <= length(varargin)
+        fn = varargin{i};
+        data = load(fn);
+        i++; leg = varargin{i}; leg = strrep (leg, "_", " ")
+        plot(data(:,1),data(:,2),sprintf("+-;%s;",leg))
+        i++;
+    end
+    hold off; grid; xlabel('Eb/No (dB)'); ylabel('loss');
+    if length(png_fn)
+        print("-dpng",png_fn);
+    end
+endfunction
