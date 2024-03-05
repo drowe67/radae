@@ -9,13 +9,15 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
     s=z(1:2:end)+j*z(2:2:end);
     figure(1); clf; plot(s,'.'); title('Scatter');
     mx = max(abs(z)); axis([-mx mx -mx mx])
-    #if length(png_fn)
-    #    print("-dpng",png_fn);
-    #end
-    figure(2); clf;  title('Scatter');
+    if length(png_fn)
+        print("-dpng",sprintf("%s_scatter.png",png_fn));
+    end
+    figure(2); clf;
     [nn cc] = hist3([real(s) imag(s)],[25 25]);
-    mesh(cc{1},cc{2},nn);
-    title('Scatter');
+    mesh(cc{1},cc{2},nn); title('Scatter 3D');
+    if length(png_fn)
+        print("-dpng",sprintf("%s_scatter_3d.png",png_fn));
+    end
 
     if length(rx_fn)
         rx=load_f32('rx.f32',1); 
