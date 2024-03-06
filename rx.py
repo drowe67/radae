@@ -47,6 +47,7 @@ parser.add_argument('--write_latent', type=str, default="", help='path to output
 parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
 parser.add_argument('--ber_test', action='store_true', help='send random PSK bits through channel model, measure BER')
 parser.add_argument('--plot_Dt', action='store_true', help='Plot acquisition metric Dt')
+parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ data symbols using classical DSP')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -59,25 +60,34 @@ num_features = 20
 num_used_features = 20
 
 # load model from a checkpoint file
-model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, pilots=args.pilots)
+model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, pilots=args.pilots, pilot_eq=args.pilot_eq)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 def complex_bpf(Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
    B = 2*np.pi*bandwidth_Hz/Fs_Hz
    alpha = 2*np.pi*centre_freq_Hz/Fs_Hz
-   Ntap=100
+   Ntap=101
    h = np.zeros(Ntap, dtype=np.csingle)
+
    for i in range(Ntap):
       n = i-(Ntap-1)/2
-      h[i] = np.sin(n*B/2)/(np.pi*n)*np.exp(1j*i*alpha)
+      if n != 0:
+         h[i] = np.sin(n*B/2)/(np.pi*n)
+      else:
+         h[i] = 1
+   
+   x_baseband = x*np.exp(-1j*alpha*np.arange(len(x)))
+   x_filt = np.convolve(x_baseband,h)
+   return x_filt*np.exp(1j*alpha*np.arange(len(x_filt)))
+   
    return np.convolve(x,h)
 
 # load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
 rx = np.fromfile(args.rx, dtype=np.csingle)
 rx = complex_bpf(8000,1200,900,rx)
 
-# TODO: fix contrast of spectrogram
+# TODO: fix contrast of spectrogram - it's not very useful
 #plt.specgram(rx,NFFT=256,Fs=model.get_Fs())
 #plt.axis([0,len(rx)/model.get_Fs(),0,2000])
 #plt.show()
@@ -135,7 +145,7 @@ if args.pilots:
    #quit()
 
 # push model to device and run receiver
-rx = torch.tensor(rx)
+rx = torch.tensor(rx, dtype=torch.complex64)
 model.to(device)
 rx = rx.to(device)
 features_hat, z_hat = model.receiver(rx)

@@ -323,7 +323,7 @@ class RADAE(nn.Module):
         self.Rb =  latent_dim/self.Tz                  # BPSK symbol rate (symbols/s or Hz)
 
         # SNR calcs for a fixed Eb/No run (e.g. inference)
-        # TODO: maybe move this to inference.sh
+        # TODO: maybe move this to inference.py
         if self.range_EbNo == False:
             EbNo = 10**(EbNodB/10)                     # linear Eb/No
             B = 3000                                   # (kinda arbitrary) bandwidth for measuring noise power (Hz)
@@ -377,6 +377,38 @@ class RADAE(nn.Module):
     def get_Fs(self):
         return self.Fs
     
+    # Use classical DSP pilot based equalisation. Note just for inference atm, and only works on AWGN
+    def do_pilot_eq(self, num_modem_frames, rx_sym_pilots):
+        Nc = self.Nc 
+        rx_pilots = torch.zeros(num_modem_frames, Nc, dtype=torch.complex64)
+        """
+        # find 3-pilot local mean across frequency. TODO: least squares method from freedv_low study
+        for i in torch.arange(num_modem_frames):
+            rx_pilots[i,0] = torch.mean(rx_sym_pilots[0,i,0,0:3]*torch.conj(self.P[0:3]))
+            for c in torch.arange(1,Nc-1):
+                rx_pilots[i,c] = torch.mean(rx_sym_pilots[0,i,0,c-1:c+2]*torch.conj(self.P[c-1:c+2]))
+            rx_pilots[i,Nc-1] = torch.mean(rx_sym_pilots[0,i,0,Nc-3:Nc]*torch.conj(self.P[Nc-3:Nc]))
+        """
+        # to handle low Eb/No we find mean channel est across all pilots. This won't handle multipath,
+        # but can be used for a first pass AWGN test at +/-2 Hz freq offset
+        for i in torch.arange(num_modem_frames):
+            rx_pilots[i,:] = torch.mean(rx_sym_pilots[0,i,0,:]/self.P)
+
+        # Linear interpolate between two pilots to EQ data symbols (phase and amplitude)
+        for i in torch.arange(num_modem_frames-1):
+            for c in torch.arange(0,Nc):
+                slope = (rx_pilots[i+1,c] - rx_pilots[i,c])/(self.Ns+1)
+                # assume pilots at index 0 and Ns+1, we want to linearly interpolate channel at 1...Ns 
+                rx_ch = slope*torch.arange(0,self.Ns+2) + rx_pilots[i,c]
+                rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_ch[1:self.Ns+1]
+        # last modem frame, use previous slope
+        i = num_modem_frames-1
+        for c in torch.arange(0,Nc):
+            rx_ch = slope*torch.arange(0,self.Ns+2) + rx_pilots[i,c]
+            rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_ch[1:self.Ns+1]
+
+        return rx_sym_pilots
+    
     # rate Fs receiver
     def receiver(self, rx):
         Ns = self.Ns
@@ -387,15 +419,15 @@ class RADAE(nn.Module):
         num_modem_frames = num_timesteps_at_rate_Rs // Ns
         num_timesteps_at_rate_Rs = Ns * num_modem_frames
         rx = rx[:num_timesteps_at_rate_Rs*self.M]
-        print(num_timesteps_at_rate_Rs)
 
         # DFT to transform M time domain samples to Nc carriers
         rx = torch.reshape(rx,(1,num_timesteps_at_rate_Rs,self.M))
         rx_sym = torch.matmul(rx, self.Wfwd)
-        print(rx.shape, rx_sym.shape)
         
         if self.pilots:
             rx_sym_pilots = torch.reshape(rx_sym,(1, num_modem_frames, self.Ns+1, self.Nc))
+            if self.pilot_eq:
+                rx_sym_pilots = self.do_pilot_eq(num_modem_frames,rx_sym_pilots)
             rx_sym = torch.ones(1, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
             rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
 
@@ -549,37 +581,8 @@ class RADAE(nn.Module):
         if self.pilots:
             rx_sym_pilots = torch.reshape(rx_sym,(num_batches, num_modem_frames, self.Ns+1, self.Nc))
 
-            # Use classical DSP pilot based equalisation. Note just for inference atm, and only works on AWGN
             if self.pilot_eq:
-
-                Nc = self.Nc 
-                rx_pilots = torch.zeros(num_modem_frames, Nc, dtype=torch.complex64)
-                """
-                # find 3-pilot local mean across frequency. TODO: least squares method from freedv_low study
-                for i in torch.arange(num_modem_frames):
-                    rx_pilots[i,0] = torch.mean(rx_sym_pilots[0,i,0,0:3]*torch.conj(self.P[0:3]))
-                    for c in torch.arange(1,Nc-1):
-                        rx_pilots[i,c] = torch.mean(rx_sym_pilots[0,i,0,c-1:c+2]*torch.conj(self.P[c-1:c+2]))
-                    rx_pilots[i,Nc-1] = torch.mean(rx_sym_pilots[0,i,0,Nc-3:Nc]*torch.conj(self.P[Nc-3:Nc]))
-                """
-                # to handle low Eb/No we find mean channel est across all pilots. This won't handle multipath,
-                # but can be used for a first pass AWGN test at +/-2 Hz freq offset
-                for i in torch.arange(num_modem_frames):
-                    #rx_pilots[i,:] = torch.mean(rx_sym_pilots[0,i,0,:]*torch.conj(self.P))
-                    rx_pilots[i,:] = torch.mean(rx_sym_pilots[0,i,0,:]/self.P)
-
-                # Linear interpolate between two pilots to EQ data symbols (phase and amplitude)
-                for i in torch.arange(num_modem_frames-1):
-                    for c in torch.arange(0,Nc):
-                        slope = (rx_pilots[i+1,c] - rx_pilots[i,c])/(self.Ns+1)
-                        # assume pilots at index 0 and Ns+1, we want to linearly interpolate channel at 1...Ns 
-                        rx_ch = slope*torch.arange(0,self.Ns+2) + rx_pilots[i,c]
-                        rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_ch[1:self.Ns+1]
-                # last modem frame, use previous slope
-                i = num_modem_frames-1
-                for c in torch.arange(0,Nc):
-                    rx_ch = slope*torch.arange(0,self.Ns+2) + rx_pilots[i,c]
-                    rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_ch[1:self.Ns+1]
+                rx_sym_pilots = self.do_pilot_eq(num_modem_frames,rx_sym_pilots)
 
             rx_sym = torch.ones(num_batches, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
             rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
