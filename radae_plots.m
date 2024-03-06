@@ -8,7 +8,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
     z=load_f32(z_fn,1);
     s=z(1:2:end)+j*z(2:2:end);
     figure(1); clf; plot(s,'.'); title('Scatter');
-    mx = max(abs(z)); axis([-mx mx -mx mx])
+    mx = max(abs(z))*1.5; axis([-mx mx -mx mx])
     if length(png_fn)
         print("-dpng",sprintf("%s_scatter.png",png_fn));
     end

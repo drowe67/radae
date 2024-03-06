@@ -86,7 +86,7 @@ def n(x):
 def barker_pilots(Nc):
     P_barker_8  = torch.tensor([1., 1., 1., -1., -1., 1., -1.])
     # repeating length 8 Barker code 
-    P = torch.zeros(Nc)
+    P = torch.zeros(Nc,dtype=torch.complex64)
     for i in range(Nc):
         P[i] = P_barker_8[i % len(P_barker_8)]
     return P
@@ -282,7 +282,8 @@ class RADAE(nn.Module):
                  gain = 1,
                  freq_rand = False,
                  gain_rand = False,
-                 pilots = False
+                 pilots = False,
+                 pilot_eq = False
                 ):
 
         super(RADAE, self).__init__()
@@ -302,6 +303,7 @@ class RADAE(nn.Module):
         self.freq_rand = freq_rand
         self.gain_rand = gain_rand
         self.pilots = pilots
+        self.pilot_eq = pilot_eq
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, papr_opt=papr_opt))
@@ -355,7 +357,7 @@ class RADAE(nn.Module):
            self.Winv[c,:] = torch.exp( 1j*torch.arange(self.M)*self.w[c])/self.M
            self.Wfwd[:,c] = torch.exp(-1j*torch.arange(self.M)*self.w[c])
 
-        self.P = torch.tensor(barker_pilots(self.Nc), dtype=torch.complex64)
+        self.P = barker_pilots(self.Nc)
         self.p = torch.matmul(self.P,self.Winv)
 
     def move_device(self, device):
@@ -542,10 +544,36 @@ class RADAE(nn.Module):
             sigma = 10**(-EbNodB/20)
             n = sigma*torch.randn_like(tx_sym)
             rx_sym = tx_sym + n
-
-        # strip out the pilots if present (TODO pass to decoder network, lots of useful information)
+            
+        # strip out the pilots if present (TODO pass to ML decoder network, lots of useful information)
         if self.pilots:
             rx_sym_pilots = torch.reshape(rx_sym,(num_batches, num_modem_frames, self.Ns+1, self.Nc))
+
+            # use classical DSP pilot based phase offset correction (equalisation).
+            # Note just for inference atm
+            if self.pilot_eq:
+
+                # find 3-pilot local mean across frequency. TODO: least squares method from freedv_low study
+                Nc = self.Nc 
+                rx_pilots = torch.zeros(num_modem_frames, Nc, dtype=torch.complex64)
+                print(rx_pilots.shape)
+                for i in torch.arange(num_modem_frames):
+                    rx_pilots[i,0] = torch.mean(rx_sym_pilots[0,i,0,0:3]/self.P[0:3])
+                    for c in torch.arange(1,Nc-1):
+                        rx_pilots[i,c] = torch.mean(rx_sym_pilots[0,i,0,c-1:c+2]/self.P[c-1:c+2])
+                    rx_pilots[i,Nc-1] = torch.mean(rx_sym_pilots[0,i,0,Nc-3:Nc]/self.P[Nc-3:Nc])
+                #print(self.P)
+                #print(rx_pilots[:2,:])
+                #quit()
+                # use mean of pilots in time to EQ data symbols, TODO: use linear interpolation
+                for i in torch.arange(num_modem_frames-1):
+                    for c in torch.arange(0,Nc):
+                        rx_ch = (rx_pilots[i,c]+rx_pilots[i+1,c])/2
+                        rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_ch
+                i = num_modem_frames-1
+                for c in torch.arange(0,Nc):
+                    rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_pilots[i,c]
+
             rx_sym = torch.ones(num_batches, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
             rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
 
