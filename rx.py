@@ -46,7 +46,7 @@ parser.add_argument('--latent-dim', type=int, help="number of symbols produces b
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
 parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
 parser.add_argument('--ber_test', action='store_true', help='send random PSK bits through channel model, measure BER')
-parser.add_argument('--plot_Dt', action='store_true', help='Plot acquisition metric Dt')
+parser.add_argument('--plots', action='store_true', help='display various plots')
 parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ data symbols using classical DSP')
 args = parser.parse_args()
 
@@ -65,17 +65,14 @@ checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 def complex_bpf(Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
-   B = 2*np.pi*bandwidth_Hz/Fs_Hz
+   B = bandwidth_Hz/Fs_Hz
    alpha = 2*np.pi*centre_freq_Hz/Fs_Hz
-   Ntap=101
+   Ntap=100
    h = np.zeros(Ntap, dtype=np.csingle)
 
    for i in range(Ntap):
       n = i-(Ntap-1)/2
-      if n != 0:
-         h[i] = np.sin(n*B/2)/(np.pi*n)
-      else:
-         h[i] = 1
+      h[i] = B*np.sinc(n*B)
    
    x_baseband = x*np.exp(-1j*alpha*np.arange(len(x)))
    x_filt = np.convolve(x_baseband,h)
@@ -85,13 +82,20 @@ def complex_bpf(Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
 
 # load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
 rx = np.fromfile(args.rx, dtype=np.csingle)
-rx = complex_bpf(8000,1200,900,rx)
 
 # TODO: fix contrast of spectrogram - it's not very useful
-#plt.specgram(rx,NFFT=256,Fs=model.get_Fs())
-#plt.axis([0,len(rx)/model.get_Fs(),0,2000])
-#plt.show()
+if args.plots:
+   fig, ax = plt.subplots(2, 1,figsize=(6,12))
+   fig.suptitle('Rx before and after BPF')
+   ax[0].specgram(rx,NFFT=256,Fs=model.get_Fs())
+   ax[0].axis([0,len(rx)/model.get_Fs(),0,2000])
+   ax[0].title
+rx = complex_bpf(8000,1200,900,rx)
 
+if args.plots:
+   ax[1].specgram(rx,NFFT=256,Fs=model.get_Fs())
+   ax[1].axis([0,len(rx)/model.get_Fs(),0,2000])
+ 
 # acquisition - coarse & fine timing
 
 if args.pilots:
@@ -124,14 +128,14 @@ if args.pilots:
    if not acquired:
       print("Acquisition failed....")
       quit()
-   if args.plot_Dt:
+   if args.plots:
       fig, ax = plt.subplots(2, 1,figsize=(6,12))
+      fig.suptitle('Dt complex plane and |Dt| histogram')
       ax[0].plot(D.real, D.imag,'b+')
       circle1 = plt.Circle((0,0), radius=Dthresh, color='r')
       ax[0].add_patch(circle1)
       ax[1].hist(np.abs(D))
-      plt.show()
-
+ 
    print(len(rx))
    rx = rx[tmax:]
    print(len(rx))
@@ -158,4 +162,13 @@ features_hat.tofile(args.features_hat)
 if len(args.write_latent):
    z_hat = z_hat.cpu().detach().numpy().flatten().astype('float32')
    z_hat.tofile(args.write_latent)
+
+if args.plots:
+   plt.figure(3)
+   plt.plot(z_hat[0:-2:2], z_hat[1:-1:2],'+')
+   plt.title('Scatter')
+   plt.show(block=False)
+   plt.pause(0.001)
+   input("hit[enter] to end.")
+   plt.close('all')
 
