@@ -136,6 +136,7 @@ if args.pilots:
       ax[0].add_patch(circle1)
       ax[1].hist(np.abs(D))
  
+   #tmax=48
    print(len(rx))
    rx = rx[tmax:]
    print(len(rx))
@@ -160,6 +161,8 @@ z_hat = z_hat.cpu().detach().numpy().flatten().astype('float32')
 if len(args.ber_test):
    z = torch.tensor(np.fromfile(args.ber_test, dtype=np.float32))
    print(z.shape, z_hat.shape)
+   delta = len(z) - len(z_hat)
+   z = z[delta:]
    n_errors = torch.sum(-z*z_hat>0)
    n_bits = torch.numel(z)
    BER = n_errors/n_bits

@@ -304,6 +304,9 @@ class RADAE(nn.Module):
         self.gain_rand = gain_rand
         self.pilots = pilots
         self.pilot_eq = pilot_eq
+        self.per_carrier_eq = True
+        self.phase_mag_eq = True
+        self.eq_mean = True
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, papr_opt=papr_opt))
@@ -357,7 +360,7 @@ class RADAE(nn.Module):
            self.Winv[c,:] = torch.exp( 1j*torch.arange(self.M)*self.w[c])/self.M
            self.Wfwd[:,c] = torch.exp(-1j*torch.arange(self.M)*self.w[c])
 
-        self.P = barker_pilots(self.Nc)
+        self.P = (2**(0.5))*barker_pilots(self.Nc)
         self.p = torch.matmul(self.P,self.Winv)
 
     def move_device(self, device):
@@ -381,18 +384,37 @@ class RADAE(nn.Module):
     def do_pilot_eq(self, num_modem_frames, rx_sym_pilots):
         Nc = self.Nc 
         rx_pilots = torch.zeros(num_modem_frames, Nc, dtype=torch.complex64)
-        """
-        # find 3-pilot local mean across frequency. TODO: least squares method from freedv_low study
-        for i in torch.arange(num_modem_frames):
-            rx_pilots[i,0] = torch.mean(rx_sym_pilots[0,i,0,0:3]*torch.conj(self.P[0:3]))
-            for c in torch.arange(1,Nc-1):
-                rx_pilots[i,c] = torch.mean(rx_sym_pilots[0,i,0,c-1:c+2]*torch.conj(self.P[c-1:c+2]))
-            rx_pilots[i,Nc-1] = torch.mean(rx_sym_pilots[0,i,0,Nc-3:Nc]*torch.conj(self.P[Nc-3:Nc]))
-        """
-        # to handle low Eb/No we find mean channel est across all pilots. This won't handle multipath,
-        # but can be used for a first pass AWGN test at +/-2 Hz freq offset
-        for i in torch.arange(num_modem_frames):
-            rx_pilots[i,:] = torch.mean(rx_sym_pilots[0,i,0,:]/self.P)
+        if self.per_carrier_eq:
+            # estimate pilot symbol for each carrier by smoothing information from adjacent pilots; moderate loss, but \
+            # handles multipath and timing offsets
+            for i in torch.arange(num_modem_frames):
+                if self.eq_mean:
+                    #  3-pilot local mean across frequency
+                    rx_pilots[i,0] = torch.mean(rx_sym_pilots[0,i,0,0:3]/self.P[0:3])
+                    for c in torch.arange(1,Nc-1):
+                        rx_pilots[i,c] = torch.mean(rx_sym_pilots[0,i,0,c-1:c+2]/self.P[c-1:c+2])
+                    rx_pilots[i,Nc-1] = torch.mean(rx_sym_pilots[0,i,0,Nc-3:Nc]/self.P[Nc-3:Nc])
+                else:
+                    #  3-pilot least squares fit across frequency
+                    for c in range(Nc):
+                        c_mid = c
+                        # handle edges, alternative is extra "wingman" pilots
+                        if c == 0:
+                            c_mid = 1
+                        if c == Nc-1:
+                            c_mid = Nc-2
+                        local_path_delay_s = 0.004
+                        a = local_path_delay_s*self.Fs
+                        A = torch.tensor([[1, torch.exp(-1j*self.w[c_mid-1]*a)], [1, torch.exp(-1j*self.w[c_mid]*a)], [1, torch.exp(-1j*self.w[c_mid+1]*a)]])
+                        P = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
+                        h = torch.reshape(rx_sym_pilots[0,i,0,c_mid-1:c_mid+2]/self.P[c_mid-1:c_mid+2],(3,1))
+                        g = torch.matmul(P,h)
+                        rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
+                 
+        else:
+            # average all pilots together. Low loss, but won't handle multipath and is sensitive to timing offsets
+            for i in torch.arange(num_modem_frames):
+                rx_pilots[i,:] = torch.mean(rx_sym_pilots[0,i,0,:]/self.P)
 
         # Linear interpolate between two pilots to EQ data symbols (phase and amplitude)
         for i in torch.arange(num_modem_frames-1):
@@ -400,12 +422,20 @@ class RADAE(nn.Module):
                 slope = (rx_pilots[i+1,c] - rx_pilots[i,c])/(self.Ns+1)
                 # assume pilots at index 0 and Ns+1, we want to linearly interpolate channel at 1...Ns 
                 rx_ch = slope*torch.arange(0,self.Ns+2) + rx_pilots[i,c]
-                rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_ch[1:self.Ns+1]
+                if self.phase_mag_eq:
+                    rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_ch[1:self.Ns+1]
+                else:
+                    rx_ch_angle = torch.angle(rx_ch)
+                    rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
         # last modem frame, use previous slope
         i = num_modem_frames-1
         for c in torch.arange(0,Nc):
             rx_ch = slope*torch.arange(0,self.Ns+2) + rx_pilots[i,c]
-            rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_ch[1:self.Ns+1]
+            if self.phase_mag_eq:
+                rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_ch[1:self.Ns+1]
+            else:
+                rx_ch_angle = torch.angle(rx_ch)
+                rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
 
         return rx_sym_pilots
     
@@ -559,9 +589,14 @@ class RADAE(nn.Module):
         else:
             # Simulate channel at one sample per QPSK symbol (Fs=Rs) --------------------------------
             
+            if self.phase_offset:
+                phase = self.phase_offset*torch.ones_like(tx_sym)
+                phase = torch.exp(1j*phase)
+                tx_sym = tx_sym*phase
+
             # multipath, multiply by per-carrier channel magnitudes at each OFDM modem timestep
             # preserve tx_sym variable so we can return it to measure power after multipath channel
-            tx_sym = tx_sym * H
+            #tx_sym = tx_sym * H
 
             # note noise power sigma**2 is split between real and imag channels
             sigma = 10**(-EbNodB/20)
