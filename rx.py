@@ -45,7 +45,7 @@ parser.add_argument('features_hat', type=str, help='path to output feature file 
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
 parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
-parser.add_argument('--ber_test', action='store_true', help='send random PSK bits through channel model, measure BER')
+parser.add_argument('--ber_test', type=str, default="", help='symbols are PSK bits, compare to z.f32 file to calculate BER')
 parser.add_argument('--plots', action='store_true', help='display various plots')
 parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ data symbols using classical DSP')
 args = parser.parse_args()
@@ -67,7 +67,7 @@ model.load_state_dict(checkpoint['state_dict'], strict=False)
 def complex_bpf(Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
    B = bandwidth_Hz/Fs_Hz
    alpha = 2*np.pi*centre_freq_Hz/Fs_Hz
-   Ntap=100
+   Ntap=101
    h = np.zeros(Ntap, dtype=np.csingle)
 
    for i in range(Ntap):
@@ -153,6 +153,21 @@ rx = torch.tensor(rx, dtype=torch.complex64)
 model.to(device)
 rx = rx.to(device)
 features_hat, z_hat = model.receiver(rx)
+
+z_hat = z_hat.cpu().detach().numpy().flatten().astype('float32')
+
+# BER test useful for calibrating link
+if len(args.ber_test):
+   z = torch.tensor(np.fromfile(args.ber_test, dtype=np.float32))
+   print(z.shape, z_hat.shape)
+   n_errors = torch.sum(-z*z_hat>0)
+   n_bits = torch.numel(z)
+   BER = n_errors/n_bits
+   print(f"n_bits: {n_bits:d} BER: {BER:5.3f}")
+   errors = torch.sign(-z*z_hat) > 0
+   errors = torch.reshape(errors,(-1,latent_dim))
+   print(errors.shape)
+   print(torch.sum(errors,dim=1))
 
 features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
 features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')

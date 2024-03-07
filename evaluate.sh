@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 #
 # Evaluate a model and sample wave file using various channels model
 

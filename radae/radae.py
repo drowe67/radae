@@ -434,7 +434,7 @@ class RADAE(nn.Module):
         # demap QPSK symbols
         rx_sym = torch.reshape(rx_sym, (1, -1, self.latent_dim//2))
         z_hat = torch.zeros(1,rx_sym.shape[1], self.latent_dim)
-        print(rx_sym.shape,z_hat.shape, z_hat.device)
+        #print(rx_sym.shape,z_hat.shape, z_hat.device)
         
         z_hat[:,:,::2] = rx_sym.real
         z_hat[:,:,1::2] = rx_sym.imag
@@ -477,21 +477,12 @@ class RADAE(nn.Module):
         # optionally insert pilot symbols, at the start of each modem frame
         if self.pilots:
             num_modem_frames = num_timesteps_at_rate_Rs // self.Ns
-            #print(tx_sym.dtype)
-            #quit()
             tx_sym = torch.reshape(tx_sym,(num_batches, num_modem_frames, self.Ns, self.Nc))
             tx_sym_pilots = torch.zeros(num_batches, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64,device=tx_sym.device)
             tx_sym_pilots[:,:,1:self.Ns+1,:] = tx_sym
             tx_sym_pilots[:,:,0,:] = self.P
-            #print(barker_pilots(self.Nc))
-            #print(tx_sym.shape, tx_sym_pilots.shape)
-            #print(tx_sym[0,0,:,:])
-            #print(tx_sym_pilots[0,0,:,:])
             num_timesteps_at_rate_Rs = num_timesteps_at_rate_Rs + num_modem_frames
             tx_sym = torch.reshape(tx_sym_pilots,(num_batches, num_timesteps_at_rate_Rs, self.Nc))
-            #print(tx_sym[0,:6,:])
-            #print(tx_sym.dtype)
-            #quit()
 
         tx = None
         rx = None
