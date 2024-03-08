@@ -1,5 +1,5 @@
 % multipath_samples.m
-% create a .f32 file of multipath channel magntide samples
+% create a .f32 file of multipath channel magnitude samples
 
 function multipath_samples(ch, Fs, Rs, Nc, Nseconds, fn)
     pkg load signal;

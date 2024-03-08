@@ -283,7 +283,8 @@ class RADAE(nn.Module):
                  freq_rand = False,
                  gain_rand = False,
                  pilots = False,
-                 pilot_eq = False
+                 pilot_eq = False,
+                 eq_mean6 = True
                 ):
 
         super(RADAE, self).__init__()
@@ -306,7 +307,7 @@ class RADAE(nn.Module):
         self.pilot_eq = pilot_eq
         self.per_carrier_eq = True
         self.phase_mag_eq = True
-        self.eq_mean = True
+        self.eq_mean6 = eq_mean6
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, papr_opt=papr_opt))
@@ -400,7 +401,7 @@ class RADAE(nn.Module):
             # estimate pilot symbol for each carrier by smoothing information from adjacent pilots; moderate loss, but \
             # handles multipath and timing offsets
             for i in torch.arange(num_modem_frames):
-                if self.eq_mean:
+                if self.eq_mean6:
                     #  3-pilot local mean across frequency
                     rx_pilots[i,0] = torch.mean(rx_sym_pilots[0,i,0,0:3]/self.P[0:3])
                     for c in torch.arange(1,Nc-1):

@@ -153,9 +153,9 @@ The $C/N_0$ (in dBHz) at the demodulator input of a terrestrial radio receiver i
 \begin{equation}
 \frac{C}{N_0} = P - PAPR - L_{path} - NF + 174
 \end{equation}
-where $P$ is the peak power of the transmitter power amplifier, $PAPR$ is the Peak to Average Power Ratio of the waveform, $L_{path}$ is the path loss, $NF$ is the noise figure of the receiver.  For example consider a 400 MHz FM hand held radio over a 1km urban (non line of site) path.  The radio has a 1W (30 dBm) power output, $L_{path}=120$ dB, with noise dominated by ambient EMI such that $NF=10$ dB. $C/N_0 = 30 - 0 - 120 - 10 + 174 = 74$ dBHz, sufficient for good quality speech (Table \ref{tab:waveforms_good}).
+where $P$ is the maximum output power of the transmitter power amplifier, $PAPR$ is the Peak to Average Power Ratio of the waveform, $L_{path}$ is the path loss, $NF$ is the noise figure of the receiver.  For example consider a 400 MHz FM hand held radio over a 1km urban (non line of site) path.  The radio has a 1W (30 dBm) power output, $L_{path}=120$ dB, with noise dominated by ambient EMI such that $NF=10$ dB. $C/N_0 = 30 - 0 - 120 - 10 + 174 = 74$ dBHz, sufficient for good quality speech (Table \ref{tab:waveforms_good}).
 
-Note that $C/N_0$ in the demodulator is a function of PAPR.  A high PAPR reduces the $C/N_0$ at the receiver.  We effectively ``back off" the transmitter power from the potential peak power $P$ by the PAPR.  As PAPR varies by waveform, this should be included in any metric for comparison of waveforms.  We define $P/N_0$ as:
+Note that $C/N_0$ in the demodulator is a function of PAPR.  A high PAPR reduces the $C/N_0$ at the receiver.  We effectively ``back off" the transmitter power from the maximum $P$ by the PAPR.  We assume the PA is capable of sustaining $P$ watts indefinately. As PAPR varies by waveform, it should be included in any metric for comparison of waveforms.  We define $P/N_0$ as:
 \begin{equation}
 P/N_0 = C/N_0 + PAPR
 \end{equation} 
@@ -195,19 +195,44 @@ A waveform that delivers intelligable speech at a low $P/N_0$ is the target.  A 
 
 \begin{table} [H]
 \centering
-\begin{tabular}{l l r r r}
+\begin{tabular}{l r r r r}
  \hline
  Waveform             & Audio BW & $C/N_0$ & $P/N_0$ & $\Delta$ \\
  \hline
  Radio Autoencoder    & 8000 & 30 & 31 &  0  \\
  Frequency Modulation & 3000 & 60 & 60 & -29 \\
  Single Sideband      & 2000 & 55 & 62 & -31 \\
- FreeDV 700D          & 3500 & 34 & 38 & -7  \\
  \hline
 \end{tabular}
-\caption{Comparison of good quality ``arm chair copy" by speech waveform over AWGN channels. They are ranked in terms of maximum achievable speech quality. The radio autoencoder delivers wideband (8000 Hz) audio.}
+\caption{Comparison of good quality ``arm chair copy" by speech waveform over AWGN channels. They are ranked in terms of maximum achievable speech quality. FreeDV 700D has been omitted because of its low speech quality even in ideal channels. The radio autoencoder delivers wideband (8000 Hz) audio.}
 \label{tab:waveforms_good}
 \end{table}
+
+\section{Over the Cable and Over the Air Tests}
+
+Impressive results have been obtained from the symbol rate simulations of an OFDM modem that assumed ideal synchronisation.  Need to verify using real radio signals.  This means building up a rate $Fs_s$ system, and synchronisation subsystems.  Choice was made to use classical DSP pilot symbol based syncronisation for the first pass, although we acknowldge potential for ML based syncrohinisation in future iterations.
+
+Goal is to compare speech quality at $E_b/N_0=0dB$ (approx -3dB SNR in 3000 Hz), and work through any issues that prevent the system working over real radio channels.  A column of pilots between every $N_s=4$ pilots.  Ref freedv low study, this is 0.96dB loss in SNR and increase in bandwidth. TODO calculations.  Pilots used for coarse 
+
+Pilot based sync built up in PyTorch, used for coarse and fine timing, phase and amplitide equalisation.  Unlike regular PSK, network is likely to be senstive to amplitude variations.  Phase qualisation allows small frequency offsets (+/- 2 Hz) to be tracked.
+
+Several phase estimators were prototyped. They were tested using BER measurements. Issues with maintaining low loss syncronisation at low $E_b/N_0$.  Might be better to use lower dimension and higher $E_b/N_0$, which will allocate more power to pilots, less carriers.  Using per-carrier phase estimation makes the system less dependant on fine timing and the ability to handle multipath, but has higher loss.
+
+\begin{figure}[h]
+\caption{OFDM pilot based synchronisation algorithm performance, tested with digital PSK symbols on an AWGN channel. With ideal sync, intelligable speech is produced at $E_b/N_0=-6$ dB or BER=0.24.}
+\label{fig:ofdm_sync}
+\begin{center}
+\input ofdm_sync.tex
+\end{center}
+\end{figure}
+
+Figure \ref{fig:ofdm_sync} plots the perfomance of the OFDM pilot based synchronisation system used for the OTC/OTA tests on an AWGN channel.  The unsually low $E_b/N_0$ range we are considering is challenging.  The \emph{genie} curve is the baseline rate $F_s$ OFDM system with ideal sync, and matches the theoretical results.  Using this system, we can obtain intelligable speech at $E_b/N_0=-6$, or BER=0.24 in a digital system.  We can use the BER=0.25 line to estimate the loss of the synchronisation based system at this operating point, which for the \emph{mean6} and \emph{LS} algorithms under realistic conditions is around 2dB.
+
+No CP inserted at this time.
+TODO Figure of OFDM frame.  TODO Figure of OTC tests
+TODO table/figure of sync results, discussion of issues
+
+TODO further work, try lower dimension, higher Eb/No op point, put pilots in information sent to decoder, train with freq and phase offsets, train without pilots but phase/amp offsets, compare to classical DSP pilot losses.
 
 \section{Glossary}
 

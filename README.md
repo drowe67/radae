@@ -6,6 +6,26 @@ J.-M. Valin, J. Büthe, A. Mustafa, [Low-Bitrate Redundancy Coding of Speech Usi
 
 The RDOVAE derived Python source code is released under the two-clause BSD license.
 
+# Files
+
+| File | Description |
+| --- | --- |
+| radae/radae.py | ML model and channel simulation |
+| radae/dataset.py | loading data for training |
+| train.py | trains models |
+| inference.py | Testing models, injecting channel impairments |
+| rx.py | Stand alone receiver, use inference.py as transmitter |
+| inference.sh | helper script for inference.py |
+| rx.sh | helper script for rx.py |
+| ofdm_sync.sh | generates curves to evaluate classical DSP sync performance |
+| evaluate.sh | script to compare radae to SSB, generates plots and speech samples |
+| doppler_spread.m | Octave script to generate Doppler spreading samples |
+| load_f32.m | Octave script to load .f32 samples |
+| multipath_samples.m | Octave script to generate multipath magnitude sample over a time/freq grid |
+| plot_specgram.m | Plots sepctrogram of radae modem signals |
+| radae_plots.m | Helper Octave script to generate various plots |
+| radio_ae.tex/pdf | Latex documenation |
+
 # LPCNet setup
 
 ```
@@ -89,7 +109,7 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
    octave:120> radae_plots; loss_EbNo_plot("loss_models",'model05_loss_EbNodB.txt','m5_Rs_mp','model07_loss_EbNodB.txt','m7_Fs_offets','model08_loss_EbNodB.txt','m8_Fs')
    ```
    
-# OTA/OTC
+# Over the Air/Over the Cable (OTA/OTC)
 
 We separate the system into a transmitter `inference.py` and stand alone receiver `rx.py`.
 
@@ -107,7 +127,7 @@ BER tests, useful to calibrate system, and measures loss from classical DSP base
 
 4. Or with noise, frequency, and gain offsets:
    ```
-   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav t.wav --pilots --pilot_eq --rate_Fs --EbNodB 0 --freq_offset 2 --write_rx rx_0dB.f32 --ber_test
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav t.wav --pilots --pilot_eq --rate_Fs --EbNodB 0 --freq_offset 2 --gain 0.1 --write_rx rx_0dB.f32 --ber_test
    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_0dB.f32 t.wav --pilots --pilot_eq --ber z_100dB.f32 --plots
    ```
    

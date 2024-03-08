@@ -55,3 +55,49 @@ function loss_EbNo_plot(png_fn, varargin)
         print("-dpng",png_fn);
     end
 endfunction
+
+% usage:
+%   radae_plots; ofdm_sync_plots("","ofdm_sync.txt","go-;genie;","ofdm_sync_pilot_eq.txt","r+-;mean6;","ofdm_sync_pilot_eq_f2.txt","bx-;mean6 2 Hz;","ofdm_sync_pilot_eq_g0.1.txt","gx-;mean6 gain 0.1;","ofdm_sync_pilot_eq_ls.txt","ro-;LS;","ofdm_sync_pilot_eq_ls_f2.txt","bo-;LS 2 Hz;")
+
+function ofdm_sync_plots(epslatex, varargin)
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts();
+    end
+    figure(1); clf; hold on;
+    EbNodB = -8:4; EbNo = 10.^(EbNodB/10);
+    ber_theory = 0.5*erfc(sqrt(EbNo));
+    plot(EbNodB, ber_theory,'b+-;theory;');
+    i = 1;
+    while i <= length(varargin)
+        fn = varargin{i};
+        data = load(fn);
+        i++; leg = varargin{i}; leg = strrep (leg, "_", " ")
+        plot(data(:,1),data(:,2),sprintf("%s",leg))
+        i++;
+    end
+    hold off; grid('minor'); xlabel('Eb/No (dB)'); ylabel('BER'); legend('boxoff');
+    if length(epslatex)
+        print_eps_restore(epslatex,"-S350,300",textfontsize,linewidth);
+    end
+endfunction
+
+function [textfontsize linewidth] = set_fonts(font_size=12)
+  textfontsize = get(0,"defaulttextfontsize");
+  linewidth = get(0,"defaultlinelinewidth");
+  set(0, "defaulttextfontsize", font_size);
+  set(0, "defaultaxesfontsize", font_size);
+  set(0, "defaultlinelinewidth", 0.5);
+end
+
+function restore_fonts(textfontsize,linewidth)
+  set(0, "defaulttextfontsize", textfontsize);
+  set(0, "defaultaxesfontsize", textfontsize);
+  set(0, "defaultlinelinewidth", linewidth);
+end
+
+function print_eps_restore(fn,sz,textfontsize,linewidth)
+  print(fn,sz,"-depslatex");
+  printf("printing... %s\n", fn);
+  restore_fonts(textfontsize,linewidth);
+end
+
