@@ -52,7 +52,9 @@ For example with $T_z=0.04, d=80, R_q=1000$ symbols/s.
 
 We wish to simulate an AWGN channel with a user-defined $E_b/N_0$, where $E_b$ is the energy of each BPSK symbol, and $N_0$ is the noise power per unit bandwidth.  Consider a real valued signal sampled off air (Figure \ref{fig:bandpass}).  We will follow convention and define signal and noise power in the ``single sided" bandpass interval of the frequency spectrum with bandwidth B centered on $\omega$.  As the interval is single sided, we must use complex valued quantities to represent it.
 
-We wish to simulate a bandpass AWGN channel at baseband ($\omega=0$).  This implies a frequency shift of the complex valued signal, but the signal remains complex valued and it's power is unchanged. Note that even at baseband we must use complex valued quantities for the signal and noise.  We cannot represent a bandpass baseband signal with real valued quantities. The negative frequency component is redundant and after frequency shifting can be removed by filtering.  
+We wish to simulate a bandpass AWGN channel at baseband ($\omega=0$).  This implies a frequency shift of the complex valued signal, but the signal remains complex valued and it's power is unchanged. The negative frequency component on the LHS of Figure \ref{fig:bandpass} is redundant and after frequency shifting can be removed by filtering.
+
+Note that even at baseband we must use complex valued quantities for the signal and noise to represent a bandpass signal of bandwidth $B$.  For example, given a fixed sample rate $B$ and noise power $N$, a real valued noise sequence can only represent a bandwidth of $B/2$ which results in doubling the noise density $N_0=N/(B/2)=2N_0$ compared to a complex valued noise sequence with the same power.   
 
 The energy of each BPSK symbol $E_b$ is the signal power $S$ divided by the symbol rate $R_b=1/T_b$.  The noise per unit bandwidth is the total noise power $N$ divided by the bandwidth $B$ of the system.  If we are simulating at one sample per symbol, $B=R_b$:
 \begin{equation}
@@ -99,7 +101,7 @@ At one sample per symbol, the power, the mean energy of each QPSK symbol over a 
 \begin{equation}
 E_q = E[|q_i|^2] = \frac{1}{K}\sum_{i=0}^{K-1}|q_i|^2
 \end{equation}
-As each QPSK symbol contains 2 BPSK symbols, the energy is split evenly:
+Note the variance function should not be used to calculate $E_q$, as we cannot guarantee $q_i$ is zero mean. As each QPSK symbol contains 2 BPSK symbols, the energy is split evenly:
 \begin{equation}
 E_b = E_q/2
 \end{equation}

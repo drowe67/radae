@@ -91,15 +91,31 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
    
 # OTA/OTC
 
-1. Generate Fs=8KHz complex samples with pilot symbols and AWGNnoise:
+We separate the system into a transmitter `inference.py` and stand alone receiver `rx.py`.
+
+BER tests, useful to calibrate system, and measures loss from classical DSP based synchronisation.
+
+1. First enerate no-noise reference symnbols for BER measurement `z_100dB.f32`:
    ```
-   ./inference.sh model07/checkpoints/checkpoint_epoch_100.pth wav/david.wav tmp.wav --write_latent z_hat.f32 --write_rx rx.f32  --rate_Fs --EbNodB 10 --pilots
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav t.wav --EbNodB 100 --pilots --pilot_eq --rate_Fs --ber_test --write_rx rx_100dB.f32 --write_latent z_100dB.f32
+   ```
+   
+3. The file `z_100dB.f32` can then be used to measure BER at the receiver, e.g. with no noise:
+   ```
+   ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_100dB.f32 t.wav --pilots --pilot_eq --ber z_100dB.f32 --plots
    ```
 
-1. Demodulate with stand alone receiver `rx.py`:
+4. Or with noise, frequency, and gain offsets:
    ```
-   ./rx.sh model07/checkpoints/checkpoint_epoch_100.pth rx.f32 - --pilots
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav t.wav --pilots --pilot_eq --rate_Fs --EbNodB 0 --freq_offset 2 --write_rx rx_0dB.f32 --ber_test
+   ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_0dB.f32 t.wav --pilots --pilot_eq --ber z_100dB.f32 --plots
    ```
+   
+5. Compare to the BER without pilot based EQ:
+   ```
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav t.wav --pilots --rate_Fs --EbNodB 0 --ber_test
+   ```
+   Note the ideal BER for AWGN is given by `BER = 0.5*erfc(sqrt(Eb/No))`, where Eb/No is the linear Eb/No.
 
 # Tests
 
