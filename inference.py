@@ -86,7 +86,7 @@ checkpoint['state_dict'] = model.state_dict()
 # dataloader
 feature_file = args.features
 features_in = np.reshape(np.fromfile(feature_file, dtype=np.float32), (1, -1, nb_total_features))
-nb_features_rounded = model.dec_stride*(features_in.shape[1]//model.dec_stride)
+nb_features_rounded = model.num_10ms_times_steps_rounded_to_modem_frames(features_in.shape[1])
 features = features_in[:,:nb_features_rounded,:]
 features = features[:, :, :num_used_features]
 features = torch.tensor(features)
@@ -95,7 +95,7 @@ print(f"Processing: {nb_features_rounded} feature vectors")
 # default multipath model H=1
 Rs = model.get_Rs()
 Nc = model.get_Nc()
-num_timesteps_at_rate_Rs = int((nb_features_rounded // model.get_enc_stride())*model.get_Ns())
+num_timesteps_at_rate_Rs = model.num_timesteps_at_rate_Rs(nb_features_rounded)
 H = torch.ones((1,num_timesteps_at_rate_Rs,Nc))
 
 # construct a contrived multipath model, will be a series of peaks an notches, between H=2 an H=0

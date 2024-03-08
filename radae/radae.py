@@ -341,13 +341,16 @@ class RADAE(nn.Module):
         bps = 2                                         # BPSK symbols per QPSK symbol
         Ts = 0.02                                       # OFDM QPSK symbol period
         Rs = 1/Ts                                       # OFDM QPSK symbol rate
-        Nsmf = self.latent_dim // bps                   # total number of QPSK symbols in a modem frame across all carriers
-        Ns = int(self.Tz // Ts)                         # duration of "modem frame" in QPSK symbols
+        Nzmf = 2                                        # number of latent vectors in a modem frame
+        Nsmf = Nzmf*self.latent_dim // bps              # total number of QPSK symbols in a modem frame across all carriers
+        Ns = int(Nzmf*self.Tz // Ts)                    # duration of "modem frame" in QPSK symbols
         Nc = int(Nsmf // Ns)                            # number of carriers
-        assert Ns*Nc*bps == latent_dim                  # sanity check, one modem frame should contain all the latent features
+        assert Ns*Nc*bps == Nzmf*latent_dim             # sanity check, one modem frame should contain all the latent features
+        self.Ts = Ts
         self.Rs = Rs
         self.Ns = Ns
         self.Nc = Nc
+        self.Nzmf = Nzmf
         print(f"Nsmf...: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d}")
 
         # DFT matrices for Nc freq samples, M time samples (could be a FFT but matrix convenient for small, non power of 2 DFTs)
@@ -379,6 +382,15 @@ class RADAE(nn.Module):
         return self.Ns
     def get_Fs(self):
         return self.Fs
+   
+    def num_timesteps_at_rate_Rs(self, num_ten_ms_timesteps):
+        return int((num_ten_ms_timesteps / self.enc_stride) * self.Tz / self.Ts)
+
+    def num_10ms_times_steps_rounded_to_modem_frames(self, num_ten_ms_timesteps):
+        num_modem_frames = num_ten_ms_timesteps // self.enc_stride // self.Nzmf
+        num_ten_ms_timesteps_rounded = num_modem_frames * self.enc_stride * self.Nzmf
+        print(num_ten_ms_timesteps,  num_modem_frames, num_ten_ms_timesteps_rounded)
+        return num_ten_ms_timesteps_rounded
     
     # Use classical DSP pilot based equalisation. Note just for inference atm, and only works on AWGN
     def do_pilot_eq(self, num_modem_frames, rx_sym_pilots):
@@ -477,7 +489,8 @@ class RADAE(nn.Module):
     def forward(self, features, H):
         
         (num_batches, num_ten_ms_timesteps, num_features) = features.shape
-        num_timesteps_at_rate_Rs = int((num_ten_ms_timesteps // self.enc_stride)*self.Ns)
+        num_timesteps_at_rate_Rs = self.num_timesteps_at_rate_Rs(num_ten_ms_timesteps)
+        #print(num_ten_ms_timesteps, num_timesteps_at_rate_Rs)
 
         # For every OFDM modem time step, we need one channel sample for each carrier
         #print(features.shape,H.shape, features.device, H.device)
@@ -488,7 +501,7 @@ class RADAE(nn.Module):
         # AWGN noise
         if self.range_EbNo:
             EbNodB = -6 + 20*torch.rand(num_batches,1,1,device=features.device)
-        else:
+        else:           
             EbNodB = torch.tensor(self.EbNodB)
 
         # run encoder, outputs sequence of latents that each describe 40ms of speech
