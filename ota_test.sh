@@ -53,6 +53,7 @@ soundDevice="plughw:CARD=CODEC,DEV=0"
 txstats=0
 stationid=""
 speechFs=16000
+setpoint_rms=6000
 
 function print_help {
     echo
@@ -131,6 +132,14 @@ function process_rx {
           snr_valid = snr(find(snr != -5.0)); \
           if length(snr_valid) printf('SNRav: %5.2f\n', mean(snr_valid)); else printf('SNRav: %5.2f\n', -5); end;
           quit" | octave-cli -p ${CODEC2}/octave -qf
+}
+
+function measure_rms() {
+    ch_log=$(mktemp)
+    ch $1 /dev/null 2>${ch_log}
+    rms=$(cat $ch_log | grep "RMS" | tr -s ' ' | cut -d' ' -f5)
+    papr=$(cat $ch_log | grep "CPAPR" | tr -s ' ' | cut -d' ' -f7)
+    echo $rms
 }
 
 POSITIONAL=()
@@ -239,14 +248,25 @@ else
     cat  $stationid_raw_8k $speechfile_raw_8k > $comp_in
 fi
 analog_compressor $comp_in $tx_ssb $gain
-echo "TODO measure SSB power C"
 
 # create modulated radae signal and cat with SSB
 ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth $speechfile /dev/null --EbNodB 100 --pilots --rate_Fs --write_rx ${tx_radae}.f32
-# to create real signal we just extract the "left" channel, insert 1 sec silence at start to separate SSB and radae
-sox -r 8k -e float -b 32 -c 2 ${tx_radae}.f32 -t .s16 -c 1 ${tx_radae}.raw remix 1 0 pad 1@0
-echo "TODO measure radae power C"
-cat $tx_ssb ${tx_radae}.raw > tx.raw
+# to create real signal we just extract the "left" channel
+sox -r 8k -e float -b 32 -c 2 ${tx_radae}.f32 -t .s16 -c 1 ${tx_radae}.raw remix 1 0
+
+# Make power of both signals the same, but adjusting the RMS levels to meet the setpoint
+ssb_rms=$(measure_rms $tx_ssb)
+radae_rms=$(measure_rms ${tx_radae}.raw)
+ssb_gain=$(python3 -c "gain=${setpoint_rms}/${ssb_rms}; print(\"%f\" % gain)")
+radae_gain=$(python3 -c "gain=${setpoint_rms}/${radae_rms}; print(\"%f\" % gain)")
+
+tx_ssb_gain=$(mktemp)
+sox -t .s16 -r 8k -c 1 -v $ssb_gain $tx_ssb -t .s16 -r 8k -c 1 $tx_ssb_gain
+tx_radae_gain=$(mktemp)
+# insert 1 second of silence between SSB and radae
+sox -t .s16 -r 8k -c 1 -v $radae_gain ${tx_radae}.raw -t .s16 -r 8k -c 1 $tx_radae_gain pad 1@0
+
+cat $tx_ssb_gain $tx_radae_gain > tx.raw
 sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
 
 if [ $txstats -eq 1 ]; then
