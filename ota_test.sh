@@ -59,8 +59,8 @@ function print_help {
     echo
     echo "Automated Over The Air (OTA) voice test for Radio Autoencoder"
     echo
-    echo "  usage ./ota_voice_test.sh -x InputSpeechWaveFile"
-    echo "  usage ./ota_voice_test.sh -r rxWaveFile"
+    echo "  usage ./ota_test.sh -x InputSpeechWaveFile"
+    echo "  usage ./ota_test.sh -r rxWaveFile"
     echo "  or:"
     echo "  usage ./ota_voice_test.sh [options] SpeechWaveFile [kiwi_url]"
     echo
@@ -88,7 +88,6 @@ function analog_compressor {
     ch - - --No -100 --clip 16384 --gain $gain 2>/dev/null | \
     # final line prints peak and CPAPR for SSB
     ch - - --clip 16384 |
-    # TODO: automagically adjust to get correct C or PAPR
     sox -t .s16 -r 8000 -c 1 -v 0.85 - -t .s16 $output_file
 }
 
@@ -117,21 +116,18 @@ function process_rx {
     echo "pkg load signal; warning('off', 'all'); \
           s=load_raw('${rx}'); \
           plot_specgram(s, 8000, 200, 3000); print('spec.jpg', '-djpg'); \
-          quit" | octave-cli -p ${CODEC2}/octave -qf > /dev/null
-    # attempt to decode
-    freedv_rx ${mode} ${rx} - -v --passthroughgain 1.0 2>rx_stats.txt | sox -t .s16 -r $speechFs -c 1 - rx_freedv.wav
-    cat rx_stats.txt | tr -s ' ' | cut -f5 -d' ' | awk '$0==($0+0)' > sync.txt
-    cat rx_stats.txt | tr -s ' ' | cut -f10 -d' ' | awk '$0==($0+0)' > snr.txt
-    # time domain plot of output speech, SNR, and sync
-    echo "pkg load signal; warning('off', 'all'); \
-          s=load_raw('rx_freedv.wav'); snr=load('snr.txt'); sync=load('sync.txt'); \
-          subplot(211); plot(s); subplot(212); x=1:length(sync); plotyy(x,snr,x,sync); \
-          ylim([-5 15]); ylabel('SNR (dB)'); grid; \
-          print('time_snr.jpg', '-djpg'); \
-          printf('Nsync: %3d\n', sum(sync)); \
-          snr_valid = snr(find(snr != -5.0)); \
-          if length(snr_valid) printf('SNRav: %5.2f\n', mean(snr_valid)); else printf('SNRav: %5.2f\n', -5); end;
-          quit" | octave-cli -p ${CODEC2}/octave -qf
+          quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
+    
+    # assume first half is voice, so work out length of each file
+    total_duration=$(sox --info -D $rx)
+    end_ssb=$(python3 -c "x=${total_duration}/2.0 - 2; print(\"%f\" % x)")
+    start_radae=$(python3 -c "x=${total_duration}/2.0; print(\"%f\" % x)")
+    rx_radio=$(mktemp)
+    rx_radae=$(mktemp)
+    sox $rx rx_ssb.wav trim 0 $end_ssb
+    sox $rx -e float -b 32 -c 2 ${rx_radae}.f32 trim $start_radae remix 1 0
+    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 rx_radae.wav --pilots --pilot_eq --plots
+    exit
 }
 
 function measure_rms() {
@@ -249,8 +245,11 @@ else
 fi
 analog_compressor $comp_in $tx_ssb $gain
 
-# create modulated radae signal and cat with SSB
-./inference.sh model05/checkpoints/checkpoint_epoch_100.pth $speechfile /dev/null --EbNodB 100 --pilots --rate_Fs --write_rx ${tx_radae}.f32
+# insert an extra second of silence at start of radae speech input to make sync easier
+speechfile_pad=$(mktemp).wav
+sox $speechfile $speechfile_pad pad 1@0
+# create modulated radae signal
+./inference.sh model05/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --EbNodB 100 --pilots --rate_Fs --write_rx ${tx_radae}.f32
 # to create real signal we just extract the "left" channel
 sox -r 8k -e float -b 32 -c 2 ${tx_radae}.f32 -t .s16 -c 1 ${tx_radae}.raw remix 1 0
 
@@ -266,6 +265,7 @@ tx_radae_gain=$(mktemp)
 # insert 1 second of silence between SSB and radae
 sox -t .s16 -r 8k -c 1 -v $radae_gain ${tx_radae}.raw -t .s16 -r 8k -c 1 $tx_radae_gain pad 1@0
 
+# cat both signals together so we can send them over a radio at the same time
 cat $tx_ssb_gain $tx_radae_gain > tx.raw
 sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
 
