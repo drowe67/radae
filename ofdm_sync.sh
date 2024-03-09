@@ -24,11 +24,11 @@ function run_curve {
 }
 
 # TODO vanilla, different sync algorithms, freq offsets, gain offsets
-#run_curve ofdm_sync.txt
-#run_curve ofdm_sync_pilot_eq.txt --pilot_eq
-#run_curve ofdm_sync_pilot_eq_f2.txt --pilot_eq --freq_offset 2
-#run_curve ofdm_sync_pilot_eq_g0.1.txt --pilot_eq --gain 0.1
-#run_curve ofdm_sync_pilot_eq_ls.txt --pilot_eq --eq_ls
+run_curve ofdm_sync.txt
+run_curve ofdm_sync_pilot_eq.txt --pilot_eq
+run_curve ofdm_sync_pilot_eq_f2.txt --pilot_eq --freq_offset 2
+run_curve ofdm_sync_pilot_eq_g0.1.txt --pilot_eq --gain 0.1
+run_curve ofdm_sync_pilot_eq_ls.txt --pilot_eq --eq_ls
 run_curve ofdm_sync_pilot_eq_ls_f2.txt --pilot_eq --eq_ls --freq_offset 2 --gain 0.1
 
 
