@@ -1,31 +1,50 @@
 #!/usr/bin/env bash
-# ota_voice_test.sh
+# ota_test.sh
 #
-# Automated Over The Air (OTA) voice test for FreeDV HF voice modes
+# Automated Over The Air (OTA) voice test for Radio Autoencoder:
+#   + Given an input speech wave file, constructs a compressed SSB and radae signal with 
+#     the same average power
+#   + Transmits the signal over one radio and simultaneously receives over another radio
+#   + Decodes the audio from both signals for comparison
 #
-# 1. Build codec2
+# The Tx radio can be a wave file, or COTS HF radio connected to a sound card with PTT via 
+# rigctl. The Rx radio can be a wave file, KiwiSDR, or RTLSDR.
+#
+# Setup (you may not need all of these):
+# --------------------------------------
+#
+# 0. Clone and build codec2-dev
+# 1. Install HackRF tools:
+#      TODO
 # 2. Install kiwclient:
-#    cd ~ && git clone git@github.com:jks-prv/kiwiclient.git
-# 3. Install Hamlib cli tools, and add user to dialout group:
+#      cd ~ && git clone git@github.com:jks-prv/kiwiclient.git
+# 3. Hamlib cli tools (rigctl), and add user to dialout group:
 #      sudo adduser david dialout
-# 4. To test rigctl:
+# 4. Test rigctl:
 #      echo "m" | rigctl -m 361 -r /dev/ttyUSB0
-# 5. Adjust Tx drive so ALC is just being tickled, set desired RF power:
-# ../build_linux/src/freedv_tx 2020 ~/Downloads/speech_orig_16k.wav - | aplay -f S16_LE --device="plughw:CARD=CODEC,DEV=0"
-# 6. Sample command line:
-#      ./ota_voice_test.sh ~/Downloads/speech_orig_16k.wav -m 700E -i ~/Downloads/vk5dgr_testing_8k.wav sdr.ironstonerange.com -p 8074
+# 5. Adjust HF radio Tx drive so ALC is just being tickled, set desired RF power:
+#      ./ota_test.sh ~/all/peter.wav -x
+#      aplay -f S16_LE --device="plughw:CARD=CODEC,DEV=0" tx.wav
+#
+# Usage
+# -----
+#
+# 1. File based I/O:
+#
+# 2. HF Radio Tx, KiwiSDR Rx, vk5dgr_testing_8k.wav as station ID file:
+#    ./ota_test.sh wav/peter.wav -i ~/Downloads/vk5dgr_testing_8k.wav sdr.ironstonerange.com -p 8074
 
-MY_PATH=`dirname $0`
-BUILD_PATH=`echo $MY_PATH/../build_*/src`
-PATH=${PATH}:${BUILD_PATH}:${HOME}/kiwiclient
-CODEC2=${MY_PATH}/..
+CODEC2_PATH=${HOME}/codec2-dev
+# TODO: way to adjust /build_linux/src for OSX
+PATH=${PATH}:${CODEC2_PATH}/build_linux/src:${HOME}/kiwiclient
+
+which ch || { printf "\n**** Can't find ch - check CODEC2_PATH **** \n\n"; exit 1; }
 
 kiwi_url=""
 port=8074
 freq_kHz="7177"
 tx_only=0
 Nbursts=5
-mode="700D"
 model=361
 gain=6
 serialPort="/dev/ttyUSB0"
@@ -33,22 +52,23 @@ rxwavefile=0
 soundDevice="plughw:CARD=CODEC,DEV=0"
 txstats=0
 stationid=""
+speechFs=16000
 
 function print_help {
     echo
-    echo "Automated Over The Air (OTA) voice test for FreeDV HF voice modes"
+    echo "Automated Over The Air (OTA) voice test for Radio Autoencoder"
     echo
-    echo "  usage ./ota_voice_test.sh [options] SpeechWaveFile [kiwi_url]"
-    echo "  or:"
+    echo "  usage ./ota_voice_test.sh -x InputSpeechWaveFile"
     echo "  usage ./ota_voice_test.sh -r rxWaveFile"
+    echo "  or:"
+    echo "  usage ./ota_voice_test.sh [options] SpeechWaveFile [kiwi_url]"
     echo
     echo "    -c dev                    The sound device (in ALSA format on Linux, CoreAudio for macOS)"
     echo "    -d                        debug mode; trace script execution"
     echo "    -g                        SSB (analog) compressor gain"
-    echo "    -i StationIDWaveFile      Prepend this file to identify transmission (should be 8KHz mono)"
-    echo "    -m mode   700c|700d|700e"
+    echo "    -i StationIDWaveFile      Prepend this file to identify transmission (should be 8kHz mono)"
     echo "    -o model                  select radio model number ('rigctl -l' to list)"
-    echo "    -p port                   kiwi_url port to use (default 8073)."
+    echo "    -p port                   kiwi_url port to use (default 8073)"
     echo "    -r                        Rx wave file mode: Rx process supplied rx wave file"
     echo "    -s SerialPort             The serial port (or hostname:port) to control SSB radio,"
     echo "                              default /dev/ttyUSB0"
@@ -67,7 +87,7 @@ function analog_compressor {
     ch - - --No -100 --clip 16384 --gain $gain 2>/dev/null | \
     # final line prints peak and CPAPR for SSB
     ch - - --clip 16384 |
-    # manually adjusted to get similar peak levels for SSB and FreeDV
+    # TODO: automagically adjust to get correct C or PAPR
     sox -t .s16 -r 8000 -c 1 -v 0.85 - -t .s16 $output_file
 }
 
@@ -142,11 +162,6 @@ case $key in
         shift
         shift
     ;;
-    -m)
-        mode="$2"	
-        shift
-        shift
-    ;;
     -p)
         port="$2"	
         shift
@@ -185,11 +200,7 @@ esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
-# determine sample rate of freedv_tx/freedv_rx
-speechFs=8000
-if [ "$mode" == "2020" ] || [ "$mode" == "2020B" ]; then
-   speechFs=16000
-fi
+speechFs=16000
 
 if [ $rxwavefile -eq 1 ]; then
     process_rx $1
@@ -211,14 +222,13 @@ if [ $tx_only -eq 0 ]; then
 fi
 
 # create Tx file ------------------------
-echo $mode
 
-# create compressed analog
+# create compressed SSB signal
 speechfile_raw_8k=$(mktemp)
 comp_in=$(mktemp)
-speech_comp=$(mktemp)
-speech_freedv=$(mktemp)
-# If 16kHz input files for 2020x, we need an 8kHz version for SSB
+tx_ssb=$(mktemp)
+tx_radae=$(mktemp)
+# With 16kHz input files, we need an 8kHz version for SSB
 sox $speechfile -r 8000 -t .s16 -c 1 $speechfile_raw_8k
 if [ -z $stationid ]; then
     cp $speechfile_raw_8k $comp_in
@@ -226,23 +236,27 @@ else
     # append station ID and apply analog compression
     stationid_raw_8k=$(mktemp)
     sox $stationid -r 8000 -t .s16 -c 1 $stationid_raw_8k
-    cat  $stationid_raw_8k $speechfile_raw_8k> $comp_in
+    cat  $stationid_raw_8k $speechfile_raw_8k > $comp_in
 fi
-analog_compressor $comp_in $speech_comp $gain
+analog_compressor $comp_in $tx_ssb $gain
+echo "TODO measure SSB power C"
 
-# create modulated FreeDV, with compressor enabled
-sox $speechfile -t .s16 -r $speechFs - | freedv_tx $mode - $speech_freedv --clip 1
-cat $speech_comp $speech_freedv > tx.raw
+# create modulated radae signal and cat with SSB
+./inference.sh model05/checkpoints/checkpoint_epoch_100.pth $speechfile /dev/null --EbNodB 100 --pilots --rate_Fs --write_rx ${tx_radae}.f32
+# to create real signal we just extract the "left" channel, insert 1 sec silence at start to separate SSB and radae
+sox -r 8k -e float -b 32 -c 2 ${tx_radae}.f32 -t .s16 -c 1 ${tx_radae}.raw remix 1 0 pad 1@0
+echo "TODO measure radae power C"
+cat $tx_ssb ${tx_radae}.raw > tx.raw
 sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
 
 if [ $txstats -eq 1 ]; then
     # ch just used to monitor observe peak and RMS level
-    ch $speech_freedv /dev/null
+    ch tx.raw /dev/null
     # time domain plot of tx signal
     echo "pkg load signal; warning('off', 'all'); \
           s=load_raw('tx.raw'); plot(s); \
           print('tx.jpg', '-djpg'); \
-          quit" | octave-cli -p ${CODEC2}/octave -qf > /dev/null
+          quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
     exit 0
 fi
 

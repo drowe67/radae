@@ -15,6 +15,7 @@ if [ $# -lt 3 ]; then
     echo "  ./inference.sh model in.s16 - [optional inference.py args]"
     exit 1
 fi
+
 if [ ! -f $1 ]; then
     echo "can't find $1"
     exit 1
@@ -39,7 +40,7 @@ if [ $output_speech == "-" ]; then
     tmp=$(mktemp)
     lpcnet_demo -fargan-synthesis ${features_out} ${tmp}
     aplay $tmp -r 16000 -f S16_LE
-else
+elif [ $output_speech != "/dev/null" ]; then
     tmp=$(mktemp)
     lpcnet_demo -fargan-synthesis ${features_out} ${tmp}
     sox -t .s16 -r 16000 -c 1 ${tmp} ${output_speech}
