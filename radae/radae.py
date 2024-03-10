@@ -85,10 +85,12 @@ def n(x):
 # Generate pilots using Barker codes which have good correlation properties
 def barker_pilots(Nc):
     P_barker_8  = torch.tensor([1., 1., 1., -1., -1., 1., -1.])
+    P_barker_13 = torch.tensor([1., 1., 1., 1., 1., -1., -1., 1., 1., -1., 1., -1., 1])
+
     # repeating length 8 Barker code 
     P = torch.zeros(Nc,dtype=torch.complex64)
     for i in range(Nc):
-        P[i] = P_barker_8[i % len(P_barker_8)]
+        P[i] = P_barker_13[i % len(P_barker_13)]
     return P
 
 #Wrapper for 1D conv layer

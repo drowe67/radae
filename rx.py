@@ -90,7 +90,8 @@ if args.plots:
    ax[0].specgram(rx,NFFT=256,Fs=model.get_Fs())
    ax[0].axis([0,len(rx)/model.get_Fs(),0,2000])
    ax[0].title
-rx = complex_bpf(8000,1200,900,rx)
+
+rx = complex_bpf(model.get_Fs(),1200,900,rx)
 
 if args.plots:
    ax[1].specgram(rx,NFFT=256,Fs=model.get_Fs())
@@ -102,24 +103,40 @@ if args.pilots:
    M = int(model.get_Fs()/model.get_Rs())
    Ns = model.get_Ns()                         # number of data symbols between pilots
    Nmf = int((Ns+1)*M)                         # number of samples in one modem frame
-   p = model.p                                 # pilot sequence
-   D = np.zeros(Nmf, dtype=np.csingle)         # correlation at various time offsets
+   p = np.array(model.p)                       # pilot sequence
+   Nf = 50                                     # number of samples on frequency grid
+   D = np.zeros((Nmf,Nf), dtype=np.csingle)    # correlation at various time offsets
+   Fs = model.get_Fs()
 
    tmax_candidate = 0 
    Pacq_error = 0.0001
    acquired = False
    state = "search"
 
+   # pre-calculate to speeds things up a bit
+   p_w = np.zeros((Nf, M), dtype=np.csingle)
+   for f_ind in range(Nf):
+      f = f_ind - Nf/2
+      w = 2*np.pi*f/Fs
+      p_w[f_ind,] = np.exp(1j*w*np.arange(model.M)) * p
+      
    while not acquired and len(rx) >= Nmf+M:
 
-      # search modem frame for maxima in correlation between pilots and received signal
+      # search modem frame for maxima in correlation between pilots and received signal, over
+      # a grid of time and frequency steps
       Dtmax = 0
       tmax = 0
+      fmax = 0
       for t in range(Nmf):
-         D[t] = np.dot(np.conj(rx[t:t+model.M]),p)
-         if np.abs(D[t]) > Dtmax:
-            Dtmax = np.abs(D[t])
-            tmax = t
+         for f_ind in range(Nf):
+            f = f_ind - Nf/2
+            w = 2*np.pi*f/Fs
+            D[t,f_ind] = np.dot(np.conj(rx[t:t+model.M]),p_w[f_ind,:])
+            if np.abs(D[t,f_ind]) > Dtmax:
+               Dtmax = np.abs(D[t,f_ind])
+               tmax = t
+               fmax = f 
+               f_ind_max = f_ind
       
       sigma_est = np.std(D)
       Dthresh = sigma_est*np.sqrt(-np.log(Pacq_error))
@@ -130,7 +147,7 @@ if args.pilots:
 
       # post process with a state machine that looks for 3 consecutive matches with about the same tmining offset      
       if candidate:
-         print(f"state: {state:10s} Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d}")
+         print(f"state: {state:10s} Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:f}")
 
       next_state = state
       match state:
@@ -159,23 +176,14 @@ if args.pilots:
    if args.plots:
       fig, ax = plt.subplots(2, 1,figsize=(6,12))
       fig.suptitle('Dt complex plane and |Dt| histogram')
-      ax[0].plot(D.real, D.imag,'b+')
+      ax[0].plot(D[:,f_ind_max].real, D[:,f_ind_max].imag,'b+')
       circle1 = plt.Circle((0,0), radius=Dthresh, color='r')
       ax[0].add_patch(circle1)
-      ax[1].hist(np.abs(D))
+      ax[1].hist(np.abs(D[:,f_ind_max]))
  
-   #tmax=48
-   print(len(rx))
    rx = rx[tmax:]
-   print(len(rx))
-
-   # magnitude normalisation
-
-   r = rx[:M]
-   g = np.dot(np.conj(r),r)/np.dot(np.conj(p),p)
-   print(f"g: {g:f}")
-   #rx = rx/g
-   #quit()
+   w = 2*np.pi*fmax/Fs
+   rx = rx*np.exp(-1j*w*np.arange(len(rx)))
 
 # push model to device and run receiver
 rx = torch.tensor(rx, dtype=torch.complex64)
