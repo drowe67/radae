@@ -118,23 +118,19 @@ function process_rx {
           plot_specgram(s, 8000, 200, 3000); print('spec.jpg', '-djpg'); \
           quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
     
-    # assume first half is voice, so work out length of each file
+    # assume first half is voice, so extract that, and decode radae
     total_duration=$(sox --info -D $rx)
     end_ssb=$(python3 -c "x=${total_duration}/2.0 - 2; print(\"%f\" % x)")
-    start_radae=$(python3 -c "x=${total_duration}/2.0; print(\"%f\" % x)")
-    rx_radio=$(mktemp)
     rx_radae=$(mktemp)
     sox $rx rx_ssb.wav trim 0 $end_ssb
-    sox $rx -e float -b 32 -c 2 ${rx_radae}.f32 trim $start_radae remix 1 0
+    sox $rx -e float -b 32 -c 2 ${rx_radae}.f32 trim $end_ssb remix 1 0
     ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 rx_radae.wav --pilots --pilot_eq --plots
-    exit
 }
 
 function measure_rms() {
     ch_log=$(mktemp)
     ch $1 /dev/null 2>${ch_log}
     rms=$(cat $ch_log | grep "RMS" | tr -s ' ' | cut -d' ' -f5)
-    papr=$(cat $ch_log | grep "CPAPR" | tr -s ' ' | cut -d' ' -f7)
     echo $rms
 }
 

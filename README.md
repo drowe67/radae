@@ -137,6 +137,16 @@ BER tests, useful to calibrate system, and measures loss from classical DSP base
    ```
    Note the ideal BER for AWGN is given by `BER = 0.5*erfc(sqrt(Eb/No))`, where Eb/No is the linear Eb/No.
 
+6. `ota_test.sh` script, generate `tx.wav`, simuled SSB and radae modem signal ready to run through a HF radio.  Add some noise to it to 
+   create `rx.wav`, then run through `ota_test.sh` in receive wave file mode to generate `rx_ssb.wav` and `rx_radae.wav, the demodulated
+   audio:
+   ```
+   ./ota_test.sh wav/peter.wav -x 
+   ~/codec2-dev/build_linux/src/ch tx.wav - --No -20 | sox -t .s16 -r 8000 -c 1 - rx.wav
+   ./ota_test.sh -r rx.wav
+   aplay rx_ssb.wav rx_radae.wav
+   ```
+
 # Tests
 
 1. BER test to check simulation modem calibration `--ber_test`

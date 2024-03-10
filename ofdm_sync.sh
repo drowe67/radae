@@ -31,6 +31,3 @@ run_curve ofdm_sync_pilot_eq_g0.1.txt --pilot_eq --gain 0.1
 run_curve ofdm_sync_pilot_eq_ls.txt --pilot_eq --eq_ls
 run_curve ofdm_sync_pilot_eq_ls_f2.txt --pilot_eq --eq_ls --freq_offset 2 --gain 0.1
 
-
-
-

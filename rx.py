@@ -100,16 +100,21 @@ if args.plots:
 
 if args.pilots:
    M = int(model.get_Fs()/model.get_Rs())
-   Ns = (model.get_Ns()+1)
-   Nmf = int(Ns*M)                             # number of samples in one modem frame
+   Ns = model.get_Ns()                         # number of data symbols between pilots
+   Nmf = int((Ns+1)*M)                         # number of samples in one modem frame
    p = model.p                                 # pilot sequence
    D = np.zeros(Nmf, dtype=np.csingle)         # correlation at various time offsets
-   Dtmax = 0
-   tmax = 0
-   Pacq_error = 0.001
+
+   tmax_candidate = 0 
+   Pacq_error = 0.0001
    acquired = False
+   state = "search"
+
    while not acquired and len(rx) >= Nmf+M:
-      # search modem frame for maxima
+
+      # search modem frame for maxima in correlation between pilots and received signal
+      Dtmax = 0
+      tmax = 0
       for t in range(Nmf):
          D[t] = np.dot(np.conj(rx[t:t+model.M]),p)
          if np.abs(D[t]) > Dtmax:
@@ -118,16 +123,39 @@ if args.pilots:
       
       sigma_est = np.std(D)
       Dthresh = sigma_est*np.sqrt(-np.log(Pacq_error))
-      print(f"sigma: {sigma_est:f} Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:d}")
+
+      candidate = False
       if Dtmax > Dthresh:
-         acquired = True
-         print("Acquired!")
-      else:
-         # advance one frame and search again
-         rx = rx[Nmf:-1]
+         candidate = True
+
+      # post process with a state machine that looks for 3 consecutive matches with about the same tmining offset      
+      if candidate:
+         print(f"state: {state:10s} Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d}")
+
+      next_state = state
+      match state:
+         case "search":
+            if candidate:
+               next_state = "candidate"
+               tmax_candidate = tmax
+               valid_count = 1
+         case "candidate":
+            if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
+               valid_count = valid_count + 1
+               if valid_count > 3:
+                  acquired = True
+                  print("Acquired!")
+            else:
+               next_state = "search"
+      state = next_state
+                  
+      # advance one frame and repeat
+      rx = rx[Nmf:-1]
+
    if not acquired:
       print("Acquisition failed....")
       quit()
+
    if args.plots:
       fig, ax = plt.subplots(2, 1,figsize=(6,12))
       fig.suptitle('Dt complex plane and |Dt| histogram')
