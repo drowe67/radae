@@ -39,7 +39,7 @@ from torch import nn
 import torch.nn.functional as F
 import sys
 import os
-from torch.nn.utils import weight_norm
+from torch.nn.utils.parametrizations import weight_norm
 
 # Quantization and loss utility functions
 
@@ -328,17 +328,6 @@ class RADAE(nn.Module):
         self.Rz = 1/self.Tz
         self.Rb =  latent_dim/self.Tz                  # BPSK symbol rate (symbols/s or Hz)
 
-        # SNR calcs for a fixed Eb/No run (e.g. inference)
-        # TODO: maybe move this to inference.py
-        if self.range_EbNo == False:
-            EbNo = 10**(EbNodB/10)                     # linear Eb/No
-            B = 3000                                   # (kinda arbitrary) bandwidth for measuring noise power (Hz)
-            SNR = (EbNo)*(self.Rb/B)
-            SNRdB = 10*m.log10(SNR)
-            CNodB = 10*m.log10(EbNo*self.Rb)
-            print(f"EbNodB.: {EbNodB:5.2f}  C/No dB: {CNodB:5.2f}")
-            print(f"SNR3kdB: {SNRdB:5.2f}  Rb.....:  {self.Rb:7.2f}")
-
         # set up OFDM "modem frame" parameters to support multipath simulation.  Modem frame is Nc carriers 
         # wide in frequency and Ns symbols in duration 
         bps = 2                                         # BPSK symbols per QPSK symbol
@@ -392,7 +381,7 @@ class RADAE(nn.Module):
     def num_10ms_times_steps_rounded_to_modem_frames(self, num_ten_ms_timesteps):
         num_modem_frames = num_ten_ms_timesteps // self.enc_stride // self.Nzmf
         num_ten_ms_timesteps_rounded = num_modem_frames * self.enc_stride * self.Nzmf
-        print(num_ten_ms_timesteps,  num_modem_frames, num_ten_ms_timesteps_rounded)
+        #(num_ten_ms_timesteps,  num_modem_frames, num_ten_ms_timesteps_rounded)
         return num_ten_ms_timesteps_rounded
     
     # Use classical DSP pilot based equalisation. Note just for inference atm, and only works on AWGN

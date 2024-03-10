@@ -13,7 +13,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | radae/radae.py | ML model and channel simulation |
 | radae/dataset.py | loading data for training |
 | train.py | trains models |
-| inference.py | Testing models, injecting channel impairments |
+| inference.py | Testing models, injecting channel impairments, simulate modem sync |
 | rx.py | Stand alone receiver, use inference.py as transmitter |
 | inference.sh | helper script for inference.py |
 | rx.sh | helper script for rx.py |
@@ -25,6 +25,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | plot_specgram.m | Plots sepctrogram of radae modem signals |
 | radae_plots.m | Helper Octave script to generate various plots |
 | radio_ae.tex/pdf | Latex documenation |
+| ota_test.sh | Script to automate Over The Air (OTA) testing |
 
 # LPCNet setup
 
@@ -56,7 +57,7 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
 
 1. Rate Rs with multipath, over range of Eb/No:
    ```
-   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 moedel05 --mp_file h_mpp.f32 --range_EbNo --plot_loss
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model05 --mp_file h_mpp.f32 --range_EbNo --plot_loss
    ```
 
 1. Rate Fs with simulated PA:
@@ -115,7 +116,7 @@ We separate the system into a transmitter `inference.py` and stand alone receive
 
 BER tests, useful to calibrate system, and measures loss from classical DSP based synchronisation.
 
-1. First enerate no-noise reference symnbols for BER measurement `z_100dB.f32`:
+1. First generate no-noise reference symnbols for BER measurement `z_100dB.f32`:
    ```
    ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav t.wav --EbNodB 100 --pilots --pilot_eq --rate_Fs --ber_test --write_rx rx_100dB.f32 --write_latent z_100dB.f32
    ```
@@ -137,9 +138,7 @@ BER tests, useful to calibrate system, and measures loss from classical DSP base
    ```
    Note the ideal BER for AWGN is given by `BER = 0.5*erfc(sqrt(Eb/No))`, where Eb/No is the linear Eb/No.
 
-6. `ota_test.sh` script, generate `tx.wav`, simuled SSB and radae modem signal ready to run through a HF radio.  Add some noise to it to 
-   create `rx.wav`, then run through `ota_test.sh` in receive wave file mode to generate `rx_ssb.wav` and `rx_radae.wav, the demodulated
-   audio:
+6. Example of `ota_test.sh` script. `ota_test.sh -x` generates `tx.wav` which contains the simulated SSB and radae modem signals ready to run through a HF radio.  We add noise to create `rx.wav`, then use `ota_test.sh -r` to generate the demodulated audio files `rx_ssb.wav` and `rx_radae.wav`:
    ```
    ./ota_test.sh wav/peter.wav -x 
    ~/codec2-dev/build_linux/src/ch tx.wav - --No -20 | sox -t .s16 -r 8000 -c 1 - rx.wav

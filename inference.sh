@@ -39,7 +39,7 @@ python3 ./inference.py ${model} ${features_in} ${features_out} "$@"
 if [ $output_speech == "-" ]; then
     tmp=$(mktemp)
     lpcnet_demo -fargan-synthesis ${features_out} ${tmp}
-    aplay $tmp -r 16000 -f S16_LE
+    aplay $tmp -r 16000 -f S16_LE 2>/dev/null
 elif [ $output_speech != "/dev/null" ]; then
     tmp=$(mktemp)
     lpcnet_demo -fargan-synthesis ${features_out} ${tmp}
