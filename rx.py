@@ -87,18 +87,18 @@ rx = np.fromfile(args.rx, dtype=np.csingle)
 # TODO: fix contrast of spectrogram - it's not very useful
 if args.plots:
    fig, ax = plt.subplots(2, 1,figsize=(6,12))
-   fig.suptitle('Rx before and after BPF')
    ax[0].specgram(rx,NFFT=256,Fs=model.get_Fs())
+   ax[0].set_title('Before BPF')
    ax[0].axis([0,len(rx)/model.get_Fs(),0,2000])
-   ax[0].title
 
 rx = complex_bpf(model.get_Fs(),1200,900,rx)
 
 if args.plots:
    ax[1].specgram(rx,NFFT=256,Fs=model.get_Fs())
    ax[1].axis([0,len(rx)/model.get_Fs(),0,2000])
+   ax[1].set_title('After BPF')
  
-# acquisition - coarse & fine timing
+# Acquisition - 1 sample resolution timing, coarse/fine freq offset estimation
 
 if args.pilots:
    M = model.M
@@ -186,7 +186,7 @@ if args.pilots:
       print("Acquisition failed....")
       quit()
 
-   # frequency refinement, use two pilots
+   # frequency refinement, use two sets of pilots
    ffine_range = np.arange(fmax-0.1*Rs,fmax+0.1*Rs,1)
    D_fine = np.zeros(len(ffine_range), dtype=np.csingle)
    f_ind = 0

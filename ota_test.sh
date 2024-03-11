@@ -129,6 +129,11 @@ function process_rx {
           plot_specgram(s, 8000, 200, 3000); print('spec.jpg', '-djpg'); \
           quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
     
+    # extract sine wave at start and estimate C/No
+    rx_sine=$(mktemp).f32
+    sox $rx -e float -b 32 -c 2 ${rx_sine} trim 0 1
+    python3 est_CNo.py  ${rx_sine}
+
     # assume first half is voice, so extract that, and decode radae
     total_duration=$(sox --info -D $rx)
     end_ssb=$(python3 -c "x=(${total_duration}-4)/2+1; print(\"%f\" % x)")
