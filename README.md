@@ -154,15 +154,15 @@ BER tests, useful to calibrate system, and measures loss from classical DSP base
 # Models
 
 | Model | Description | Train at | Samples |
-| ---- | ---- |
+| ---- | ---- | ---- | ---- |
 | model01 | trained at Eb/No 0 dB | Rs | - |
 | model02 | trained at Eb/No 10 dB | Rs | - |
 | model03 | --range_EbNo -2 ... 13 dB, modified sqrt loss |Rs | - |
 | model04 | --range_EbNo -2 ... 13 dB, orginal loss, noise might be 3dB less after calibration | Rs | - | 
 | model05 | --range_EbNo, --mp_file h_mpp.f32, sounds good on MPP and AWGN at a range of SNR - no pops | Rs | 240221_m5_Rs_mp |
 | model06 | --range_EbNo, --rate_Fs, trained on AWGN with PA model, PAPR about 1dB, OK at a range of Eb/No | Fs |240223_m6_Fs_papr |
-| model07 | --range_EbNo, -6 ... 14, --rate_Fs, AWGN freq, phase, gain offsets, some degredation at 0dB | 240301_m7_Fs_offets | Fs |
-| model08 | --range_EbNo, -6 ... 14, --rate_Fs, AWGN no offsets (vanilla rate Fs), similar to model 05 | 240301_m8_Fs | Fs |
+| model07 | --range_EbNo, -6 ... 14, --rate_Fs, AWGN freq, phase, gain offsets, some degredation at 0dB | Fs | 240301_m7_Fs_offets | Fs |
+| model08 | --range_EbNo, -6 ... 14, --rate_Fs, AWGN no offsets (vanilla rate Fs), similar to model 05 | Fs | 240301_m8_Fs | 
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
