@@ -101,13 +101,18 @@ if args.plots:
 # acquisition - coarse & fine timing
 
 if args.pilots:
-   M = int(model.get_Fs()/model.get_Rs())
+   M = model.M
    Ns = model.get_Ns()                         # number of data symbols between pilots
    Nmf = int((Ns+1)*M)                         # number of samples in one modem frame
    p = np.array(model.p)                       # pilot sequence
-   Nf = 100                                    # number of samples on frequency grid
-   D = np.zeros((Nmf,Nf), dtype=np.csingle)    # correlation at various time offsets
-   Fs = model.get_Fs()
+   frange = 100                                # coarse grid -frange/2 ... + frange/2
+   fstep = 5                                   # coarse grid spacing in Hz
+   Fs = model.Fs
+   Rs = model.Rs
+
+   # correlation at various time and freq offsets
+   fcoarse_range = np.arange(-frange/2,frange/2,fstep)
+   D = np.zeros((Nmf,len(fcoarse_range)), dtype=np.csingle)
 
    tmax_candidate = 0 
    Pacq_error = 0.0001
@@ -115,12 +120,13 @@ if args.pilots:
    state = "search"
 
    # pre-calculate to speeds things up a bit
-   p_w = np.zeros((Nf, M), dtype=np.csingle)
-   for f_ind in range(Nf):
-      f = f_ind - Nf/2
+   p_w = np.zeros((len(fcoarse_range), M), dtype=np.csingle)
+   f_ind = 0
+   for f in fcoarse_range:
       w = 2*np.pi*f/Fs
-      p_w[f_ind,] = np.exp(1j*w*np.arange(model.M)) * p
-      
+      p_w[f_ind,] = np.exp(1j*w*np.arange(M)) * p
+      f_ind + f_ind + 1
+
    while not acquired and len(rx) >= Nmf+M:
 
       # search modem frame for maxima in correlation between pilots and received signal, over
@@ -128,17 +134,23 @@ if args.pilots:
       Dtmax = 0
       tmax = 0
       fmax = 0
+
       for t in range(Nmf):
-         for f_ind in range(Nf):
-            f = f_ind - Nf/2
+         f_ind = 0
+         for f in fcoarse_range:
+            #D[t,f_ind] = np.dot(np.conj(rx[t:t+M]),p_w[f_ind,:])
             w = 2*np.pi*f/Fs
-            D[t,f_ind] = np.dot(np.conj(rx[t:t+model.M]),p_w[f_ind,:])
+            w_vec = np.exp(-1j*w*np.arange(M))
+            D[t,f_ind] = np.dot(np.conj(w_vec*rx[t:t+M]),p)
+
             if np.abs(D[t,f_ind]) > Dtmax:
                Dtmax = np.abs(D[t,f_ind])
                tmax = t
                fmax = f 
-               f_ind_max = f_ind
+               f_ind_max =  f_ind
+            f_ind = f_ind + 1
       
+      # Ref: freedv_low.pdf "Coarse Frequency Estimation"
       sigma_est = np.std(D)
       Dthresh = sigma_est*np.sqrt(-np.log(Pacq_error))
 
@@ -174,14 +186,41 @@ if args.pilots:
       print("Acquisition failed....")
       quit()
 
+   # frequency refinement, use two pilots
+   ffine_range = np.arange(fmax-0.1*Rs,fmax+0.1*Rs,1)
+   D_fine = np.zeros(len(ffine_range), dtype=np.csingle)
+   f_ind = 0
+   fmax_fine = fmax
+   for f in ffine_range:
+      w = 2*np.pi*f/Fs
+      # current pilot samples at start of this modem frame
+      w_vec = np.exp(-1j*w*np.arange(M))
+      D_fine[f_ind] = np.dot(np.conj(w_vec*rx[tmax:tmax+M]),p)
+      # next pilot samples at end of this modem frame
+      w_vec = np.exp(-1j*w*(Nmf+np.arange(M)))
+      D_fine[f_ind] = D_fine[f_ind] + np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),p)
+
+      if np.abs(D_fine[f_ind]) > Dtmax:
+         Dtmax = np.abs(D_fine[f_ind])
+         fmax = f 
+      f_ind = f_ind + 1
+   print(f"refined fmax: {fmax:f}")
+
    if args.plots:
       fig, ax = plt.subplots(2, 1,figsize=(6,12))
-      fig.suptitle('Dt complex plane and |Dt| histogram')
+      ax[0].set_title('Dt complex plane')
       ax[0].plot(D[:,f_ind_max].real, D[:,f_ind_max].imag,'b+')
       circle1 = plt.Circle((0,0), radius=Dthresh, color='r')
       ax[0].add_patch(circle1)
       ax[1].hist(np.abs(D[:,f_ind_max]))
- 
+      ax[1].set_title('|Dt| histogram')
+
+      fig1, ax1 = plt.subplots(2, 1,figsize=(6,12))
+      ax1[0].plot(fcoarse_range, np.abs(D[tmax,:]),'b+')
+      ax1[0].set_title('|Dt| against f (coarse)')
+      ax1[1].plot(ffine_range, np.abs(D_fine),'b+')
+      ax1[1].set_title('|Dt| against f (fine)')
+   
    rx = rx[tmax:]
    if args.freq_offset:
       fmax = args.freq_offset
@@ -222,7 +261,7 @@ if len(args.write_latent):
    z_hat.tofile(args.write_latent)
 
 if args.plots:
-   plt.figure(3)
+   plt.figure(4)
    plt.plot(z_hat[0:-2:2], z_hat[1:-1:2],'+')
    plt.title('Scatter')
    plt.show(block=False)
