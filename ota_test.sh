@@ -30,13 +30,22 @@
 # -----
 #
 # 1. File based I/O:
+#    ./ota_test.sh wav/peter.wav -x 
+#    ~/codec2-dev/build_linux/src/ch tx.wav - --No -20 | sox -t .s16 -r 8000 -c 1 - rx.wav
+#    ./ota_test.sh -r rx.wav
+#    aplay rx_ssb.wav rx_radae.wav
 #
-# 2. HF Radio Tx, KiwiSDR Rx, vk5dgr_testing_8k.wav as station ID file:
+# 2. Use HackRF to Tx SSB + radae at 144.5 MHz
+#    ./ota_test.sh wav/peter.wav -x
+#    hackrf_transfer -t tx.iq8 -s 4E6 -f 143.5E6 -R
+#    Note tx.iq8 has at +1 MHz offset, so we tune the HackRF 1 MHz low
+#  
+# 3. HF Radio Tx, KiwiSDR Rx, vk5dgr_testing_8k.wav as station ID file:
 #    ./ota_test.sh wav/peter.wav -i ~/Downloads/vk5dgr_testing_8k.wav sdr.ironstonerange.com -p 8074
 
 CODEC2_PATH=${HOME}/codec2-dev
 # TODO: way to adjust /build_linux/src for OSX
-PATH=${PATH}:${CODEC2_PATH}/build_linux/src:${HOME}/kiwiclient
+PATH=${PATH}:${CODEC2_PATH}/build_linux/src:${CODEC2_PATH}/build_linux/misc:${HOME}/kiwiclient
 
 which ch || { printf "\n**** Can't find ch - check CODEC2_PATH **** \n\n"; exit 1; }
 
@@ -54,6 +63,7 @@ txstats=0
 stationid=""
 speechFs=16000
 setpoint_rms=6000
+freq_offset=0
 
 function print_help {
     echo
@@ -74,7 +84,7 @@ function print_help {
     echo "    -s SerialPort             The serial port (or hostname:port) to control SSB radio,"
     echo "                              default /dev/ttyUSB0"
     echo "    -t                        Tx only, useful for manually observing SDRs"
-    echo "    -x                        Generate tx.wav file and exit"
+    echo "    -x                        Generate tx.raw, tx.wav, tx.iq8 files and exit"
     echo
     exit
 }
@@ -111,20 +121,21 @@ function clean_up {
 
 function process_rx {
     echo "Process receiver sample"
-    rx=$1
+    rx=$(mktemp).wav
+    sox $1 -c 1 -r 8k $rx
     # generate spectrogram
     echo "pkg load signal; warning('off', 'all'); \
-          s=load_raw('${rx}'); \
+          s=load_raw('$rx'); \
           plot_specgram(s, 8000, 200, 3000); print('spec.jpg', '-djpg'); \
           quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
     
     # assume first half is voice, so extract that, and decode radae
     total_duration=$(sox --info -D $rx)
-    end_ssb=$(python3 -c "x=${total_duration}/2.0 - 2; print(\"%f\" % x)")
+    end_ssb=$(python3 -c "x=(${total_duration}-4)/2+1; print(\"%f\" % x)")
     rx_radae=$(mktemp)
-    sox $rx rx_ssb.wav trim 0 $end_ssb
+    sox $rx rx_ssb.wav trim 3 $end_ssb
     sox $rx -e float -b 32 -c 2 ${rx_radae}.f32 trim $end_ssb remix 1 0
-    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 rx_radae.wav --pilots --pilot_eq --plots
+    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 rx_radae.wav --pilots --pilot_eq --plots --freq_offset $2
 }
 
 function measure_rms() {
@@ -145,6 +156,11 @@ case $key in
     ;;
     -f)
         freq_kHz="$2"	
+        shift
+        shift
+    ;;
+    --freq_offset)
+        freq_offset="$2"	
         shift
         shift
     ;;
@@ -204,7 +220,7 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 speechFs=16000
 
 if [ $rxwavefile -eq 1 ]; then
-    process_rx $1
+    process_rx $1 $freq_offset
     exit 0
 fi
 
@@ -223,6 +239,11 @@ if [ $tx_only -eq 0 ]; then
 fi
 
 # create Tx file ------------------------
+
+# create 1000 Hz sinewave header used for tuning and C/No est
+tx_sine=$(mktemp)
+peak_amp=$(python3 -c "import numpy as np; peak_amp=${setpoint_rms}*np.sqrt(2); print(\"%f\" % peak_amp)")
+mksine $tx_sine 1000 4 $peak_amp
 
 # create compressed SSB signal
 speechfile_raw_8k=$(mktemp)
@@ -261,9 +282,12 @@ tx_radae_gain=$(mktemp)
 # insert 1 second of silence between SSB and radae
 sox -t .s16 -r 8k -c 1 -v $radae_gain ${tx_radae}.raw -t .s16 -r 8k -c 1 $tx_radae_gain pad 1@0
 
-# cat both signals together so we can send them over a radio at the same time
-cat $tx_ssb_gain $tx_radae_gain > tx.raw
+# cat signals together so we can send them over a radio at the same time
+cat $tx_sine $tx_ssb_gain $tx_radae_gain > tx.raw
 sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
+
+# generate a 4MSP .iq8 file suitable for replaying by HackRF
+ch tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
 
 if [ $txstats -eq 1 ]; then
     # ch just used to monitor observe peak and RMS level

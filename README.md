@@ -168,22 +168,36 @@ Note the samples are generated with `evaluate.sh`, which runs inference at rate 
 
 # Notes
 
-1. Issue: ~We would like smooth degredation from high SNR to low SNR, rather than training and operating at one SNR.  Currently if trained at 10dB, not as good as model trained at 0dB when tested at 0dB.  Also, if trained at 0dB, quality is reduced when tested on high SNR channel, compared to model trained at high SNR.~  This has been dealt with by training at a range of SNRs.
-
-1. Issue: ~occasional pops in output speech (e.g. model01/03/04, vk5dgr_test 0 and 100dB, model03 all 100dB).  Speaker depedence, e.g. predictor struggling with uneven pitch tracks of some speakers?  Network encountering data it hasn't seen before? Some bug unrealted to training?~ model05 with multipath in loop is pop free
-
 1. Issue: vk5dgr_test.wav sounds poorer than LPCNet/wav/all.wav - same speaker, but former much louder.
 
 1. Test: Multipath with no noise should mean speech is not impaired, as no "symbol errors".
 
 1. Test: co-channel interference, interfering sinusoids, and impulse noise, non-flat passband.
 
-1. Test: level sensitivity, do we need/assume amplitude normalisation?
-
 1. Test: Try vocoder with several speakers and background noise.
    + can hear some whitsles on vk5dgr_test.wav with vanilla fargan (maybe check if I have correct version)
 
 1. Can we include maximum likelyhood detection in rx side of the bottelneck?  E.g. a +2 received means very likely +1 was transmitted, and shouldn't have the same weight in decoding operation as a 0 received.  Probability of received symbol.
+
+1. Look at bottleneck vectors, PCA, any correlation?  Ameniable to VQ?  Further dim reduction? VQ would enable comparative test using classical FEC methods.
+
+1. How can we apply interleaving, e.g./ just spread symbol sover a longer modem frame, or let network spread them.
+
+1. Diversity in frequency - classical DSP or with ML in the loop?
+
+1. Sweep different latent dimensions and choose best perf for given SNR.
+
+1. Naming thoughts (what is it):
+   * Neural modem - as network selects constellation, or "neural speech modem"
+   * Neural channel coding - as network takes features and encoders them for transmisison of the channel
+   * Radio VAE or Radio AE - don't feel this has much to do with variational autoencoders
+   * Joint source and channel coding
+   
+1. Issue: ~We would like smooth degredation from high SNR to low SNR, rather than training and operating at one SNR.  Currently if trained at 10dB, not as good as model trained at 0dB when tested at 0dB.  Also, if trained at 0dB, quality is reduced when tested on high SNR channel, compared to model trained at high SNR.~  This has been dealt with by training at a range of SNRs.
+
+1. Issue: ~occasional pops in output speech (e.g. model01/03/04, vk5dgr_test 0 and 100dB, model03 all 100dB).  Speaker depedence, e.g. predictor struggling with uneven pitch tracks of some speakers?  Network encountering data it hasn't seen before? Some bug unrealted to training?~ model05 with multipath in loop is pop free
+
+1. ~Test: level sensitivity, do we need/assume amplitude normalisation? ~ Yes - have used pilots to normalise amplitude
 
 1. ~Plot scatter diagram of Tx to see where symbols are being mapped.~
 
@@ -197,23 +211,9 @@ Note the samples are generated with `evaluate.sh`, which runs inference at rate 
 
 1. ~Confirm SNR calculations, maybe print them, or have SNR3k | Es/No as cmd line options~
 
-1. PAPR optimisation.  If we put a bottleneck on the peak power, the network should optimise for miminal PAPR (maximise RMS power) for a given noise level. Be interesting to observe envelope of waveform as it trains, and the phase of symbols. We might need to include sync symbols.
+1. ~PAPR optimisation.  If we put a bottleneck on the peak power, the network should optimise for miminal PAPR (maximise RMS power) for a given noise level. Be interesting to observe envelope of waveform as it trains, and the phase of symbols. We might need to include sync symbols.~
 
-1.~ Way to write/read bottleneck vectors (channel symbols)~
+1.  Way to write/read bottleneck vectors (channel symbols)~
 
-1. Look at bottleneck vectors, PCA, any correlation?  Ameniable to VQ?  Further dim reduction? VQ would enable comparative test using classical FEC methods.
+1. ~Can we use loss function as an objective measure for comparing different schemes?~
 
-1. How can we apply interleaving, e.g./ just spread symbol sover a longer modem frame, or let network spread them.
-
-1. Diversity in frequency - classical DSP or with ML in the loop?
-
-1. Sweep different latent dimensions and choose best perf for given SNR.
-
-1. Can we use loss function as an objective measure for comparing different schemes?
-
-1. Naming thoughts (what is it):
-   * Neural modem - as network selects constellation, or "neural speech modem"
-   * Neural channel coding - as network takes features and encoders them for transmisison of the channel
-   * Radio VAE or Radio AE - don't feel this has much to do with variational autoencoders
-   * Joint source and channel coding
-   

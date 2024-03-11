@@ -48,6 +48,7 @@ parser.add_argument('--pilots', action='store_true', help='insert pilot symbols'
 parser.add_argument('--ber_test', type=str, default="", help='symbols are PSK bits, compare to z.f32 file to calculate BER')
 parser.add_argument('--plots', action='store_true', help='display various plots')
 parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ data symbols using classical DSP')
+parser.add_argument('--freq_offset', type=float, default=0, help='manually specify frequency offset')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -104,7 +105,7 @@ if args.pilots:
    Ns = model.get_Ns()                         # number of data symbols between pilots
    Nmf = int((Ns+1)*M)                         # number of samples in one modem frame
    p = np.array(model.p)                       # pilot sequence
-   Nf = 50                                     # number of samples on frequency grid
+   Nf = 100                                    # number of samples on frequency grid
    D = np.zeros((Nmf,Nf), dtype=np.csingle)    # correlation at various time offsets
    Fs = model.get_Fs()
 
@@ -182,6 +183,9 @@ if args.pilots:
       ax[1].hist(np.abs(D[:,f_ind_max]))
  
    rx = rx[tmax:]
+   if args.freq_offset:
+      fmax = args.freq_offset
+      print(fmax)
    w = 2*np.pi*fmax/Fs
    rx = rx*np.exp(-1j*w*np.arange(len(rx)))
 
