@@ -543,15 +543,11 @@ class RADAE(nn.Module):
             # Optionally insert a cyclic prefix
             Ncp = self.Ncp
             if self.Ncp:
-                tx_cp = torch.zeros((num_batches,num_timesteps_at_rate_Rs,self.M+Ncp))
+                tx_cp = torch.zeros((num_batches,num_timesteps_at_rate_Rs,self.M+Ncp),dtype=torch.complex64,device=tx.device)
                 tx_cp[:,:,Ncp:] = tx
                 tx_cp[:,:,:Ncp] = tx_cp[:,:,-Ncp:]
-                print(tx.shape,tx_cp.shape)
                 tx = tx_cp
-                print(tx.shape)
-                print(num_timesteps_at_rate_Fs)
                 num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*(self.M+Ncp)
-                print(num_timesteps_at_rate_Fs)
             tx = torch.reshape(tx,(num_batches,num_timesteps_at_rate_Fs))
                           
             # simulate Power Amplifier (PA) that saturates at abs(tx) ~ 1
