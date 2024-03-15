@@ -49,9 +49,10 @@ parser.add_argument('--cuda-visible-devices', type=str, help="set to 0 to run us
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
 parser.add_argument('--EbNodB', type=float, default=0, help='BPSK Eb/No in dB')
 parser.add_argument('--passthru', action='store_true', help='copy features in to feature out, bypassing ML network')
-parser.add_argument('--mp_test', action='store_true', help='Fixed notch test multipath channel')
+parser.add_argument('--mp_test', action='store_true', help='Fixed notch test multipath channel (rate Rs)')
 parser.add_argument('--ber_test', action='store_true', help='send random PSK bits through channel model, measure BER')
-parser.add_argument('--mp_file', type=str, default="", help='path to multipath file, rate Rs time steps by Nc carriers .f32 format')
+parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath samples, rate Rs time steps by Nc carriers .f32 format')
+parser.add_argument('--g_file', type=str, default="", help='path to rate Fs Doppler spread samples, ...G1G2G1G2... .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--write_rx', type=str, default="", help='path to output file of rate Fs rx samples in ..IQIQ...f32 format')
 parser.add_argument('--phase_offset', type=float, default=0, help='phase offset in rads')
@@ -93,19 +94,17 @@ features = features[:, :, :num_used_features]
 features = torch.tensor(features)
 print(f"Processing: {nb_features_rounded} feature vectors")
 
-# default multipath model H=1
-Rs = model.get_Rs()
-Nc = model.get_Nc()
+# default rate Rs multipath model H=1
+Rs = model.Rs
+Nc = model.Nc
 num_timesteps_at_rate_Rs = model.num_timesteps_at_rate_Rs(nb_features_rounded)
 H = torch.ones((1,num_timesteps_at_rate_Rs,Nc))
 
-# construct a contrived multipath model, will be a series of peaks an notches, between H=2 an H=0
+# construct a contrived rate Rs multipath model, will be a series of peaks an notches, between H=2 an H=0
 if args.mp_test:
    G1 = 1
    G2 = 1
    d  = 0.002
-   Rs = model.get_Rs()
-   Nc = model.get_Nc()
 
    for c in range(Nc):
       omega = 2*np.pi*c
@@ -113,18 +112,29 @@ if args.mp_test:
       H[0,:,c] = torch.abs(G1 + G2*torch.exp(arg))  # in this case channel doesn't evolve over time
                                                     # only mag matters, we assume external phase equalisation
 
-# user supplied multipath model
-if args.mp_file:
-   H = np.reshape(np.fromfile(args.mp_file, dtype=np.float32), (1, -1, Nc))
+# user supplied rate Rs multipath model, sequence of H matrices
+if args.h_file:
+   H = np.reshape(np.fromfile(args.h_file, dtype=np.float32), (1, -1, Nc))
    #print(H.shape, num_timesteps_at_rate_Rs)
    if H.shape[1] < num_timesteps_at_rate_Rs:
-      print("Multipath file too short")
+      print("Multipath H file too short")
       quit()
    H = H[:,:num_timesteps_at_rate_Rs,:]
-   #hf_gain = np.std(H)
-   #H = H/hf_gain
-   #print(H.shape,np.var(H))
    H = torch.tensor(H)
+
+# default rate Fs multipath model G1=1, G2=0
+num_timesteps_at_rate_Fs = model.num_timesteps_at_rate_Fs(num_timesteps_at_rate_Rs)
+G = torch.ones((1,num_timesteps_at_rate_Fs,2), dtype=torch.complex64)
+G[:,:,1] = 0
+# user supplied rate Fs multipath model, sequence of G1,G2 complex Doppler spread samples
+if args.h_file:
+   G = np.reshape(np.fromfile(args.g_file, dtype=np.float32), (1, -1, 2))
+   print(G.shape, num_timesteps_at_rate_Fs)
+   if G.shape[1] < num_timesteps_at_rate_Fs:
+      print("Multipath Doppler spread file too short")
+      quit()
+   G = G[:,:num_timesteps_at_rate_Fs,:]
+   G = torch.tensor(G)
 
 if __name__ == '__main__':
 
@@ -137,7 +147,8 @@ if __name__ == '__main__':
    model.to(device)
    features = features.to(device)
    H = H.to(device)
-   output = model(features,H)
+   G = G.to(device)
+   output = model(features,H,G)
 
    # target SNR calcs for a fixed Eb/No run (e.g. inference)
    EbNo = 10**(args.EbNodB/10)                # linear Eb/No

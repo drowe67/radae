@@ -296,7 +296,7 @@ class RADAE(nn.Module):
         self.EbNodB = EbNodB
         self.range_EbNo = range_EbNo
         self.ber_test = ber_test
-        self.multipath_delay = multipath_delay  # two path multipath model path delay (s)
+        self.multipath_delay = multipath_delay 
         self.rate_Fs = rate_Fs
         self.papr_opt = papr_opt
         self.phase_offset = phase_offset
@@ -358,6 +358,8 @@ class RADAE(nn.Module):
         self.P = (2**(0.5))*barker_pilots(self.Nc)
         self.p = torch.matmul(self.P,self.Winv)
 
+        self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
+
     def move_device(self, device):
         # TODO: work out why we need this step
         self.Winv = self.Winv.to(device)
@@ -377,7 +379,14 @@ class RADAE(nn.Module):
    
     def num_timesteps_at_rate_Rs(self, num_ten_ms_timesteps):
         return int((num_ten_ms_timesteps / self.enc_stride) * self.Tz / self.Ts)
-
+    
+    def num_timesteps_at_rate_Fs(self, num_timesteps_at_rate_Rs):
+        if self.pilots:
+            Ns = self.Ns
+            return int(((Ns+1)/Ns)*num_timesteps_at_rate_Rs*self.M)
+        else:
+            return int(num_timesteps_at_rate_Rs*self.M)
+        
     def num_10ms_times_steps_rounded_to_modem_frames(self, num_ten_ms_timesteps):
         num_modem_frames = num_ten_ms_timesteps // self.enc_stride // self.Nzmf
         num_ten_ms_timesteps_rounded = num_modem_frames * self.enc_stride * self.Nzmf
@@ -389,7 +398,7 @@ class RADAE(nn.Module):
         Nc = self.Nc 
         rx_pilots = torch.zeros(num_modem_frames, Nc, dtype=torch.complex64)
         if self.per_carrier_eq:
-            # estimate pilot symbol for each carrier by smoothing information from adjacent pilots; moderate loss, but \
+            # estimate pilot symbol for each carrier by smoothing information from adjacent pilots; moderate loss, but
             # handles multipath and timing offsets
             for i in torch.arange(num_modem_frames):
                 if self.eq_mean6:
@@ -478,7 +487,7 @@ class RADAE(nn.Module):
         return features_hat,z_hat
 
 
-    def forward(self, features, H):
+    def forward(self, features, H, G=None):
         
         (num_batches, num_ten_ms_timesteps, num_features) = features.shape
         num_timesteps_at_rate_Rs = self.num_timesteps_at_rate_Rs(num_ten_ms_timesteps)
@@ -530,13 +539,20 @@ class RADAE(nn.Module):
             tx = torch.matmul(tx_sym, self.Winv)
             tx = torch.reshape(tx,(num_batches,num_timesteps_at_rate_Fs))
            
-            # TODO Add cyclic prefix, time domain multipath simulation
-
             # simulate Power Amplifier (PA) that saturates at abs(tx) ~ 1
-            # TODO: this has problems when magnitude goes thru 0 (e.g. --ber_test), change formulation
+            # TODO: this has problems when magnitude goes thru 0 (e.g. --ber_test), change formulation to use angle()
             if self.papr_opt:
                 tx_norm = tx/torch.abs(tx)
                 tx = torch.tanh(torch.abs(tx)) * tx_norm
+
+            # rate Fs multipath model
+            d = self.d_samples
+            #print(tx.shape, G.shape)
+            #quit()
+            tx_mp = torch.zeros((num_batches,num_timesteps_at_rate_Fs))
+            tx_mp = tx*G[:,:,0]
+            tx_mp[:,d:] = tx_mp[:,d:] + tx[:,d:]*G[:,:-d,1]
+            tx = tx_mp
 
             # user supplied phase and freq offsets (used at inference time)
             if self.phase_offset:
@@ -551,7 +567,7 @@ class RADAE(nn.Module):
                 lin_phase = torch.exp(1j*lin_phase)
                 tx = tx*lin_phase
 
-            # insert per batch random phase and freq offset
+            # insert per sequence random phase and freq offset (training time)
             if self.freq_rand:
                 phase = torch.zeros(num_batches, num_timesteps_at_rate_Fs,device=tx.device)
                 phase[:,] = 2.0*torch.pi*torch.rand(num_batches,1)
@@ -565,7 +581,7 @@ class RADAE(nn.Module):
             # AWGN noise
             EbNodB = torch.reshape(EbNodB,(num_batches,1))
             EbNo = 10**(EbNodB/10)
-            #print(EbNo.shape)
+            
             if self.papr_opt:
                 # determine sigma assuming rms power var(tx) = 1 (will be a few dB less due to PA backoff)
                 S = 1
@@ -575,7 +591,7 @@ class RADAE(nn.Module):
                 sigma = (EbNo*self.M)**(-0.5)
             rx = tx + sigma*torch.randn_like(tx)
 
-            # insert per batch random gain variations, -20 ... +20 dB
+            # insert per sequence random gain variations, -20 ... +20 dB (training time)
             if self.gain_rand:
                 gain = torch.zeros(num_batches, num_timesteps_at_rate_Fs,device=tx.device)
                 gain[:,] = -20 + 40*torch.rand(num_batches,1)
@@ -586,8 +602,6 @@ class RADAE(nn.Module):
             # user supplied gain    
             rx = rx * self.gain
 
-            #print(rx.shape)
-            
             # DFT to transform M time domain samples to Nc carriers
             rx = torch.reshape(rx,(num_batches,num_timesteps_at_rate_Rs,self.M))
             rx_sym = torch.matmul(rx, self.Wfwd)
