@@ -62,6 +62,7 @@ parser.add_argument('--gain', type=float, default=1.0, help='rx gain (defaul 1.0
 parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
 parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ data symbols using classical DSP')
 parser.add_argument('--eq_ls', action='store_true', help='Use per carrier least squares EQ (default mean6)')
+parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic prefix in seconds, (default 0)')
 args = parser.parse_args()
 
 # set visible devices
@@ -80,7 +81,8 @@ num_used_features = 20
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rate_Fs=args.rate_Fs, 
               phase_offset=args.phase_offset, freq_offset=args.freq_offset, df_dt=args.df_dt,
-              gain=args.gain, pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls)
+              gain=args.gain, pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls,
+              cyclic_prefix = args.cp)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
@@ -127,9 +129,13 @@ num_timesteps_at_rate_Fs = model.num_timesteps_at_rate_Fs(num_timesteps_at_rate_
 G = torch.ones((1,num_timesteps_at_rate_Fs,2), dtype=torch.complex64)
 G[:,:,1] = 0
 # user supplied rate Fs multipath model, sequence of G1,G2 complex Doppler spread samples
-if args.h_file:
-   G = np.reshape(np.fromfile(args.g_file, dtype=np.float32), (1, -1, 2))
-   print(G.shape, num_timesteps_at_rate_Fs)
+if args.g_file:
+   G = np.reshape(np.fromfile(args.g_file, dtype=np.csingle), (1, -1, 2))
+   # first sample in file is estimate of gain required for a mean power of 1 through
+   # the multipath channel over long runs, but in practice this is hard to predict as
+   # test sample runs are short  
+   mp_gain = np.real(G[:,0,0])
+   G = mp_gain*G[:,1:,:] 
    if G.shape[1] < num_timesteps_at_rate_Fs:
       print("Multipath Doppler spread file too short")
       quit()

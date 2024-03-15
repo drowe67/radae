@@ -286,7 +286,8 @@ class RADAE(nn.Module):
                  gain_rand = False,
                  pilots = False,
                  pilot_eq = False,
-                 eq_mean6 = True
+                 eq_mean6 = True,
+                 cyclic_prefix = 0
                 ):
 
         super(RADAE, self).__init__()
@@ -308,7 +309,7 @@ class RADAE(nn.Module):
         self.pilots = pilots
         self.pilot_eq = pilot_eq
         self.per_carrier_eq = True
-        self.phase_mag_eq = True
+        self.phase_mag_eq = False
         self.eq_mean6 = eq_mean6
 
         # TODO: nn.DataParallel() shouldn't be needed
@@ -343,6 +344,7 @@ class RADAE(nn.Module):
         self.Ns = Ns
         self.Nc = Nc
         self.Nzmf = Nzmf
+
         print(f"Nsmf...: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d}")
 
         # DFT matrices for Nc freq samples, M time samples (could be a FFT but matrix convenient for small, non power of 2 DFTs)
@@ -359,7 +361,8 @@ class RADAE(nn.Module):
         self.p = torch.matmul(self.P,self.Winv)
 
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
-
+        self.Ncp = int(cyclic_prefix*self.Fs)
+        
     def move_device(self, device):
         # TODO: work out why we need this step
         self.Winv = self.Winv.to(device)
@@ -383,7 +386,7 @@ class RADAE(nn.Module):
     def num_timesteps_at_rate_Fs(self, num_timesteps_at_rate_Rs):
         if self.pilots:
             Ns = self.Ns
-            return int(((Ns+1)/Ns)*num_timesteps_at_rate_Rs*self.M)
+            return int(((Ns+1)/Ns)*num_timesteps_at_rate_Rs*(self.M+self.Ncp))
         else:
             return int(num_timesteps_at_rate_Rs*self.M)
         
@@ -537,21 +540,31 @@ class RADAE(nn.Module):
 
             # IDFT to transform Nc carriers to M time domain samples
             tx = torch.matmul(tx_sym, self.Winv)
+            # Optionally insert a cyclic prefix
+            Ncp = self.Ncp
+            if self.Ncp:
+                tx_cp = torch.zeros((num_batches,num_timesteps_at_rate_Rs,self.M+Ncp))
+                tx_cp[:,:,Ncp:] = tx
+                tx_cp[:,:,:Ncp] = tx_cp[:,:,-Ncp:]
+                print(tx.shape,tx_cp.shape)
+                tx = tx_cp
+                print(tx.shape)
+                print(num_timesteps_at_rate_Fs)
+                num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*(self.M+Ncp)
+                print(num_timesteps_at_rate_Fs)
             tx = torch.reshape(tx,(num_batches,num_timesteps_at_rate_Fs))
-           
+                          
             # simulate Power Amplifier (PA) that saturates at abs(tx) ~ 1
             # TODO: this has problems when magnitude goes thru 0 (e.g. --ber_test), change formulation to use angle()
             if self.papr_opt:
                 tx_norm = tx/torch.abs(tx)
                 tx = torch.tanh(torch.abs(tx)) * tx_norm
-
+      
             # rate Fs multipath model
             d = self.d_samples
-            #print(tx.shape, G.shape)
-            #quit()
             tx_mp = torch.zeros((num_batches,num_timesteps_at_rate_Fs))
             tx_mp = tx*G[:,:,0]
-            tx_mp[:,d:] = tx_mp[:,d:] + tx[:,d:]*G[:,:-d,1]
+            tx_mp[:,d:] = tx_mp[:,d:] + tx[:,:-d]*G[:,:-d,1]
             tx = tx_mp
 
             # user supplied phase and freq offsets (used at inference time)
@@ -588,7 +601,7 @@ class RADAE(nn.Module):
                 sigma = (S*self.Fs/(EbNo*self.Rb))**(0.5)
             else:
                 # similar to rate Rs, but scale noise by M samples/symbol
-                sigma = (EbNo*self.M)**(-0.5)
+                sigma = (EbNo*(self.M+Ncp))**(-0.5)
             rx = tx + sigma*torch.randn_like(tx)
 
             # insert per sequence random gain variations, -20 ... +20 dB (training time)
@@ -602,8 +615,11 @@ class RADAE(nn.Module):
             # user supplied gain    
             rx = rx * self.gain
 
+            # remove cyclic prefix (assume genie timing)
+            rx = torch.reshape(rx,(num_batches,num_timesteps_at_rate_Rs,self.M+self.Ncp))
+            rx = rx[:,:,Ncp:]
+
             # DFT to transform M time domain samples to Nc carriers
-            rx = torch.reshape(rx,(num_batches,num_timesteps_at_rate_Rs,self.M))
             rx_sym = torch.matmul(rx, self.Wfwd)
         else:
             # Simulate channel at one sample per QPSK symbol (Fs=Rs) --------------------------------
