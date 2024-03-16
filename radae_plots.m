@@ -65,8 +65,10 @@ function ofdm_sync_plots(epslatex, varargin)
     end
     figure(1); clf; hold on;
     EbNodB = -8:4; EbNo = 10.^(EbNodB/10);
-    ber_theory = 0.5*erfc(sqrt(EbNo));
-    plot(EbNodB, ber_theory,'b+-;theory;');
+    awgn_theory = 0.5*erfc(sqrt(EbNo));
+    multipath_theory = 0.5.*(1-sqrt(EbNo./(EbNo+1)));
+    plot(EbNodB, awgn_theory,'b+-;AWGN theory;');
+    plot(EbNodB, multipath_theory,'bx-;Multipath theory;');
     i = 1;
     while i <= length(varargin)
         fn = varargin{i};

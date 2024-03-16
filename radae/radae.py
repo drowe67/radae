@@ -627,7 +627,7 @@ class RADAE(nn.Module):
 
             # multipath, multiply by per-carrier channel magnitudes at each OFDM modem timestep
             # preserve tx_sym variable so we can return it to measure power after multipath channel
-            #tx_sym = tx_sym * H
+            tx_sym = tx_sym * H
 
             # note noise power sigma**2 is split between real and imag channels
             sigma = 10**(-EbNodB/20)

@@ -260,7 +260,7 @@ sox $speechfile -r 8000 -t .s16 -c 1 $speechfile_raw_8k
 if [ -z $stationid ]; then
     cp $speechfile_raw_8k $comp_in
 else
-    # append station ID and apply analog compression
+    # append station ID
     stationid_raw_8k=$(mktemp)
     sox $stationid -r 8000 -t .s16 -c 1 $stationid_raw_8k
     cat  $stationid_raw_8k $speechfile_raw_8k > $comp_in
@@ -270,6 +270,7 @@ analog_compressor $comp_in $tx_ssb $gain
 # insert an extra second of silence at start of radae speech input to make sync easier
 speechfile_pad=$(mktemp).wav
 sox $speechfile $speechfile_pad pad 1@0
+
 # create modulated radae signal
 ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --EbNodB 100 --pilots --rate_Fs --write_rx ${tx_radae}.f32
 # to create real signal we just extract the "left" channel
@@ -280,10 +281,10 @@ ssb_rms=$(measure_rms $tx_ssb)
 radae_rms=$(measure_rms ${tx_radae}.raw)
 ssb_gain=$(python3 -c "gain=${setpoint_rms}/${ssb_rms}; print(\"%f\" % gain)")
 radae_gain=$(python3 -c "gain=${setpoint_rms}/${radae_rms}; print(\"%f\" % gain)")
-
 tx_ssb_gain=$(mktemp)
 sox -t .s16 -r 8k -c 1 -v $ssb_gain $tx_ssb -t .s16 -r 8k -c 1 $tx_ssb_gain
 tx_radae_gain=$(mktemp)
+
 # insert 1 second of silence between SSB and radae
 sox -t .s16 -r 8k -c 1 -v $radae_gain ${tx_radae}.raw -t .s16 -r 8k -c 1 $tx_radae_gain pad 1@0
 
@@ -295,7 +296,7 @@ sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
 ch tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
 
 if [ $txstats -eq 1 ]; then
-    # ch just used to monitor observe peak and RMS level
+    # ch just used to monitor peak and RMS level
     ch tx.raw /dev/null
     # time domain plot of tx signal
     echo "pkg load signal; warning('off', 'all'); \
