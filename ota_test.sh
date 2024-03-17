@@ -65,6 +65,8 @@ speechFs=16000
 setpoint_rms=6000
 freq_offset=0
 
+source utils.sh
+
 function print_help {
     echo
     echo "Automated Over The Air (OTA) voice test for Radio Autoencoder"
@@ -89,17 +91,6 @@ function print_help {
     exit
 }
 
-# Approximation of Hilbert clipper type compressor.  Could do with some HF boost
-function analog_compressor {
-    input_file=$1
-    output_file=$2
-    gain=$3
-    cat $input_file | ch - - 2>/dev/null | \
-    ch - - --No -100 --clip 16384 --gain $gain 2>/dev/null | \
-    # final line prints peak and CPAPR for SSB
-    ch - - --clip 16384 |
-    sox -t .s16 -r 8000 -c 1 -v 0.85 - -t .s16 $output_file
-}
 
 function run_rigctl {
     command=$1
@@ -143,12 +134,6 @@ function process_rx {
     ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 rx_radae.wav --pilots --pilot_eq --plots --freq_offset $2
 }
 
-function measure_rms() {
-    ch_log=$(mktemp)
-    ch $1 /dev/null 2>${ch_log}
-    rms=$(cat $ch_log | grep "RMS" | tr -s ' ' | cut -d' ' -f5)
-    echo $rms
-}
 
 POSITIONAL=()
 while [[ $# -gt 0 ]]
@@ -277,19 +262,15 @@ sox $speechfile $speechfile_pad pad 1@0
 sox -r 8k -e float -b 32 -c 2 ${tx_radae}.f32 -t .s16 -c 1 ${tx_radae}.raw remix 1 0
 
 # Make power of both signals the same, but adjusting the RMS levels to meet the setpoint
-ssb_rms=$(measure_rms $tx_ssb)
-radae_rms=$(measure_rms ${tx_radae}.raw)
-ssb_gain=$(python3 -c "gain=${setpoint_rms}/${ssb_rms}; print(\"%f\" % gain)")
-radae_gain=$(python3 -c "gain=${setpoint_rms}/${radae_rms}; print(\"%f\" % gain)")
-tx_ssb_gain=$(mktemp)
-sox -t .s16 -r 8k -c 1 -v $ssb_gain $tx_ssb -t .s16 -r 8k -c 1 $tx_ssb_gain
-tx_radae_gain=$(mktemp)
+set_rms $tx_ssb $setpoint
+set_rms ${tx_radae}.raw $setpoint
 
 # insert 1 second of silence between SSB and radae
-sox -t .s16 -r 8k -c 1 -v $radae_gain ${tx_radae}.raw -t .s16 -r 8k -c 1 $tx_radae_gain pad 1@0
+tx_radae_pad=$(mktemp).raw
+sox -t .s16 -r 8k -c 1 -v ${tx_radae}.raw -t .s16 -r 8k -c 1 $tx_radae_pad pad 1@0
 
 # cat signals together so we can send them over a radio at the same time
-cat $tx_sine $tx_ssb_gain $tx_radae_gain > tx.raw
+cat $tx_sine $tx_ssb $tx_radae_pad > tx.raw
 sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
 
 # generate a 4MSP .iq8 file suitable for replaying by HackRF
