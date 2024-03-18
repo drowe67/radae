@@ -120,8 +120,8 @@ if type(args.initial_checkpoint) != type(None):
 checkpoint['state_dict']    = model.state_dict()
 
 # dataloader
-Nc = model.get_Nc()
-mp_sequence_length = int((sequence_length // model.get_enc_stride())*model.get_Ns())
+Nc = model.Nc
+mp_sequence_length = int((sequence_length // model.enc_stride)*model.Ns)
 checkpoint['dataset_args'] = (feature_file, sequence_length, mp_sequence_length, Nc)
 checkpoint['dataset_kwargs'] = {'enc_stride': model.enc_stride}
 dataset = RADAEDataset(*checkpoint['dataset_args'], mp_file = args.mp_file)

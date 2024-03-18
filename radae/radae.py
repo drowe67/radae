@@ -327,25 +327,29 @@ class RADAE(nn.Module):
         self.Tf = 0.01                                 # feature update period (s) 
         self.Tz = self.Tf*self.enc_stride              # autoencoder latent vector update period (s)
         self.Rz = 1/self.Tz
-        self.Rb =  latent_dim/self.Tz                  # BPSK symbol rate (symbols/s or Hz)
+        self.Rb =  latent_dim/self.Tz                  # payload data BPSK symbol rate (symbols/s or Hz)
 
         # set up OFDM "modem frame" parameters to support multipath simulation.  Modem frame is Nc carriers 
         # wide in frequency and Ns symbols in duration 
         bps = 2                                         # BPSK symbols per QPSK symbol
-        Ts = 0.02                                       # OFDM QPSK symbol period
+        Ts = 0.02                                       # OFDM QPSK symbol period (without pilots or CP)
         Rs = 1/Ts                                       # OFDM QPSK symbol rate
         Nzmf = 2                                        # number of latent vectors in a modem frame
         Nsmf = Nzmf*self.latent_dim // bps              # total number of QPSK symbols in a modem frame across all carriers
         Ns = int(Nzmf*self.Tz // Ts)                    # duration of "modem frame" in QPSK symbols
         Nc = int(Nsmf // Ns)                            # number of carriers
         assert Ns*Nc*bps == Nzmf*latent_dim             # sanity check, one modem frame should contain all the latent features
+        if self.pilots:
+            Rs = Rs*(Ns+1)/Ns                           # increase symbol rate so that modem frame period is constant
+            Ts_dash = 1/Rs
+            Rb_dash = self.Rb*(Ns+1)/Ns
         self.Ts = Ts
+        self.Ts_dash = Ts_dash
+        self.Rb_dash = Rb_dash
         self.Rs = Rs
         self.Ns = Ns
         self.Nc = Nc
         self.Nzmf = Nzmf
-
-        print(f"Nsmf...: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d}")
 
         # DFT matrices for Nc freq samples, M time samples (could be a FFT but matrix convenient for small, non power of 2 DFTs)
         self.Fs = 8000                                               # sample rate of modem signal 
@@ -362,26 +366,17 @@ class RADAE(nn.Module):
 
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)
-        
+    
+        print(f"Rs: {Rs:5.2f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}")
+
+    
     def move_device(self, device):
         # TODO: work out why we need this step
         self.Winv = self.Winv.to(device)
         self.Wfwd = self.Wfwd.to(device)
-    def get_Rs(self):
-        return self.Rs
-    def get_Rb(self):
-        return self.Rb
-    def get_Nc(self):
-        return self.Nc
-    def get_enc_stride(self):
-        return self.enc_stride
-    def get_Ns(self):
-        return self.Ns
-    def get_Fs(self):
-        return self.Fs
-   
+ 
     def num_timesteps_at_rate_Rs(self, num_ten_ms_timesteps):
-        return int((num_ten_ms_timesteps / self.enc_stride) * self.Tz / self.Ts)
+        return int((num_ten_ms_timesteps / self.enc_stride) * self.Nzmf)
     
     def num_timesteps_at_rate_Fs(self, num_timesteps_at_rate_Rs):
         if self.pilots:
@@ -631,7 +626,7 @@ class RADAE(nn.Module):
 
             # multipath, multiply by per-carrier channel magnitudes at each OFDM modem timestep
             # preserve tx_sym variable so we can return it to measure power after multipath channel
-            tx_sym = tx_sym * H
+            #tx_sym = tx_sym * H
 
             # note noise power sigma**2 is split between real and imag channels
             sigma = 10**(-EbNodB/20)

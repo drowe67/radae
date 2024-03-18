@@ -159,11 +159,11 @@ if __name__ == '__main__':
    # target SNR calcs for a fixed Eb/No run (e.g. inference)
    EbNo = 10**(args.EbNodB/10)                # linear Eb/No
    B = 3000                                   # (kinda arbitrary) bandwidth for measuring noise power (Hz)
-   SNR = (EbNo)*(model.get_Rb()/B)
+   SNR = EbNo*(model.Rb/B)
    SNRdB = 10*np.log10(SNR)
-   CNodB = 10*np.log10(EbNo*model.get_Rb())
-   print(f"          Eb/No   C/No     SNR3k  Rb    Eq    PAPR")
-   print(f"Target..: {args.EbNodB:6.2f}  {CNodB:6.2f}  {SNRdB:6.2f}  {int(model.get_Rb()):d}")
+   CNodB = 10*np.log10(EbNo*model.Rb)
+   print(f"          Eb/No   C/No     SNR3k  Rb'   Eq    PAPR")
+   print(f"Target..: {args.EbNodB:6.2f}  {CNodB:6.2f}  {SNRdB:6.2f}  {int(model.Rb_dash):d}")
 
    # Lets check actual Eq/No, Eb/No and SNR, and monitor assumption |z| ~ 1, especially for multipath.
    # If |z| ~ 1, Eb ~ 1, Eq ~ 2, and the measured SNR should match the set point SNR. 
@@ -174,8 +174,8 @@ if __name__ == '__main__':
       N = output["sigma"]**2                                 # noise power in B=Fs
       N = N.item()
       #print(S, N)
-      CNodB_meas = 10*np.log10(S*model.get_Fs()/N)
-      EbNodB_meas = CNodB_meas - 10*np.log10(model.get_Rb())
+      CNodB_meas = 10*np.log10(S*model.Fs/N)
+      EbNodB_meas = CNodB_meas - 10*np.log10(model.Rb_dash)
       SNRdB_meas = CNodB_meas - 10*np.log10(B)               # SNR in B=3000
       PAPRdB = 20*np.log10(np.max(np.abs(tx))/np.sqrt(S))
       print(f"Measured: {EbNodB_meas:6.2f}  {CNodB_meas:6.2f}  {SNRdB_meas:6.2f}             {PAPRdB:5.2f}")
@@ -187,7 +187,7 @@ if __name__ == '__main__':
       EqNodB_meas = 10*np.log10(Eq_meas/No)
       Rq = Rs*Nc
       SNRdB_meas = EqNodB_meas + 10*np.log10(Rq/B)
-      print(f"Measured: {EqNodB_meas-3:6.2f}         {SNRdB_meas:6.2f}       {Eq_meas:5.2f}")
+      print(f"Measured: {EqNodB_meas-3:6.2f}          {SNRdB_meas:6.2f}       {Eq_meas:5.2f}")
 
    features_hat = output["features_hat"]
    features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
