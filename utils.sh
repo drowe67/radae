@@ -16,8 +16,10 @@ function analog_compressor {
 
 function measure_rms() {
     ch_log=$(mktemp)
-    ch $1 /dev/null 2>${ch_log}
-    rms=$(cat $ch_log | grep "RMS" | tr -s ' ' | cut -d' ' -f5)
+    raw=$1
+    shift
+    ch $raw /dev/null $@ 2>${ch_log}
+    rms=$(cat $ch_log| grep "RMS" | tr -s ' ' | cut -d' ' -f5)
     echo $rms
 }
 

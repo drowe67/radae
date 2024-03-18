@@ -561,7 +561,11 @@ class RADAE(nn.Module):
             tx_mp = torch.zeros((num_batches,num_timesteps_at_rate_Fs))
             tx_mp = tx*G[:,:,0]
             tx_mp[:,d:] = tx_mp[:,d:] + tx[:,:-d]*G[:,:-d,1]
-            tx = tx_mp
+            # normalise power through multipath model
+            tx_power = torch.mean(torch.abs(tx)**2)
+            tx_mp_power = torch.mean(torch.abs(tx_mp)**2)
+            mp_gain = (tx_power/tx_mp_power)**0.5
+            tx = mp_gain*tx_mp
 
             # user supplied phase and freq offsets (used at inference time)
             if self.phase_offset:
