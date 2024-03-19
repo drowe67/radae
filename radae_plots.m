@@ -24,7 +24,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
         rx=rx(1:2:end)+j*rx(2:2:end); 
         figure(3); clf; plot(rx); title('rx Scatter (IQ)');
         figure(4); clf; plot(abs(rx(1:1000))); xlabel('Time (samples)'); ylabel('|rx|');
-        figure(5); clf; plot_specgram(rx, Fs=8000, 0, 2000);
+        figure(5); clf; plot_specgram(rx, Fs=8000, 0, 3000);
     end
 endfunction
 

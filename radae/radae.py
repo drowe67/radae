@@ -339,35 +339,50 @@ class RADAE(nn.Module):
         Ns = int(Nzmf*self.Tz // Ts)                    # duration of "modem frame" in QPSK symbols
         Nc = int(Nsmf // Ns)                            # number of carriers
         assert Ns*Nc*bps == Nzmf*latent_dim             # sanity check, one modem frame should contain all the latent features
+        
+        # when inserting pilots increase OFDM symbol rate so that modem frame period is constant
+        Rs_dash = Rs
+        Ts_dash = Ts
+        Rb_dash = self.Rb
         if self.pilots:
-            Rs = Rs*(Ns+1)/Ns                           # increase symbol rate so that modem frame period is constant
-            Ts_dash = 1/Rs
+            Rs_dash = Rs*(Ns+1)/Ns
+            Ts_dash = 1/Rs_dash
             Rb_dash = self.Rb*(Ns+1)/Ns
-        self.Ts = Ts
-        self.Ts_dash = Ts_dash
-        self.Rb_dash = Rb_dash
-        self.Rs = Rs
-        self.Ns = Ns
-        self.Nc = Nc
-        self.Nzmf = Nzmf
+
+        # when inserting cyclic prefix increase OFDM symbol rate so that modem frame period is constant
+        self.Fs = 8000                                               # sample rate of modem signal 
+        self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
+        self.Ncp = int(cyclic_prefix*self.Fs)
+        Rs_dash = Rs_dash/(1-cyclic_prefix/Ts_dash)            
+        Ts_dash = 1/Rs_dash
+        Rb_dash = Rb_dash/(1-cyclic_prefix/Ts_dash)
 
         # DFT matrices for Nc freq samples, M time samples (could be a FFT but matrix convenient for small, non power of 2 DFTs)
-        self.Fs = 8000                                               # sample rate of modem signal 
-        self.M = int(self.Fs // self.Rs)                             # oversampling rate
-        self.w = 2*m.pi*(400 + torch.arange(Nc)*Rs)/self.Fs          # carrier frequencies, start at 400Hz to be above analog filtering in radios
+        self.M = int(self.Fs // Rs_dash)                             # oversampling rate
+        self.w = 2*m.pi*(400 + torch.arange(Nc)*Rs_dash)/self.Fs     # carrier frequencies, start at 400Hz to be above analog filtering in radios
         self.Winv = torch.zeros((Nc,self.M), dtype=torch.complex64)  # inverse DFT matrix, Nc freq domain to M time domain (OFDM Tx)
         self.Wfwd = torch.zeros((self.M,Nc), dtype=torch.complex64)  # forward DFT matrix, M time domain to Nc freq domain (OFDM Rx)
         for c in range(0,Nc):
            self.Winv[c,:] = torch.exp( 1j*torch.arange(self.M)*self.w[c])/self.M
            self.Wfwd[:,c] = torch.exp(-1j*torch.arange(self.M)*self.w[c])
 
-        self.P = (2**(0.5))*barker_pilots(self.Nc)
+        self.P = (2**(0.5))*barker_pilots(Nc)
         self.p = torch.matmul(self.P,self.Winv)
 
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)
     
-        print(f"Rs: {Rs:5.2f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}")
+        print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}")
+
+        self.bps = bps
+        self.Ts = Ts
+        self.Ts_dash = Ts_dash
+        self.Rb_dash = Rb_dash
+        self.Rs = Rs
+        self.Rs_dash = Rs_dash
+        self.Ns = Ns
+        self.Nc = Nc
+        self.Nzmf = Nzmf
 
     
     def move_device(self, device):
@@ -530,11 +545,12 @@ class RADAE(nn.Module):
         rx = None
         if self.rate_Fs:
             num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*self.M
-
+ 
             # Simulate channel at M=Fs/Rs samples per QPSK symbol ---------------------------------
 
             # IDFT to transform Nc carriers to M time domain samples
             tx = torch.matmul(tx_sym, self.Winv)
+
             # Optionally insert a cyclic prefix
             Ncp = self.Ncp
             if self.Ncp:
@@ -596,7 +612,7 @@ class RADAE(nn.Module):
                 sigma = (S*self.Fs/(EbNo*self.Rb))**(0.5)
             else:
                 # similar to rate Rs, but scale noise by M samples/symbol
-                sigma = (EbNo*(self.M+Ncp))**(-0.5)
+                sigma = (EbNo*(self.M))**(-0.5)
             rx = tx + sigma*torch.randn_like(tx)
 
             # insert per sequence random gain variations, -20 ... +20 dB (training time)
@@ -612,10 +628,10 @@ class RADAE(nn.Module):
 
             # remove cyclic prefix (assume genie timing)
             rx = torch.reshape(rx,(num_batches,num_timesteps_at_rate_Rs,self.M+self.Ncp))
-            rx = rx[:,:,Ncp:]
+            rx_dash = rx[:,:,Ncp:]
 
             # DFT to transform M time domain samples to Nc carriers
-            rx_sym = torch.matmul(rx, self.Wfwd)
+            rx_sym = torch.matmul(rx_dash, self.Wfwd)
         else:
             # Simulate channel at one sample per QPSK symbol (Fs=Rs) --------------------------------
             

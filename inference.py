@@ -174,8 +174,11 @@ if __name__ == '__main__':
       N = output["sigma"]**2                                 # noise power in B=Fs
       N = N.item()
       #print(S, N)
-      CNodB_meas = 10*np.log10(S*model.Fs/N)
-      EbNodB_meas = CNodB_meas - 10*np.log10(model.Rb_dash)
+      CNodB_meas = 10*np.log10(S*model.Fs/N)                 # S/N = S/(NoB) = S/(NoFs), C = S, C/No = SFs/N
+      # With a CP the Eb gets tricky, not simply C/No/Rb_dash.  Only M samples out of M+Ncp are used for detection, 
+      # the Ncp samples used for the CP is discarded.  So we work Es=M/Fs for one OFDM symbol,
+      # then divide by (Nc and bps) to get Eb. 
+      EbNodB_meas = CNodB_meas + 10*np.log10(model.M/(model.Fs*model.Nc*model.bps))
       SNRdB_meas = CNodB_meas - 10*np.log10(B)               # SNR in B=3000
       PAPRdB = 20*np.log10(np.max(np.abs(tx))/np.sqrt(S))
       print(f"Measured: {EbNodB_meas:6.2f}  {CNodB_meas:6.2f}  {SNRdB_meas:6.2f}             {PAPRdB:5.2f}")
