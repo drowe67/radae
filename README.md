@@ -173,6 +173,7 @@ BER tests, useful to calibrate system, and measures loss from classical DSP base
 | model06 | --range_EbNo, --rate_Fs, trained on AWGN with PA model, PAPR about 1dB, OK at a range of Eb/No | Fs |240223_m6_Fs_papr |
 | model07 | --range_EbNo, -6 ... 14, --rate_Fs, AWGN freq, phase, gain offsets, some degredation at 0dB | Fs | 240301_m7_Fs_offets | Fs |
 | model08 | --range_EbNo, -6 ... 14, --rate_Fs, AWGN no offsets (vanilla rate Fs), similar to model 05 | Fs | 240301_m8_Fs | 
+| model05 | practical OFDM with 4ms CP and pilots, increased Rs', MPP, speech dropping in and out | Fs | 240319_m5_Fs_mp | 
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
