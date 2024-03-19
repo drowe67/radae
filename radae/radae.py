@@ -40,6 +40,7 @@ import torch.nn.functional as F
 import sys
 import os
 from torch.nn.utils.parametrizations import weight_norm
+from matplotlib import pyplot as plt
 
 # Quantization and loss utility functions
 
@@ -287,7 +288,8 @@ class RADAE(nn.Module):
                  pilots = False,
                  pilot_eq = False,
                  eq_mean6 = True,
-                 cyclic_prefix = 0
+                 cyclic_prefix = 0,
+                 time_offset = 0
                 ):
 
         super(RADAE, self).__init__()
@@ -311,6 +313,7 @@ class RADAE(nn.Module):
         self.per_carrier_eq = True
         self.phase_mag_eq = False
         self.eq_mean6 = eq_mean6
+        self.time_offset = time_offset
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, papr_opt=papr_opt))
@@ -344,28 +347,31 @@ class RADAE(nn.Module):
         Rs_dash = Rs
         Ts_dash = Ts
         Rb_dash = self.Rb
+        
         if self.pilots:
             Rs_dash = Rs*(Ns+1)/Ns
             Ts_dash = 1/Rs_dash
             Rb_dash = self.Rb*(Ns+1)/Ns
-
+        
         # when inserting cyclic prefix increase OFDM symbol rate so that modem frame period is constant
         self.Fs = 8000                                               # sample rate of modem signal 
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)
+        
         Rs_dash = Rs_dash/(1-cyclic_prefix/Ts_dash)            
         Ts_dash = 1/Rs_dash
         Rb_dash = Rb_dash/(1-cyclic_prefix/Ts_dash)
-
+        
         # DFT matrices for Nc freq samples, M time samples (could be a FFT but matrix convenient for small, non power of 2 DFTs)
         self.M = int(self.Fs // Rs_dash)                             # oversampling rate
-        self.w = 2*m.pi*(400 + torch.arange(Nc)*Rs_dash)/self.Fs     # carrier frequencies, start at 400Hz to be above analog filtering in radios
+        lower = round(400/Rs_dash)                                   # start carrier freqs at about 400Hz to be above analog filtering in radios
+        self.w = 2*m.pi*(lower+torch.arange(Nc))/self.M              # note: must be integer DFT freq indexes or DFT falls over
         self.Winv = torch.zeros((Nc,self.M), dtype=torch.complex64)  # inverse DFT matrix, Nc freq domain to M time domain (OFDM Tx)
         self.Wfwd = torch.zeros((self.M,Nc), dtype=torch.complex64)  # forward DFT matrix, M time domain to Nc freq domain (OFDM Rx)
         for c in range(0,Nc):
            self.Winv[c,:] = torch.exp( 1j*torch.arange(self.M)*self.w[c])/self.M
            self.Wfwd[:,c] = torch.exp(-1j*torch.arange(self.M)*self.w[c])
-
+        
         self.P = (2**(0.5))*barker_pilots(Nc)
         self.p = torch.matmul(self.P,self.Winv)
 
@@ -417,9 +423,11 @@ class RADAE(nn.Module):
                 if self.eq_mean6:
                     #  3-pilot local mean across frequency
                     rx_pilots[i,0] = torch.mean(rx_sym_pilots[0,i,0,0:3]/self.P[0:3])
+                    #rx_pilots[i,0] = rx_sym_pilots[0,i,0,0]/self.P[0]
                     for c in torch.arange(1,Nc-1):
                         rx_pilots[i,c] = torch.mean(rx_sym_pilots[0,i,0,c-1:c+2]/self.P[c-1:c+2])
                     rx_pilots[i,Nc-1] = torch.mean(rx_sym_pilots[0,i,0,Nc-3:Nc]/self.P[Nc-3:Nc])
+                    #rx_pilots[i,Nc-1] = rx_sym_pilots[0,i,0,Nc-1]/self.P[Nc-1]
                 else:
                     #  3-pilot least squares fit across frequency
                     for c in range(Nc):
@@ -429,7 +437,7 @@ class RADAE(nn.Module):
                             c_mid = 1
                         if c == Nc-1:
                             c_mid = Nc-2
-                        local_path_delay_s = 0.004
+                        local_path_delay_s = 0.0025      # guess at actual path delay
                         a = local_path_delay_s*self.Fs
                         A = torch.tensor([[1, torch.exp(-1j*self.w[c_mid-1]*a)], [1, torch.exp(-1j*self.w[c_mid]*a)], [1, torch.exp(-1j*self.w[c_mid+1]*a)]])
                         P = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
@@ -559,14 +567,14 @@ class RADAE(nn.Module):
                 tx_cp[:,:,:Ncp] = tx_cp[:,:,-Ncp:]
                 tx = tx_cp
                 num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*(self.M+Ncp)
-            tx = torch.reshape(tx,(num_batches,num_timesteps_at_rate_Fs))
-                          
+            tx = torch.reshape(tx,(num_batches,num_timesteps_at_rate_Fs))                         
+            
             # simulate Power Amplifier (PA) that saturates at abs(tx) ~ 1
             # TODO: this has problems when magnitude goes thru 0 (e.g. --ber_test), change formulation to use angle()
             if self.papr_opt:
                 tx_norm = tx/torch.abs(tx)
                 tx = torch.tanh(torch.abs(tx)) * tx_norm
-      
+            
             # rate Fs multipath model
             d = self.d_samples
             tx_mp = torch.zeros((num_batches,num_timesteps_at_rate_Fs))
@@ -577,7 +585,7 @@ class RADAE(nn.Module):
             tx_mp_power = torch.mean(torch.abs(tx_mp)**2)
             mp_gain = (tx_power/tx_mp_power)**0.5
             tx = mp_gain*tx_mp
-
+            
             # user supplied phase and freq offsets (used at inference time)
             if self.phase_offset:
                 phase = self.phase_offset*torch.ones_like(tx)
@@ -628,7 +636,7 @@ class RADAE(nn.Module):
 
             # remove cyclic prefix (assume genie timing)
             rx = torch.reshape(rx,(num_batches,num_timesteps_at_rate_Rs,self.M+self.Ncp))
-            rx_dash = rx[:,:,Ncp:]
+            rx_dash = rx[:,:,Ncp+self.time_offset:Ncp+self.time_offset+self.M]
 
             # DFT to transform M time domain samples to Nc carriers
             rx_sym = torch.matmul(rx_dash, self.Wfwd)
