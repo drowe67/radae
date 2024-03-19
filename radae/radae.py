@@ -335,11 +335,12 @@ class RADAE(nn.Module):
         # set up OFDM "modem frame" parameters to support multipath simulation.  Modem frame is Nc carriers 
         # wide in frequency and Ns symbols in duration 
         bps = 2                                         # BPSK symbols per QPSK symbol
-        Ts = 0.02                                       # OFDM QPSK symbol period (without pilots or CP)
+        Ts = 0.03                                       # OFDM QPSK symbol period (without pilots or CP)
         Rs = 1/Ts                                       # OFDM QPSK symbol rate
-        Nzmf = 2                                        # number of latent vectors in a modem frame
+        Nzmf = 3                                        # number of latent vectors in a modem frame
         Nsmf = Nzmf*self.latent_dim // bps              # total number of QPSK symbols in a modem frame across all carriers
         Ns = int(Nzmf*self.Tz // Ts)                    # duration of "modem frame" in QPSK symbols
+        Tmf = Ns*Ts                                     # period of modem frame (s), this must remain constant for real time operation
         Nc = int(Nsmf // Ns)                            # number of carriers
         assert Ns*Nc*bps == Nzmf*latent_dim             # sanity check, one modem frame should contain all the latent features
         
@@ -359,11 +360,11 @@ class RADAE(nn.Module):
         self.Ncp = int(cyclic_prefix*self.Fs)
         
         Rs_dash = Rs_dash/(1-cyclic_prefix/Ts_dash)            
-        Ts_dash = 1/Rs_dash
         Rb_dash = Rb_dash/(1-cyclic_prefix/Ts_dash)
+        Ts_dash = 1/Rs_dash
         
         # DFT matrices for Nc freq samples, M time samples (could be a FFT but matrix convenient for small, non power of 2 DFTs)
-        self.M = int(self.Fs // Rs_dash)                             # oversampling rate
+        self.M = round(self.Fs / Rs_dash)                            # oversampling rate
         lower = round(400/Rs_dash)                                   # start carrier freqs at about 400Hz to be above analog filtering in radios
         self.w = 2*m.pi*(lower+torch.arange(Nc))/self.M              # note: must be integer DFT freq indexes or DFT falls over
         self.Winv = torch.zeros((Nc,self.M), dtype=torch.complex64)  # inverse DFT matrix, Nc freq domain to M time domain (OFDM Tx)
@@ -380,6 +381,7 @@ class RADAE(nn.Module):
     
         print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}")
 
+        self.Tmf = Tmf
         self.bps = bps
         self.Ts = Ts
         self.Ts_dash = Ts_dash
@@ -397,7 +399,8 @@ class RADAE(nn.Module):
         self.Wfwd = self.Wfwd.to(device)
  
     def num_timesteps_at_rate_Rs(self, num_ten_ms_timesteps):
-        return int((num_ten_ms_timesteps / self.enc_stride) * self.Nzmf)
+        num_modem_frames = num_ten_ms_timesteps // self.enc_stride // self.Nzmf
+        return int(num_modem_frames*self.Ns)
     
     def num_timesteps_at_rate_Fs(self, num_timesteps_at_rate_Rs):
         if self.pilots:
@@ -512,7 +515,7 @@ class RADAE(nn.Module):
         
         (num_batches, num_ten_ms_timesteps, num_features) = features.shape
         num_timesteps_at_rate_Rs = self.num_timesteps_at_rate_Rs(num_ten_ms_timesteps)
-        #print(num_ten_ms_timesteps, num_timesteps_at_rate_Rs)
+        print(num_ten_ms_timesteps, num_timesteps_at_rate_Rs)
 
         # For every OFDM modem time step, we need one channel sample for each carrier
         #print(features.shape,H.shape, features.device, H.device)
@@ -537,6 +540,7 @@ class RADAE(nn.Module):
         qpsk_shape = tx_sym.shape
  
         # reshape into sequence of OFDM modem frames
+        print(tx_sym.shape)
         tx_sym = torch.reshape(tx_sym,(num_batches,num_timesteps_at_rate_Rs,self.Nc))
    
         # optionally insert pilot symbols, at the start of each modem frame
