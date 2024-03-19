@@ -29,10 +29,13 @@ EbNodB=$4
 g_file=$5
 
 # set up command lines to simulate multipath
-if [ -f $gfile ]; then
+if [ ! -z $g_file ]; then
     radae_mp="--g_file ${g_file}"
     cp $g_file fast_fading_samples.float
     ssb_mp="--fading_dir . --mpp"
+    channel="mpp"
+else
+    channel="awgn"
 fi
 
 filename=$(basename -- "$fullfile")
@@ -42,13 +45,13 @@ mkdir -p ${out_dir}
 
 # radae simulation
 rx=$(mktemp).f32
-log=$(./inference.sh ${model} ${fullfile} ${out_dir}/${filename}_${EbNodB}dB.wav \
+log=$(./inference.sh ${model} ${fullfile} ${out_dir}/${filename}_${EbNodB}dB_${channel}.wav \
       --EbNodB ${EbNodB} --write_rx ${rx} --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 $radae_mp)
 CNodB=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f3)
 
 # listen to the modem signal, just keep real channel, filter to simulate listening on a SSB Rx
-sox -r 8k -e float -b 32 -c 2 ${rx} -c 1 -e signed-integer -b 16 ${out_dir}/${filename}_${EbNodB}dB_rx.wav sinc 0.3-2.7k remix 1 0
-spectrogram "${out_dir}/${filename}_${EbNodB}dB_rx.wav" "${out_dir}/${filename}_${EbNodB}dB_spec.png"
+sox -r 8k -e float -b 32 -c 2 ${rx} -c 1 -e signed-integer -b 16 ${out_dir}/${filename}_${EbNodB}dB_${channel}_rx.wav sinc 0.3-2.7k remix 1 0
+spectrogram "${out_dir}/${filename}_${EbNodB}dB_${channel}_rx.wav" "${out_dir}/${filename}_${EbNodB}dB_${channel}_spec.png"
 
 # SSB simulation
 speech_8k=$(mktemp).s16
@@ -64,9 +67,9 @@ No=$(python3 -c "import numpy as np; C=10*np.log10(${rms}*${rms}); No=C-${CNodB}
 ch $speech_comp $speech_comp_noise --No ${No} $ssb_mp --after_fade
 
 # adjust peak level to be similar to radae output
-radae_peak=$(measure_peak ${out_dir}/${filename}_${EbNodB}dB.wav)
+radae_peak=$(measure_peak ${out_dir}/${filename}_${EbNodB}dB_${channel}.wav)
 ssb_peak=$(measure_peak $speech_comp_noise)
 gain=$(python3 -c "gain=${radae_peak}/${ssb_peak}; print(\"%f\" % gain)")
-sox -t .s16 -r 8000 -c 1 -v $gain $speech_comp_noise ${out_dir}/${filename}_${EbNodB}dB_ssb.wav
+sox -t .s16 -r 8000 -c 1 -v $gain $speech_comp_noise ${out_dir}/${filename}_${EbNodB}dB_${channel}_ssb.wav
 
-spectrogram ${out_dir}/${filename}_${EbNodB}dB_ssb.wav ${out_dir}/${filename}_${EbNodB}dB_ssb_spec.png
+spectrogram ${out_dir}/${filename}_${EbNodB}dB_${channel}_ssb.wav ${out_dir}/${filename}_${EbNodB}dB_${channel}_ssb_spec.png
