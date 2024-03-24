@@ -496,14 +496,17 @@ class RADAE(nn.Module):
         if self.pilots:
             Ns = Ns + 1
         # integer number of modem frames
-        num_timesteps_at_rate_Rs = len(rx) // self.M
+        num_timesteps_at_rate_Rs = len(rx) // (self.M+self.Ncp)
         num_modem_frames = num_timesteps_at_rate_Rs // Ns
         num_timesteps_at_rate_Rs = Ns * num_modem_frames
-        rx = rx[:num_timesteps_at_rate_Rs*self.M]
+        rx = rx[:num_timesteps_at_rate_Rs*(self.M+self.Ncp)]
 
+        # remove cyclic prefix
+        rx = torch.reshape(rx,(1,num_timesteps_at_rate_Rs,self.M+self.Ncp))
+        rx_dash = rx[:,:,self.Ncp+self.time_offset:self.Ncp+self.time_offset+self.M]
+        
         # DFT to transform M time domain samples to Nc carriers
-        rx = torch.reshape(rx,(1,num_timesteps_at_rate_Rs,self.M))
-        rx_sym = torch.matmul(rx, self.Wfwd)
+        rx_sym = torch.matmul(rx_dash, self.Wfwd)
         
         if self.pilots:
             rx_sym_pilots = torch.reshape(rx_sym,(1, num_modem_frames, self.Ns+1, self.Nc))

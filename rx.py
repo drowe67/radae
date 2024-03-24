@@ -48,7 +48,9 @@ parser.add_argument('--pilots', action='store_true', help='insert pilot symbols'
 parser.add_argument('--ber_test', type=str, default="", help='symbols are PSK bits, compare to z.f32 file to calculate BER')
 parser.add_argument('--plots', action='store_true', help='display various plots')
 parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ data symbols using classical DSP')
-parser.add_argument('--freq_offset', type=float, default=0, help='manually specify frequency offset')
+parser.add_argument('--freq_offset', type=float, help='manually specify frequency offset')
+parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0)')
+parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude correction (fixes --gain)')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -61,7 +63,9 @@ num_features = 20
 num_used_features = 20
 
 # load model from a checkpoint file
-model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, pilots=args.pilots, pilot_eq=args.pilot_eq)
+model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, 
+              pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = False, cyclic_prefix=args.cp,
+              coarse_mag=args.coarse_mag)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 
@@ -78,8 +82,6 @@ def complex_bpf(Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
    x_baseband = x*np.exp(-1j*alpha*np.arange(len(x)))
    x_filt = np.convolve(x_baseband,h)
    return x_filt*np.exp(1j*alpha*np.arange(len(x_filt)))
-   
-   return np.convolve(x,h)
 
 # load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
 rx = np.fromfile(args.rx, dtype=np.csingle)
@@ -87,23 +89,24 @@ rx = np.fromfile(args.rx, dtype=np.csingle)
 # TODO: fix contrast of spectrogram - it's not very useful
 if args.plots:
    fig, ax = plt.subplots(2, 1,figsize=(6,12))
-   ax[0].specgram(rx,NFFT=256,Fs=model.get_Fs())
+   ax[0].specgram(rx,NFFT=256,Fs=model.Fs)
    ax[0].set_title('Before BPF')
-   ax[0].axis([0,len(rx)/model.get_Fs(),0,2000])
+   ax[0].axis([0,len(rx)/model.Fs,0,2000])
 
-rx = complex_bpf(model.get_Fs(),1200,900,rx)
+#rx = complex_bpf(model.Fs,1200,900,rx)
 
 if args.plots:
-   ax[1].specgram(rx,NFFT=256,Fs=model.get_Fs())
-   ax[1].axis([0,len(rx)/model.get_Fs(),0,2000])
+   ax[1].specgram(rx,NFFT=256,Fs=model.Fs)
+   ax[1].axis([0,len(rx)/model.Fs,0,2000])
    ax[1].set_title('After BPF')
- 
+
 # Acquisition - 1 sample resolution timing, coarse/fine freq offset estimation
 
 if args.pilots:
    M = model.M
-   Ns = model.get_Ns()                         # number of data symbols between pilots
-   Nmf = int((Ns+1)*M)                         # number of samples in one modem frame
+   Ncp = model.Ncp
+   Ns = model.Ns                               # number of data symbols between pilots
+   Nmf = int((Ns+1)*(M+Ncp))                   # number of samples in one modem frame
    p = np.array(model.p)                       # pilot sequence
    frange = 100                                # coarse grid -frange/2 ... + frange/2
    fstep = 5                                   # coarse grid spacing in Hz
@@ -125,12 +128,14 @@ if args.pilots:
    for f in fcoarse_range:
       w = 2*np.pi*f/Fs
       p_w[f_ind,] = np.exp(1j*w*np.arange(M)) * p
+
       f_ind + f_ind + 1
 
    while not acquired and len(rx) >= Nmf+M:
 
-      # search modem frame for maxima in correlation between pilots and received signal, over
-      # a grid of time and frequency steps
+      # Search modem frame for maxima in correlation between pilots and received signal, over
+      # a grid of time and frequency steps.  Note we only correlate on the M samples after the
+      # cyclic prefix
       Dtmax = 0
       tmax = 0
       fmax = 0
@@ -188,6 +193,7 @@ if args.pilots:
 
    # frequency refinement, use two sets of pilots
    ffine_range = np.arange(fmax-0.1*Rs,fmax+0.1*Rs,1)
+   print(ffine_range)
    D_fine = np.zeros(len(ffine_range), dtype=np.csingle)
    f_ind = 0
    fmax_fine = fmax
@@ -221,8 +227,9 @@ if args.pilots:
       ax1[1].plot(ffine_range, np.abs(D_fine),'b+')
       ax1[1].set_title('|Dt| against f (fine)')
    
+   tmax = 0
    rx = rx[tmax:]
-   if args.freq_offset:
+   if args.freq_offset is not None:
       fmax = args.freq_offset
       print(fmax)
    w = 2*np.pi*fmax/Fs
@@ -257,7 +264,6 @@ features_hat.tofile(args.features_hat)
 
 # write real valued latent vectors
 if len(args.write_latent):
-   z_hat = z_hat.cpu().detach().numpy().flatten().astype('float32')
    z_hat.tofile(args.write_latent)
 
 if args.plots:
