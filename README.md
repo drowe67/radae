@@ -122,33 +122,74 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
 
 # Over the Air/Over the Cable (OTA/OTC)
 
-We separate the system into a transmitter `inference.py` and stand alone receiver `rx.py`.
+We separate the system into a transmitter `inference.py` and stand alone receiver `rx.py`.  Theses examples test the OFDM waveform, including pilot symbol insertion, cyclic prefix, least squares phase EQ, and coarse magnitude EQ.
 
-BER tests, useful to calibrate system, and measures loss from classical DSP based synchronisation.
+BER tests are useful to calibrate the system, and measure loss from classical DSP based synchronisation.  We have a good theoretical model for the expected BER on AWGN and multipath channels.
 
 1. First generate no-noise reference symnbols for BER measurement `z_100dB.f32`:
    ```
-   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav t.wav --EbNodB 100 --pilots --pilot_eq --rate_Fs --ber_test --write_rx rx_100dB.f32 --write_latent z_100dB.f32
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav /dev/null --rate_Fs --pilots --write_latent z_100dB.f32 --write_rx rx_100dB.f32 --EbNodB 100 --cp 0.004 --pilot_eq --eq_ls --ber_test
    ```
-   
-3. The file `z_100dB.f32` can then be used to measure BER at the receiver, e.g. with no noise:
+   `rx_100dB.f32` is the rate Fs IQ sample file, the actual modem signal we could send over the air.
+
+1. The file `z_100dB.f32` can then be used as a reference to measure BER at the receiver, e.g. using the no noise `rx_100dB.f32` sample:
    ```
-   ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_100dB.f32 t.wav --pilots --pilot_eq --ber z_100dB.f32 --plots
+   ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_100dB.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
    ```
 
-4. Or with noise, frequency, and gain offsets:
+1  An AWGN channel at Eb/No = 0dB, first generate `rx_0dB.f32`:
    ```
-   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav t.wav --pilots --pilot_eq --rate_Fs --EbNodB 0 --freq_offset 2 --gain 0.1 --write_rx rx_0dB.f32 --ber_test
-   ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_0dB.f32 t.wav --pilots --pilot_eq --ber z_100dB.f32 --plots
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav /dev/null --rate_Fs --pilots --write_rx rx_0dB.f32 --EbNodB 0 --cp 0.004 --pilot_eq --eq_ls --ber_test
    ```
-   
-5. Compare to the BER without pilot based EQ:
+   Then demodulate
+   ```
+   ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_0dB.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
+   ```
+   This will give a BER of around 0.094, compared to 0.079 theoretical for BPSK, a loss of about 1dB due to non-ideal synchronisation.
+
+1. Compare to the BER with the ideal phase estimate (pilot based EQ disabled):
    ```
    ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav t.wav --pilots --rate_Fs --EbNodB 0 --ber_test
    ```
-   Note the ideal BER for AWGN is given by `BER = 0.5*erfc(sqrt(Eb/No))`, where Eb/No is the linear Eb/No.
+   Which is exactly the theoretical 0.078. Note the ideal BER for AWGN is given by `BER = 0.5*erfc(sqrt(Eb/No))`, where Eb/No is the linear Eb/No.
 
-6. Example of `ota_test.sh` script. `ota_test.sh -x` generates `tx.wav` which contains the simulated SSB and radae modem signals ready to run through a HF radio.  We add noise to create `rx.wav`, then use `ota_test.sh -r` to generate the demodulated audio files `rx_ssb.wav` and `rx_radae.wav`:
+1. Lets introduce frequency, and magnitude (gain) offsets typical of real radio channels:
+   ```
+   /inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav /dev/null --rate_Fs --pilots --write_rx rx_0dB.f32 --EbNodB 0 --cp 0.004 --pilot_eq --eq_ls --ber_test --freq_offset 2 --gain 0.1
+   ```
+   ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_0dB.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
+   ```
+   The acquisition system detected and corrected the 2Hz frequency offset, and the -20dB (--gain 0.1) magntitude offset, and the resulting BER was
+   about the same at 0.095.
+
+1. Typical HF multipath channels evolve at around 1 Hz, so it's a good idea to use longer samples to get a meaningful average.  First generate the reference `z_100dB.f32` file for `all.wav`:
+   ```
+   /inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null --rate_Fs --pilots --write_latent z_100dB.f32 --write_rx rx_100dB.f32 --EbNodB 100 --cp 0.004 --pilot_eq --eq_ls --ber_test
+   ```
+   Check that it's doing sensible things with no noise (BER=0):
+   ```
+   ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_100dB.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
+   ```
+   Lets generate a MPP sample `rx_100dB_mpp.f32` with no noise, and check the scatter diagram is a noice cross shape with BER close to 0:
+   ```
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null --rate_Fs --pilots --write_rx rx_100dB_mpp.f32 --EbNodB 100 --cp 0.004 --pilot_eq --eq_ls --ber_test --g_file g_mpp.f32
+   ```
+   ```
+   ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_100dB_mpp.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
+   ```
+   You can listen to the modulated OFDM waveform over the MPP channel simulation with:
+   ```
+   play -r 8k -e float -b 32 -c 2 rx_100dB_mpp.f32 sinc 0.3-2.7k
+   ```
+   Lets add some channel impairments:
+   ```
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null --rate_Fs --pilots --write_rx rx_0dB_mpp.f32 --EbNodB 0 --cp 0.004 --pilot_eq --eq_ls --ber_test --g_file g_mpp.f32
+   ```
+   ```./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_0dB_mpp.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
+   ```
+   Which gives us a BER of 0.172, about 1.5dB from the ideal Rayleigh multipath channel BER of 0.15 (which the MPP model approximates).
+
+1. Example of `ota_test.sh` script. `ota_test.sh -x` generates `tx.wav` which contains the simulated SSB and radae modem signals ready to run through a HF radio.  We add noise to create `rx.wav`, then use `ota_test.sh -r` to generate the demodulated audio files `rx_ssb.wav` and `rx_radae.wav`:
    ```
    ./ota_test.sh wav/peter.wav -x 
    ~/codec2-dev/build_linux/src/ch tx.wav - --No -20 | sox -t .s16 -r 8000 -c 1 - rx.wav

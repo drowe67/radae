@@ -104,7 +104,7 @@ Nc = model.Nc
 w = model.w.cpu().detach().numpy()
 bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
 centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
-print(f"bandwidth: {bandwidth:f} centre: {centre:f}")
+print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}")
 rx = complex_bpf(model.Fs,bandwidth,centre,rx)
 
 if args.plots:
@@ -140,7 +140,6 @@ if args.pilots:
       f_ind + f_ind + 1
 
    while not acquired and len(rx) >= Nmf+M:
-      print(Nmf, len(rx),len(rx)/Nmf)
       # Search modem frame for maxima in correlation between pilots and received signal, over
       # a grid of time and frequency steps.  Note we only correlate on the M samples after the
       # cyclic prefix, so tmax will be Ncp samples after the start of the modem frame
@@ -201,7 +200,7 @@ if args.pilots:
 
    # frequency refinement, use two sets of pilots
    ffine_range = np.arange(fmax-5,fmax+5,1)
-   print(ffine_range)
+   #print(ffine_range)
    D_fine = np.zeros(len(ffine_range), dtype=np.csingle)
    f_ind = 0
    fmax_fine = fmax
@@ -256,15 +255,19 @@ z_hat = z_hat.cpu().detach().numpy().flatten().astype('float32')
 if len(args.ber_test):
    # every time acq shifted Nmf (one modem frame of samples), we shifted this many latents:
    num_latents_per_modem_frame = model.Nzmf*model.latent_dim
-   print(num_latents_per_modem_frame)
+   #print(num_latents_per_modem_frame)
    z = np.fromfile(args.ber_test, dtype=np.float32)
-   print(z.shape, z_hat.shape)
-   for f in np.arange(10):
+   #print(z.shape, z_hat.shape)
+   best_BER = 1
+   # to find best alignment look for lowerest BER over a range of shifts
+   for f in np.arange(20):
       n_syms = min(len(z),len(z_hat))
       n_errors = np.sum(-z[:n_syms]*z_hat[:n_syms]>0)
       n_bits = len(z)
       BER = n_errors/n_bits
-      print(f"n_bits: {n_bits:d} n_errors: {n_errors:d} BER: {BER:5.3f}")
+      if BER < best_BER:
+         best_BER = BER
+         print(f"f: {f:2d} n_bits: {n_bits:d} n_errors: {n_errors:d} BER: {BER:5.3f}")
       z = z[num_latents_per_modem_frame:]
    #errors = torch.sign(-z*z_hat) > 0
    #errors = torch.reshape(errors,(-1,latent_dim))

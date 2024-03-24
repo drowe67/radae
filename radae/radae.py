@@ -485,7 +485,7 @@ class RADAE(nn.Module):
         if self.coarse_mag:
             # est RMS magnitude
             mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
-            print(mag)
+            #print(mag)
             rx_sym_pilots = rx_sym_pilots/mag
 
         return rx_sym_pilots
