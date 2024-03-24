@@ -51,6 +51,7 @@ parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ da
 parser.add_argument('--freq_offset', type=float, help='manually specify frequency offset')
 parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0)')
 parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude correction (fixes --gain)')
+parser.add_argument('--time_offset', type=int, default=0, help='sampling time offset in samples')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -65,7 +66,7 @@ num_used_features = 20
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, 
               pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = False, cyclic_prefix=args.cp,
-              coarse_mag=args.coarse_mag)
+              coarse_mag=args.coarse_mag,time_offset=args.time_offset)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 
@@ -91,13 +92,18 @@ if args.plots:
    fig, ax = plt.subplots(2, 1,figsize=(6,12))
    ax[0].specgram(rx,NFFT=256,Fs=model.Fs)
    ax[0].set_title('Before BPF')
-   ax[0].axis([0,len(rx)/model.Fs,0,2000])
+   ax[0].axis([0,len(rx)/model.Fs,0,3000])
 
-#rx = complex_bpf(model.Fs,1200,900,rx)
+Nc = model.Nc
+w = model.w.cpu().detach().numpy()
+bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
+centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
+print(f"bandwidth: {bandwidth:f} centre: {centre:f}")
+rx = complex_bpf(model.Fs,bandwidth,centre,rx)
 
 if args.plots:
    ax[1].specgram(rx,NFFT=256,Fs=model.Fs)
-   ax[1].axis([0,len(rx)/model.Fs,0,2000])
+   ax[1].axis([0,len(rx)/model.Fs,0,3000])
    ax[1].set_title('After BPF')
 
 # Acquisition - 1 sample resolution timing, coarse/fine freq offset estimation
@@ -135,7 +141,7 @@ if args.pilots:
 
       # Search modem frame for maxima in correlation between pilots and received signal, over
       # a grid of time and frequency steps.  Note we only correlate on the M samples after the
-      # cyclic prefix
+      # cyclic prefix, so tmax will be Ncp samples after the start of the modem frame
       Dtmax = 0
       tmax = 0
       fmax = 0
@@ -192,7 +198,7 @@ if args.pilots:
       quit()
 
    # frequency refinement, use two sets of pilots
-   ffine_range = np.arange(fmax-0.1*Rs,fmax+0.1*Rs,1)
+   ffine_range = np.arange(fmax-5,fmax+5,1)
    print(ffine_range)
    D_fine = np.zeros(len(ffine_range), dtype=np.csingle)
    f_ind = 0
@@ -227,8 +233,7 @@ if args.pilots:
       ax1[1].plot(ffine_range, np.abs(D_fine),'b+')
       ax1[1].set_title('|Dt| against f (fine)')
    
-   tmax = 0
-   rx = rx[tmax:]
+   rx = rx[tmax-Ncp:]
    if args.freq_offset is not None:
       fmax = args.freq_offset
       print(fmax)

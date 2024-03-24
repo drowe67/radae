@@ -37,7 +37,7 @@ if [ $output_speech == "-" ]; then
     tmp=$(mktemp)
     lpcnet_demo -fargan-synthesis ${features_out} ${tmp}
     aplay $tmp -r 16000 -f S16_LE
-else
+elif [ $output_speech != "/dev/null" ]; then
     tmp=$(mktemp)
     lpcnet_demo -fargan-synthesis ${features_out} ${tmp}
     sox -t .s16 -r 16000 -c 1 ${tmp} ${output_speech}
