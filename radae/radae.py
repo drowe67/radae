@@ -289,7 +289,8 @@ class RADAE(nn.Module):
                  pilot_eq = False,
                  eq_mean6 = True,
                  cyclic_prefix = 0,
-                 time_offset = 0
+                 time_offset = 0,
+                 coarse_mag = False
                 ):
 
         super(RADAE, self).__init__()
@@ -314,6 +315,7 @@ class RADAE(nn.Module):
         self.phase_mag_eq = False
         self.eq_mean6 = eq_mean6
         self.time_offset = time_offset
+        self.coarse_mag = coarse_mag
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, papr_opt=papr_opt))
@@ -415,9 +417,11 @@ class RADAE(nn.Module):
         #(num_ten_ms_timesteps,  num_modem_frames, num_ten_ms_timesteps_rounded)
         return num_ten_ms_timesteps_rounded
     
-    # Use classical DSP pilot based equalisation. Note just for inference atm, and only works on AWGN
+    # Use classical DSP pilot based equalisation. Note just for inference atm
     def do_pilot_eq(self, num_modem_frames, rx_sym_pilots):
         Nc = self.Nc 
+
+        # First, estimate the (complex) value of each received pilot symbol
         rx_pilots = torch.zeros(num_modem_frames, Nc, dtype=torch.complex64)
         if self.per_carrier_eq:
             # estimate pilot symbol for each carrier by smoothing information from adjacent pilots; moderate loss, but
@@ -453,7 +457,7 @@ class RADAE(nn.Module):
             for i in torch.arange(num_modem_frames):
                 rx_pilots[i,:] = torch.mean(rx_sym_pilots[0,i,0,:]/self.P)
 
-        # Linear interpolate between two pilots to EQ data symbols (phase and amplitude)
+        # Linearly interpolate between two pilots to EQ data symbols (phase and optionally mag)
         for i in torch.arange(num_modem_frames-1):
             for c in torch.arange(0,Nc):
                 slope = (rx_pilots[i+1,c] - rx_pilots[i,c])/(self.Ns+1)
@@ -473,6 +477,16 @@ class RADAE(nn.Module):
             else:
                 rx_ch_angle = torch.angle(rx_ch)
                 rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
+
+        # Optional "coarse" magntiude estimation and correction based on mean of all pilots across sequence. Unlike 
+        # regular PSK, ML network is sensitive to magnitude shifts.  We can't use the average mangnitude of the non-pilot symbols
+        # as they have unknown amplitudes. TODO: For a practical, real world implementation, make this a frame by frame AGC type
+        # algorithm, e.g. IIR smoothing of the RMS mag of each frames pilots 
+        if self.coarse_mag:
+            # est RMS magnitude
+            mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
+            print(mag)
+            rx_sym_pilots = rx_sym_pilots/mag
 
         return rx_sym_pilots
     
