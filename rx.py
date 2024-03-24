@@ -84,8 +84,14 @@ def complex_bpf(Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
    x_filt = np.convolve(x_baseband,h)
    return x_filt*np.exp(1j*alpha*np.arange(len(x_filt)))
 
+M = model.M
+Ncp = model.Ncp
+Ns = model.Ns               # number of data symbols between pilots
+Nmf = int((Ns+1)*(M+Ncp))   # number of samples in one modem frame
+
 # load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
 rx = np.fromfile(args.rx, dtype=np.csingle)
+print(f"samples: {len(rx):d} Nmf: {Nmf:d} modem frames: {len(rx) // Nmf}")
 
 # TODO: fix contrast of spectrogram - it's not very useful
 if args.plots:
@@ -109,10 +115,6 @@ if args.plots:
 # Acquisition - 1 sample resolution timing, coarse/fine freq offset estimation
 
 if args.pilots:
-   M = model.M
-   Ncp = model.Ncp
-   Ns = model.Ns                               # number of data symbols between pilots
-   Nmf = int((Ns+1)*(M+Ncp))                   # number of samples in one modem frame
    p = np.array(model.p)                       # pilot sequence
    frange = 100                                # coarse grid -frange/2 ... + frange/2
    fstep = 5                                   # coarse grid spacing in Hz
@@ -138,7 +140,7 @@ if args.pilots:
       f_ind + f_ind + 1
 
    while not acquired and len(rx) >= Nmf+M:
-
+      print(Nmf, len(rx),len(rx)/Nmf)
       # Search modem frame for maxima in correlation between pilots and received signal, over
       # a grid of time and frequency steps.  Note we only correlate on the M samples after the
       # cyclic prefix, so tmax will be Ncp samples after the start of the modem frame
@@ -248,20 +250,26 @@ features_hat, z_hat = model.receiver(rx)
 
 z_hat = z_hat.cpu().detach().numpy().flatten().astype('float32')
 
-# BER test useful for calibrating link
+# BER test useful for calibrating link.  To mneasure BER we compare the received symnbols 
+# to the known transmitted symbols.  However due to acquisition delays we may have lost several
+# modem frames in the received sequence.
 if len(args.ber_test):
-   z = torch.tensor(np.fromfile(args.ber_test, dtype=np.float32))
+   # every time acq shifted Nmf (one modem frame of samples), we shifted this many latents:
+   num_latents_per_modem_frame = model.Nzmf*model.latent_dim
+   print(num_latents_per_modem_frame)
+   z = np.fromfile(args.ber_test, dtype=np.float32)
    print(z.shape, z_hat.shape)
-   delta = len(z) - len(z_hat)
-   z = z[delta:]
-   n_errors = torch.sum(-z*z_hat>0)
-   n_bits = torch.numel(z)
-   BER = n_errors/n_bits
-   print(f"n_bits: {n_bits:d} BER: {BER:5.3f}")
-   errors = torch.sign(-z*z_hat) > 0
-   errors = torch.reshape(errors,(-1,latent_dim))
-   print(errors.shape)
-   print(torch.sum(errors,dim=1))
+   for f in np.arange(10):
+      n_syms = min(len(z),len(z_hat))
+      n_errors = np.sum(-z[:n_syms]*z_hat[:n_syms]>0)
+      n_bits = len(z)
+      BER = n_errors/n_bits
+      print(f"n_bits: {n_bits:d} n_errors: {n_errors:d} BER: {BER:5.3f}")
+      z = z[num_latents_per_modem_frame:]
+   #errors = torch.sign(-z*z_hat) > 0
+   #errors = torch.reshape(errors,(-1,latent_dim))
+   #print(errors.shape)
+   #print(torch.sum(errors,dim=1))
 
 features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
 features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
