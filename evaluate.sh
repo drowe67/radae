@@ -73,3 +73,30 @@ gain=$(python3 -c "gain=${radae_peak}/${ssb_peak}; print(\"%f\" % gain)")
 sox -t .s16 -r 8000 -c 1 -v $gain $speech_comp_noise ${out_dir}/${filename}_${EbNodB}dB_${channel}_ssb.wav
 
 spectrogram ${out_dir}/${filename}_${EbNodB}dB_${channel}_ssb.wav ${out_dir}/${filename}_${EbNodB}dB_${channel}_ssb_spec.png
+
+# reference files and README
+cp $fullfile ${out_dir}/zz_${filename}_orig.wav
+sox -t .s16 -r 8000 -c 1 $speech_comp ${out_dir}/zz_${filename}_ssb.wav
+
+cat > ${out_dir}/zz_README.txt <<'endreadme'
+Radio Autoencoder (radae) samples that demonstrate the system compared to analog SSB
+
+We simulate SSB by compressing the signal, and adjusting the C/No to be the same as the radae signal.  We also adjust the peak level of the Rx "ssb" signal to be about the same as the radae output speech, to make listening convenient. 
+
+General format is filename_EbNodB_channel_proc
+
+filename: the name of the sample e.g. david.wav -> david
+EbNodB..: for example 0dB
+channel.: awgn or mpp (multipath poor)
+proc....: suffix describing processing applied to file:
+          none: receiver output audio from radio autoencoder
+          rx..: the radae modulated received signal, what you would hear "off air" on a SSB receiver before decoding
+          spec: spectrogram of "rx" signal
+          ssb.: the received SSB "off air" signal, what SSB sounds like at the same C/No.  Compare to "none"
+          ssb_spec: The spectrogram of the received SSB signal
+zz_filename: The input speech file
+zz_filename_ssb: The compressed and bandlimited SSB Tx signal
+
+Use a file manager to present the samples as a matrix of icons, each row at the same Eb/No.  Then click to listen or view spectrograms.
+
+endreadme

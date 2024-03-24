@@ -26,6 +26,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | radae_plots.m | Helper Octave script to generate various plots |
 | radio_ae.tex/pdf | Latex documenation |
 | ota_test.sh | Script to automate Over The Air (OTA) testing |
+| Radio Autoencoder Waveform Design.ods | Working for OFDM waveform, inclduing pilot and cyclic prefix overheads |
 
 # LPCNet setup
 
