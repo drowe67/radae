@@ -19,11 +19,13 @@
 # 2. Install kiwclient:
 #      cd ~ && git clone git@github.com:jks-prv/kiwiclient.git
 # 3. Hamlib cli tools (rigctl), and add user to dialout group:
+#      sudo apt install libhamlib-utils
 #      sudo adduser david dialout
-# 4. Test rigctl:
-#      echo "m" | rigctl -m 361 -r /dev/ttyUSB0
+#      logout/log back in and check "groups" includes dialout
+# 4. Test rigctl (change model number for your radio):
+#      echo "m" | rigctl -m 3061 -r /dev/ttyUSB0
 # 5. Adjust HF radio Tx drive so ALC is just being tickled, set desired RF power:
-#      ./ota_test.sh ~/all/peter.wav -x
+#      ./ota_test.sh wav/david.wav -x
 #      aplay -f S16_LE --device="plughw:CARD=CODEC,DEV=0" tx.wav
 #
 # Usage
@@ -54,12 +56,12 @@ port=8074
 freq_kHz="7177"
 tx_only=0
 Nbursts=5
-model=361
+model=3061
 gain=6
 serialPort="/dev/ttyUSB0"
 rxwavefile=0
 soundDevice="plughw:CARD=CODEC,DEV=0"
-txstats=0
+tx_file_only=0
 stationid=""
 speechFs=16000
 setpoint_rms=6000
@@ -131,7 +133,7 @@ function process_rx {
     rx_radae=$(mktemp)
     sox $rx rx_ssb.wav trim 3 $end_ssb
     sox $rx -e float -b 32 -c 2 ${rx_radae}.f32 trim $end_ssb remix 1 0
-    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 rx_radae.wav --pilots --pilot_eq --plots --freq_offset $2
+    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 rx_radae.wav --pilots --pilot_eq --plots
 }
 
 
@@ -183,7 +185,7 @@ case $key in
         shift
     ;;
     -x)
-        txstats=1	
+        tx_file_only=1	
         shift
     ;;
     -c)
@@ -262,29 +264,28 @@ sox $speechfile $speechfile_pad pad 1@0
 sox -r 8k -e float -b 32 -c 2 ${tx_radae}.f32 -t .s16 -c 1 ${tx_radae}.raw remix 1 0
 
 # Make power of both signals the same, but adjusting the RMS levels to meet the setpoint
-set_rms $tx_ssb $setpoint
-set_rms ${tx_radae}.raw $setpoint
+set_rms $tx_ssb $setpoint_rms
+set_rms ${tx_radae}.raw $setpoint_rms
 
 # insert 1 second of silence between SSB and radae
 tx_radae_pad=$(mktemp).raw
-sox -t .s16 -r 8k -c 1 -v ${tx_radae}.raw -t .s16 -r 8k -c 1 $tx_radae_pad pad 1@0
+sox -t .s16 -r 8k -c 1 ${tx_radae}.raw -t .s16 -r 8k -c 1 $tx_radae_pad pad 1@0
 
 # cat signals together so we can send them over a radio at the same time
 cat $tx_sine $tx_ssb $tx_radae_pad > tx.raw
 sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
 
-# generate a 4MSP .iq8 file suitable for replaying by HackRF
-ch tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
+# generate a 4MSP .iq8 file suitable for replaying by HackRF (can disable if not using HackRF)
+#ch tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
 
-if [ $txstats -eq 1 ]; then
-    # ch just used to monitor peak and RMS level
-    ch tx.raw /dev/null
-    # time domain plot of tx signal
-    echo "pkg load signal; warning('off', 'all'); \
-          s=load_raw('tx.raw'); plot(s); \
-          print('tx.jpg', '-djpg'); \
-          quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
-    exit 0
+# time domain plot of tx signal
+#echo "pkg load signal; warning('off', 'all'); \
+#       s=load_raw('tx.raw'); plot(s); \
+#        print('tx.jpg', '-djpg'); \
+#       quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
+
+if [ $tx_file_only -eq 1 ]; then
+  exit 0
 fi
 
 # kick off KiwiSDR ----------------------------
@@ -321,7 +322,6 @@ fi
 echo "Tx data signal"
 freq_Hz=$((freq_kHz*1000))
 usb_lsb_upper=$(echo ${usb_lsb} | awk '{print toupper($0)}')
-run_rigctl "\\set_mode PKT${usb_lsb_upper} 0" $model
 run_rigctl "\\set_freq ${freq_Hz}" $model
 run_rigctl "\\set_ptt 1" $model
 if [ `uname` == "Darwin" ]; then

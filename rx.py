@@ -199,7 +199,7 @@ if args.pilots:
       quit()
 
    # frequency refinement, use two sets of pilots
-   ffine_range = np.arange(fmax-5,fmax+5,1)
+   ffine_range = np.arange(fmax-8,fmax+8,0.25)
    #print(ffine_range)
    D_fine = np.zeros(len(ffine_range), dtype=np.csingle)
    f_ind = 0

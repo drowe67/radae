@@ -198,6 +198,16 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
    aplay rx_ssb.wav rx_radae.wav
    ```
 
+1. Testing OTA over HF channels. Using my IC7200 as the Tx station:
+   ```
+   ./ota_test.sh wav/david.wav -g 9 -t -d -f 14236
+   ```
+   The `-g 9` sample gives the `david.wav` sample a little more compression, this was ajusted by experiment, listening to the `tx.wav` file, and looking for signs of a compressed waveform on Audacity.  To receive the signal I tune into a convenient KiwiSDR, and manually start recording when my radio starts transmitting.  I stop recording when I hear the transmission end.  This will result in a wave file being downloaded.  This can be decoded with:
+   ```
+   ./ota_test.sh -d -r ~/Downloads/kiwisdr.owdjim.gen.nz_2024-03-26T06_58_32Z_14236.00_usb.wav
+   ```
+   The output will be a `rx_radae.wav` and `rx_ssb.wav`, which you can listen to and compare, `spec.png` is the spectrogram.  The C/No will be estimated and displayed but this is unreliable at present.  The `ota_test.sh` script is capable of automatically recording from KiwiSDRs, however this code hasn't been debugged yet.
+
 # Tests
 
 1. BER test to check simulation modem calibration `--ber_test`
@@ -217,6 +227,7 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
 | model08 | --range_EbNo, -6 ... 14, --rate_Fs, AWGN no offsets (vanilla rate Fs), similar to model 05 | Fs | 240301_m8_Fs | 
 | model05 | practical OFDM with 4ms CP and pilots, increased Rs', MPP, 4dB sync loss, speech dropping in and out | Fs | 240319_m5_Fs_mp | 
 | model05 | practical OFDM with 120ms modem frame, 4ms CP and pilots, reduced Rs', 1dB improvement, mooneer sample | Fs | 240320_m5_Fs | 
+| model05 | HF OTA tests of up to 2000km, including weak signal, EMI, NVIS | Fs | 240326_ota_hf | 
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
