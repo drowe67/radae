@@ -34,18 +34,18 @@ For example with $T_z=0.04, d=80, R_q=1000$ symbols/s.
 \label{fig:bandpass}
 \begin{center}
 \begin{tikzpicture}[>=triangle 45,x=1.0cm,y=1.0cm]
-\draw[thick,->] (-6,0) -- (6,0) node [below, align=left, text width=3cm]{Frequency};
-\draw[thick,->] (0,0) -- (0,3);
-\draw (-3,0) -- (-3,2) -- (-1,2) -- (-1,0);
-\draw[blue] (1,0) -- (1,2) -- (3,2) -- (3,0);
-\draw[<->] (1,1) -- node [above]{$B$}(3,1); 
-\draw[->] (2,-0.5)  node [below]{$\omega$} -- (2,0);
+\draw[thick,->] (-3,0) -- (3,0) node [below, align=left, text width=3cm]{Frequency};
+\draw[thick,->] (0,0) -- (0,1.5);
+\draw (-1.5,0) -- (-1.5,1) -- (-0.5,1) -- (-0.5,0);
+\draw[blue] (0.5,0) -- (0.5,1) -- (1.5,1) -- (1.5,0);
+\draw[<->] (0.5,0.5) -- node [above]{$B$}(1.5,0.5); 
+\draw[->] (1,-0.5)  node [below]{$\omega$} -- (1,0);
 \end{tikzpicture}
 \begin{tikzpicture}[>=triangle 45,x=1.0cm,y=1.0cm]
-\draw[thick,->] (-6,0) -- (6,0) node [below, align=left, text width=3cm]{Frequency};
-\draw[thick,->] (0,0) -- (0,3);
-\draw (-5,0) -- (-5,2) -- (-3,2) -- (-3,0);
-\draw[blue] (-1,0) -- (-1,2) -- (1,2) -- (1,0);
+\draw[thick,->] (-3,0) -- (3,0) node [below, align=left, text width=3cm]{Frequency};
+\draw[thick,->] (0,0) -- (0,1.5);
+\draw (-2.5,0) -- (-2.5,1) -- (-1.5,0.5) -- (-1.5,0);
+\draw[blue] (-0.5,0) -- (-0.5,1) -- (0.5,1) -- (0.5,0);
 \draw[->] (0,-0.5)  node [below]{$\omega=0$} -- (0,0);
 \end{tikzpicture}
 \end{center}
@@ -191,27 +191,34 @@ TODO Figure of OFDM frame.  TODO Block diagram of OTC tests
 
 Take aways:
 \begin{enumerate}
-\item The algorithms run at the symbol rate, so despite being fairly complex ML algorithms have reasonable CPU efficiency (the Python code runs several times faster than real time).
-\item Doing quite well with multipath fading, despite chunks of data being missing, especially given the short time window (TODO correct term).
-\item
+\item We have combined ML vocoder, ML autoencoder and classical DSP OFDM to build a system capable of sending speech over radio channels.  It is robust to AWGN and multipath channel impairments.  Our initial simulation, VHF OTC, and HF OTA tests suggest performance highly competative with the incumbent analog SSB at the same $C/N_0$.
+\item The ML algorithms run at a 40ms frame rate (with some DSP at the OFDM 20ms symbol rate), resulting in modest CPU requirements.  The PyTorch simulation code runs several times faster than real time in inference mode.
+\item Simulation and initial HF OTA results show surprisingly good performance on multipath channels where the period of the fading (100's of ms) is large compared to the 40ms analysis window of the ML code.  Classical DSP would require a 1000-2000 ms interleaver (introducing a algorithmic delay of the same order) for similar robustness to fading on these channels.
+\item Unlike regular PSK, we require magnitude estimation and correction, due to the limited dynamic range of ML systems and the wide dynamic range of radio signals.
+\item The \emph{Candidate 2} OFDM frame design \cite{FreeDV-032} contains three latent vectors $z$, so introduces an algorthmic delay of 120ms, due to OFDM framing considerations.  This amount of additional delay is tolerable in a PTT radio system, but ideally should be reduced.
+\item Substituting classical PSK digital symbols and measuring BER is a very useful way to test sync, and to allows us to verity $E_b/N_0$ using BER measurments during development.
+\item Much of our development effort was conscerned with the ``is this too good to be true" question; significantly more effort was put into noise calibration and testing than the actual ML.
 \end{enumerate}
 
 Further work:
 \begin{enumerate}
-\item Try a low dimension latent vector, e.g. $d=40$, and see if similar speech quality can be obtained at 3dB high $E_b/N_0$. This would result in lower sync losses for the same channel SNR or $C/N_0$, as the $Eb/N_0$ of the pilots would be increased. Does the encoder output still resemble BPSK, or is it training to a higher order constellation?
-\item There is significant synchronisation loss when using classical DSP. Attempt to use the ML network to perform frequency, phase and amplitude equalisation, with or without passing the pilots to the decoder.  Some initial results without pilots resulted in some performance degredation, however this may be acceptable if it is in the same order as the pilot based sync losses. Some pilot or unique word injection may still be required to perform coarse and fine timing estimation using classical DSP running at the sample rate.
-\item Some form or intervaalving, like a long time window for the ML network.
+\item Try a low dimension latent vector, e.g. $d=40$, and see if similar speech quality can be obtained at 3dB higher $E_b/N_0$. This would result in lower sync losses and RF bandwith for the same channel SNR or $C/N_0$, as the $E_b/N_0$ of the pilots would be increased. Does the encoder output still resemble BPSK, or is it training to a higher order constellation?
+\item There is significant synchronisation loss from the classical DSP OFDM wabeform and associated sync algorithms. Attempt to use the ML network to perform frequency, phase and amplitude equalisation, with or without passing the pilots to the decoder.  An initial attempt (model07) without pilots showed some ability to correct phase, frequency, and magnitude offsets, but resulted in some performance degredation. However this may be acceptable if comparable to the pilot based sync losses. Some pilot or unique word injection may still be required to perform coarse and fine timing estimation using classical DSP running at the sample rate.
+\item We may be able to improve on algorithmic delay using ML sync techniques that are less dependant on traditional OFDM framing considerations.
+\item Some form or interleaving, or a long time window for the ML network, may improve performance.
 \item Work to improve the current classical DSP sync, e.g. a feedback loop to track out frequency offsets is worth 1 dB.
 \item Include PAPR optimisation and rate $F_s$ multipath channels in the training.
-\item A better analog compressor, a 3rd party reference implementation in software form would be useful.
-\item For formal subj evaluation, how about readability scale across a panel of listeners.
-\item Definition of lower limit link closure for this use case, for example "CQ CQ, and callsign, enough to produce a QSO report".
-
+\item To better model SSB, locate a better analog compressor, a 3rd party reference implementation in software form would be useful.
+\item For formal subj evaluation, how about radio style 1-5 readability scale across a panel of listeners.
+\item Definition of lower limit link closure for this use case, for example ``CQ CQ, and callsign, enough to produce a QSO report".
+\item For a practical implementation, coarse amplitude and timing need to be updated regularly. As we are testing short samples, a single block estimate is used at present.
 \end{enumerate}
 
 \section{Comparison with Other Speech Waveforms}
 
-We wish to compare our radio autoencoder with existing waveforms used for speech transmission over radio channels.  We start with the assumption that we have a transmitter of $C$ watts, and an AWGN channel with a spectral noise density of $N_0$ watts/Hz. As the speech waveforms being considered vary in bandwidth we will choose $C/N_0$ as the SNR metric.
+We wish to compare our radio autoencoder with existing waveforms used for speech transmission over radio channels.  This section assumes the \emph{radae} system can send intelligable speech at an $E_b/N_0$ of 6dB, with a PAPR of 1dB, both results have been demonstrated in simulation (but not at the time of writing together over real world radio channels).  We include a 3dB syncronisation overhead.
+
+We start with the assumption that we have a transmitter of $C$ watts, and an AWGN channel with a spectral noise density of $N_0$ watts/Hz. As the speech waveforms being considered vary in bandwidth we will choose $C/N_0$ as the SNR metric.
 
 The $C/N_0$ (in dBHz) at the demodulator input of a terrestrial radio receiver is given by:
 \begin{equation}
@@ -219,11 +226,11 @@ The $C/N_0$ (in dBHz) at the demodulator input of a terrestrial radio receiver i
 \end{equation}
 where $P$ is the maximum output power of the transmitter power amplifier, $PAPR$ is the Peak to Average Power Ratio of the waveform, $L_{path}$ is the path loss, $NF$ is the noise figure of the receiver.  For example consider a 400 MHz FM hand held radio over a 1km urban (non line of site) path.  The radio has a 1W (30 dBm) power output, $L_{path}=120$ dB, with noise dominated by ambient EMI such that $NF=10$ dB. $C/N_0 = 30 - 0 - 120 - 10 + 174 = 74$ dBHz, sufficient for good quality speech (Table \ref{tab:waveforms_good}).
 
-Note that $C/N_0$ at the demodulator is a function of the waveform PAPR.  With all other link properties (e.g. peak PA power, noise figure, path loss) being equal, a high PAPR reduces the $C/N_0$ available at the receiver.  We effectively ``back off" the transmitter power from the maximum $P$ by the PAPR.  We assume the PA is capable of sustaining $P$ watts indefinately. As PAPR varies by waveform, it should be included in any metric for comparison of waveforms.  We define $P/N_0$ as:
+Note that $C/N_0$ at the demodulator is a function of the waveform PAPR.  With all other link properties (e.g. peak PA power, noise figure, path loss) being equal, a high PAPR reduces the $C/N_0$ available at the receiver.  We effectively ``back off" the transmitter power from the maximum $P$ by the PAPR.  We assume the PA is capable of sustaining $P$ watts indefinately, i.e. it is only the waveform choice that lowers the average power. As PAPR varies by waveform and has an impact on the $C/N_0$ available the receiver, it should be included in any metric for comparison of waveforms.  We define $P/N_0$ as:
 \begin{equation}
 P/N_0 = C/N_0 + PAPR
 \end{equation} 
-A waveform that delivers intelligable speech at a low $P/N_0$ is the target.  A low PAPR waveform has other desirable properties, such as greater PA efficiency, longer battery life, and the use of low cost semiconductors in the radio hardware.
+A waveform that delivers intelligable speech at a low $P/N_0$ is the target.  A low PAPR waveform has other desirable properties, such as greater PA efficiency, longer battery life, and the use of low cost semiconductors in the radio power amplifier electronics.
 
 \begin{table} [H]
 \centering
@@ -234,7 +241,7 @@ A waveform that delivers intelligable speech at a low $P/N_0$ is the target.  A 
  Single Sideband      & 0dB SNR in 3000Hz noise BW, 2400Hz audio bandwidth, Tx speech compressor with 6dB PAPR \\
  Frequency Modulation & -120 dBm quoted for many NBFM radios, 54dB above -174dBm/Hz noise floor \\
  FreeDV 700D          & 10\% PER theshold at -2dB SNR in 3000Hz noise BW \\
- Radio Autoencoder    & Intelligable speech at $E_b/N_0=-6$ dB, $R_b=2000$ symbols/s, 3dB sync overhead \\
+ Radio Autoencoder    & Intelligable speech at $E_b/N_0=-6$ dB, $R_b=2000$ symbols/s, 3dB sync overhead, a PAPR of 1dB \\
  \hline
 \end{tabular}
 \caption{Thresholds for speech link closure for each waveform. The link is considered closed when the speech is barely intelligable to a trained listener.}
@@ -283,10 +290,10 @@ TODO: include 1st gen VHF/UHF digital voice - I think they go down to -123 dB (5
  \hline
  Radio Autoencoder    & 8000 & 36 & 37 &   0 \\
  Frequency Modulation & 3000 & 64 & 64 & -27 \\
- Single Sideband      & 2000 & 55 & 61 & -24 \\
+ Single Sideband      & 3000 & 55 & 61 & -24 \\
  \hline
 \end{tabular}
-\caption{Comparison of good quality ``arm chair copy" by speech waveform over AWGN channels. They are ranked in terms of maximum achievable speech quality. FreeDV 700D has been omitted because of its low speech quality even in ideal channels. The radio autoencoder delivers wideband (8000 Hz) audio.}
+\caption{Comparison of good quality ``arm chair copy" by waveform over AWGN channels. They are ranked in terms of maximum achievable speech quality. FreeDV 700D has been omitted because of its low speech quality even at high SNR. Even at 20dB SNR there is noticable noise in received SSB, although DSP based noise reduction may help. Only the radio autoencoder delivers wideband (8000 Hz) speech.}
 \label{tab:waveforms_good}
 \end{table}
 
