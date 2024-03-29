@@ -2,19 +2,67 @@
 \usepackage{amsmath}
 \usepackage{hyperref}
 \usepackage{tikz}
-\usetikzlibrary{arrows}
+\usetikzlibrary{calc,arrows,shapes,positioning}
+\usepackage{tkz-euclide}
 \usepackage[numbib]{tocbibind}
 \usepackage{float}
 \usepackage{array}
 
 \begin{document}
 
-\title{Analog Transmission of Vocoder Features over Radio Channels}
+% Tikz code used to support block diagrams
+% credit: https://tex.stackexchange.com/questions/175969/block-diagrams-using-tikz
+
+\tikzset{
+block/.style = {draw, fill=white, rectangle, minimum height=3em, minimum width=3em},
+tmp/.style  = {coordinate}, 
+circ/.style= {draw, fill=white, circle, node distance=1cm, minimum size=0.6cm},
+input/.style = {coordinate},
+output/.style= {coordinate},
+pinstyle/.style = {pin edge={to-,thin,black}}
+}
+
+\title{An Autoencoder for Transmission of Vocoder Features over Radio Channels}
 \maketitle
 
-Given a vector of vocoder features $\bf{f}$, use an autoencoder $E$ to map them to a dimension $d$ latent vector $\bf{z}$ where $d$ is even.  Unlike digital modulation, each element $z_i$ of $\bf{z}$ is continuously valued and not constrained to a discrete set of points.  For bandwidth efficient transmission over the channel the elements of $\bf{z}$ are mapped to $d/2$ complex symbols $\bf{q}$. Compared to classical digital modulation, the elements of $\bf{z}$ can be considered BPSK symbols (continuously valued, analog bits), and the elements of $\bf{q}$ analog QPSK symbols.
+\section{Introduction}
 
-Our goal is to determine if reasonable speech quality can be obtained over a channel of bandwidth $B<3000$ Hz and SNR (measured in $B=3000$ Hz) of between 0 and 6dB, roughly the lower limit of Single Side Band (SSB) - a common power and bandwidth efficient form of analog radio communication.
+This report is a feasibility study around using an autoencoder derived from RDOVAE \cite{valin2023lowbitrate} to send speech over radio channels.  Our goal is to determine if reasonable speech quality can be obtained over a channel of bandwidth $B<3000$ Hz and SNR around 0dB, roughly the lower limit of Single Side Band (SSB) - a common power and bandwidth efficient form of analog radio communication.
+
+\begin{figure}[h]
+\caption{Radio Autoencoder Concept}
+\label{fig:radae_block}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.5cm]
+
+\node [input] (rinput) {};
+\node [input, right of=rinput,node distance=0.5cm] (z) {};
+\node [block, right of=z, node distance=1.5cm] (lpcnet_enc) {LPCNet Encoder};
+\node [block, below of=lpcnet_enc,node distance=2cm] (radae_enc) {\emph{radae} Encoder};
+\node [block, right of=radae_enc,node distance=2.5cm] (channel) {Radio Channel};
+\node [block, right of=channel,node distance=2.5cm] (radae_dec) {\emph{radae} Decoder};
+\node [block, below of=radae_dec,node distance=2cm,text width=2cm] (lpcnet_dec) {LPCNet \scalebox{0.8}[0.8]{FARGAN} Decoder};
+\node [output, right of=lpcnet_dec,node distance=2cm] (routput) {};
+
+\draw [->] node[align=left,text width=2cm] {Input Speech} (rinput) -- (lpcnet_enc);
+\draw [->] (lpcnet_enc) --  node[left, text width=0.5cm] {$\bf{f}$} (radae_enc);
+\draw [->] (radae_enc) -- (channel);
+\draw [->] (channel) -- (radae_dec);
+\draw [->] (radae_dec) --  node[left, text width=0.5cm] {$\hat{\bf{f}}$} (lpcnet_dec);
+\draw [->] (lpcnet_dec) -- (routput) node[right, align=left, text width=1.5cm] {Output Speech};
+
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
+The encoder (Figure \ref{fig:radae_block}) takes as input a typical set of vocoder features (short term spectrum, pitch, voicing), then applies time based prediction and transforms to produce a set of parameters that can be sent over a channel. This is similar to vocoders using classical DSP, except Machine Learning (ML) allows us to learn non-linear transforms and prediction, which tend to be more powerful.
+
+Usually, after the transformation/prediction stage we then quantise to a low bit rate, then use Forward Error 
+Correction (FEC) and modems to send the bits over a channel. However our work takes a novel twist – we train the autoencoder to generate PSK symbols that we send over the channel. It effectively combines quantisation, channel coding, and modulation. The symbols from the autoencoder tend to cluster around +/-1 like BPSK but are continuously valued, so can be considered discrete time, continuously valued PSK.
+
+The encoder and decoder are trained together as an autoencoder with the loss function  $L(\bf{f},\hat{\bf{f}})$ applied to the vocoder features.  We employ the LPCNet \scalebox{0.8}[0.8]{FARGAN} vocoder for speech analysis and synthesis, however the concept is applicable to any neural and even classical vocoder with a similar feature set.
+
+Given a vector of vocoder features $\bf{f}$, we use an encoder $E$ to map them to a dimension $d$ latent vector $\bf{z}$ where $d$ is even.  Unlike digital modulation, each element $z_i$ of $\bf{z}$ is continuously valued and not constrained to a discrete set of points.  For bandwidth efficient transmission over the channel the elements of $\bf{z}$ are mapped to $d/2$ complex symbols $\bf{q}$. Compared to classical digital modulation, the elements of $\bf{z}$ can be considered BPSK symbols (continuously valued, analog bits), and the elements of $\bf{q}$ analog QPSK symbols.
 
 \section{Simulation of AWGN Channels}
 
@@ -44,7 +92,7 @@ For example with $T_z=0.04, d=80, R_q=1000$ symbols/s.
 \begin{tikzpicture}[>=triangle 45,x=1.0cm,y=1.0cm]
 \draw[thick,->] (-3,0) -- (3,0) node [below, align=left, text width=3cm]{Frequency};
 \draw[thick,->] (0,0) -- (0,1.5);
-\draw (-2.5,0) -- (-2.5,1) -- (-1.5,0.5) -- (-1.5,0);
+\draw (-2.5,0) -- (-2.5,1) -- (-1.5,1.0) -- (-1.5,0);
 \draw[blue] (-0.5,0) -- (-0.5,1) -- (0.5,1) -- (0.5,0);
 \draw[->] (0,-0.5)  node [below]{$\omega=0$} -- (0,0);
 \end{tikzpicture}
@@ -55,7 +103,7 @@ We wish to simulate an AWGN channel with a user-defined $E_b/N_0$, where $E_b$ i
 
 We wish to simulate a bandpass AWGN channel at baseband ($\omega=0$).  This implies a frequency shift of the complex valued signal, but the signal remains complex valued and it's power is unchanged. The negative frequency component on the LHS of Figure \ref{fig:bandpass} is redundant and after frequency shifting can be removed by filtering.
 
-Note that even at baseband we must use complex valued quantities for the signal and noise to represent a bandpass signal of bandwidth $B$.  For example, given a fixed sample rate $B$ and noise power $N$, a real valued noise sequence can only represent a bandwidth of $B/2$ which results in doubling the noise density $N_0=N/(B/2)=2N_0$ compared to a complex valued noise sequence with the same power.   
+Note that even at baseband we must use complex valued quantities for the signal and noise to represent a bandpass signal of bandwidth $B$.  As a counter-example, given a fixed sample rate $B$ and noise power $N$, a real valued noise sequence can only represent a bandwidth of $B/2$ which results in doubling the noise density $N_0=N/(B/2)=2N_0$ compared to a complex valued noise sequence with the same power.   
 
 The energy of each BPSK symbol $E_b$ is the signal power $S$ divided by the symbol rate $R_b=1/T_b$.  The noise per unit bandwidth is the total noise power $N$ divided by the bandwidth $B$ of the system.  If we are simulating at one sample per symbol, $B=R_b$:
 \begin{equation}
@@ -108,7 +156,7 @@ E_b = E_q/2
 \end{equation}
 For example if the symbol amplitude is $A=1, E_b=A^2=1$, then $E_q=1+1=2$.
 
-To model transmission over multipath channels using OFDM we arrange the QPSK symbols as $N_c$ parallel carriers, each running at a symbol rate of $R_s=R_q/N_c$ symbols/s, where $R_s$ is chosen based on delay spread considerations.  Typical values for HF modems are $N_c=20$ and $R_s=50$ Hz. However the OFDM carriers are arranged such that the total symbol rate over the channel remains constant.  So for a given signal power $E_q$ and $E_b$ remain constant (Table \ref{tab:constant_eb}).
+For transmission over multipath channels using OFDM we arrange the QPSK symbols as $N_c$ parallel carriers, each running at a symbol rate of $R_s=R_q/N_c$ symbols/s, where $R_s$ is chosen based on delay spread considerations.  Typical values for HF modems are $N_c=20$ and $R_s=50$ Hz. However the OFDM carriers are arranged such that the total symbol rate over the channel remains constant.  So for a given signal power $E_q$ and $E_b$ remain constant (Table \ref{tab:constant_eb}).
 
 \begin{table} [H]
 \centering
@@ -149,12 +197,12 @@ BER = 0.5 \left(1-\sqrt{\frac{E_b/N_0}{E_b/N_0+1}} \right)
 
 \section{Radio Frequency Tests}
 
-Impressive results have been obtained from symbol rate simulations of an OFDM modem, which assumed ideal synchronisation.  We would like to verify these results using real radio signals in Over The Cable (OTC) and Over the Air (OTA) tests.  This requires building up a rate $F_s$ system, and synchronisation subsystems.  For a first pass, the choice was made to use classical DSP pilot symbol based synchronisation, although we acknowldge potential for ML based synchronisation in future iterations.
+Impressive results have been obtained from symbol rate simulations of an OFDM modem, which assumed ideal synchronisation.  We would like to verify these results using real radio signals in Over The Cable (OTC) and Over the Air (OTA) tests.  This requires building up a rate $F_s$ system, and synchronisation subsystems.  For our initial tests, the choice was made to use classical DSP pilot symbol based synchronisation, although we acknowldge potential for ML based synchronisation in future iterations.
 
 The goal is to compare speech quality to SSB at $E_b/N_0=0dB$ (approx -3dB SNR in a 3000Hz BW), and work through any issues that prevent the system working over real radio channels.  PAPR optimisation will be ignored for the first iteration, as our initial goal is to verifiy the low $E_b/N_0$ results suggested by the symbol rate simulations.
 
 \begin{figure}[H]
-\caption{OFDM modem frame, $P$ denotes pilot symbol, $D$ payload data symbols. This example has a modem frame of $N_s=4$ symbols, and $N_c=3$ carriers.  Each symbol $D$ or $P$ is comprised of a $T_{cp}$ second Cyclic Prefix and $T_s^\prime$ symbol $D^\prime$.}
+\caption{OFDM modem frame, $P$ denotes pilot symbol, $D$ payload data symbols. This example has a modem frame of $N_s=4$ symbols, and $N_c=3$ carriers.  Each symbol $D$ or $P$ is comprised of a $T_{cp}$ second Cyclic Prefix and $T_s^\prime$ second symbol $D^\prime$.}
 \vspace{5mm}
 \label{fig:ofdm_frame}
 \begin{center}
@@ -204,7 +252,7 @@ The goal is to compare speech quality to SSB at $E_b/N_0=0dB$ (approx -3dB SNR i
 
 Pilot symbols have been inserted into each OFDM carrier at a rate of one pilot every 4 data symbols.  From \cite{freedv_low}, the SNR loss from injecting the pilot symbols is given by:
 \begin{equation}
-L_p = 10log_{10}\frac{N_s}{Ns-1}
+L_p = 10log_{10}\frac{N_s}{N_s-1}
 \end{equation}
 For $N_s=5$, the loss in 0.96dB.  To maintain the same payload symbol rate over the channel, the bandwidth increases:
 \begin{equation}
@@ -238,25 +286,36 @@ Combined with $L_p$, we estimate a total sync loss of 3dB for this first pass of
 \end{center}
 \end{figure}
 
-TODO Block diagram of OTC tests
+\begin{figure}[h]
+\caption{Over The Cable (OTC) Tests}
+\label{fig:otc}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
+
+
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
 
 \subsection{March 2024 Results}
 
 Take aways:
 \begin{enumerate}
 \item We have combined ML vocoder, ML autoencoder and classical DSP OFDM to build a system capable of sending speech over radio channels.  It is robust to AWGN and multipath channel impairments.  Our initial simulation, VHF OTC, and HF OTA tests suggest performance competative with the analog SSB at the same $C/N_0$.
+\item The total ``sync losses" due to pilot, cyclic prefix overheads and non-ideal equalisation are around 3dB.  It is conceivable these can be reduced using ML rather than classical DSP. 
 \item The ML algorithms run at a 40ms frame rate (with some DSP at the OFDM 20ms symbol rate), resulting in modest CPU requirements.  The PyTorch simulation code runs several times faster than real time in inference mode.
 \item Simulation and initial HF OTA results show surprisingly good performance on multipath channels where the period of the fading (100's of ms) is large compared to the 40ms analysis window of the ML code.  Classical DSP would require a 1000-2000 ms interleaver (introducing a algorithmic delay of the same order) for similar robustness to fading on these channels.
 \item Unlike regular PSK, we require magnitude estimation and correction, due to the limited dynamic range of ML systems and the wide dynamic range of radio signals.
 \item The \emph{Candidate 2} OFDM frame design \cite{FreeDV-032} contains three latent vectors $z$, so introduces an algorthmic delay of 120ms, due to OFDM framing considerations.  This is tolerable in a PTT radio system, but ideally should be reduced.
 \item Substituting classical PSK digital symbols and measuring BER is a very useful way to test sync, and to allows us to verity $E_b/N_0$ using BER measurments during development.
-\item Much of our development effort was conscerned with the ``is this too good to be true" question; significantly more effort was put into noise calibration and testing than the actual ML.
+\item Much of our development effort to date has concerned with the ``is this too good to be true" question; significantly more effort was put into noise calibration and testing than the actual ML.
 \end{enumerate}
 
 Further work:
 \begin{enumerate}
 \item Try a low dimension latent vector, e.g. $d=40$, and see if similar speech quality can be obtained at 3dB higher $E_b/N_0$. This would result in lower sync losses and RF bandwith for the same channel SNR or $C/N_0$, as the $E_b/N_0$ of the pilots would be increased. Does the encoder output still resemble BPSK, or is it training to a higher order constellation?
-\item There is significant synchronisation loss from the classical DSP OFDM wabeform and associated sync algorithms. Attempt to use the ML network to perform frequency, phase and amplitude equalisation, with or without passing the pilots to the decoder.  An initial attempt (model07) without pilots showed some ability to correct phase, frequency, and magnitude offsets, but resulted in some performance degredation. However this may be acceptable if comparable to the pilot based sync losses. Some pilot or unique word injection may still be required to perform coarse and fine timing estimation using classical DSP running at the sample rate.
+\item There is significant synchronisation loss from the classical DSP OFDM waveform and associated sync algorithms. Attempt to use the ML network to perform frequency, phase and amplitude equalisation, with or without passing the pilots to the decoder.  An initial attempt (model07) without pilots showed some ability to correct phase, frequency, and magnitude offsets, but resulted in some performance degredation. However this may be acceptable if comparable to the pilot based sync losses. Some pilot or unique word injection may still be required to perform coarse and fine timing estimation using classical DSP running at the sample rate.
 \item We may be able to improve on algorithmic delay using ML sync techniques that are less dependant on traditional OFDM framing considerations.
 \item Some form or interleaving, or a long time window for the ML network, may improve performance.
 \item Work to improve the current classical DSP sync, e.g. a feedback loop to track out frequency offsets is worth 1 dB.
@@ -331,7 +390,7 @@ TODO: include 1st gen VHF/UHF digital voice - I think they go down to -123 dB (5
  Radio Autoencoder    & radAE & 1400  &  1 & 30 & 31 &  0  \\
  \hline
 \end{tabular}
-\caption{Comparison of link closure by waveform over AWGN channels.}
+\caption{Comparison of link closure by waveform over AWGN channels. A lower $P/N_0$ is better.}
 \label{tab:waveforms_linkclosure}
 \end{table}
 
