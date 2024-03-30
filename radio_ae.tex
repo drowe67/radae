@@ -27,7 +27,9 @@ pinstyle/.style = {pin edge={to-,thin,black}}
 
 \section{Introduction}
 
-This report is a feasibility study around using an autoencoder derived from RDOVAE \cite{valin2023lowbitrate} to send speech over radio channels.  Our goal is to determine if reasonable speech quality can be obtained over a channel of bandwidth $B<3000$ Hz and SNR around 0dB, roughly the lower limit of Single Side Band (SSB) - a common power and bandwidth efficient form of analog radio communication.
+This report presents an autoencoder derived from RDOVAE \cite{valin2023lowbitrate} to send speech over radio channels.  Our goal is to determine if reasonable speech quality can be obtained over a channel of bandwidth $B<3000$ Hz and SNR around 0dB, roughly the lower limit of Single Side Band (SSB) - a popular power and bandwidth efficient form of speech communication.
+
+This document describes the Radio Autoencoder \emph{radae} system, discusses channels simulation and calibration, and describes how we combined ML with classical DSP to create a practical proof of concept system that can send speech over real world VHF and HF radio channels.  Finally, we compare the capabilities of the Radio Autoencoder to existing systems for speech communication over HF and VHF/UHF radio.
 
 \begin{figure}[h]
 \caption{Radio Autoencoder Concept}
@@ -193,10 +195,10 @@ For a multipath channel:
 BER = 0.5 \left(1-\sqrt{\frac{E_b/N_0}{E_b/N_0+1}} \right)
 \end{equation}
 
-\section{Radio Frequency Tests}
+\section{Proof of Concept Radio Frequency Tests}
 
 \begin{figure}[h]
-\caption{ML combined with OFDM and Classical DSP synchronisation.  Transmitter (Tx) is on the LHS, at RHS is the Receiver (Rx). The sample rate over the channel is $F_s=8000$ Hz.}
+\caption{ML combined with OFDM and classical DSP synchronisation.  Transmitter (Tx) is on the LHS, at RHS is the Receiver (Rx). The sample rate over the channel is $F_s=8000$ Hz.}
 \label{fig:ml_dsp_framework}
 \begin{center}
 \begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.5cm]
@@ -230,7 +232,7 @@ BER = 0.5 \left(1-\sqrt{\frac{E_b/N_0}{E_b/N_0+1}} \right)
 \end{center}
 \end{figure}
 
-Impressive results have been obtained from symbol rate simulations of an OFDM modem, which assumed ideal synchronisation.  We would like to verify these results using real radio signals in Over The Cable (OTC) and Over the Air (OTA) tests.  This requires building up a rate $F_s$ system, and synchronisation subsystems.  For our initial tests, the choice was made to use OFDM to handle HF multipath channel, and classical DSP pilot symbol based synchronisation, although we acknowldge potential for ML based synchronisation in future iterations.  The combined ML and OFDM/DSP system is illustrated in Figure \ref{fig:ml_dsp_framework}.
+Impressive results have been obtained from symbol rate simulations of an OFDM modem, which assumed ideal synchronisation.  We would like to verify these results using real radio signals in Over The Cable (OTC) and Over the Air (OTA) tests.  This requires building up a rate $F_s$ system, and synchronisation subsystems.  For our prrof of concept system, the choice was made to use OFDM to handle HF multipath channel, and classical DSP pilot symbol based synchronisation, although we acknowldge potential for ML based synchronisation in future iterations.  The combined ML and OFDM/DSP system is illustrated in Figure \ref{fig:ml_dsp_framework}.
 
 The goal is to compare speech quality to SSB at $E_b/N_0=0dB$ (approx -3dB SNR in a 3000Hz BW), and work through any issues that prevent the system working over real radio channels.  PAPR optimisation will be ignored for the first iteration, as our initial goal is to verifiy the low $E_b/N_0$ results suggested by the symbol rate simulations.
 
@@ -283,9 +285,7 @@ The goal is to compare speech quality to SSB at $E_b/N_0=0dB$ (approx -3dB SNR i
 \end{center}
 \end{figure}
 
-The general design of the OFDM frame in Figure \ref{fig:ofdm_frame}.  QPSK symbols are mapped to a matrix of parallel carriers at a relatively low symbol rate in order to sucessfully pass through the target HF multipath channel. Pilot symbols are periodically inserted into each OFDM carrier.  At the receiver the  pilots are used to estimate the time varying phase of the channel (equalisation), and for initial acquistion (coarse frequency, and frame sync) of the received signal.  The disadvantage of pilot based schemes is they consume carrier power that would otherwise be available for the data symbols, and require the symbol rate and hence overall RF bandwidth to be increased to maintain the payload data rate.  After the IDFT stage a cyclic prefix is inserted to accomodate inter symbol interference.  The cyclic prefix also consumes carrier power and requires an increase in RF bandwidth.  The OFDM waveform details, including overheads, are explained in detail in the waveform design spreadsheet \cite{FreeDV-032}.
-
-TODO: table summarisng waveform, and losses, either here of FreeDV-032.
+The general design of the OFDM frame in Figure \ref{fig:ofdm_frame}.  QPSK symbols are mapped to a matrix of parallel carriers at a relatively low symbol rate in order to sucessfully pass through the target HF multipath channel. Pilot symbols are periodically inserted into each OFDM carrier.  At the receiver the  pilots are used to estimate the time varying phase of the channel (equalisation), and for initial acquistion (coarse frequency, and frame sync) of the received signal.  The disadvantage of pilot based schemes is they consume carrier power that would otherwise be available for the data symbols, and require the symbol rate and hence overall RF bandwidth to be increased to maintain the payload data rate.  After the IDFT stage a cyclic prefix is inserted to accomodate inter symbol interference.  The cyclic prefix also consumes carrier power and requires an increase in RF bandwidth.  The OFDM waveform details, including overheads, are explained in detail in the waveform design spreadsheet \cite{FreeDV-032}.  The \emph{Candidate 2} waveform has a RF bandwidth of approximately 1500 Hz, with 500Hz due to synchronisation overhead.
 
 A pilot based sync system was built in PyTorch, and is used for coarse and fine timing, phase and amplitide equalisation.  Unlike classical PSK, the ML network is likely to be sensitive to amplitude variations.  Phase equalisation also allows small frequency offsets ($\pm2$ Hz) to be handled, sufficient for tests with short samples.
 
@@ -299,17 +299,32 @@ Several phase estimators were prototyped, and evaluated using BER measurements. 
 \end{center}
 \end{figure}
 
-Figure \ref{fig:ofdm_sync} plots the simulated perfomance of the OFDM pilot based synchronisation system on an AWGN channel.  The \emph{genie} curve is the baseline rate $F_s$ OFDM system with ideal sync, and matches the theoretical BPSK BER curve.  Using this baseline system to send ML symbols, we obtain intelligable speech at $E_b/N_0=-6$, which corresponds to BER=0.24 in a digital modem.  We can use the BER=0.24 line to estimate the synchronisation loss at this operating point, which for the \emph{mean6} and \emph{LS} algorithms under realistic conditions is around 2 to 2.4 dB. The \emph{LS} works better on fast fading multipath channels.
-
-Combined with $L_p$, we estimate a total sync loss of 3dB for this first pass of the ML system combined with classical pilot based syncronisation. However we note that no cyclic prefix has been added at this time.
-
 \begin{figure}[h]
-\caption{OFDM pilot based synchronisation algorithm performance, tested by measuring the BER obtained using discrete PSK symbols on an multipath (MPP) channel.}
+\caption{OFDM pilot based synchronisation algorithm performance, tested by measuring the BER obtained using discrete PSK symbols on an multipath (MPP) channel. The ``genie" curve is slightly better than theory, probably due to an insufficiently long run.  At the BER=0.24 theshold, the \emph{LS} algorithm has a 2dB loss compared to the ``genie" curve}
 \label{fig:ofdm_sync_mp}
 \begin{center}
 \input ofdm_sync_mp.tex
 \end{center}
 \end{figure}
+
+Figurew \ref{fig:ofdm_sync} and \ref{fig:ofdm_sync_mp} plots the simulated perfomance of the OFDM pilot based synchronisation system on AWGN and multipath channels.  The \emph{genie} curve is the baseline rate $F_s$ OFDM system with ideal sync, and matches the theoretical BPSK BER curve.  Using this baseline system to send ML symbols, we obtain intelligable speech at $E_b/N_0=-6$, which corresponds to BER=0.24 in a digital modem.  We can use the BER=0.24 line to estimate the synchronisation loss at this operating point, which for the \emph{mean6} and \emph{LS} algorithms under realistic conditions is around 2 to 2.4 dB on AWGN, and 2dB on the  multipath channel. The \emph{LS} works better on fast fading multipath channels, so was chosen for the HF OTA trials.
+
+Table \ref{tab:sync_losses} summarises the sync losses.  These are comnparable to classical DSP OFDM data modems. Combined with $L_p$, we estimate a total sync loss of 4dB for this first pass of the ML system combined with classical pilot based synchronisation.
+
+\begin{table} [H]
+\centering
+\begin{tabular}{ l | l | l}
+ \hline
+ Symbol & Loss (dB) & Description \\
+ \hline
+ $L_p$  & 0.97  & Pilot symbol overhead \\
+ $L_{cp}$  & 0.97  & Cyclic prefix overhead \\
+ $L_{eq}$  & 2.00  & \emph{LS} equalisation (multipath) \\
+  \hline
+\end{tabular}
+\caption{\emph{Candidate 2} OFDM waveform design sync losses, around 4dB total.}
+\label{tab:sync_losses}
+\end{table}
 
 \begin{figure}[H]
 \caption{Over The Cable (OTC) VHF test. The \emph{radae} transmitter output is upsampled and shifted to 144.5 MHz using a HackRF.  The RF receive power and hence SNR is set by a step attenuator before being received by a RTL-SDR and \emph{gqrx} SDR application. Wave files recorded off air by \emph{gqrx} are presented to the \emph{radae} receiver.}
@@ -369,16 +384,18 @@ Combined with $L_p$, we estimate a total sync loss of 3dB for this first pass of
 
 \subsection{March 2024 Results}
 
+In March 2024, the system was tested over a VHF OTC AWGN path and OTA on a variety of real world Australian HF multipath paths. Figure \ref{fig:vhf_otc} and Figure \ref{fig:vhf_otc} describe the experimental configurations.  Wave fiules contating a sine wave tone, compressed SSB, and the \emph{radae} signal were sent over the same channel at the same time. The speech quality obtianed was consistent with the simulations and competative with SSB sent over the same channel at the same time.
+
 Take aways:
 \begin{enumerate}
 \item We have combined ML vocoder, ML autoencoder and classical DSP OFDM to build a system capable of sending speech over radio channels.  It is robust to AWGN and multipath channel impairments.  Our initial simulation, VHF OTC, and HF OTA tests suggest performance competative with the analog SSB at the same $C/N_0$.
-\item The total ``sync losses" due to pilot, cyclic prefix overheads and non-ideal equalisation are around 3dB.  It is conceivable these can be reduced using ML rather than classical DSP. 
+\item The total ``sync losses" due to pilot, cyclic prefix overheads and non-ideal equalisation are around 4dB.  It is conceivable these can be reduced using ML rather than classical DSP. 
 \item The ML algorithms run at a 40ms frame rate (with some DSP at the OFDM 20ms symbol rate), resulting in modest CPU requirements.  The PyTorch simulation code runs several times faster than real time in inference mode.
 \item Simulation and initial HF OTA results show surprisingly good performance on multipath channels where the period of the fading (100's of ms) is large compared to the 40ms analysis window of the ML code.  Classical DSP would require a 1000-2000 ms interleaver (introducing a algorithmic delay of the same order) for similar robustness to fading on these channels.
 \item Unlike regular PSK, we require magnitude estimation and correction, due to the limited dynamic range of ML systems and the wide dynamic range of radio signals.
 \item The \emph{Candidate 2} OFDM frame design \cite{FreeDV-032} contains three latent vectors $z$, so introduces an algorthmic delay of 120ms, due to OFDM framing considerations.  This is tolerable in a PTT radio system, but ideally should be reduced.
 \item Substituting classical PSK digital symbols and measuring BER is a very useful way to test sync, and to allows us to verity $E_b/N_0$ using BER measurments during development.
-\item Much of our development effort to date has concerned with the ``is this too good to be true" question; significantly more effort was put into noise calibration and testing than the actual ML.
+\item Much of our development effort to date has concerned with the ``is this too good to be true" question; to date significantly more effort was put into noise calibration, syncronisation algorithms and testing than the actual ML.
 \end{enumerate}
 
 Further work:
@@ -387,17 +404,16 @@ Further work:
 \item There is significant synchronisation loss from the classical DSP OFDM waveform and associated sync algorithms. Attempt to use the ML network to perform frequency, phase and amplitude equalisation, with or without passing the pilots to the decoder.  An initial attempt (model07) without pilots showed some ability to correct phase, frequency, and magnitude offsets, but resulted in some performance degredation. However this may be acceptable if comparable to the pilot based sync losses. Some pilot or unique word injection may still be required to perform coarse and fine timing estimation using classical DSP running at the sample rate.
 \item We may be able to improve on algorithmic delay using ML sync techniques that are less dependant on traditional OFDM framing considerations.
 \item Some form or interleaving, or a long time window for the ML network, may improve performance.
-\item Work to improve the current classical DSP sync, e.g. a feedback loop to track out frequency offsets is worth 1 dB.
+\item Work to improve the current classical DSP sync, e.g. from Figure \ref{fig:ofdm_sync} a feedback loop to track out frequency offsets is worth 1 dB.
 \item Include PAPR optimisation and rate $F_s$ multipath channels in the training.
 \item To better model SSB, locate a better analog compressor, a 3rd party reference implementation in software form would be useful.
-\item For formal subj evaluation, how about radio style 1-5 readability scale across a panel of listeners.
 \item Definition of lower limit link closure for this use case, for example ``CQ CQ, and callsign, enough to produce a QSO report".
 \item For a practical implementation, coarse amplitude and timing need to be updated regularly. As we are testing short samples, a single block estimate is used at present.
 \end{enumerate}
 
 \section{Comparison with Other Speech Waveforms}
 
-We wish to compare our radio autoencoder with existing waveforms used for speech transmission over radio channels.  This section assumes the \emph{radae} system can send intelligable speech at an $E_b/N_0$ of 6dB, with a PAPR of 1dB, both results have been demonstrated in simulation (but not at the time of writing together over real world radio channels).  We include a 3dB syncronisation overhead.
+We wish to compare the potential of our radio autoencoder with existing waveforms used for speech transmission over radio channels.  This section assumes the \emph{radae} system can send intelligable speech at an $E_b/N_0$ of -6dB, with a PAPR of 1dB, both results have been demonstrated in simulation (but not at the time of writing together over real world radio channels).  We include a 3dB syncronisation overhead, anticipating modest improvements over the 4dB obtained with our proof of concept system described above.
 
 We start with the assumption that we have a transmitter of $C$ watts, and an AWGN channel with a spectral noise density of $N_0$ watts/Hz. As the speech waveforms being considered vary in bandwidth we will choose $C/N_0$ as the SNR metric.
 
