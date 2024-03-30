@@ -196,7 +196,7 @@ BER = 0.5 \left(1-\sqrt{\frac{E_b/N_0}{E_b/N_0+1}} \right)
 \section{Radio Frequency Tests}
 
 \begin{figure}[h]
-\caption{ML combined with OFDM and Classical DSP sync}
+\caption{ML combined with OFDM and Classical DSP synchronisation.  Transmitter (Tx) is on the LHS, at RHS is the Receiver (Rx). The sample rate over the channel is $F_s=8000$ Hz.}
 \label{fig:ml_dsp_framework}
 \begin{center}
 \begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.5cm]
@@ -206,8 +206,8 @@ BER = 0.5 \left(1-\sqrt{\frac{E_b/N_0}{E_b/N_0+1}} \right)
 \node [block, below of=radae_enc,node distance=2cm] (qpsk_map) {QPSK map};
 \node [block, below of=qpsk_map,node distance=2cm] (ofdm_frame) {OFDM framing};
 \node [block, below of=ofdm_frame,node distance=2cm] (idft) {IDFT};
-\node [block, right of=idft,node distance=2.5cm] (channel) {Radio Channel};
-\node [block, right of=channel,node distance=2.5cm,text width=2cm] (dsp_acq) {DSP Acquisition};
+\node [block, right of=idft,node distance=3cm] (channel) {Radio Channel};
+\node [block, right of=channel,node distance=3cm,text width=2cm] (dsp_acq) {DSP Acquisition};
 \node [block, above of=dsp_acq,node distance=2cm] (dft) {DFT};
 \node [block, above of=dft,node distance=2cm,text width=2cm] (dsp_eq) {DSP Equalisation};
 \node [block, above of=dsp_eq,node distance=2cm] (qpsk_demap) {QPSK demap};
@@ -218,8 +218,8 @@ BER = 0.5 \left(1-\sqrt{\frac{E_b/N_0}{E_b/N_0+1}} \right)
 \draw [->] (radae_enc) -- node[left, text width=0.5cm] {$\bf{z}$} (qpsk_map);
 \draw [->] (qpsk_map) -- node[left, text width=0.5cm] {$\bf{q}$} (ofdm_frame); 
 \draw [->] (ofdm_frame)-- (idft); 
-\draw [->] (idft)-- (channel); 
-\draw [->] (channel) -- (dsp_acq);
+\draw [->] (idft) -- node[below] {$F_s$} (channel); 
+\draw [->] (channel) --  node[below] {$F_s$} (dsp_acq);
 \draw [->] (dsp_acq)-- (dft); 
 \draw [->] (dft)-- (dsp_eq); 
 \draw [->] (dsp_eq)--  node[left, text width=0.5cm] {$\hat{\bf{q}}$} (qpsk_demap); 
@@ -311,7 +311,61 @@ Combined with $L_p$, we estimate a total sync loss of 3dB for this first pass of
 \end{center}
 \end{figure}
 
+\begin{figure}[H]
+\caption{Over The Cable (OTC) VHF test. The \emph{radae} transmitter output is upsampled and shifted to 144.5 MHz using a HackRF.  The RF receive power and hence SNR is set by a step attenuator before being received by a RTL-SDR and \emph{gqrx} SDR application. Wave files recorded off air by \emph{gqrx} are presented to the \emph{radae} receiver.}
+\label{fig:vhf_otc}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.5cm]
 
+\node [input] (rinput) {};
+\node [input, right of=rinput,node distance=0.5cm] (z) {};
+\node [block, right of=z, node distance=1.5cm] (radae_tx) {\emph{radae} Tx};
+\node [block, below of=radae_tx,node distance=2cm,text width=2cm] (upsampler) {Upsampler};
+\node [block, below of=upsampler,node distance=2cm] (hackrf) {HackRF};
+\node [block, right of=hackrf,node distance=2.5cm,text width=2cm] (attenuator) {Switched Attenuator};
+\node [block, right of=attenuator,node distance=2.5cm] (rtlsdr) {RTLSDR};
+\node [block, above of=rtlsdr,node distance=2cm] (gqrx) {gqrx App};
+\node [block, above of=gqrx,node distance=2cm] (radae_rx) {\emph{radae} Rx};
+\node [output, right of=radae_rx,node distance=2cm] (routput) {};
+
+\draw [->] node[align=left,text width=2cm] {Input Speech} (rinput) -- (radae_tx);
+\draw [->] (radae_tx) -- (upsampler);
+\draw [->] (upsampler) -- (hackrf);
+\draw [->] (hackrf) -- (attenuator);
+\draw [->] (attenuator) -- (rtlsdr);
+\draw [->] (rtlsdr) -- (gqrx);
+\draw [->] (gqrx) -- node[left,text width=1cm] {\emph{.wav}} (radae_rx);
+\draw [->] (radae_rx) -- (routput) node[right, align=left, text width=1.5cm] {Output Speech};
+
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
+\begin{figure}[H]
+\caption{Over The Cable (OTA) HF test. The \emph{radae} transmitter output is fed to the USB sound interface of a COTS HF Radio where it is shifted to HF, amplified, and transmitted over various real world HF channels to a remote KiwiSDR receiver.  Wave files recorded off air by the KiwiSDR are presented to the \emph{radae} receiver.}
+\label{fig:hf_ota}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.5cm]
+
+\node [input] (rinput) {};
+\node [input, right of=rinput,node distance=0.5cm] (z) {};
+\node [block, right of=z, node distance=1.5cm] (radae_tx) {\emph{radae} Tx};
+\node [block, below of=radae_tx,node distance=2cm] (hf_tx) {HF Radio};
+\node [block, right of=hf_tx,node distance=2.5cm] (hf_channel) {HF Channel};
+\node [block, right of=hf_channel,node distance=2.5cm] (kiwisdr) {KiwiSDR};
+\node [block, above of=kiwisdr,node distance=2cm] (radae_rx) {\emph{radae} Rx};
+\node [output, right of=radae_rx,node distance=2cm] (routput) {};
+
+\draw [->] node[align=left,text width=2cm] {Input Speech} (rinput) -- (radae_tx);
+\draw [->] (radae_tx) -- (hf_tx);
+\draw [->] (hf_tx) -- (hf_channel);
+\draw [->] (hf_channel) -- (kiwisdr);
+\draw [->] (kiwisdr) -- node[left,text width=1cm] {\emph{.wav}} (radae_rx);
+\draw [->] (radae_rx) -- (routput) node[right, align=left, text width=1.5cm] {Output Speech};
+
+\end{tikzpicture}
+\end{center}
+\end{figure}
 
 \subsection{March 2024 Results}
 
