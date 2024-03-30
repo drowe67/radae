@@ -45,10 +45,10 @@ This report is a feasibility study around using an autoencoder derived from RDOV
 \node [output, right of=lpcnet_dec,node distance=2cm] (routput) {};
 
 \draw [->] node[align=left,text width=2cm] {Input Speech} (rinput) -- (lpcnet_enc);
-\draw [->] (lpcnet_enc) --  node[left, text width=0.5cm] {$\bf{f}$} (radae_enc);
-\draw [->] (radae_enc) -- (channel);
-\draw [->] (channel) -- (radae_dec);
-\draw [->] (radae_dec) --  node[left, text width=0.5cm] {$\hat{\bf{f}}$} (lpcnet_dec);
+\draw [->] (lpcnet_enc) -- node[left, text width=0.5cm] {$\bf{f}$} (radae_enc);
+\draw [->] (radae_enc) -- node[above, text width=0.5cm] {$\bf{z}$} (channel);
+\draw [->] (channel) -- node[above, text width=0.5cm] {$\hat{\bf{z}}$} (radae_dec);
+\draw [->] (radae_dec) -- node[left, text width=0.5cm] {$\hat{\bf{f}}$} (lpcnet_dec);
 \draw [->] (lpcnet_dec) -- (routput) node[right, align=left, text width=1.5cm] {Output Speech};
 
 \end{tikzpicture}
@@ -57,12 +57,11 @@ This report is a feasibility study around using an autoencoder derived from RDOV
 
 The encoder (Figure \ref{fig:radae_block}) takes as input a typical set of vocoder features (short term spectrum, pitch, voicing), then applies time based prediction and transforms to produce a set of parameters that can be sent over a channel. This is similar to vocoders using classical DSP, except Machine Learning (ML) allows us to learn non-linear transforms and prediction, which tend to be more powerful.
 
-Usually, after the transformation/prediction stage we then quantise to a low bit rate, then use Forward Error 
-Correction (FEC) and modems to send the bits over a channel. However our work takes a novel twist – we train the autoencoder to generate PSK symbols that we send over the channel. It effectively combines quantisation, channel coding, and modulation. The symbols from the autoencoder tend to cluster around +/-1 like BPSK but are continuously valued, so can be considered discrete time, continuously valued PSK.
+In conventional digital speech systems, after the transformation/prediction stage we then quantise to a low bit rate, then use Forward Error  Correction (FEC) and modems to send the bits over a channel. However our work takes a novel twist – we train the autoencoder to generate PSK symbols that we send over the channel. It effectively combines quantisation, channel coding, and modulation. The symbols from the autoencoder tend to cluster around +/-1 like BPSK but are continuously valued, so can be considered discrete time, continuously valued PSK.
 
 The encoder and decoder are trained together as an autoencoder with the loss function  $L(\bf{f},\hat{\bf{f}})$ applied to the vocoder features.  We employ the LPCNet \scalebox{0.8}[0.8]{FARGAN} vocoder for speech analysis and synthesis, however the concept is applicable to any neural and even classical vocoder with a similar feature set.
 
-Given a vector of vocoder features $\bf{f}$, we use an encoder $E$ to map them to a dimension $d$ latent vector $\bf{z}$ where $d$ is even.  Unlike digital modulation, each element $z_i$ of $\bf{z}$ is continuously valued and not constrained to a discrete set of points.  For bandwidth efficient transmission over the channel the elements of $\bf{z}$ are mapped to $d/2$ complex symbols $\bf{q}$. Compared to classical digital modulation, the elements of $\bf{z}$ can be considered BPSK symbols (continuously valued, analog bits), and the elements of $\bf{q}$ analog QPSK symbols.
+Given a vector of vocoder features $\bf{f}$, we use an encoder to map them to a dimension $d$ latent vector $\bf{z}$ where $d$ is even.  Unlike digital modulation, each element $z_i$ of $\bf{z}$ is continuously valued and not constrained to a discrete set of points.  For bandwidth efficient transmission over the channel the elements of $\bf{z}$ are mapped to $d/2$ complex symbols $\bf{q}$. Compared to classical digital modulation, the elements of $\bf{z}$ can be considered BPSK symbols (continuously valued, analog bits), and the elements of $\bf{q}$ analog QPSK symbols.
 
 \section{Simulation of AWGN Channels}
 
@@ -194,14 +193,48 @@ For a multipath channel:
 BER = 0.5 \left(1-\sqrt{\frac{E_b/N_0}{E_b/N_0+1}} \right)
 \end{equation}
 
-
 \section{Radio Frequency Tests}
 
-Impressive results have been obtained from symbol rate simulations of an OFDM modem, which assumed ideal synchronisation.  We would like to verify these results using real radio signals in Over The Cable (OTC) and Over the Air (OTA) tests.  This requires building up a rate $F_s$ system, and synchronisation subsystems.  For our initial tests, the choice was made to use classical DSP pilot symbol based synchronisation, although we acknowldge potential for ML based synchronisation in future iterations.
+\begin{figure}[h]
+\caption{ML combined with OFDM and Classical DSP sync}
+\label{fig:ml_dsp_framework}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.5cm]
+
+\node [input] (rinput) (z) {};
+\node [block, below of=z,node distance=1cm] (radae_enc) {\emph{radae} Encoder};
+\node [block, below of=radae_enc,node distance=2cm] (qpsk_map) {QPSK map};
+\node [block, below of=qpsk_map,node distance=2cm] (ofdm_frame) {OFDM framing};
+\node [block, below of=ofdm_frame,node distance=2cm] (idft) {IDFT};
+\node [block, right of=idft,node distance=2.5cm] (channel) {Radio Channel};
+\node [block, right of=channel,node distance=2.5cm,text width=2cm] (dsp_acq) {DSP Acquisition};
+\node [block, above of=dsp_acq,node distance=2cm] (dft) {DFT};
+\node [block, above of=dft,node distance=2cm,text width=2cm] (dsp_eq) {DSP Equalisation};
+\node [block, above of=dsp_eq,node distance=2cm] (qpsk_demap) {QPSK demap};
+\node [block, above of=qpsk_demap,node distance=2cm] (radae_dec) {\emph{radae} Decoder};
+\node [output, right of=radae_dec,node distance=2cm] (routput) {};
+
+\draw [->] node[above,text width=1cm] {$\bf{f}$} (rinput) -- (radae_enc);
+\draw [->] (radae_enc) -- node[left, text width=0.5cm] {$\bf{z}$} (qpsk_map);
+\draw [->] (qpsk_map) -- node[left, text width=0.5cm] {$\bf{q}$} (ofdm_frame); 
+\draw [->] (ofdm_frame)-- (idft); 
+\draw [->] (idft)-- (channel); 
+\draw [->] (channel) -- (dsp_acq);
+\draw [->] (dsp_acq)-- (dft); 
+\draw [->] (dft)-- (dsp_eq); 
+\draw [->] (dsp_eq)--  node[left, text width=0.5cm] {$\hat{\bf{q}}$} (qpsk_demap); 
+\draw [->] (qpsk_demap) -- node[left, text width=0.5cm] {$\hat{\bf{z}}$} (radae_dec); 
+\draw [->] (radae_dec) -- node[above, align=right, text width=1cm] {$\hat{\bf{f}}$} (routput) ;
+
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
+Impressive results have been obtained from symbol rate simulations of an OFDM modem, which assumed ideal synchronisation.  We would like to verify these results using real radio signals in Over The Cable (OTC) and Over the Air (OTA) tests.  This requires building up a rate $F_s$ system, and synchronisation subsystems.  For our initial tests, the choice was made to use OFDM to handle HF multipath channel, and classical DSP pilot symbol based synchronisation, although we acknowldge potential for ML based synchronisation in future iterations.  The combined ML and OFDM/DSP system is illustrated in Figure \ref{fig:ml_dsp_framework}.
 
 The goal is to compare speech quality to SSB at $E_b/N_0=0dB$ (approx -3dB SNR in a 3000Hz BW), and work through any issues that prevent the system working over real radio channels.  PAPR optimisation will be ignored for the first iteration, as our initial goal is to verifiy the low $E_b/N_0$ results suggested by the symbol rate simulations.
 
-\begin{figure}[H]
+\begin{figure}
 \caption{OFDM modem frame, $P$ denotes pilot symbol, $D$ payload data symbols. This example has a modem frame of $N_s=4$ symbols, and $N_c=3$ carriers.  Each symbol $D$ or $P$ is comprised of a $T_{cp}$ second Cyclic Prefix and $T_s^\prime$ second symbol $D^\prime$.}
 \vspace{5mm}
 \label{fig:ofdm_frame}
@@ -250,17 +283,9 @@ The goal is to compare speech quality to SSB at $E_b/N_0=0dB$ (approx -3dB SNR i
 \end{center}
 \end{figure}
 
-Pilot symbols have been inserted into each OFDM carrier at a rate of one pilot every 4 data symbols.  From \cite{freedv_low}, the SNR loss from injecting the pilot symbols is given by:
-\begin{equation}
-L_p = 10log_{10}\frac{N_s}{N_s-1}
-\end{equation}
-For $N_s=5$, the loss in 0.96dB.  To maintain the same payload symbol rate over the channel, the bandwidth increases:
-\begin{equation}
-R^\prime_b = R_b\frac{N_s}{N_s-1}
-\end{equation}
-For $N_s=5$, $R^\prime_b=2500$ symbols/s, or a OFDM QPSK bandwidth of around 1250 Hz plus some guard bandwidth.
+The general design of the OFDM frame in Figure \ref{fig:ofdm_frame}.  QPSK symbols are mapped to a matrix of parallel carriers at a relatively low symbol rate in order to sucessfully pass through the target HF multipath channel. Pilot symbols are periodically inserted into each OFDM carrier.  At the receiver the  pilots are used to estimate the time varying phase of the channel (equalisation), and for initial acquistion (coarse frequency, and frame sync) of the received signal.  The disadvantage of pilot based schemes is they consume carrier power that would otherwise be available for the data symbols, and require the symbol rate and hence overall RF bandwidth to be increased to maintain the payload data rate.  After the IDFT stage a cyclic prefix is inserted to accomodate inter symbol interference.  The cyclic prefix also consumes carrier power and requires an increase in RF bandwidth.  The OFDM waveform details, including overheads, are explained in detail in the waveform design spreadsheet \cite{FreeDV-032}.
 
-TODO: Add CP losses, discuss two candidates explored for OFDM frame.
+TODO: table summarisng waveform, and losses, either here of FreeDV-032.
 
 A pilot based sync system was built in PyTorch, and is used for coarse and fine timing, phase and amplitide equalisation.  Unlike classical PSK, the ML network is likely to be sensitive to amplitude variations.  Phase equalisation also allows small frequency offsets ($\pm2$ Hz) to be handled, sufficient for tests with short samples.
 
@@ -286,16 +311,6 @@ Combined with $L_p$, we estimate a total sync loss of 3dB for this first pass of
 \end{center}
 \end{figure}
 
-\begin{figure}[h]
-\caption{Over The Cable (OTC) Tests}
-\label{fig:otc}
-\begin{center}
-\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
-
-
-\end{tikzpicture}
-\end{center}
-\end{figure}
 
 
 \subsection{March 2024 Results}
