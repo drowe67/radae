@@ -121,10 +121,12 @@ checkpoint['state_dict']    = model.state_dict()
 
 # dataloader
 Nc = model.Nc
-mp_sequence_length = int((sequence_length // model.enc_stride)*model.Ns)
+mp_sequence_length = model.num_timesteps_at_rate_Rs(sequence_length)
+print(sequence_length,mp_sequence_length)
+
 checkpoint['dataset_args'] = (feature_file, sequence_length, mp_sequence_length, Nc)
 checkpoint['dataset_kwargs'] = {'enc_stride': model.enc_stride}
-dataset = RADAEDataset(*checkpoint['dataset_args'], mp_file = args.mp_file)
+dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
 # optimizer

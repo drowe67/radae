@@ -337,11 +337,18 @@ class RADAE(nn.Module):
         # set up OFDM "modem frame" parameters to support multipath simulation.  Modem frame is Nc carriers 
         # wide in frequency and Ns symbols in duration 
         bps = 2                                         # BPSK symbols per QPSK symbol
-        Ts = 0.03                                       # OFDM QPSK symbol period (without pilots or CP)
+
+        if self.pilots:
+            Ts = 0.03                                   # OFDM QPSK symbol period (without pilots or CP)
+        else:
+            Ts = 0.02
         Rs = 1/Ts                                       # OFDM QPSK symbol rate
         Nzmf = 3                                        # number of latent vectors in a modem frame
         Nsmf = Nzmf*self.latent_dim // bps              # total number of QPSK symbols in a modem frame across all carriers
-        Ns = int(Nzmf*self.Tz // Ts)                    # duration of "modem frame" in QPSK symbols
+        
+        Ns = int(Nzmf*self.Tz / Ts)                    # duration of "modem frame" in QPSK symbols
+        print(self.Tz, Ts, Nzmf*self.Tz / Ts, Ns)
+        #quit()
         Tmf = Ns*Ts                                     # period of modem frame (s), this must remain constant for real time operation
         Nc = int(Nsmf // Ns)                            # number of carriers
         assert Ns*Nc*bps == Nzmf*latent_dim             # sanity check, one modem frame should contain all the latent features
@@ -401,7 +408,7 @@ class RADAE(nn.Module):
         self.Wfwd = self.Wfwd.to(device)
  
     def num_timesteps_at_rate_Rs(self, num_ten_ms_timesteps):
-        num_modem_frames = num_ten_ms_timesteps // self.enc_stride // self.Nzmf
+        num_modem_frames = num_ten_ms_timesteps / self.enc_stride / self.Nzmf
         return int(num_modem_frames*self.Ns)
     
     def num_timesteps_at_rate_Fs(self, num_timesteps_at_rate_Rs):
@@ -532,7 +539,7 @@ class RADAE(nn.Module):
         
         (num_batches, num_ten_ms_timesteps, num_features) = features.shape
         num_timesteps_at_rate_Rs = self.num_timesteps_at_rate_Rs(num_ten_ms_timesteps)
-        print(num_ten_ms_timesteps, num_timesteps_at_rate_Rs)
+        #print(num_ten_ms_timesteps, num_timesteps_at_rate_Rs)
 
         # For every OFDM modem time step, we need one channel sample for each carrier
         #print(features.shape,H.shape, features.device, H.device)
@@ -557,7 +564,6 @@ class RADAE(nn.Module):
         qpsk_shape = tx_sym.shape
  
         # reshape into sequence of OFDM modem frames
-        print(tx_sym.shape)
         tx_sym = torch.reshape(tx_sym,(num_batches,num_timesteps_at_rate_Rs,self.Nc))
    
         # optionally insert pilot symbols, at the start of each modem frame

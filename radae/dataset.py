@@ -41,7 +41,7 @@ class RADAEDataset(torch.utils.data.Dataset):
                 Nc,
                 num_used_features=20,
                 num_features=36,
-                mp_file=""
+                h_file=""
                 ):
 
         self.sequence_length = sequence_length
@@ -52,11 +52,11 @@ class RADAEDataset(torch.utils.data.Dataset):
         
         # optionally load multipath model
         self.mp_sequence_length = mp_sequence_length
-        if len(mp_file):
-            self.H = np.reshape(np.fromfile(mp_file, dtype=np.float32), (-1, Nc))
+        if len(h_file):
+            self.H = np.reshape(np.fromfile(h_file, dtype=np.float32), (-1, Nc))
             mp_num_sequences = self.H.shape[0] // mp_sequence_length
             if mp_num_sequences < self.num_sequences:
-                print("Multipath file too short")
+                print(f"Multipath file too short num_sequences: {self.num_sequences:d} mp_num_sequences: {mp_num_sequences:d}")
                 quit()
         else:
             self.H = np.ones((self.num_sequences*self.mp_sequence_length,Nc))
