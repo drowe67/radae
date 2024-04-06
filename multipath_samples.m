@@ -32,7 +32,7 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="")
     omega = 2*pi*(0:Nc-1);
     d = path_delay_s;
     H = hf_gain*abs(G1(1:M:end) + G2(1:M:end).*exp(-j*omega*d*Rs));
-    figure(1); mesh(H)
+    figure(1); mesh(H(1:10*Rs,:))
     f=fopen(H_fn,"wb");
     [r c] = size(H);
     Hflat = reshape(H', 1, r*c);
