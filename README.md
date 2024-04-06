@@ -120,8 +120,7 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
    octave:87> radae_plots; do_plots('z.f32','rx.f32')
    ```
    
-
-# Over the Air/Over the Cable (OTA/OTC)
+# Seperate Tx and Rx
 
 We separate the system into a transmitter `inference.py` and stand alone receiver `rx.py`.  Theses examples test the OFDM waveform, including pilot symbol insertion, cyclic prefix, least squares phase EQ, and coarse magnitude EQ.
 
@@ -189,6 +188,8 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
    ```./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_0dB_mpp.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
    ```
    Which gives us a BER of 0.172, about 1.5dB from the ideal Rayleigh multipath channel BER of 0.15 (which the MPP model approximates).
+
+# Over the Air/Over the Cable (OTA/OTC)
 
 1. Example of `ota_test.sh` script. `ota_test.sh -x` generates `tx.wav` which contains the simulated SSB and radae modem signals ready to run through a HF radio.  We add noise to create `rx.wav`, then use `ota_test.sh -r` to generate the demodulated audio files `rx_ssb.wav` and `rx_radae.wav`:
    ```
