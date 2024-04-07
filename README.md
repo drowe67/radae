@@ -71,9 +71,9 @@ make ch mksine tlininterp
 
 # Training
 
-Note a serious NVIDEA GPU is required for training, the author used a RTX4090.
+Note a serious NVIDIA GPU is required for training, the author used a RTX4090.
 
-1. Generate a training features file using your speech training database `input.pcm`, we used 200 hours of speech from open source databases:
+1. Generate a training features file using your speech training database `training_input.pcm`, we used 200 hours of speech from open source databases:
    ```
    ./lpcnet_demo -features training_input.pcm training_features_file.f32
    ```
