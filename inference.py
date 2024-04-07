@@ -35,7 +35,6 @@ import argparse
 
 import numpy as np
 import torch
-import tqdm
 
 from radae import RADAE, RADAEDataset, distortion_loss
 

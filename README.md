@@ -28,9 +28,16 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | ota_test.sh | Script to automate Over The Air (OTA) testing |
 | Radio Autoencoder Waveform Design.ods | Working for OFDM waveform, inclduing pilot and cyclic prefix overheads |
 
-# LPCNet setup
+# Installation
+
+## Packages
+
+sox, python3, [pytorch](https://pytorch.org/get-started/locally/), octave, octave signal processing toolbox
+
+## LPCNet setup
 
 ```
+cd ~
 git clone git@github.com:xiph/opus.git
 cd opus
 git checkout opus-ng
@@ -48,6 +55,19 @@ Playing on a remote machine:
 ```
 scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
 ```
+
+## codec2-dev
+
+Supplies some utilities used for `ota_test.sh` and `evaluate.sh`
+```
+cd ~
+git clone git@github.com:drowe67/codec2-dev.gitcd codec2
+mkdir build_linux
+cd build_linux
+cmake -DUNITTEST=1 ..
+make ch mksine tlininterp
+```
+(optional if using HackRF) manually compile misc/tsrc 
 
 # Training
 
