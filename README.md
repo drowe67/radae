@@ -32,7 +32,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 
 ## Packages
 
-sox, python3, [pytorch](https://pytorch.org/get-started/locally/), octave, octave signal processing toolbox
+sox, python3, python3-matplotlib and python3-tqdm, octave, octave-signal.  Pytorch should be installed using the instructions from the [pytorch](https://pytorch.org/get-started/locally/) web site. 
 
 ## LPCNet setup
 
@@ -71,6 +71,13 @@ make ch mksine tlininterp
 
 # Training
 
+Note a serious NVIDEA GPU is required for training, the author used a RTX4090.
+
+1. Generate a training features file using your speech training database `input.pcm`, we used 200 hours of speech from open source databases:
+   ```
+   ./lpcnet_demo -features training_input.pcm training_features_file.f32
+   ```
+   
 1. Vanilla fixed Eb/No:
    ```
    python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 --plot_loss training_features_file.f32 model_dir_name
