@@ -39,19 +39,19 @@ This document describes the Radio Autoencoder \emph{radae} system, discusses cha
 
 \node [input] (rinput) {};
 \node [input, right of=rinput,node distance=0.5cm] (z) {};
-\node [block, right of=z, node distance=1.5cm] (lpcnet_enc) {LPCNet Encoder};
-\node [block, below of=lpcnet_enc,node distance=2cm] (radae_enc) {\emph{radae} Encoder};
+\node [block, right of=z, node distance=1.5cm,text width=2cm] (feature_ext) {Feature Extraction};
+\node [block, below of=feature_ext,node distance=2cm] (radae_enc) {\emph{radae} Encoder};
 \node [block, right of=radae_enc,node distance=2.5cm] (channel) {Radio Channel};
 \node [block, right of=channel,node distance=2.5cm] (radae_dec) {\emph{radae} Decoder};
-\node [block, below of=radae_dec,node distance=2cm,text width=2cm] (lpcnet_dec) {LPCNet \scalebox{0.8}[0.8]{FARGAN} Decoder};
-\node [output, right of=lpcnet_dec,node distance=2cm] (routput) {};
+\node [block, below of=radae_dec,node distance=2cm] (fargan) {\scalebox{0.8}[0.8]{FARGAN}};
+\node [output, right of=fargan,node distance=2cm] (routput) {};
 
-\draw [->] node[align=left,text width=2cm] {Input Speech} (rinput) -- (lpcnet_enc);
-\draw [->] (lpcnet_enc) -- node[left, text width=0.5cm] {$\bf{f}$} (radae_enc);
+\draw [->] node[align=left,text width=2cm] {Input Speech} (rinput) -- (feature_ext);
+\draw [->] (feature_ext) -- node[left, text width=0.5cm] {$\bf{f}$} (radae_enc);
 \draw [->] (radae_enc) -- node[above, text width=0.5cm] {$\bf{z}$} (channel);
 \draw [->] (channel) -- node[above, text width=0.5cm] {$\hat{\bf{z}}$} (radae_dec);
-\draw [->] (radae_dec) -- node[left, text width=0.5cm] {$\hat{\bf{f}}$} (lpcnet_dec);
-\draw [->] (lpcnet_dec) -- (routput) node[right, align=left, text width=1.5cm] {Output Speech};
+\draw [->] (radae_dec) -- node[left, text width=0.5cm] {$\hat{\bf{f}}$} (fargan);
+\draw [->] (fargan) -- (routput) node[right, align=left, text width=1.5cm] {Output Speech};
 
 \end{tikzpicture}
 \end{center}
@@ -61,7 +61,7 @@ The encoder (Figure \ref{fig:radae_block}) takes as input a typical set of vocod
 
 In conventional digital speech systems, after the transformation/prediction stage we then quantise to a low bit rate, then use Forward Error  Correction (FEC) and modems to send the bits over a channel. However our work takes a novel twist – we train the autoencoder to generate PSK symbols that we send over the channel. It effectively combines quantisation, channel coding, and modulation. The symbols from the autoencoder tend to cluster around +/-1 like BPSK but are continuously valued, so can be considered discrete time, continuously valued PSK.
 
-The encoder and decoder are trained together as an autoencoder with the loss function  $L(\bf{f},\hat{\bf{f}})$ applied to the vocoder features.  We employ the LPCNet \scalebox{0.8}[0.8]{FARGAN} vocoder for speech analysis and synthesis, however the concept is applicable to any neural and even classical vocoder with a similar feature set.
+The encoder and decoder are trained together as an autoencoder with the loss function  $L(\bf{f},\hat{\bf{f}})$ applied to the vocoder features.  We employ the \scalebox{0.8}[0.8]{FARGAN} vocoder for speech analysis and synthesis, however the concept is applicable to any neural and even classical vocoder with a similar feature set.
 
 Given a vector of vocoder features $\bf{f}$, we use an encoder to map them to a dimension $d$ latent vector $\bf{z}$ where $d$ is even.  Unlike digital modulation, each element $z_i$ of $\bf{z}$ is continuously valued and not constrained to a discrete set of points.  For bandwidth efficient transmission over the channel the elements of $\bf{z}$ are mapped to $d/2$ complex symbols $\bf{q}$. Compared to classical digital modulation, the elements of $\bf{z}$ can be considered BPSK symbols (continuously valued, analog bits), and the elements of $\bf{q}$ analog QPSK symbols.
 
@@ -493,6 +493,36 @@ TODO: include 1st gen VHF/UHF digital voice - I think they go down to -123 dB (5
 \caption{Comparison of good quality ``arm chair copy" by waveform over AWGN channels. They are ranked in terms of maximum achievable speech quality. FreeDV 700D has been omitted because of its low speech quality even at high SNR. Even at 20dB SNR there is noticeable noise in received SSB, although DSP based noise reduction may help. Only the radio autoencoder delivers wideband (8000 Hz) speech.}
 \label{tab:waveforms_good}
 \end{table}
+
+\section{CPU and Memory Requirements}
+
+\begin{table} [H]
+\centering
+\begin{tabular}{l l l}
+ \hline
+ Module & MMACS & Memory (kbyte) \\
+ \hline
+ Feature Extraction &  - & - \\
+ FARGAN vocoder &  300/175 &  800 \\
+ RADAE Encoder & 80 & 1000 \\
+ RADAE Decoder & 80 & 1000 \\
+ OFDM Tx & - &  - \\
+ OFDM Rx & - & - \\
+ \hline
+ Totals & 460 & 2800 \\
+ \hline
+\end{tabular}
+\caption{Estimates of RADAE CPU and Memory Requirements. MMACS is the number of 1E6 8 bit multiply and accumulates per second.}
+\label{tab:radae_resources}
+\end{table}
+
+The FARGAN author recommends a 64-bit ARM with NEON extensions as a minimum machine (Cortex-M is likely too small). The current FARGAN vocoder requires 300 MMACs, a slightly lower quality version is available that uses 175 MMACS.  The classical DSP Feature Extraction uses comparatively small amounts of CPU and memory, but currently requires floating point hardware.
+
+The memory is mainly ML weights which are read-only.  However memory access needs to be fast to maintain the MMAC rate - each MMAC is assumed to include any required loads.
+ 
+The RADAE ML CPU hasn't been measured accurately but runs in real time in Python, and is less than the FARGAN decoder (i.e. the FARGAN vocoder dominates the CPU).  For an initial estimate we have approximated the RADAE CPU as 25\% of FARGAN. The RADAE encoder and decoder require approximately the same CPU, and similar memory (ML weights).  It may be possible to reduce the number of weights and CPU, as the optimal size of the RADAE network has not been studied.
+
+The classical DSP OFDM processing requires less resources but hasn't been accurately measured at this time.  Comparable modems at similar symbol rates run on a fraction of Cortex-M micro-controllers. Unlike the ML modules, it currently requires floating point hardware.  For a first approximation we assume OFDM resource requirements are small compared to the ML modules.
 
 \section{Glossary}
 
