@@ -36,6 +36,7 @@ import torch
 import tqdm
 from matplotlib import pyplot as plt
 import numpy as np
+import sys
 
 from radae import RADAE, RADAEDataset, distortion_loss
 
@@ -52,6 +53,7 @@ parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (
 parser.add_argument('--freq_rand', action='store_true', help='random phase and freq offset for each sequence')
 parser.add_argument('--gain_rand', action='store_true', help='random rx gain -20 .. +20dB, SNR unchanged')
 parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
+parser.add_argument('--q_opt', action='store_true', help='constrain power of each PSK symbol')
 
 training_group = parser.add_argument_group(title="training parameters")
 training_group.add_argument('--batch-size', type=int, help="batch size, default: 32", default=32)
@@ -110,7 +112,7 @@ feature_file = args.features
 # model
 checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_EbNo, args.rate_Fs)
 model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, rate_Fs=args.rate_Fs,
-             freq_rand=args.freq_rand,gain_rand=args.gain_rand, pilots=args.pilots)
+              freq_rand=args.freq_rand,gain_rand=args.gain_rand, pilots=args.pilots, q_opt=args.q_opt)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
@@ -152,7 +154,7 @@ if __name__ == '__main__':
     # Main training loop
     for epoch in range(1, epochs + 1):
 
-        print(f"training epoch {epoch}...")
+        print(f"training epoch {epoch}...",file=sys.stderr)
 
         # running stats
         running_total_loss      = 0
