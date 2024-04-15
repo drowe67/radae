@@ -503,23 +503,37 @@ TODO: include 1st gen VHF/UHF digital voice - I think they go down to -123 dB (5
  Module & MMACS & Memory (kbyte) \\
  \hline
  Feature Extraction &  - & - \\
- FARGAN vocoder &  300/175 &  800 \\
  RADAE Encoder & 80 & 1000 \\
- RADAE Decoder & 80 & 1000 \\
  OFDM Tx & - &  - \\
- OFDM Rx & - & - \\
  \hline
- Totals & 460 & 2800 \\
+ Totals & 80 & 1000 \\
  \hline
 \end{tabular}
-\caption{Estimates of RADAE CPU and Memory Requirements. MMACS is the number of 1E6 8 bit multiply and accumulates per second.}
-\label{tab:radae_resources}
+\caption{Estimates of RADAE transmitter (Tx) CPU and Memory Requirements.}
+\label{tab:radae_tx_resources}
+
+\end{table}
+\begin{table} [H]
+\centering
+\begin{tabular}{l l l}
+ \hline
+ Module & MMACS & Memory (kbyte) \\
+ \hline
+ FARGAN vocoder &  300/175 &  800 \\
+ RADAE Decoder & 80 & 1000 \\
+ OFDM Rx & - & - \\
+ \hline
+ Totals & 380/255 & 1800 \\
+ \hline
+\end{tabular}
+\caption{Estimates of RADAE receiver (Rx) CPU and Memory Requirements.}
+\label{tab:radae_rx_resources}
 \end{table}
 
+Tables \ref{tab:radae_tx_resources} and \ref{tab:radae_rx_resources} contain estimates of the CPU and memory resources. Typical PTT radio uses-case are half duplex, so the Tx and Rx would not be required to run at the same time.  The receiver dominates, due to the FARGAN vocoder. MMACS is the number 8-bit multiply and accumulates per second divided by 1E6. The memory is mainly ML weights which are read-only.  However memory access needs to be fast to maintain the MMAC rate - each MMAC is assumed to include any required loads. A non-SIMD floating point implementation (where multiple and accumulate are separate operations) would take twice the number of operations when measured in MFLOPS, and four times the memory.
+ 
 The FARGAN author recommends a 64-bit ARM with NEON extensions as a minimum machine (Cortex-M is likely too small). The current FARGAN vocoder requires 300 MMACs, a slightly lower quality version is available that uses 175 MMACS.  The classical DSP Feature Extraction uses comparatively small amounts of CPU and memory, but currently requires floating point hardware.
 
-The memory is mainly ML weights which are read-only.  However memory access needs to be fast to maintain the MMAC rate - each MMAC is assumed to include any required loads.
- 
 The RADAE ML CPU hasn't been measured accurately but runs in real time in Python, and is less than the FARGAN decoder (i.e. the FARGAN vocoder dominates the CPU).  For an initial estimate we have approximated the RADAE CPU as 25\% of FARGAN. The RADAE encoder and decoder require approximately the same CPU, and similar memory (ML weights).  It may be possible to reduce the number of weights and CPU, as the optimal size of the RADAE network has not been studied.
 
 The classical DSP OFDM processing requires less resources but hasn't been accurately measured at this time.  Comparable modems at similar symbol rates run on a fraction of Cortex-M micro-controllers. Unlike the ML modules, it currently requires floating point hardware.  For a first approximation we assume OFDM resource requirements are small compared to the ML modules.
