@@ -28,9 +28,16 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | ota_test.sh | Script to automate Over The Air (OTA) testing |
 | Radio Autoencoder Waveform Design.ods | Working for OFDM waveform, inclduing pilot and cyclic prefix overheads |
 
-# LPCNet setup
+# Installation
+
+## Packages
+
+sox, python3, python3-matplotlib and python3-tqdm, octave, octave-signal.  Pytorch should be installed using the instructions from the [pytorch](https://pytorch.org/get-started/locally/) web site. 
+
+## LPCNet setup
 
 ```
+cd ~
 git clone git@github.com:xiph/opus.git
 cd opus
 git checkout opus-ng
@@ -49,8 +56,28 @@ Playing on a remote machine:
 scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
 ```
 
+## codec2-dev
+
+Supplies some utilities used for `ota_test.sh` and `evaluate.sh`
+```
+cd ~
+git clone git@github.com:drowe67/codec2-dev.gitcd codec2
+mkdir build_linux
+cd build_linux
+cmake -DUNITTEST=1 ..
+make ch mksine tlininterp
+```
+(optional if using HackRF) manually compile misc/tsrc 
+
 # Training
 
+Note a serious NVIDIA GPU is required for training, the author used a RTX4090.
+
+1. Generate a training features file using your speech training database `training_input.pcm`, we used 200 hours of speech from open source databases:
+   ```
+   ./lpcnet_demo -features training_input.pcm training_features_file.f32
+   ```
+   
 1. Vanilla fixed Eb/No:
    ```
    python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 --plot_loss training_features_file.f32 model_dir_name

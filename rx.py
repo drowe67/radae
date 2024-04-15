@@ -175,20 +175,19 @@ if args.pilots:
          print(f"state: {state:10s} Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:f}")
 
       next_state = state
-      match state:
-         case "search":
-            if candidate:
-               next_state = "candidate"
-               tmax_candidate = tmax
-               valid_count = 1
-         case "candidate":
-            if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
-               valid_count = valid_count + 1
-               if valid_count > 3:
-                  acquired = True
-                  print("Acquired!")
-            else:
-               next_state = "search"
+      if state == "search":
+         if candidate:
+            next_state = "candidate"
+            tmax_candidate = tmax
+            valid_count = 1
+      elif state == "candidate":
+         if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
+            valid_count = valid_count + 1
+            if valid_count > 3:
+               acquired = True
+               print("Acquired!")
+         else:
+            next_state = "search"
       state = next_state
                   
       # advance one frame and repeat

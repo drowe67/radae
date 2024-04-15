@@ -13,12 +13,20 @@
 # Setup (you may not need all of these):
 # --------------------------------------
 #
-# 0. Clone and build codec2-dev
-# 1. Install HackRF tools:
+# 1. Install python3, sox, octave, octave signal processing toolbox
+# 2. Clone and build codec2-dev/master, as we use a few utilities
+#    cd codec2
+#    mkdir build_linux
+#    cd build_linux
+#    cmake -DUNITTEST=1 ..
+#    make ch mksine tlininterp
+#    (optional if using HackRF) manually compile misc/tsrc 
+# 1. (optional) Install HackRF tools:
 #      TODO
-# 2. Install kiwclient:
+# 2. (optional) Install kiwclient:
+#      TODO - this option not working yet
 #      cd ~ && git clone git@github.com:jks-prv/kiwiclient.git
-# 3. Hamlib cli tools (rigctl), and add user to dialout group:
+# 3. Hamlib cli tools (rigctl), and add user to dialout group, e.g. for "david" user:
 #      sudo apt install libhamlib-utils
 #      sudo adduser david dialout
 #      logout/log back in and check "groups" includes dialout
