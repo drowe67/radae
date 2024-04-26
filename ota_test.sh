@@ -4,8 +4,8 @@
 # Automated Over The Air (OTA) voice test for Radio Autoencoder:
 #   + Given an input speech wave file, constructs a compressed SSB and radae signal with 
 #     the same average power
-#   + Transmits the signal over one radio and simultaneously receives over another radio
-#   + Decodes the audio from both signals for comparison
+#   + Transmits the signal over a radio
+#   + Decodes the radae audio and extract SSB for comparison
 #
 # The Tx radio can be a wave file, or COTS HF radio connected to a sound card with PTT via 
 # rigctl. The Rx radio can be a wave file, KiwiSDR, or RTLSDR.
@@ -39,7 +39,7 @@
 # Usage
 # -----
 #
-# 1. File based I/O:
+# 1. File based I/O example:
 #    ./ota_test.sh wav/peter.wav -x 
 #    ~/codec2-dev/build_linux/src/ch tx.wav - --No -20 | sox -t .s16 -r 8000 -c 1 - rx.wav
 #    ./ota_test.sh -r rx.wav
@@ -122,12 +122,15 @@ function clean_up {
 
 function process_rx {
     echo "Process receiver sample"
+    # Place results in same path, same file name as inpout file
+    filename="${1%.*}"
+     
     rx=$(mktemp).wav
     sox $1 -c 1 -r 8k $rx
     # generate spectrogram
     echo "pkg load signal; warning('off', 'all'); \
           s=load_raw('$rx'); \
-          plot_specgram(s, 8000, 200, 3000); print('spec.jpg', '-djpg'); \
+          plot_specgram(s, 8000, 200, 3000); print('${filename}_spec.jpg', '-djpg'); \
           quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
     
     # extract sine wave at start and estimate C/No
@@ -139,9 +142,9 @@ function process_rx {
     total_duration=$(sox --info -D $rx)
     end_ssb=$(python3 -c "x=(${total_duration}-4)/2+1; print(\"%f\" % x)")
     rx_radae=$(mktemp)
-    sox $rx rx_ssb.wav trim 3 $end_ssb
+    sox $rx ${filename}_ssb.wav trim 3 $end_ssb
     sox $rx -e float -b 32 -c 2 ${rx_radae}.f32 trim $end_ssb remix 1 0
-    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 rx_radae.wav --pilots --pilot_eq --plots
+    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 ${filename}_radae.wav --pilots --pilot_eq
 }
 
 
