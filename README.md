@@ -1,3 +1,10 @@
+# Quickstart
+
+To Tx and Rx RADAE signal over the air using stored wavefiles you just need these sections:
+
+1. Installation
+2. Over the Air/Over the Cable (OTA/OTC)
+
 # Attributions and License
 
 This software was derived from RDOVAE Python source (Github xiph/opus.git opus-ng branch opus/dnn/torch/rdovae):
@@ -68,35 +75,6 @@ cmake -DUNITTEST=1 ..
 make ch mksine tlininterp
 ```
 (optional if using HackRF) manually compile misc/tsrc 
-
-# Training
-
-Note a serious NVIDIA GPU is required for training, the author used a RTX4090.
-
-1. Generate a training features file using your speech training database `training_input.pcm`, we used 200 hours of speech from open source databases:
-   ```
-   ./lpcnet_demo -features training_input.pcm training_features_file.f32
-   ```
-   
-1. Vanilla fixed Eb/No:
-   ```
-   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 --plot_loss training_features_file.f32 model_dir_name
-   ```
-
-1. Rate Rs with multipath, over range of Eb/No:
-   ```
-   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model05 --mp_file h_mpp.f32 --range_EbNo --plot_loss
-   ```
-
-1. Rate Fs with simulated PA:
-   ```
-   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model06 --plot_loss --rate_Fs --range_EbNo
-   ```
-
-1. Rate Fs with phase and freq offsets:
-   ```
-   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model07 --range_EbNo --plot_loss --rate_Fs --freq_rand
-   ```
 
 # Inference
 
@@ -230,11 +208,40 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
    ```
    ./ota_test.sh wav/david.wav -g 9 -t -d -f 14236
    ```
-   The `-g 9` sample gives the `david.wav` sample a little more compression, this was ajusted by experiment, listening to the `tx.wav` file, and looking for signs of a compressed waveform on Audacity.  To receive the signal I tune into a convenient KiwiSDR, and manually start recording when my radio starts transmitting.  I stop recording when I hear the transmission end.  This will result in a wave file being downloaded.  This can be decoded with:
+   The `-g 9` sample gives the `david.wav` sample a little more compression, this was ajusted by experiment, listening to the `tx.wav` file, and looking for signs of a compressed waveform on Audacity.  To receive the signal I tune into a convenient KiwiSDR, and manually start recording when my radio starts transmitting.  I stop recording when I hear the transmission end.  This will result in a wave file being downloaded.  It's a good idea to trim any excess off the start and end of the rx wave file. It can be decoded with:
    ```
-   ./ota_test.sh -d -r ~/Downloads/kiwisdr.owdjim.gen.nz_2024-03-26T06_58_32Z_14236.00_usb.wav
+   ./ota_test.sh -d -r ~/Downloads/kiwisdr_usb.wav
    ```
-   The output will be a `rx_radae.wav` and `rx_ssb.wav`, which you can listen to and compare, `spec.png` is the spectrogram.  The C/No will be estimated and displayed but this is unreliable at present.  The `ota_test.sh` script is capable of automatically recording from KiwiSDRs, however this code hasn't been debugged yet.
+   The output will be a `~/Downloads/kiwisdr_usb_radae.wav` and `~/Downloads/kiwisdr_usb_ssb.wav`, which you can listen to and compare, `~/Downloads/kiwisdr_usb_spec.png` is the spectrogram.  The C/No will be estimated and displayed but this is unreliable at present for non-AWGN channels.  The `ota_test.sh` script is capable of automatically recording from KiwiSDRs, however this code hasn't been debugged yet.
+
+# Training
+
+This section is optional - pre-trained models that run on a standard laptop CPU are available for experimenting with RADAE. If you wish to perform training, a serious NVIDIA GPU is required - the author used a RTX4090.
+
+1. Generate a training features file using your speech training database `training_input.pcm`, we used 200 hours of speech from open source databases:
+   ```
+   ./lpcnet_demo -features training_input.pcm training_features_file.f32
+   ```
+   
+1. Vanilla fixed Eb/No:
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 --plot_loss training_features_file.f32 model_dir_name
+   ```
+
+1. Rate Rs with multipath, over range of Eb/No:
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model05 --mp_file h_mpp.f32 --range_EbNo --plot_loss
+   ```
+
+1. Rate Fs with simulated PA:
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model06 --plot_loss --rate_Fs --range_EbNo
+   ```
+
+1. Rate Fs with phase and freq offsets:
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model07 --range_EbNo --plot_loss --rate_Fs --freq_rand
+   ```
 
 # Tests
 
