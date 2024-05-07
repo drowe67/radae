@@ -39,7 +39,7 @@ function multipath_example()
     print("-dpng","multipath_h.png")
 endfunction
 
-% Plots loss v EbNo curves from text files dumped by train.py, pass in pairs of text_file.txt,legend
+% Plots loss v Eb/No curves from text files dumped by train.py, pass in pairs of EqNo_file.txt,legend
 function loss_EqNo_plot(png_fn, varargin)
     figure(1); clf; hold on;
     i = 1;
@@ -51,6 +51,32 @@ function loss_EqNo_plot(png_fn, varargin)
         i++;
     end
     hold off; grid; xlabel('Eq/No (dB)'); ylabel('loss');
+    if length(png_fn)
+        print("-dpng",png_fn);
+    end
+endfunction
+
+% Plots loss v C/No curves from text files dumped by train.py, pass in EqNo_file.txt,dim,leg for each curve
+function loss_CNo_plot(png_fn, Rs, B, varargin)
+    figure(1); clf; hold on;
+    i = 1;
+    while i <= length(varargin)
+        fn = varargin{i};
+        data = load(fn);
+        i++; dim = varargin{i}; Nc = dim/2;
+        i++; leg = varargin{i}; leg = strrep (leg, "_", " ");
+        EqNo = data(:,1);
+        CNo = EqNo + 10*log10(Rs*Nc/B);
+        plot(CNo,data(:,2),sprintf("+-;%s;",leg))
+        i++;
+    end
+    hold off; grid; 
+    if B==1
+      xlabel('C/No (dB)');
+    else
+      xlabel('SNR (dB)');
+    end
+     ylabel('loss');
     if length(png_fn)
         print("-dpng",png_fn);
     end

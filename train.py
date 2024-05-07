@@ -48,6 +48,7 @@ parser.add_argument('--cuda-visible-devices', type=str, help="comma separates li
 parser.add_argument('--latent-dim', type=int, help="number of symbols produced by encoder, default: 80", default=80)
 parser.add_argument('--EbNodB', type=float, default=0, help='BPSK Eb/No in dB')
 parser.add_argument('--range_EbNo', action='store_true', help='Use a range of Eb/No during training')
+parser.add_argument('--range_EbNo_start', type=float, default=-6.0, help='starting value for Eb/No during training')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath file, rate Rs time steps by Nc carriers .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--freq_rand', action='store_true', help='random phase and freq offset for each sequence')
@@ -118,7 +119,9 @@ feature_file = args.features
 
 # model
 checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_EbNo, args.rate_Fs)
-model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, rate_Fs=args.rate_Fs,
+model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, 
+              range_EbNo_start=args.range_EbNo_start, 
+              rate_Fs=args.rate_Fs,
               freq_rand=args.freq_rand,gain_rand=args.gain_rand, pilots=args.pilots, q_opt=args.q_opt)
 
 if type(args.initial_checkpoint) != type(None):

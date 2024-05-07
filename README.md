@@ -105,17 +105,6 @@ make ch mksine tlininterp
    octave:91> radae_plots; do_plots('z_hat.f32') 
    ```
 
-1. Generate `loss` versus Eb/No curves for a model:
-   ```
-   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 1 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 tmp --range_EbNo --plot_EbNo model05 --rate_Fs --initial-checkpoint model05/checkpoints/checkpoint_epoch_100.pth
-   ```
-   This runs another training epoch (results not used so saved in `tmp` folder), but the results won't change much as the network has converged.  While training across a range of Eb/No, it gathers stats on `loss` against Eb/No, and plots them in a PNG and dumps a text file.  The text output is useful for plotting curves from different training runs together. One weakness is it doesn't measure actual Eb/No - Eb may vary as different networks have slightly different symbol magnitudes (TODO improve this).
-
-   Octave can be used to plot several loss curves together:
-   ```
-   octave:120> radae_plots; loss_EbNo_plot("loss_models",'model05_loss_EbNodB.txt','m5_Rs_mp','model07_loss_EbNodB.txt','m7_Fs_offets','model08_loss_EbNodB.txt','m8_Fs')
-   ```
-
 # Multipath rate Fs
 
 1. Baseline no noise simulation:
@@ -241,6 +230,18 @@ This section is optional - pre-trained models that run on a standard laptop CPU 
 1. Rate Fs with phase and freq offsets:
    ```
    python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model07 --range_EbNo --plot_loss --rate_Fs --freq_rand
+   ```
+
+1. Generate `loss` versus Eb/No curves for a model:
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 1 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 tmp --range_EbNo --plot_EqNo model05 --rate_Fs --initial-checkpoint model05/checkpoints/checkpoint_epoch_100.pth
+   ```
+   This runs another training epoch (results not used so saved in `tmp` folder), but the results won't change much as the network has converged.  While training across a range of Eb/No, it gathers stats on `loss` against Eq/No, and plots them in a PNG and dumps a text file.  The text output is useful for plotting curves from different training runs together. TODO: reconcile original Eb/No simulation parameter with latest model
+   that also trains constellations which means symbol energy Eq is a better parameter.
+
+   Octave can be used to plot several loss curves together:
+   ```
+   octave:120> radae_plots; loss_EqNo_plot("loss_models",'model05_loss_EbNodB.txt','m5_Rs_mp','model07_loss_EbNodB.txt','m7_Fs_offets','model08_loss_EbNodB.txt','m8_Fs')
    ```
 
 # Tests

@@ -277,6 +277,7 @@ class RADAE(nn.Module):
                  EbNodB,
                  multipath_delay = 0.002,
                  range_EbNo = False,
+                 range_EbNo_start = -6.0,
                  ber_test = False,
                  rate_Fs = False,
                  papr_opt = False,
@@ -301,6 +302,7 @@ class RADAE(nn.Module):
         self.latent_dim  = latent_dim
         self.EbNodB = EbNodB
         self.range_EbNo = range_EbNo
+        self.range_EbNo_start = range_EbNo_start
         self.ber_test = ber_test
         self.multipath_delay = multipath_delay 
         self.rate_Fs = rate_Fs
@@ -552,7 +554,7 @@ class RADAE(nn.Module):
 
         # AWGN noise
         if self.range_EbNo:
-            EbNodB = -6 + 20*torch.rand(num_batches,1,1,device=features.device)
+            EbNodB = self.range_EbNo_start + 20*torch.rand(num_batches,1,1,device=features.device)
         else:           
             EbNodB = torch.tensor(self.EbNodB)
 
