@@ -64,7 +64,7 @@ parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ da
 parser.add_argument('--eq_ls', action='store_true', help='Use per carrier least squares EQ (default mean6)')
 parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0)')
 parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude correction (fixes --gain)')
-parser.add_argument('--q_opt', action='store_true', help='constrain power of each PSK symbol')
+parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
 args = parser.parse_args()
 
 # set visible devices
@@ -84,7 +84,7 @@ num_used_features = 20
 model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rate_Fs=args.rate_Fs, 
               phase_offset=args.phase_offset, freq_offset=args.freq_offset, df_dt=args.df_dt,
               gain=args.gain, pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls,
-              cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, q_opt=args.q_opt)
+              cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, bottleneck=args.bottleneck)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
@@ -189,9 +189,11 @@ if __name__ == '__main__':
       tx_sym = output["tx_sym"].cpu().detach().numpy()
       Eq_meas = np.mean(np.abs(tx_sym)**2)
       No = output["sigma"]**2
+      No = No.item()
       EqNodB_meas = 10*np.log10(Eq_meas/No)
       Rq = Rs*Nc
       SNRdB_meas = EqNodB_meas + 10*np.log10(Rq/B)
+      #print(EqNodB_meas,SNRdB_meas,Eq_meas)
       print(f"Measured: {EqNodB_meas-3:6.2f}          {SNRdB_meas:6.2f}       {Eq_meas:5.2f}")
 
    features_hat = output["features_hat"]

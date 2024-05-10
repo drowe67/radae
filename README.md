@@ -264,6 +264,11 @@ This section is optional - pre-trained models that run on a standard laptop CPU 
 | model05 | practical OFDM with 4ms CP and pilots, increased Rs', MPP, 4dB sync loss, speech dropping in and out | Fs | 240319_m5_Fs_mp | 
 | model05 | practical OFDM with 120ms modem frame, 4ms CP and pilots, reduced Rs', 1dB improvement, mooneer sample | Fs | 240320_m5_Fs | 
 | model05 | HF OTA tests of up to 2000km, including weak signal, EMI, NVIS | Fs | 240326_ota_hf | 
+| model09 | repeat of model05 as a sanity check, similar loss v Eq/No | Rs | |
+| model10 | First attempt at dim=40 1D bottelneck, AWGN, poor audio quality, relatively high loss v Eq/No, square constellation | Rs | |
+| model11 | dim=40 with 2D bottelneck #1, AWGN good audio quality, similar to model05, good loss v Eq/No, circular constellation | Rs | |
+| model12 | dim=40 with 2D bottelneck #2, a more sensible --range_EbNo_start 0, improved loss v Eq/No, circular constellation | Rs | |
+| model13 | dim=80 with 2D bottelneck on rate Fs, 0.5db PAPR, loss > m5, but sounds OK | Fs | |
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 

@@ -138,15 +138,14 @@ class CoreEncoder(nn.Module):
     FRAMES_PER_STEP = 4
     CONV_KERNEL_SIZE = 4
 
-    def __init__(self, feature_dim, output_dim, papr_opt=False, q_opt=False):
+    def __init__(self, feature_dim, output_dim, bottleneck = 1):
 
         super(CoreEncoder, self).__init__()
 
         # hyper parameters
         self.feature_dim        = feature_dim
         self.output_dim         = output_dim
-        self.papr_opt           = papr_opt
-        self.q_opt              = q_opt
+        self.bottleneck         = bottleneck
         
         # derived parameters
         self.input_dim = self.FRAMES_PER_STEP * self.feature_dim
@@ -193,11 +192,11 @@ class CoreEncoder(nn.Module):
         x = torch.cat([x, n(self.gru5(x)[0])], -1)
         x = torch.cat([x, n(self.conv5(x))], -1)
 
-        if self.papr_opt or self.q_opt:
-            # power unconstrained here, constrained in forward() instead
-            z = self.z_dense(x)
-        else:
+        # bottleneck constrains 1D real symbol magnitude
+        if self.bottleneck == 1:
             z = torch.tanh(self.z_dense(x))
+        else:
+            z = self.z_dense(x)
 
         return z
 
@@ -280,7 +279,7 @@ class RADAE(nn.Module):
                  range_EbNo_start = -6.0,
                  ber_test = False,
                  rate_Fs = False,
-                 papr_opt = False,
+                 bottleneck = 1,
                  phase_offset = 0,
                  freq_offset = 0,
                  df_dt = 0,
@@ -293,7 +292,6 @@ class RADAE(nn.Module):
                  cyclic_prefix = 0,
                  time_offset = 0,
                  coarse_mag = False,
-                 q_opt = False
                 ):
 
         super(RADAE, self).__init__()
@@ -306,7 +304,7 @@ class RADAE(nn.Module):
         self.ber_test = ber_test
         self.multipath_delay = multipath_delay 
         self.rate_Fs = rate_Fs
-        self.papr_opt = papr_opt
+        self.bottleneck = bottleneck
         self.phase_offset = phase_offset
         self.freq_offset = freq_offset
         self.df_dt = df_dt
@@ -320,10 +318,9 @@ class RADAE(nn.Module):
         self.eq_mean6 = eq_mean6
         self.time_offset = time_offset
         self.coarse_mag = coarse_mag
-        self.q_opt = q_opt
-        
+
         # TODO: nn.DataParallel() shouldn't be needed
-        self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, papr_opt=papr_opt, q_opt=self.q_opt))
+        self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
         self.core_decoder =  nn.DataParallel(CoreDecoder(latent_dim, feature_dim))
         #self.core_encoder = CoreEncoder(feature_dim, latent_dim)
         #self.core_decoder = CoreDecoder(latent_dim, feature_dim)
@@ -556,7 +553,7 @@ class RADAE(nn.Module):
         if self.range_EbNo:
             EbNodB = self.range_EbNo_start + 20*torch.rand(num_batches,1,1,device=features.device)
         else:           
-            EbNodB = torch.tensor(self.EbNodB)
+            EbNodB = self.EbNodB*torch.ones(num_batches,1,1,device=features.device)
 
         # run encoder, outputs sequence of latents that each describe 40ms of speech
         z = self.core_encoder(features)
@@ -568,8 +565,8 @@ class RADAE(nn.Module):
         tx_sym = z[:,:,::2] + 1j*z[:,:,1::2]
         qpsk_shape = tx_sym.shape
 
-        # constrain power of complex symbols 
-        if self.q_opt:
+        # constrain magnitude of 2D complex symbols 
+        if self.bottleneck == 2:
             tx_sym = torch.tanh(torch.abs(tx_sym))*torch.exp(1j*torch.angle(tx_sym))
             
         # reshape into sequence of OFDM modem frames
@@ -605,14 +602,15 @@ class RADAE(nn.Module):
                 num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*(self.M+Ncp)
             tx = torch.reshape(tx,(num_batches,num_timesteps_at_rate_Fs))                         
             
-            # Constrain power of complex rate Fs time domain signal, simulates Power
+            # Constrain magnitude of complex rate Fs time domain signal, simulates Power
             # Amplifier (PA) that saturates at abs(tx) ~ 1
-            if self.papr_opt:
-                tx = torch.tanh(torch.abs(tx)) * torch.angle(tx)
-            
+            if self.bottleneck == 3:
+                tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
+
             # rate Fs multipath model
             d = self.d_samples
             tx_mp = torch.zeros((num_batches,num_timesteps_at_rate_Fs))
+            #print(tx.shape, G.shape)
             tx_mp = tx*G[:,:,0]
             tx_mp[:,d:] = tx_mp[:,d:] + tx[:,:-d]*G[:,:-d,1]
             # normalise power through multipath model
@@ -649,13 +647,14 @@ class RADAE(nn.Module):
             EbNodB = torch.reshape(EbNodB,(num_batches,1))
             EbNo = 10**(EbNodB/10)
             
-            if self.papr_opt:
+            if self.bottleneck == 3:
                 # determine sigma assuming rms power var(tx) = 1 (will be a few dB less due to PA backoff)
                 S = 1
                 sigma = (S*self.Fs/(EbNo*self.Rb))**(0.5)
             else:
                 # similar to rate Rs, but scale noise by M samples/symbol
                 sigma = (EbNo*(self.M))**(-0.5)
+            
             rx = tx + sigma*torch.randn_like(tx)
 
             # insert per sequence random gain variations, -20 ... +20 dB (training time)

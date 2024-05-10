@@ -54,7 +54,7 @@ parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (
 parser.add_argument('--freq_rand', action='store_true', help='random phase and freq offset for each sequence')
 parser.add_argument('--gain_rand', action='store_true', help='random rx gain -20 .. +20dB, SNR unchanged')
 parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
-parser.add_argument('--q_opt', action='store_true', help='constrain power of each PSK symbol')
+parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
 
 training_group = parser.add_argument_group(title="training parameters")
 training_group.add_argument('--batch-size', type=int, help="batch size, default: 32", default=32)
@@ -68,12 +68,6 @@ training_group.add_argument('--plot_loss', action='store_true', help='plot loss 
 training_group.add_argument('--plot_EqNo', type=str, default="", help='plot loss versus Eq/No for final epoch')
 
 args = parser.parse_args()
-
-# Eq/No measurement only implemented for rate Rs
-if len(args.plot_EqNo):
-    if args.rate_Fs:
-        print("Es/No measurement only works at rate Rs at present")
-        quit()
 
 # set visible devices
 os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_visible_devices
@@ -122,7 +116,7 @@ checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_Eb
 model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, 
               range_EbNo_start=args.range_EbNo_start, 
               rate_Fs=args.rate_Fs,
-              freq_rand=args.freq_rand,gain_rand=args.gain_rand, pilots=args.pilots, q_opt=args.q_opt)
+              freq_rand=args.freq_rand,gain_rand=args.gain_rand, pilots=args.pilots, bottleneck=args.bottleneck)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
@@ -140,6 +134,13 @@ checkpoint['dataset_kwargs'] = {'enc_stride': model.enc_stride}
 dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
+# default rate Fs multipath model G1=1, G2=0
+num_timesteps_at_rate_Rs = model.num_timesteps_at_rate_Rs(sequence_length)
+num_timesteps_at_rate_Fs = model.num_timesteps_at_rate_Fs(num_timesteps_at_rate_Rs)
+print(sequence_length,num_timesteps_at_rate_Rs,num_timesteps_at_rate_Fs)
+G = torch.ones((1,num_timesteps_at_rate_Fs,2), dtype=torch.complex64)
+G[:,:,1] = 0
+
 # optimizer
 params = [p for p in model.parameters() if p.requires_grad]
 optimizer = torch.optim.Adam(params, lr=lr, betas=adam_betas, eps=adam_eps)
@@ -153,13 +154,84 @@ if __name__ == '__main__':
     model.to(device)
     model.move_device(device)
 
+    # -----------------------------------------------------------------------------------------------
+    # run through dataset once with current model but training disabled, to gather loss ve EqNo stats
+    # -----------------------------------------------------------------------------------------------
+    if len(args.plot_EqNo):
+        # TODO: move this to a function
+        print("Measuring loss ve Eq/No over training set with training disabled")
+        model.eval()
+        EqNodB_loss = np.zeros((dataloader.__len__()*batch_size,2))
+        running_total_loss      = 0
+        previous_total_loss     = 0
+        current_loss            = 0.
+
+        with torch.no_grad():
+            with tqdm.tqdm(dataloader, unit='batch') as tepoch:
+                for i, (features,H) in enumerate(tepoch):
+                    features = features.to(device)
+                    H = H.to(device)
+                    G = G.to(device)
+                    output = model(features,H,G)
+                    loss_by_batch = distortion_loss(features, output["features_hat"])
+                    total_loss = torch.mean(loss_by_batch)
+                    
+                    # collect running Eq/No stats, measured Eq/No and loss for each sequence in batch
+                    if args.rate_Fs:
+                        tx = output["tx"].cpu().detach().numpy()
+                        S = np.mean(np.abs(tx)**2,axis=1)
+                        N = output["sigma"][:,0]**2                          # noise power in B=Fs
+                        CNodB_meas = 10*np.log10(S*model.Fs/N)               # S/N = S/(NoB) = S/(NoFs), C = S, C/No = SFs/N
+                        EqNodB_meas = CNodB_meas - 10*np.log10(model.Rs*model.Nc)
+                    else:
+                        tx_sym = output["tx_sym"].cpu().detach().numpy()
+                        Eq_meas = np.mean(np.abs(tx_sym)**2,axis=(1,2))
+                        No = output["sigma"][:,0,0]**2
+                        EqNodB_meas = 10*np.log10(Eq_meas/No)
+                    EqNodB_loss[i*batch_size:(i+1)*batch_size,0] = EqNodB_meas
+                    EqNodB_loss[i*batch_size:(i+1)*batch_size,1] = loss_by_batch.cpu().detach().numpy()                       
+
+                    running_total_loss += float(total_loss.detach().cpu())
+                    
+                    if (i + 1) % log_interval == 0:
+                        current_loss = (running_total_loss - previous_total_loss) / log_interval
+                        tepoch.set_postfix(
+                            current_loss=current_loss,
+                            total_loss=running_total_loss / (i + 1),
+                        )
+                        previous_total_loss = running_total_loss
+
+        # Plot loss against EqNodB for final epoch, using log of loss and Eq/No for
+        # each sequence.  We group losses into 1dB Eq/No bins, kind of like a histogram.
+            EqNodB_min = int(np.ceil(np.min(EqNodB_loss[:,0])))
+        EqNodB_max = int(np.ceil(np.max(EqNodB_loss[:,0])))
+        EqNodB_mean_loss = np.zeros((EqNodB_max-EqNodB_min,2))
+        # group the losses from training into 1dB wide bins, and find mean for that bin
+        r = np.arange(EqNodB_min,EqNodB_max)
+        for i in np.arange(len(r)):
+            EqNodB = r[i]
+            x = np.where(np.abs(EqNodB_loss[:,0] - EqNodB) < 0.5)
+            EqNodB_mean_loss[i,0] = EqNodB
+            EqNodB_mean_loss[i,1] = np.mean(EqNodB_loss[x,1])
+        plt.figure(2)
+        plt.plot(EqNodB_mean_loss[:,0],EqNodB_mean_loss[:,1],'b+-')
+        plt.grid()
+        plt.xlabel('Eq/No (dB)')
+        plt.ylabel('Loss')
+        plt.show(block=False)
+        plt.savefig(args.plot_EqNo + '_loss_EqNodB.png')
+
+        np.savetxt(args.plot_EqNo + '_loss_EqNodB' + '.txt', EqNodB_mean_loss)
+        quit()
+
+    # ---------------------------------------------------------------------------------------------
+    # Regular training loop
+    # ---------------------------------------------------------------------------------------------
+
     if args.plot_loss:
         plt.figure(1)
         loss_epoch=np.zeros((args.epochs+1))
     
-    # loss v EqNo stats
-    EqNodB_loss = np.zeros((dataloader.__len__()*batch_size,2))
-
     # Main training loop
     for epoch in range(1, epochs + 1):
 
@@ -179,7 +251,8 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 features = features.to(device)
                 H = H.to(device)
-                output = model(features,H)
+                G = G.to(device)
+                output = model(features,H,G)
                 loss_by_batch = distortion_loss(features, output["features_hat"])
                 total_loss = torch.mean(loss_by_batch)
                 total_loss.backward()
@@ -188,14 +261,23 @@ if __name__ == '__main__':
 
                 if len(args.plot_EqNo):
                     # collect running Eq/No stats, measured Eq/No and loss for each sequence in batch
-                    tx_sym = output["tx_sym"].cpu().detach().numpy()
-                    Eq_meas = np.mean(np.abs(tx_sym)**2,axis=(1,2))
-                    No = output["sigma"][:,0,0]**2
-                    EqNodB_meas = 10*np.log10(Eq_meas/No)
+                    if args.rate_Fs:
+                        tx = output["tx"].cpu().detach().numpy()
+                        S = np.mean(np.abs(tx)**2,axis=1)
+                        N = output["sigma"][:,0]**2                          # noise power in B=Fs
+                        CNodB_meas = 10*np.log10(S*model.Fs/N)               # S/N = S/(NoB) = S/(NoFs), C = S, C/No = SFs/N
+                        EqNodB_meas = CNodB_meas - 10*np.log10(model.Rs*model.Nc)
+                        #print(S[:10])
+                    else:
+                        tx_sym = output["tx_sym"].cpu().detach().numpy()
+                        Eq_meas = np.mean(np.abs(tx_sym)**2,axis=(1,2))
+                        No = output["sigma"][:,0,0]**2
+                        EqNodB_meas = 10*np.log10(Eq_meas/No)
                     EqNodB_loss[i*batch_size:(i+1)*batch_size,0] = EqNodB_meas
-                    EqNodB_loss[i*batch_size:(i+1)*batch_size,1] = loss_by_batch.cpu().detach().numpy()
+                    EqNodB_loss[i*batch_size:(i+1)*batch_size,1] = loss_by_batch.cpu().detach().numpy()                       
 
                 running_total_loss += float(total_loss.detach().cpu())
+                
                 if (i + 1) % log_interval == 0:
                     current_loss = (running_total_loss - previous_total_loss) / log_interval
                     tepoch.set_postfix(
@@ -223,27 +305,4 @@ if __name__ == '__main__':
         if args.plot_loss:
             plt.savefig(args.output + '_loss.png')
             np.savetxt(args.output + '_loss' + '.txt', loss_epoch[1:epoch+1])
-
-    # optionally plot loss against EqNodB for final epoch, using log of loss and Eq/No for
-    # each sequence.  We group losses into 1dB Eq/No bins, kind of like a histogram.
-    if len(args.plot_EqNo):
-        EqNodB_min = int(np.ceil(np.min(EqNodB_loss[:,0])))
-        EqNodB_max = int(np.ceil(np.max(EqNodB_loss[:,0])))
-        EqNodB_mean_loss = np.zeros((EqNodB_max-EqNodB_min,2))
-        # group the losses from training into 1dB wide bins, and find mean for that bin
-        r = np.arange(EqNodB_min,EqNodB_max)
-        for i in np.arange(len(r)):
-            EqNodB = r[i]
-            x = np.where(np.abs(EqNodB_loss[:,0] - EqNodB) < 0.5)
-            EqNodB_mean_loss[i,0] = EqNodB
-            EqNodB_mean_loss[i,1] = np.mean(EqNodB_loss[x,1])
-        plt.figure(2)
-        plt.plot(EqNodB_mean_loss[:,0],EqNodB_mean_loss[:,1],'b+-')
-        plt.grid()
-        plt.xlabel('Eq/No (dB)')
-        plt.ylabel('Loss')
-        plt.show(block=False)
-        plt.savefig(args.plot_EqNo + '_loss_EqNodB.png')
-
-        np.savetxt(args.plot_EqNo + '_loss_EqNodB' + '.txt', EqNodB_mean_loss)
 
