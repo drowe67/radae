@@ -36,12 +36,14 @@ import numpy as np
 class RADAEDataset(torch.utils.data.Dataset):
     def __init__(self,
                 feature_file,
-                sequence_length,      # number of feature vectors in each sequence of time steps we train on
-                mp_sequence_length,   # corresponding number of multipath vectors in each sequence of time steps we train on
+                sequence_length,      # number of vocoder feature vectors in each sequence of time steps we train on
+                H_sequence_length,    # number of rate Rs multipath channel vectors in each sequence of time steps we train on
                 Nc,
+                G_sequence_length,    # number of rate Fs multipath channel vectors in each sequence of time steps we train on
                 num_used_features=20,
                 num_features=36,
-                h_file=""
+                h_file="",            # rate Rs multipath channel samples
+                g_file=""             # rate Fs multipath channel samples
                 ):
 
         self.sequence_length = sequence_length
@@ -50,24 +52,54 @@ class RADAEDataset(torch.utils.data.Dataset):
         self.features = self.features[:, :num_used_features]
         self.num_sequences = self.features.shape[0] // sequence_length
         
-        # optionally load multipath model
-        self.mp_sequence_length = mp_sequence_length
+        # optionally set up rate Rs multipath model
+        self.H_sequence_length = H_sequence_length
         if len(h_file):
             self.H = np.reshape(np.fromfile(h_file, dtype=np.float32), (-1, Nc))
-            mp_num_sequences = self.H.shape[0] // mp_sequence_length
-            if mp_num_sequences < self.num_sequences:
-                print(f"Multipath file too short num_sequences: {self.num_sequences:d} mp_num_sequences: {mp_num_sequences:d}")
-                quit()
+            self.H_num_sequences = self.H.shape[0] // self.H_sequence_length
+            if self.H_num_sequences < self.num_sequences:
+                print(f"dataloader: Number sequences in multipath H file less than feature file:")
+                print(f"dataloader:   num_sequences: {self.num_sequences:d} H_num_sequences: {self.H_num_sequences:d}")
+                print(f"dataloader:   If H is large enough to represent the range of channels this is probably OK, we'll re-use H sequences as we train .....")
         else:
-            self.H = np.ones((self.num_sequences*self.mp_sequence_length,Nc))
-        print(f"dataloader: sequence_length: {self.sequence_length:d} num_sequences: {self.num_sequences:d} mp_sequence_length: {mp_sequence_length:d}")
-        print(self.features.shape, self.H.shape)
+            # dummy multipath model that is equivalent to AWGN
+            self.H_num_sequences = 100
+            self.H = np.ones((self.H_num_sequences*self.H_sequence_length,Nc))
+
+        # optionally set up rate Fs multipath model
+        self.G_sequence_length = G_sequence_length
+        self.G_num_sequences = 0
+        if len(g_file):
+            self.G = np.reshape(np.fromfile(g_file, dtype=np.csingle), (-1, 2))
+            # first row is hf gain factor
+            mp_gain = np.real(self.G[0,0])
+            self.G = mp_gain*self.G[1:,:]
+            self.G_num_sequences = self.G.shape[0] // self.G_sequence_length
+            if self.H_num_sequences < self.num_sequences:
+                print(f"dataloader: Number sequences in multipath G file less than feature file:")
+                print(f"dataloader:   num_sequences: {self.num_sequences:d} G_num_sequences: {self.G_num_sequences:d}")
+                print(f"dataloader:   If G is large enough to represent the range of channels this is probably OK, we'll re-use G sequences as we train .....")
+
+        # summary of datasets loaded
+        print(f"dataloader: sequence_length..: {self.sequence_length:d} num_sequences: {self.num_sequences:d} features.shape: {self.features.shape}")
+        print(f"dataloader: H_sequence_length: {self.H_sequence_length:d} H_num_sequences: {self.H_num_sequences:d} H.shape: {self.H.shape}")
+        if self.G_num_sequences > 0:
+            print(f"dataloader: G_sequence_length: {self.G_sequence_length:d} G_num_sequences: {self.G_num_sequences:d} G.shape: {self.G.shape}")
 
     def __len__(self):
         return self.num_sequences
 
     def __getitem__(self, index):
         features = self.features[index * self.sequence_length: (index + 1) * self.sequence_length, :]
-        H = self.H[index * self.mp_sequence_length: (index + 1) * self.mp_sequence_length, :]
 
-        return features,H
+        # deal with H_num_sequences < num_sequences, by re-using H sequences
+        h_index = index % (self.H_num_sequences - 1)
+        H = self.H[h_index * self.H_sequence_length: (h_index + 1) * self.H_sequence_length, :]
+
+        G = np.zeros((1,2))
+        if self.G_num_sequences > 0:
+            # deal with G_num_sequences < num_sequences, by re-using G sequences
+            g_index = index % (self.G_num_sequences - 1)
+            G = self.G[g_index * self.G_sequence_length: (g_index + 1) * self.G_sequence_length, :]
+
+        return features,H,G

@@ -50,6 +50,7 @@ parser.add_argument('--EbNodB', type=float, default=0, help='BPSK Eb/No in dB')
 parser.add_argument('--range_EbNo', action='store_true', help='Use a range of Eb/No during training')
 parser.add_argument('--range_EbNo_start', type=float, default=-6.0, help='starting value for Eb/No during training')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath file, rate Rs time steps by Nc carriers .f32 format')
+parser.add_argument('--g_file', type=str, default="", help='path to rate Fs multipath file, ...G1G2... .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--freq_rand', action='store_true', help='random phase and freq offset for each sequence')
 parser.add_argument('--gain_rand', action='store_true', help='random rx gain -20 .. +20dB, SNR unchanged')
@@ -127,19 +128,13 @@ checkpoint['state_dict']    = model.state_dict()
 
 # dataloader
 Nc = model.Nc
-mp_sequence_length = model.num_timesteps_at_rate_Rs(sequence_length)
+H_sequence_length = model.num_timesteps_at_rate_Rs(sequence_length)
+G_sequence_length = model.num_timesteps_at_rate_Fs(H_sequence_length)
 
-checkpoint['dataset_args'] = (feature_file, sequence_length, mp_sequence_length, Nc)
+checkpoint['dataset_args'] = (feature_file, sequence_length, H_sequence_length, Nc, G_sequence_length)
 checkpoint['dataset_kwargs'] = {'enc_stride': model.enc_stride}
-dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file)
+dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file, g_file = args.g_file)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
-
-# default rate Fs multipath model G1=1, G2=0
-num_timesteps_at_rate_Rs = model.num_timesteps_at_rate_Rs(sequence_length)
-num_timesteps_at_rate_Fs = model.num_timesteps_at_rate_Fs(num_timesteps_at_rate_Rs)
-print(sequence_length,num_timesteps_at_rate_Rs,num_timesteps_at_rate_Fs)
-G = torch.ones((1,num_timesteps_at_rate_Fs,2), dtype=torch.complex64)
-G[:,:,1] = 0
 
 # optimizer
 params = [p for p in model.parameters() if p.requires_grad]
@@ -155,7 +150,7 @@ if __name__ == '__main__':
     model.move_device(device)
 
     # -----------------------------------------------------------------------------------------------
-    # run through dataset once with current model but training disabled, to gather loss ve EqNo stats
+    # run through dataset once with current model but training disabled, to gather loss v EqNo stats
     # -----------------------------------------------------------------------------------------------
     if len(args.plot_EqNo):
         # TODO: move this to a function
@@ -168,7 +163,7 @@ if __name__ == '__main__':
 
         with torch.no_grad():
             with tqdm.tqdm(dataloader, unit='batch') as tepoch:
-                for i, (features,H) in enumerate(tepoch):
+                for i, (features,H,G) in enumerate(tepoch):
                     features = features.to(device)
                     H = H.to(device)
                     G = G.to(device)
@@ -203,7 +198,7 @@ if __name__ == '__main__':
 
         # Plot loss against EqNodB for final epoch, using log of loss and Eq/No for
         # each sequence.  We group losses into 1dB Eq/No bins, kind of like a histogram.
-            EqNodB_min = int(np.ceil(np.min(EqNodB_loss[:,0])))
+        EqNodB_min = int(np.ceil(np.min(EqNodB_loss[:,0])))
         EqNodB_max = int(np.ceil(np.max(EqNodB_loss[:,0])))
         EqNodB_mean_loss = np.zeros((EqNodB_max-EqNodB_min,2))
         # group the losses from training into 1dB wide bins, and find mean for that bin
@@ -246,35 +241,21 @@ if __name__ == '__main__':
             plt.figure(1)
             
         with tqdm.tqdm(dataloader, unit='batch') as tepoch:
-            for i, (features,H) in enumerate(tepoch):
+            for i, (features,H,G) in enumerate(tepoch):
 
                 optimizer.zero_grad()
                 features = features.to(device)
                 H = H.to(device)
-                G = G.to(device)
-                output = model(features,H,G)
+                if len(args.g_file):
+                    G = G.to(device)
+                    output = model(features,H,G)
+                else:
+                    output = model(features,H)
                 loss_by_batch = distortion_loss(features, output["features_hat"])
                 total_loss = torch.mean(loss_by_batch)
                 total_loss.backward()
                 optimizer.step()
                 scheduler.step()
-
-                if len(args.plot_EqNo):
-                    # collect running Eq/No stats, measured Eq/No and loss for each sequence in batch
-                    if args.rate_Fs:
-                        tx = output["tx"].cpu().detach().numpy()
-                        S = np.mean(np.abs(tx)**2,axis=1)
-                        N = output["sigma"][:,0]**2                          # noise power in B=Fs
-                        CNodB_meas = 10*np.log10(S*model.Fs/N)               # S/N = S/(NoB) = S/(NoFs), C = S, C/No = SFs/N
-                        EqNodB_meas = CNodB_meas - 10*np.log10(model.Rs*model.Nc)
-                        #print(S[:10])
-                    else:
-                        tx_sym = output["tx_sym"].cpu().detach().numpy()
-                        Eq_meas = np.mean(np.abs(tx_sym)**2,axis=(1,2))
-                        No = output["sigma"][:,0,0]**2
-                        EqNodB_meas = 10*np.log10(Eq_meas/No)
-                    EqNodB_loss[i*batch_size:(i+1)*batch_size,0] = EqNodB_meas
-                    EqNodB_loss[i*batch_size:(i+1)*batch_size,1] = loss_by_batch.cpu().detach().numpy()                       
 
                 running_total_loss += float(total_loss.detach().cpu())
                 

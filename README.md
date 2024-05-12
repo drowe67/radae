@@ -1,3 +1,7 @@
+# Radio Autoencoder - RADAE
+
+A hybrid Machine Learning/DSP system for sending speech over HF radio channels.  The RADAE encoder takes vocoder features such as pitch, short term spectrum and voicing and generates a sequence of analog PSK symbols.  These are placed on OFDM carriers and sent over the HF radio channel. The decoder takes the received PSK symbols and produces vocoder features that can be sent to a speech decoder.  The system is trained to minimise the distortion of the vocoder features over HF channels.  Compared to classical DSP approaches to digital voice, the key innovation is jointly performing transformation, prediction, quantisation, channel coding, and modulation in the ML network.
+
 # Quickstart
 
 To Tx and Rx RADAE signal over the air using stored wavefiles you just need these sections:
@@ -34,6 +38,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | radio_ae.tex/pdf | Latex documenation |
 | ota_test.sh | Script to automate Over The Air (OTA) testing |
 | Radio Autoencoder Waveform Design.ods | Working for OFDM waveform, inclduing pilot and cyclic prefix overheads |
+| compare_models.sh | Builds loss versus Eq/No curves for models to objectively compare |
 
 # Installation
 
@@ -265,10 +270,13 @@ This section is optional - pre-trained models that run on a standard laptop CPU 
 | model05 | practical OFDM with 120ms modem frame, 4ms CP and pilots, reduced Rs', 1dB improvement, mooneer sample | Fs | 240320_m5_Fs | 
 | model05 | HF OTA tests of up to 2000km, including weak signal, EMI, NVIS | Fs | 240326_ota_hf | 
 | model09 | repeat of model05 as a sanity check, similar loss v Eq/No | Rs | |
-| model10 | First attempt at dim=40 1D bottelneck, AWGN, poor audio quality, relatively high loss v Eq/No, square constellation | Rs | |
-| model11 | dim=40 with 2D bottelneck #1, AWGN good audio quality, similar to model05, good loss v Eq/No, circular constellation | Rs | |
-| model12 | dim=40 with 2D bottelneck #2, a more sensible --range_EbNo_start 0, improved loss v Eq/No, circular constellation | Rs | |
-| model13 | dim=80 with 2D bottelneck on rate Fs, 0.5db PAPR, loss > m5, but sounds OK | Fs | |
+| model10 | First attempt at dim=40 1D bottleneck, AWGN, poor audio quality, relatively high loss v Eq/No, square constellation | Rs | |
+| model11 | dim=40 with 2D bottleneck #1, AWGN, good audio quality, similar to model05, good loss v Eq/No, circular constellation | Rs | |
+| model12 | dim=40 with 2D bottleneck #2, AWGN, a more sensible --range_EbNo_start 0, improved loss v Eq/No, circular constellation | Rs | |
+| model13 | dim=80 with 2D bottleneck 3 on rate Fs, AWGN, 0.5db PAPR, loss > m5, a few dB poorer at low SNR, very similar at high SNR | Fs | |
+| model14 | dim=80 with 2D bottleneck 3 on rate Fs, 10 hour --h_file h_nc20_test.f32 --range_EbNo_start 0, 0.7dB PAPR, "accident" as it introduces phase distortion with no EQ, but does a reasonable job (however speech quality < m5), handles phase and small freq offsets with no pilots, worth exploring further | Fs | |
+| model15 | repeat of model05/09 with 250 hour --h_file h_nc20_train_mpp.f32, after refactoring dataloader, loss v epoch curve v close to model09, ep 100 loss 0.150 | Rs | |
+| model16 | repeat of model05/09 with 10 hour --h_file h_nc20_test.f32, testing short h file, ep 100 loss 0.149 | Rs | |
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 

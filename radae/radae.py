@@ -648,7 +648,7 @@ class RADAE(nn.Module):
             EbNo = 10**(EbNodB/10)
             
             if self.bottleneck == 3:
-                # determine sigma assuming rms power var(tx) = 1 (will be a few dB less due to PA backoff)
+                # determine sigma assuming rms power var(tx) = 1 (actually a fraction of a dB less in practice)
                 S = 1
                 sigma = (S*self.Fs/(EbNo*self.Rb))**(0.5)
             else:
