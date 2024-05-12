@@ -133,7 +133,7 @@ G_sequence_length = model.num_timesteps_at_rate_Fs(H_sequence_length)
 
 checkpoint['dataset_args'] = (feature_file, sequence_length, H_sequence_length, Nc, G_sequence_length)
 checkpoint['dataset_kwargs'] = {'enc_stride': model.enc_stride}
-dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file, g_file = args.g_file)
+dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file, g_file = args.g_file, rate_Fs = args.rate_Fs)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
 # optimizer

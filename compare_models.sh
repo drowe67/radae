@@ -20,14 +20,12 @@ function run_model() {
 #run_model model11 40  --q_opt                              # tanh applied to |z|
 #run_model model12 40  --bottleneck 2  --range_EbNo_start 0 # tanh applied to |z|, --range_EbNo_start 0
 #run_model model13 80  --bottleneck 3  --rate_Fs            # tanh applied to |tx|
-run_model model14 80  --bottleneck 3  --rate_Fs            # tanh applied to |tx|
+#run_model model14 80  --bottleneck 3  --rate_Fs            # tanh applied to |tx|
 
 # TODO - some bash functions to generate plots with less work
 echo "radae_plots; loss_EqNo_plot('loss_EqNo_models_1',
                                   'model05_loss_EqNodB.txt','m5 dim 80 mpp 1D #1', \
-                                  'model10_loss_EqNodB.txt','m10 dim 40 awgn 1D', \
-                                  'model11_loss_EqNodB.txt','m11 dim 40 awgn 2D #1', \
-                                  'model12_loss_EqNodB.txt','m12 dim 40 awgn 2D #2', \
+                                  'model13_loss_EqNodB.txt','m13 dim 80 awgn 2D |tx|', \
                                   'model14_loss_EqNodB.txt','m14 dim 80 mpp 2D |tx| #2' \
                                   ); \
      quit" | octave-cli -qf

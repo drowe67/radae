@@ -43,7 +43,8 @@ class RADAEDataset(torch.utils.data.Dataset):
                 num_used_features=20,
                 num_features=36,
                 h_file="",            # rate Rs multipath channel samples
-                g_file=""             # rate Fs multipath channel samples
+                g_file="",            # rate Fs multipath channel samples
+                rate_Fs = False
                 ):
 
         self.sequence_length = sequence_length
@@ -51,7 +52,8 @@ class RADAEDataset(torch.utils.data.Dataset):
         self.features = np.reshape(np.fromfile(feature_file, dtype=np.float32), (-1, num_features))
         self.features = self.features[:, :num_used_features]
         self.num_sequences = self.features.shape[0] // sequence_length
-        
+        self.rate_Fs = rate_Fs
+
         # optionally set up rate Rs multipath model
         self.H_sequence_length = H_sequence_length
         if len(h_file):
@@ -79,7 +81,12 @@ class RADAEDataset(torch.utils.data.Dataset):
                 print(f"dataloader: Number sequences in multipath G file less than feature file:")
                 print(f"dataloader:   num_sequences: {self.num_sequences:d} G_num_sequences: {self.G_num_sequences:d}")
                 print(f"dataloader:   If G is large enough to represent the range of channels this is probably OK, we'll re-use G sequences as we train .....")
-
+        if len(g_file) == 0 and self.rate_Fs:
+            # no mulipath sample file provided, but we are still running at rate Fs, so create a benign (AWGN) model
+            self.G_num_sequences = 100
+            self.G = np.zeros((self.G_num_sequences*self.G_sequence_length,2), dtype=np.csingle)
+            self.G[:,0] = 1
+        
         # summary of datasets loaded
         print(f"dataloader: sequence_length..: {self.sequence_length:d} num_sequences: {self.num_sequences:d} features.shape: {self.features.shape}")
         print(f"dataloader: H_sequence_length: {self.H_sequence_length:d} H_num_sequences: {self.H_num_sequences:d} H.shape: {self.H.shape}")
@@ -96,10 +103,12 @@ class RADAEDataset(torch.utils.data.Dataset):
         h_index = index % (self.H_num_sequences - 1)
         H = self.H[h_index * self.H_sequence_length: (h_index + 1) * self.H_sequence_length, :]
 
-        G = np.zeros((1,2))
         if self.G_num_sequences > 0:
             # deal with G_num_sequences < num_sequences, by re-using G sequences
             g_index = index % (self.G_num_sequences - 1)
             G = self.G[g_index * self.G_sequence_length: (g_index + 1) * self.G_sequence_length, :]
+        else:
+            # If G not used (e.g. rate Rs), passing small dummy G doubles training speed
+            G = np.zeros((1,2))
 
         return features,H,G
