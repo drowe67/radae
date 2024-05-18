@@ -613,7 +613,7 @@ class RADAE(nn.Module):
             #print(tx.shape, G.shape)
             tx_mp = tx*G[:,:,0]
             tx_mp[:,d:] = tx_mp[:,d:] + tx[:,:-d]*G[:,:-d,1]
-            # normalise power through multipath model
+            # normalise power through multipath model (used at inference so SNR is correct)
             tx_power = torch.mean(torch.abs(tx)**2)
             tx_mp_power = torch.mean(torch.abs(tx_mp)**2)
             mp_gain = (tx_power/tx_mp_power)**0.5
@@ -676,7 +676,16 @@ class RADAE(nn.Module):
             rx_sym = torch.matmul(rx_dash, self.Wfwd)
         else:
             # Simulate channel at one sample per QPSK symbol (Fs=Rs) --------------------------------
-            
+
+            if self.bottleneck == 3:
+                # Hybrid time & freq domain model - we need time domain to apply bottleneck
+                # IDFT to transform Nc carriers to M time domain samples
+                tx = torch.matmul(tx_sym, self.Winv)
+                # Apply time domain magnitude bottleneck
+                tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
+                # DFT to transform M time domain samples to Nc carriers
+                tx_sym = torch.matmul(tx, self.Wfwd)
+                
             if self.phase_offset:
                 phase = self.phase_offset*torch.ones_like(tx_sym)
                 phase = torch.exp(1j*phase)
@@ -686,12 +695,18 @@ class RADAE(nn.Module):
             # preserve tx_sym variable so we can return it to measure power after multipath channel
             tx_sym = tx_sym * H
 
+            # AWGN noise ------------------
             # note noise power sigma**2 is split between real and imag channels
-            sigma = 10**(-EbNodB/20)
+            if self.bottleneck == 3:
+                EbNo = 10**(EbNodB/10)
+                sigma = self.M/((2*self.Nc*EbNo)**(0.5))
+                sigma = sigma/(2**0.5)
+            else:
+                sigma = 10**(-EbNodB/20)
             n = sigma*torch.randn_like(tx_sym)
             rx_sym = tx_sym + n
             
-        # strip out the pilots if present (TODO pass to ML decoder network, lots of useful information)
+        # strip out the pilots if present (future work: pass to ML decoder network, lots of useful information)
         if self.pilots:
             rx_sym_pilots = torch.reshape(rx_sym,(num_batches, num_modem_frames, self.Ns+1, self.Nc))
 

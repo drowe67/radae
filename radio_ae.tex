@@ -153,6 +153,7 @@ E_q = E[|q_i|^2] = \frac{1}{K}\sum_{i=0}^{K-1}|q_i|^2
 \end{equation}
 Note the variance function should not be used to calculate $E_q$, as we cannot guarantee $q_i$ is zero mean. As each QPSK symbol contains 2 BPSK symbols, the energy is split evenly:
 \begin{equation}
+\label{eq:Eb_Es}
 E_b = E_q/2
 \end{equation}
 For example if the symbol amplitude is $A=1, E_b=A^2=1$, then $E_q=1+1=2$.
@@ -538,6 +539,38 @@ The RADAE ML CPU hasn't been measured accurately but runs in real time in Python
 
 The classical DSP OFDM processing requires less resources but hasn't been accurately measured at this time.  Comparable modems at similar symbol rates run on a fraction of Cortex-M micro-controllers. Unlike the ML modules, it currently requires floating point hardware.  For a first approximation we assume OFDM resource requirements are small compared to the ML modules.
 
+\section{Training for low PAPR}
+
+To train for low PAPR we constrain the magnitude of the complex rate $F_s$ time domain transmit signal $|x(n)| \le 1$.  We wish to train for a range of SNRs so require an expression to compute $\sigma$ for a given target $E_b/N_0$.
+
+Consider a hybrid ML-DSP system where we constrain $|x(n)|$ in the time domain, but perform all other processing at rate $R_s$ in the frequency domain using classical DSP OFDM techniques.  After the bottleneck is applied to $x(n)$, we DFT to transform back to the frequency domain, apply a magnitude only multipath model, than add AWGN noise to simulate the received frequency domain symbols $\hat{q}$.
+
+Given this model, we wish to inject calibrated AWGN noise. Consider one time domain OFDM carrier $x(n)$ with magnitude $B$. We take the length $M$ DFT to determine the magnitude $A_q$ of the corresponding frequency domain PSK symbol:
+\begin{equation}
+\begin{split}
+x(n) &= Be^{j(2 \pi n k/M + \theta)} \\
+X(k) &= \sum_{n=0}^{M-1} x(n) e^{-j(2 \pi n k/M)} \\
+     &= BMe^{j\theta} \\
+|X(k)| &= A_q = BM
+\end{split}
+\end{equation}
+
+We have $N_c$ carriers, and the bottleneck constrains the total time domain power of all carriers to be approximately 1:
+\begin{equation}
+\begin{split}
+N_cB^2 &= 1 \\
+B        &= \frac{1}{\sqrt{N_c}}
+\end{split}
+\end{equation}
+Using (\ref{eq:Eb_Es}) and (\ref{eq:noise_sigma}) we can find an expression for $\sigma$ given $E_b/N_0$:
+\begin{equation}
+\begin{split}
+\sigma &= \frac{A_b}{\sqrt{E_b/N_0}} \\
+\sigma &= \frac{A_q}{\sqrt{2 E_b/N_0}} \\
+\sigma &= \frac{M}{\sqrt{2 N_c E_b/N_0}} 
+\end{split}
+\end{equation}
+The factor of $\sqrt{2}$ on the denominator accounts for $A_q$ being the amplitude of a PSK symbol, whereas (\ref{eq:noise_sigma}) is configured for BPSK symbols. For example if $A_b=1$, $A_q=\sqrt{2}$.
 \section{Glossary}
 
 \begin{table} [H]

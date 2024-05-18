@@ -133,3 +133,32 @@ function print_eps_restore(fn,sz,textfontsize,linewidth)
   restore_fonts(textfontsize,linewidth);
 end
 
+% test expressions for sigma calculation with rate Fs bottleneck
+function test_rate_Fs_bottleneck
+  Nc=10; Fs=8000; Rs=50; M=Fs/Rs;
+  B = 1/sqrt(Nc);
+  x = zeros(1,M);
+  n = 0:M-1;
+  for c=1:Nc
+    x += B*exp(j*2*pi*n*c/M);
+  end
+
+  % check average rate Fs power == 1. Power is energy per unit time. Note this
+  % test waveform will have a high peak power, as no attempt has been made to
+  % manage PAPR
+  Px = sum(abs(x).^2)/M;
+  printf("Power of time domain signal Px: %f (target: 1.0)\n",Px);
+  
+  % check symbol amplitude for one carrier
+  c = 1;
+  Aq = abs(sum(x .* exp(-j*2*pi*n*c/M)));
+  printf("Amplitude of carrier %d freq domain PSK symbol Aq: %f (target %f)\n",c, Aq,B*M);
+
+  % check symbol SNR
+  EbNo_target = 1;
+  sigma = M/sqrt(2*Nc*EbNo_target);
+  EqNo = (Aq^2)/(sigma^2);
+  EbNo = 0.5*EqNo;
+  printf("EbNo: %f (target: %f)\n",EbNo,EbNo_target);
+  
+end
