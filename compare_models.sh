@@ -14,6 +14,7 @@ function run_model() {
         --range_EbNo --plot_EqNo ${model} --initial-checkpoint ${model}/checkpoints/checkpoint_epoch_100.pth $@
 }
 
+# TODO automate here; Makefile like behaivour to generate model${model}_loss_EqNodB.txt files if they don't exist
 #run_model model05 80                                       # known good reference
 #run_model model09 80                                       # should be a copy of 05
 #run_model model10 40                                       # first attempt at dim=40
@@ -21,42 +22,28 @@ function run_model() {
 #run_model model12 40  --bottleneck 2  --range_EbNo_start 0 # tanh applied to |z|, --range_EbNo_start 0
 #run_model model13 80  --bottleneck 3  --rate_Fs            # tanh applied to |tx|
 #run_model model14 80  --bottleneck 3  --rate_Fs            # tanh applied to |tx|
+#run_model model17 80  --bottleneck 3  --range_EbNo_start -9                      # mixed rate Rs with tanh applied to |tx|
+#run_model model18 40  --bottleneck 3                     # mixed rate Rs with tanh applied to |tx|
 
-# TODO - some bash functions to generate plots with less work
-echo "radae_plots; loss_EqNo_plot('loss_EqNo_models_1',
-                                  'model05_loss_EqNodB.txt','m5 dim 80 mpp 1D #1', \
-                                  'model13_loss_EqNodB.txt','m13 dim 80 awgn 2D |tx|', \
-                                  'model14_loss_EqNodB.txt','m14 dim 80 mpp 2D |tx| #2' \
-                                  ); \
-     quit" | octave-cli -qf
- 
-echo "radae_plots; loss_EqNo_plot('loss_EqNo_models',
-                                  'model05_loss_EqNodB.txt','m5 dim 80 mpp 1D #1', \
-                                  'model09_loss_EqNodB.txt','m9 dim 80 mpp 1D #2', \
-                                  'model10_loss_EqNodB.txt','m10 dim 40 awgn 1D', \
-                                  'model11_loss_EqNodB.txt','m11 dim 40 awgn 2D #1', \
-                                  'model12_loss_EqNodB.txt','m12 dim 40 awgn 2D #2', \
-                                  'model13_loss_EqNodB.txt','m13 dim 80 awgn 2D |tx| #1' \
-                                 ); \
-     quit" | octave-cli -qf
-echo "radae_plots; loss_CNo_plot('loss_CNo_models_1', 50, 1, \
-                                 'model05_loss_EqNodB.txt',80,'m5 dim 80 mpp 1D #1', \
-                                 'model10_loss_EqNodB.txt',40,'m10 dim 40 awgn 1D', \
-                                 'model11_loss_EqNodB.txt',40,'m12 dim 40 awgn 2D #1', \
-                                 'model12_loss_EqNodB.txt',40,'m12 dim 40 awgn 2D #2'); \
-     quit" | octave-cli -qf
+model_list='05 14 17 18'
+model_dim=(80 80 80 40)
+declare -a model_legend=("m05 dim 80 mpp 1D #1" \
+                         "m14 dim 80 mpp 2D Fs |tx|" \
+                         "m17 dim 80 mpp 2D |tx| mixed" \
+                         "m18 dim 40 mpp 2D |tx| mixed")
 
-echo "radae_plots; loss_CNo_plot('loss_CNo_models', 50, 1, \
-                                 'model05_loss_EqNodB.txt',80,'m5 dim 80 mpp 1D #1', \
-                                 'model10_loss_EqNodB.txt',40,'m10 dim 40 awgn 1D', \
-                                 'model12_loss_EqNodB.txt',40,'m12 dim 40 awgn 2D #2', \
-                                 'model13_loss_EqNodB.txt',80,'m13 dim 80 awgn 2D |tx| #1', \
-                                 'model14_loss_EqNodB.txt',80,'m14 dim 80 awgn 2D |tx| #2'); \
-     quit" | octave-cli -qf
-echo "radae_plots; loss_CNo_plot('loss_SNR_models', 50, 3000, \
-                                 'model05_loss_EqNodB.txt',80,'m5 dim 80 mpp 1D #1', \
-                                 'model10_loss_EqNodB.txt',40,'m10 dim 40 awgn 1D', \
-                                 'model12_loss_EqNodB.txt',40,'m12 dim 40 awgn 2D #2',
-                                 'model13_loss_EqNodB.txt',80,'m13 dim 80 awgn 2D |tx| #1', \
-                                 'model14_loss_EqNodB.txt',80,'m14 dim 80 awgn 2D |tx| #2'); \
-     quit" | octave-cli -qf
+loss_EqNo="'loss_EqNo_models'"
+loss_CNo="'loss_CNo_models',50,1"
+loss_SNR3k="'loss_SNR3k_models',50,3000"
+i=0;
+for model in $model_list
+  do
+    loss_EqNo="${loss_EqNo},'model${model}_loss_EqNodB.txt','${model_legend[i]}'"
+    CNo=",'model${model}_loss_EqNodB.txt',${model_dim[i]},'${model_legend[i]}'"
+    loss_CNo="${loss_CNo}${CNo}"
+    loss_SNR3k="${loss_SNR3k}${CNo}"
+    ((i++))
+  done
+echo "radae_plots; loss_EqNo_plot(${loss_EqNo}); quit" | octave-cli -qf
+echo "radae_plots; loss_CNo_plot(${loss_CNo}); quit" | octave-cli -qf
+echo "radae_plots; loss_CNo_plot(${loss_SNR3k}); quit" | octave-cli -qf
