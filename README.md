@@ -169,7 +169,7 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
    ```
    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_100dB.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
    ```
-   Lets generate a MPP sample `rx_100dB_mpp.f32` with no noise, and check the scatter diagram is a noice cross shape with BER close to 0:
+   Lets generate a MPP sample `rx_100dB_mpp.f32` with no noise, and check the scatter diagram is a nice cross shape with BER close to 0:
    ```
    ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null --rate_Fs --pilots --write_rx rx_100dB_mpp.f32 --EbNodB 100 --cp 0.004 --pilot_eq --eq_ls --ber_test --g_file g_mpp.f32
    ```
@@ -277,6 +277,8 @@ This section is optional - pre-trained models that run on a standard laptop CPU 
 | model14 | dim=80 with 2D bottleneck 3 on rate Fs, 10 hour --h_file h_nc20_test.f32 --range_EbNo_start 0, 0.7dB PAPR, "accident" as it introduces phase distortion with no EQ, but does a reasonable job (however speech quality < m5), handles phase and small freq offsets with no pilots, worth exploring further | Fs | |
 | model15 | repeat of model05/09 with 250 hour --h_file h_nc20_train_mpp.f32, after refactoring dataloader, loss v epoch curve v close to model09, ep 100 loss 0.150 | Rs | |
 | model16 | repeat of model05/09 with 10 hour --h_file h_nc20_test.f32, testing short h file, ep 100 loss 0.149 | Rs | |
+| model17 | `--bottleneck 3 --h_file h_nc20_train_mpp.f32` mixed rate Rs with time domain bottelneck 3, ep 100 loss 0.112 | Rs | |
+| model18 | `--latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3` like model17 but dim 40, ep 100 loss 0.123 | Rs | |
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 

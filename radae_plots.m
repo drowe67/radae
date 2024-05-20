@@ -18,13 +18,15 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
     if length(png_fn)
         print("-dpng",sprintf("%s_scatter_3d.png",png_fn));
     end
+    figure(3); clf; hist(abs(s));
+    var(abs(s))
 
     if length(rx_fn)
         rx=load_f32(rx_fn,1); 
         rx=rx(1:2:end)+j*rx(2:2:end); 
-        figure(3); clf; plot(rx); title('rx Scatter (IQ)');
-        figure(4); clf; plot(abs(rx(1:1000))); xlabel('Time (samples)'); ylabel('|rx|');
-        figure(5); clf; plot_specgram(rx, Fs=8000, 0, 3000);
+        figure(4); clf; plot(rx); title('rate Fs Scatter (IQ)'); mx = max(abs(rx))*1.5; axis([-mx mx -mx mx]);
+        figure(5); clf; plot(abs(rx(1:1000))); xlabel('Time (samples)'); ylabel('|rx|');
+        figure(6); clf; plot_specgram(rx, Fs=8000, 0, 3000);
         peak = max(abs(rx).^2);
         av = mean(abs(rx).^2);
         PAPRdB = 10*log10(peak/av);

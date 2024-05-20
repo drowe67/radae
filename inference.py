@@ -54,6 +54,7 @@ parser.add_argument('--h_file', type=str, default="", help='path to rate Rs mult
 parser.add_argument('--g_file', type=str, default="", help='path to rate Fs Doppler spread samples, ...G1G2G1G2... .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--write_rx', type=str, default="", help='path to output file of rate Fs rx samples in ..IQIQ...f32 format')
+parser.add_argument('--write_tx', type=str, default="", help='path to output file of rate Fs tx samples in ..IQIQ...f32 format')
 parser.add_argument('--phase_offset', type=float, default=0, help='phase offset in rads')
 parser.add_argument('--freq_offset', type=float, help='freq offset in Hz')
 parser.add_argument('--time_offset', type=int, default=0, help='sampling time offset in samples')
@@ -164,7 +165,7 @@ if __name__ == '__main__':
    SNR = EbNo*(model.Rb/B)
    SNRdB = 10*np.log10(SNR)
    CNodB = 10*np.log10(EbNo*model.Rb)
-   print(f"          Eb/No   C/No     SNR3k  Rb'   Eq    PAPR")
+   print(f"          Eb/No   C/No     SNR3k  Rb'    Eq     PAPR")
    print(f"Target..: {args.EbNodB:6.2f}  {CNodB:6.2f}  {SNRdB:6.2f}  {int(model.Rb_dash):d}")
 
    # Lets check actual Eq/No, Eb/No and SNR, and monitor assumption |z| ~ 1, especially for multipath.
@@ -183,7 +184,7 @@ if __name__ == '__main__':
       EbNodB_meas = CNodB_meas + 10*np.log10(model.M/(model.Fs*model.Nc*model.bps))
       SNRdB_meas = CNodB_meas - 10*np.log10(B)               # SNR in B=3000
       PAPRdB = 20*np.log10(np.max(np.abs(tx))/np.sqrt(S))
-      print(f"Measured: {EbNodB_meas:6.2f}  {CNodB_meas:6.2f}  {SNRdB_meas:6.2f}             {PAPRdB:5.2f}")
+      print(f"Measured: {EbNodB_meas:6.2f}  {CNodB_meas:6.2f}  {SNRdB_meas:6.2f}                {PAPRdB:5.2f}")
    else:
       # rate Rs simulation
       tx_sym = output["tx_sym"].cpu().detach().numpy()
@@ -194,7 +195,13 @@ if __name__ == '__main__':
       Rq = Rs*Nc
       SNRdB_meas = EqNodB_meas + 10*np.log10(Rq/B)
       #print(EqNodB_meas,SNRdB_meas,Eq_meas)
-      print(f"Measured: {EqNodB_meas-3:6.2f}          {SNRdB_meas:6.2f}       {Eq_meas:5.2f}")
+      if model.bottleneck == 3:
+         tx = output["tx"].cpu().detach().numpy()
+         S = np.mean(np.abs(tx)**2)
+         PAPRdB = 20*np.log10(np.max(np.abs(tx))/np.sqrt(S))
+         print(f"Measured: {EqNodB_meas-3:6.2f}          {SNRdB_meas:6.2f}       {Eq_meas:7.2f} {PAPRdB:5.2f}")
+      else:
+         print(f"Measured: {EqNodB_meas-3:6.2f}          {SNRdB_meas:6.2f}       {Eq_meas:7.2f}")
 
    features_hat = output["features_hat"]
    features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
@@ -211,3 +218,9 @@ if __name__ == '__main__':
       rx = output["rx"].cpu().detach().numpy().flatten().astype('csingle')
       rx.tofile(args.write_rx)
    
+   # write complex valued rate Fs time domain tx samples
+   if len(args.write_tx) and args.bottleneck == 3:
+      rx = output["tx"].cpu().detach().numpy().flatten().astype('csingle')
+      rx.tofile(args.write_tx)
+   
+

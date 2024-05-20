@@ -106,20 +106,24 @@ We wish to simulate a bandpass AWGN channel at baseband ($\omega=0$).  This impl
 
 Note that even at baseband we must use complex valued quantities for the signal and noise to represent a bandpass signal of bandwidth $B$.  As a counter-example, given a fixed sample rate $B$ and noise power $N$, a real valued noise sequence can only represent a bandwidth of $B/2$ which results in doubling the noise density $N_0=N/(B/2)=2N_0$ compared to a complex valued noise sequence with the same power.   
 
-The energy of each BPSK symbol $E_b$ is the signal power $S$ divided by the symbol rate $R_b=1/T_b$.  The noise per unit bandwidth is the total noise power $N$ divided by the bandwidth $B$ of the system.  If we are simulating at one sample per symbol, $B=R_b$:
+The energy of each PSK symbol $E_q$ is the signal power $S$ divided by the PSK symbol rate $R_q$.  The noise per unit bandwidth is the total noise power $N$ divided by the bandwidth $B$ of the system.  If we are simulating at one sample per PSK symbol, $B=R_q$:
 \begin{equation}
 \begin{split}
-\frac{E_b}{N_0} &= \frac{S/R_b}{N/R_b} \\
+\frac{E_q}{N_0} &= \frac{S/R_q}{N/R_q} \\
                 &= \frac{S}{N} \\
-                &= \frac{A^2}{\sigma^2}
+                &= \frac{A_q^2}{\sigma^2}
 \end{split}
 \end{equation}
-where $A$ is the amplitude of each BPSK symbol and $\sigma^2=N$ is the variance of the complex valued noise (mean noise energy per sample).  Given a set point $E_b/N_0$:
+where $A_q$ is the amplitude of each PSK symbol and $\sigma^2=N$ is the variance of the complex valued noise (mean noise energy per sample).  Given a set point $E_q/N_0$:
 \begin{equation}
 \label{eq:noise_sigma}
-\sigma = \frac{A}{\sqrt{E_b/N_0}}
+\sigma = \frac{A_q}{\sqrt{E_q/N_0}}
 \end{equation}
-The complex noise sample $r_i$ can be generated as:
+If we use a BPSK system model, we note the amplitude of each BPSK symbol $A_b = A_q/\sqrt{2}$, and the energy of each BPSK symbol $E_b=E_q/2$.  Subsituting into \ref{eq:noise_sigma}:
+\begin{equation}
+\sigma = \frac{A_b}{\sqrt{E_b/N_0}}
+\end{equation}
+Which allows us to simulate using a set point $E_b/N_0$.  The complex noise sample $r_i$ can be generated as:
 \begin{equation}
 r_i = \frac{\sigma}{\sqrt{2}}(\mathcal{N}_{2i}(0,1) + j\mathcal{N}_{2i+1}(0,1))
 \end{equation}
