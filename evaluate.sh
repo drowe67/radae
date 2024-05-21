@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 #
 # Evaluate a model and sample wave file using AWGN and MPP multipath models, with SSB at same C/No
 
@@ -8,10 +8,22 @@ PATH=${PATH}:${OPUS}:${CODEC2}
 
 source utils.sh
 
-if [ $# -lt 4 ]; then
+function print_help {
     echo "usage:"
-    echo "  ./evaluate.sh model sample.[s16|wav] out_dir EbNodB [g_file]"
+    echo "  ./evaluate.sh model sample.[s16|wav] out_dir EbNodB [options]"
+    echo ""
+    echo "Eb/No (dB) is a set point that controls the SNR, adjust by experiment"
+    echo
+    echo "-d                        Enable debug mode"
+    echo "--g_file G_FILE           Simulate multipath channel with rate Fs fading file (default AWGN channel)"
+    echo "--bottleneck BOTTLENECK   bottleneck to apply"
+    echo "--latent-dim LATENT_DIM   Model z dimension (deafult 80)"
+    echo "--peak                    Equalise peak power of RADAE and SSB (default is equal RMS power)"
     exit 1
+}
+
+if [ $# -lt 4 ]; then
+    print_help
 fi
 if [ ! -f $1 ]; then
     echo "can't find $1"
@@ -26,17 +38,50 @@ model=$1
 fullfile=$2
 out_dir=$3
 EbNodB=$4
-g_file=$5
+shift; shift; shift; shift;
+inference_args=""
+ch_args=""
+channel="awgn"
+peak=0
 
-# set up command lines to simulate multipath
-if [ ! -z $g_file ]; then
-    radae_mp="--g_file ${g_file}"
-    cp $g_file fast_fading_samples.float
-    ssb_mp="--fading_dir . --mpp"
-    channel="mpp"
-else
-    channel="awgn"
-fi
+while [[ $# -gt 0 ]]
+do
+key="$1"
+case $key in
+    -d)
+        set -x	
+        shift
+    ;;
+    --g_file)
+        channel="mpp"
+        inference_args="${inference_args} --g_file ${2}"	
+        cp $g_file fast_fading_samples.float
+        ch_args="${ch_args} --fading_dir . --mpp"
+        shift
+        shift
+    ;;
+    --latent_dim)
+        inference_args="${inference_args} --latent_dim ${2}"	
+        shift
+        shift
+    ;;
+   --bottleneck)
+        inference_args="${inference_args} --bottleneck ${2}"	
+        shift
+        shift
+    ;;
+    --peak)
+        peak=1	
+        shift
+    ;;
+    -h)
+        print_help	
+    ;;
+    *)
+        print_help
+    ;;
+esac
+done
 
 filename=$(basename -- "$fullfile")
 filename="${filename%.*}"
@@ -46,8 +91,10 @@ mkdir -p ${out_dir}
 # radae simulation
 rx=$(mktemp).f32
 log=$(./inference.sh ${model} ${fullfile} ${out_dir}/${filename}_${EbNodB}dB_${channel}.wav \
-      --EbNodB ${EbNodB} --write_rx ${rx} --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 $radae_mp)
+      --EbNodB ${EbNodB} --write_rx ${rx} --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 ${inference_args})
 CNodB=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f3)
+PAPRdB=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f5)
+PNodB=$(python3 -c "PNodB=${CNodB}+${PAPRdB}; print(\"%f\" % PNodB) ")
 
 # listen to the modem signal, just keep real channel, filter to simulate listening on a SSB Rx
 sox -r 8k -e float -b 32 -c 2 ${rx} -c 1 -e signed-integer -b 16 ${out_dir}/${filename}_${EbNodB}dB_${channel}_rx.wav sinc 0.3-2.7k remix 1 0
@@ -60,13 +107,20 @@ speech_comp_noise=$(mktemp).s16
 sox $fullfile -r 8000 -t .s16 -c 1 $speech_8k
 analog_compressor $speech_8k $speech_comp 6
 
-# add noise at same C/No as radae signal, note we measure RMS value after multipath fading if enabled
-rms=$(measure_rms $speech_comp $ssb_mp --after_fade)
-# 60dB term is due to scaling in ch.c
-No=$(python3 -c "import numpy as np; C=10*np.log10(${rms}*${rms}); No=C-${CNodB}-60; print(\"%f\" % No) ")
-ch $speech_comp $speech_comp_noise --No ${No} $ssb_mp --after_fade
+if [ $peak -eq 1 ]; then
+  # TODO - do we need after fade type normalisation here??
+  peak=$(measure_peak $speech_comp $ch_args)
+  # 60dB term is due to scaling in ch.c
+  No=$(python3 -c "import numpy as np; P=10*np.log10(${peak}*${peak}); No=P-${PNodB}-60; print(\"%f\" % No) ")
+else
+  # add noise at same C/No as radae signal, note we measure RMS value after multipath fading if enabled
+  rms=$(measure_rms $speech_comp $ch_args --after_fade)
+  # 60dB term is due to scaling in ch.c
+  No=$(python3 -c "import numpy as np; C=10*np.log10(${rms}*${rms}); No=C-${CNodB}-60; print(\"%f\" % No) ")
+fi
+ch $speech_comp $speech_comp_noise --No ${No} $ch_args --after_fade
 
-# adjust peak level to be similar to radae output
+# adjust peak ouput audio level to be similar to radae output
 radae_peak=$(measure_peak ${out_dir}/${filename}_${EbNodB}dB_${channel}.wav)
 ssb_peak=$(measure_peak $speech_comp_noise)
 gain=$(python3 -c "gain=${radae_peak}/${ssb_peak}; print(\"%f\" % gain)")
@@ -86,7 +140,7 @@ We simulate SSB by compressing the signal, and adjusting the C/No to be the same
 General format is filename_EbNodB_channel_proc
 
 filename: the name of the sample e.g. david.wav -> david
-EbNodB..: for example 0dB
+CNodB..: for example 30dB
 channel.: awgn or mpp (multipath poor)
 proc....: suffix describing processing applied to file:
           none: receiver output audio from radio autoencoder
