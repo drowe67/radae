@@ -158,8 +158,7 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
    ```
    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_0dB.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
    ```
-   The acquisition system detected and corrected the 2Hz frequency offset, and the -20dB (--gain 0.1) magntitude offset, and the resulting BER was
-   about the same at 0.095.
+   The acquisition system detected and corrected the 2Hz frequency offset, and the -20dB (--gain 0.1) magntitude offset, and the resulting BER was about the same at 0.095.
 
 1. Typical HF multipath channels evolve at around 1 Hz, so it's a good idea to use longer samples to get a meaningful average.  First generate the reference `z_100dB.f32` file for `all.wav`:
    ```
