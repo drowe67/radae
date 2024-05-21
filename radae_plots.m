@@ -19,8 +19,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
         print("-dpng",sprintf("%s_scatter_3d.png",png_fn));
     end
     figure(3); clf; hist(abs(s));
-    var(abs(s))
-
+ 
     if length(rx_fn)
         rx=load_f32(rx_fn,1); 
         rx=rx(1:2:end)+j*rx(2:2:end); 
@@ -30,8 +29,11 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
         peak = max(abs(rx).^2);
         av = mean(abs(rx).^2);
         PAPRdB = 10*log10(peak/av);
-        printf("Pav: %f PAPRdB: %5.2f\n", av, PAPRdB);
-    end
+        peak = max(abs(rx(1:160)).^2);
+        av = mean(abs(rx(1:160)).^2);
+        PilotPAPRdB = 10*log10(peak/av);
+        printf("Pav: %f PAPRdB: %5.2f PilotPAPRdB: %5.2f\n", av, PAPRdB, PilotPAPRdB);
+     end
 endfunction
 
 function multipath_example()
