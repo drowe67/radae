@@ -578,7 +578,11 @@ class RADAE(nn.Module):
             tx_sym = torch.reshape(tx_sym,(num_batches, num_modem_frames, self.Ns, self.Nc))
             tx_sym_pilots = torch.zeros(num_batches, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64,device=tx_sym.device)
             tx_sym_pilots[:,:,1:self.Ns+1,:] = tx_sym
-            tx_sym_pilots[:,:,0,:] = self.P
+            pilot_gain = 1.0
+            if self.bottleneck == 3:
+                pilot_backoff = 10**(-1/10)
+                pilot_gain = pilot_backoff*self.M/(self.Nc**0.5)
+            tx_sym_pilots[:,:,0,:] = pilot_gain*self.P
             num_timesteps_at_rate_Rs = num_timesteps_at_rate_Rs + num_modem_frames
             tx_sym = torch.reshape(tx_sym_pilots,(num_batches, num_timesteps_at_rate_Rs, self.Nc))
 

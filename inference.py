@@ -68,6 +68,10 @@ parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude 
 parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
 args = parser.parse_args()
 
+if len(args.h_file):
+   if args.rate_Fs:
+      print("WARNING: --g_file should be used to define the multipath model with --rate_Fs")
+
 # set visible devices
 os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_visible_devices
 
@@ -214,13 +218,19 @@ if __name__ == '__main__':
       z_hat.tofile(args.write_latent)
    
    # write complex valued rate Fs time domain rx samples
-   if len(args.write_rx) and args.rate_Fs:
-      rx = output["rx"].cpu().detach().numpy().flatten().astype('csingle')
-      rx.tofile(args.write_rx)
-   
+   if len(args.write_rx):
+      if args.rate_Fs:
+         rx = output["rx"].cpu().detach().numpy().flatten().astype('csingle')
+         rx.tofile(args.write_rx)
+      else:
+         print("\nWARNING: Need --rate_Fs for --write_rx")
+      
    # write complex valued rate Fs time domain tx samples
-   if len(args.write_tx) and args.bottleneck == 3:
-      rx = output["tx"].cpu().detach().numpy().flatten().astype('csingle')
-      rx.tofile(args.write_tx)
+   if len(args.write_tx):
+      if args.bottleneck == 3:
+         rx = output["tx"].cpu().detach().numpy().flatten().astype('csingle')
+         rx.tofile(args.write_tx)
+      else:
+         print("\nWARNING: Need --bottleneck 3 for --write_tx")
    
 
