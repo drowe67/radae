@@ -399,7 +399,7 @@ Take aways:
 \item Simulation and initial HF OTA results show surprisingly good performance on multipath channels where the period of the fading (100's of ms) is large compared to the 40ms analysis window of the ML code.  Classical DSP would require a 1000-2000 ms interleaver (introducing a algorithmic delay of the same order) for similar robustness to fading on these channels.
 \item Unlike regular PSK, we require magnitude estimation and correction, due to the limited dynamic range of ML systems and the wide dynamic range of radio signals.
 \item The \emph{Candidate 2} OFDM frame design \cite{FreeDV-032} contains three latent vectors $z$, so introduces an algorithmic delay of 120ms, due to OFDM framing considerations.  This is tolerable in a PTT radio system, but ideally should be reduced.
-\item Substituting classical PSK digital symbols and measuring BER is a very useful way to test sync, and to allows us to verity $E_b/N_0$ using BER measurements during development.
+\item Substituting classical PSK digital symbols and measuring BER is a very useful way to test sync subsystems, and to allows us to verify $E_b/N_0$ using BER measurements during development.
 \item Much of our development effort to date has concerned with the ``is this too good to be true" question; to date significantly more effort was put into noise calibration, synchronisation algorithms and testing than the actual ML.
 \end{enumerate}
 
@@ -543,7 +543,21 @@ The RADAE ML CPU hasn't been measured accurately but runs in real time in Python
 
 The classical DSP OFDM processing requires less resources but hasn't been accurately measured at this time.  Comparable modems at similar symbol rates run on a fraction of Cortex-M micro-controllers. Unlike the ML modules, it currently requires floating point hardware.  For a first approximation we assume OFDM resource requirements are small compared to the ML modules.
 
-\section{Training for low PAPR}
+\section{Training and Testing Low PAPR Models}
+
+\subsection{Mixed Rate Model}
+
+We wish to train a model to minimise PAPR over multipath channels.  Our previous models (e.g. \emph{model05}) were trained in the frequency domain at rate $R_s$ with the bottleneck applied to the magnitude of real valued symbols $z_i$.  Due to the neat properties of OFDM, we could ignore issues like phase/amplitude equalisation and ISI during training, and just apply magnitude only fading to each PSK symbol.  After training, classical DSP techniques were then wrapped around the core ML encoder to develop a practical, rate $F_s$ digital voice system.
+
+We reasoned that a time domain bottleneck applied to the magnitiude of the complex time domain signal would encourage the network to maximise the RMS power (and hence minimse the PAPR) given the channel noise and peak power constraint of the bottleneck.
+
+To train a model to optimise PAPR we need to apply a bottleneck in the time domain, and simultaneously apply a multipath channel model.  Applying the multipath model in the time domain introduces phase rotations and ISI, which would then require equalisation and removal inside the training loop.  While possible this would require significant additional CPU and algorithmic complexity using classical DSP or ML based equalisation, and require training at the higher rate $F_s$ sample rate ($F_s/R_s=160$ in our use case).
+
+An alternative, ``mixed rate" training model was therefore developed.  The transmit PSK symbols are IDFTed to the time domain, the bottleneck applied, then immediately DFTed back to the frequency domain.  The multipath model is then applied on the frequency domain PSK symbols.  Training using this model resulted in signals with a PAPR of around 0.5 dB and S/N performance close to the reference non-PAPR optimised 1-D bottleneck \emph{model05}.
+ 
+After training, pilot symbols and a cyclic prefix are concatentaed with the ML signal carrying the payload voice information.  Classical PAPR compression techniques (gain and compression) are applied to reduce the pilot signal PAPR to around 3dB. As the pilot sequence is much shorter than the payload sequence in each ``modem frame", the overall PAPR remains beneath 1dB.
+
+\subsection{Calibrated Noise}
 
 To train for low PAPR we constrain the magnitude of the complex rate $F_s$ time domain transmit signal $|x(n)| \le 1$.  We wish to train for a range of SNRs so require an expression to compute $\sigma$ for a given target $E_b/N_0$.
 
@@ -566,7 +580,7 @@ N_cB^2 &= 1 \\
 B        &= \frac{1}{\sqrt{N_c}}
 \end{split}
 \end{equation}
-Using (\ref{eq:Eb_Es}) and (\ref{eq:noise_sigma}) we can find an expression for $\sigma$ given $E_b/N_0$:
+Using (\ref{eq:noise_sigma}) we can find an expression for $\sigma$ given $E_b/N_0$:
 \begin{equation}
 \begin{split}
 \sigma &= \frac{A_b}{\sqrt{E_b/N_0}} \\
@@ -575,6 +589,32 @@ Using (\ref{eq:Eb_Es}) and (\ref{eq:noise_sigma}) we can find an expression for 
 \end{split}
 \end{equation}
 The factor of $\sqrt{2}$ on the denominator accounts for $A_q$ being the amplitude of a PSK symbol, whereas (\ref{eq:noise_sigma}) is configured for BPSK symbols. For example if $A_b=1$, $A_q=\sqrt{2}$.
+
+These expressions were used as a baseline for applying noise to PAPR optimised models. It was found the measured $Eq/N_0$ were around 2.5dB higher than the targets.  Our theory is that in practice the symbol magnitudes $A_q$ vary across carriers and time and are best described as a model-dependant distribution (probably Rayleigh) rather than a constant.  Nevertheless the expressions in this section are close enough for practical training over a range of SNRs, and for inference where we measure and report the actual SNR.
+
+\subsection{Simulated Results}
+
+The \emph{evaluate.sh} script was used to genereate samples for informal listening, and to compare to SSB (Table \ref{tab:papr_ssb}). $E_b/N_0$ controls the channel $C/No$ but does not map exactly to it due to model-model variations. In practice we measure $C/No$ and PAPR for each run of the RADAE simulation, then determine the amount of noise to inject for the SSB sample to obtain the target $P/N_0$. When applying a multipath model, the transmit power is normalised over the simulation run such that the average carrier power $C$ is the same before and after the multipath model is applied.
+
+The earlier, \emph{model05} RADAE waveform has a PAPR of 9-10dB.  Based on our experience of classical DSP OFDM waveforms we reason that by applying classical DSP PAPR reduction techniques this could be reduced to 5dB, with a 1dB loss in performance, leading to an effective PAPR of 6dB, similar to the SSB signal.  We have not tested this configuration, but reason that \emph{model17} will have a 6dB advantage over \emph{model05} for the same transmitter peak power.
+
+\begin{table} [H]
+\centering
+\begin{tabular}{l c r r r r r}
+ \hline
+ Waveform             & Channel & $E_b/N_0$ & PAPR & $C/N_0$ & $P/N_0$ & SNR \\
+ \hline
+ Radio Autoencoder    & AWGN & 16 & 0.80 & 48.21 & 49.01 & 13.44 \\
+ Single Sideband      & AWGN & 16 & 6.66 & 42.35 & 49.91 & 7.58  \\
+ Radio Autoencoder    & MPP & 16 & 0.80 & 48.21 & 49.01 & 13.44 \\
+ Single Sideband      & MPP & 16 & 6.66 & 42.35 & 49.91 & 7.58  \\
+ \hline
+\end{tabular}
+\caption{Comparison of PAPR optimised RADAE \emph{model17} to SSB. The low PAPR RADAE waveform shows an improvement of around 6dB in receiver SNR over SSB, although the relationship between speech quality and SNR is of course different for both receivers.}
+\label{tab:papr_ssb}
+\end{table}
+
+
 \section{Glossary}
 
 \begin{table} [H]
@@ -584,7 +624,7 @@ The factor of $\sqrt{2}$ on the denominator accounts for $A_q$ being the amplitu
  Symbol & Explanation & Units \\
  \hline
  $B$ & noise or signal bandwidth & Hz \\
- $C$ & Carrier (transmitter) power $C=S$ for this study \\
+ $C$ & RMS carrier power $C=S$ for this study \\
  $C/N_0$ & Carrier power/spectral noise density \\
  $d$ & dimension of latent vector $\bf{z}$ \\
  $E_b/N_0$ & energy per BPSK symbol on spectral noise density \\
@@ -592,7 +632,7 @@ The factor of $\sqrt{2}$ on the denominator accounts for $A_q$ being the amplitu
  $N$ & total noise power & Watts \\
  $N_c$ & Number of carriers  \\
  $N_0$ & Noise power in 1 Hz of bandwidth  \\
- $P/N_0$ & Peak transmitter power/spectral noise density \\
+ $P/N_0$ & Peak power/spectral noise density \\
  $\bf{q}$ & vector of QPSK symbols \\ 
  $q_i$ & single QPSK symbol, element of $\bf{q}$ \\ 
  $R_b$ & BPSK symbol rate & symbols/second \\

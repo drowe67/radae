@@ -610,6 +610,7 @@ class RADAE(nn.Module):
             # Amplifier (PA) that saturates at abs(tx) ~ 1
             if self.bottleneck == 3:
                 tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
+            tx_before_channel = tx
 
             # rate Fs multipath model
             d = self.d_samples
@@ -739,7 +740,7 @@ class RADAE(nn.Module):
             "features_hat" : features_hat,
             "z_hat"  : z_hat,
             "tx_sym" : tx_sym,
-            "tx"     : tx,
+            "tx"     : tx_before_channel,
             "rx"     : rx,
             "sigma"  : sigma.cpu().numpy(),
             "EbNodB" : EbNodB.cpu().numpy()

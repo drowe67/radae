@@ -108,17 +108,19 @@ sox $fullfile -r 8000 -t .s16 -c 1 $speech_8k
 analog_compressor $speech_8k $speech_comp 6
 
 if [ $peak -eq 1 ]; then
-  # TODO - do we need after fade type normalisation here??
-  peak=$(measure_peak $speech_comp $ch_args)
-  # 60dB term is due to scaling in ch.c
-  No=$(python3 -c "import numpy as np; P=10*np.log10(${peak}*${peak}); No=P-${PNodB}-60; print(\"%f\" % No) ")
+  # measure PAPR based on SSB signal before multipath fading applied, as fading messes with PAPR
+  papr=$(measure_cpapr $speech_comp)
+  # Measure RMS value (after multipath fading if enabled), so we normalise the ups and downs of fading
+  rms=$(measure_rms $speech_comp $ch_args --after_fade)
+  # Now calculate peak power P required to get target P/No, the 60dB term is due to scaling in ch.c
+  No=$(python3 -c "import numpy as np; CdB=10*np.log10(${rms}*${rms}); PdB=CdB+${papr}; No=PdB-${PNodB}-60; print(\"%f\" % No) ")
 else
   # add noise at same C/No as radae signal, note we measure RMS value after multipath fading if enabled
   rms=$(measure_rms $speech_comp $ch_args --after_fade)
   # 60dB term is due to scaling in ch.c
-  No=$(python3 -c "import numpy as np; C=10*np.log10(${rms}*${rms}); No=C-${CNodB}-60; print(\"%f\" % No) ")
+  No=$(python3 -c "import numpy as np; CdB=10*np.log10(${rms}*${rms}); No=CdB-${CNodB}-60; print(\"%f\" % No) ")
 fi
-ch $speech_comp $speech_comp_noise --No ${No} $ch_args --after_fade
+ch $speech_comp $speech_comp_noise --No ${No} --clip 16384 --after_fade $ch_args
 
 # adjust peak ouput audio level to be similar to radae output
 radae_peak=$(measure_peak ${out_dir}/${filename}_${EbNodB}dB_${channel}.wav)
