@@ -93,6 +93,7 @@ rx=$(mktemp).f32
 log=$(./inference.sh ${model} ${fullfile} ${out_dir}/${filename}_${EbNodB}dB_${channel}.wav \
       --EbNodB ${EbNodB} --write_rx ${rx} --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 ${inference_args})
 CNodB=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f3)
+SNRdB=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f4)
 PAPRdB=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f5)
 PNodB=$(python3 -c "PNodB=${CNodB}+${PAPRdB}; print(\"%f\" % PNodB) ")
 
@@ -120,9 +121,20 @@ else
   # 60dB term is due to scaling in ch.c
   No=$(python3 -c "import numpy as np; CdB=10*np.log10(${rms}*${rms}); No=CdB-${CNodB}-60; print(\"%f\" % No) ")
 fi
-ch $speech_comp $speech_comp_noise --No ${No} --clip 16384 --after_fade $ch_args
+ch_log=$(mktemp)
+ch $speech_comp $speech_comp_noise --No ${No} --clip 16384 --after_fade $ch_args 2>${ch_log}
+# extract measured values
+snr=$(cat $ch_log| grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
+cno=$(cat $ch_log| grep "C/No" | tr -s ' ' | cut -d' ' -f5)
+pno=$(python3 -c "PNodB=${cno}+${papr}; print(\"%f\" % PNodB) ")
 
-# adjust peak ouput audio level to be similar to radae output
+# README of RADAE & SSB from measured values
+readme=${out_dir}/${filename}_${EbNodB}dB_${channel}_zREADME.txt
+printf "Waveform           EbNo  PAPR  C/No  P/No  SNR\n" > $readme
+printf "Radio Autoencoder: %5.2f %5.2f %5.2f %5.2f %5.2f\n" $EbNodB $PAPRdB $CNodB $PNodB $SNRdB >> $readme
+printf "SSB..............: %5.2f %5.2f %5.2f %5.2f %5.2f\n" $EbNodB $papr $cno $pno $snr >> $readme
+
+# adjust peak output audio level to be similar to radae output, to ease listening
 radae_peak=$(measure_peak ${out_dir}/${filename}_${EbNodB}dB_${channel}.wav)
 ssb_peak=$(measure_peak $speech_comp_noise)
 gain=$(python3 -c "gain=${radae_peak}/${ssb_peak}; print(\"%f\" % gain)")
@@ -150,6 +162,7 @@ proc....: suffix describing processing applied to file:
           spec: spectrogram of "rx" signal
           ssb.: the received SSB "off air" signal, what SSB sounds like at the same C/No.  Compare to "none"
           ssb_spec: The spectrogram of the received SSB signal
+          README: Measured C/No, PAPR, P/No and SNR for RADAE and SSB
 zz_filename: The input speech file
 zz_filename_ssb: The compressed and bandlimited SSB Tx signal
 

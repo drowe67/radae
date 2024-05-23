@@ -103,7 +103,7 @@ make ch mksine tlininterp
 1. Multipath demo at approx 0dB B=3000 Hz SNR. First generate multipath channel samples using GNU Octave (only need to be generated once): 
    ```
    octave:85> Rs=50; Nc=20; multipath_samples("mpp", Rs, Rs, Nc, 60, "h_mpp.f32")
-   $ ./inference.sh model03/checkpoints/checkpoint_epoch_100.pth ~/LPCNet/wav/all.wav tmp.wav --EbNodB 3 --write_latent z_hat.f32 --h_file h_mpp.f32
+   $ ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth ~/LPCNet/wav/all.wav tmp.wav --EbNodB 3 --write_latent z_hat.f32 --h_file h_mpp.f32
    ```
    Then use Octave to plot scatter diagram using z_hat latents from channel:
    ```
@@ -119,6 +119,20 @@ make ch mksine tlininterp
    octave:87> radae_plots; do_plots('z.f32','rx.f32')
    ```
    
+# Evaluate script
+
+Automates joint simulation of SSB and RADAE, generates wave files and spectrograms.  Can adjust noise for equal C/No or equal P/No.
+
+1. Run `peter.wav`` through RADAE and SSB using Eb/No=16dB set point, calibrating SSB noise such that P/No is the same for both samples
+   ```
+   ./evaluate.sh model17/checkpoints/checkpoint_epoch_100.pth wav/peter.wav 240521 16 --bottleneck 3 -d --peak
+   ```
+1. As above but MPP channel using Eb/No=6dB set point
+   ```
+   ./evaluate.sh model17/checkpoints/checkpoint_epoch_100.pth wav/peter.wav 240521 6 --bottleneck 3 -d --peak --g_file g_nc20_test.f32
+   ```
+
+
 # Seperate Tx and Rx
 
 We separate the system into a transmitter `inference.py` and stand alone receiver `rx.py`.  Theses examples test the OFDM waveform, including pilot symbol insertion, cyclic prefix, least squares phase EQ, and coarse magnitude EQ.
