@@ -54,14 +54,18 @@ case $key in
     ;;
     --g_file)
         channel="mpp"
+        if [ ! -f $2 ]; then
+            echo "can't find $2"
+            exit 1
+        fi
         inference_args="${inference_args} --g_file ${2}"	
-        cp $g_file fast_fading_samples.float
+        cp ${2} fast_fading_samples.float
         ch_args="${ch_args} --fading_dir . --mpp"
         shift
         shift
     ;;
     --latent_dim)
-        inference_args="${inference_args} --latent_dim ${2}"	
+        inference_args="${inference_args} --latent-dim ${2}"	
         shift
         shift
     ;;
@@ -149,22 +153,22 @@ sox -t .s16 -r 8000 -c 1 $speech_comp ${out_dir}/zz_${filename}_ssb.wav
 cat > ${out_dir}/zz_README.txt <<'endreadme'
 Radio Autoencoder (radae) samples that demonstrate the system compared to analog SSB
 
-We simulate SSB by compressing the signal, and adjusting the C/No to be the same as the radae signal.  We also adjust the peak level of the Rx "ssb" signal to be about the same as the radae output speech, to make listening convenient. 
+We simulate SSB by compressing the signal, and adjusting the C/No (or optionally the P/No) to be the same as the radae signal.  We also adjust the peak level of the Rx "ssb" signal to be about the same as the radae output speech, to make listening convenient. 
 
 General format is filename_EbNodB_channel_proc
 
 filename: the name of the sample e.g. david.wav -> david
-CNodB..: for example 30dB
+EbNodB..: for example 6dB
 channel.: awgn or mpp (multipath poor)
 proc....: suffix describing processing applied to file:
           none: receiver output audio from radio autoencoder
           rx..: the radae modulated received signal, what you would hear "off air" on a SSB receiver before decoding
           spec: spectrogram of "rx" signal
-          ssb.: the received SSB "off air" signal, what SSB sounds like at the same C/No.  Compare to "none"
+          ssb.: the received SSB "off air" signal, what SSB sounds like at the same C/No or P/No.  Compare to "none"
           ssb_spec: The spectrogram of the received SSB signal
-          README: Measured C/No, PAPR, P/No and SNR for RADAE and SSB
+          README: Measured C/No, PAPR, P/No and SNR3k for RADAE and SSB
 zz_filename: The input speech file
-zz_filename_ssb: The compressed and bandlimited SSB Tx signal
+zz_filename_ssb: The compressed and bandlimited SSB Tx signal, perfect SSB with no noise
 
 Use a file manager to present the samples as a matrix of icons, each row at the same Eb/No.  Then click to listen or view spectrograms.
 

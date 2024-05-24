@@ -304,6 +304,7 @@ class RADAE(nn.Module):
         self.ber_test = ber_test
         self.multipath_delay = multipath_delay 
         self.rate_Fs = rate_Fs
+        assert bottleneck == 1 or bottleneck == 2 or bottleneck == 3
         self.bottleneck = bottleneck
         self.phase_offset = phase_offset
         self.freq_offset = freq_offset
@@ -580,13 +581,13 @@ class RADAE(nn.Module):
             tx_sym_pilots[:,:,1:self.Ns+1,:] = tx_sym
             pilot_gain = 1.0
             if self.bottleneck == 3:
-                pilot_backoff = 10**(-1/10)
+                pilot_backoff = 10**(-2/20)
                 pilot_gain = pilot_backoff*self.M/(self.Nc**0.5)
             tx_sym_pilots[:,:,0,:] = pilot_gain*self.P
             num_timesteps_at_rate_Rs = num_timesteps_at_rate_Rs + num_modem_frames
             tx_sym = torch.reshape(tx_sym_pilots,(num_batches, num_timesteps_at_rate_Rs, self.Nc))
 
-        tx = None
+        tx_before_channel = None
         rx = None
         if self.rate_Fs:
             num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*self.M

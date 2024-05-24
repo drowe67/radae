@@ -424,11 +424,11 @@ We start with the assumption that we have a transmitter of $C$ watts, and an AWG
 
 The $C/N_0$ (in dBHz) at the demodulator input of a terrestrial radio receiver is given by:
 \begin{equation}
-\frac{C}{N_0} = P - PAPR - L_{path} - NF + 174
+\frac{C}{N_0} = P_{tx} - PAPR - L_{path} - NF + 174
 \end{equation}
-where $P$ is the maximum output power of the transmitter power amplifier, $PAPR$ is the Peak to Average Power Ratio of the waveform, $L_{path}$ is the path loss, $NF$ is the noise figure of the receiver.  For example consider a 400 MHz FM hand held radio over a 1km urban (non line of site) path.  The radio has a 1W (30 dBm) power output, $L_{path}=120$ dB, with noise dominated by ambient EMI such that $NF=10$ dB. $C/N_0 = 30 - 0 - 120 - 10 + 174 = 74$ dBHz, sufficient for good quality speech (Table \ref{tab:waveforms_good}).
+where $P_{tx}$ is the peak output power of the transmitter, $PAPR$ is the Peak to Average Power Ratio of the waveform, $L_{path}$ is the path loss, $NF$ is the noise figure of the receiver.  For example consider a 400 MHz FM hand held radio over a 1km urban (non line of site) path.  The radio has a 1W (30 dBm) power output, $L_{path}=120$ dB, with noise dominated by ambient EMI such that $NF=10$ dB. $C/N_0 = 30 - 0 - 120 - 10 + 174 = 74$ dBHz, sufficient for good quality speech (Table \ref{tab:waveforms_good}).
 
-Note that $C/N_0$ at the demodulator is a function of the waveform PAPR.  With all other link properties (e.g. peak PA power, noise figure, path loss) being equal, a high PAPR reduces the $C/N_0$ available at the receiver.  We effectively ``back off" the transmitter power from the maximum $P$ by the PAPR.  We assume the PA is capable of sustaining $P$ watts indefinitely, i.e. it is only the waveform choice that lowers the average power. As PAPR varies by waveform and has an impact on the $C/N_0$ available the receiver, it should be included in any metric for comparison of waveforms.  We define $P/N_0$ as:
+Note that $C/N_0$ at the demodulator is a function of the waveform PAPR.  With all other link properties (e.g. peak output power, noise figure, path loss) being equal, a high PAPR reduces the $C/N_0$ available at the receiver.  We effectively ``back off" the transmitter power from the maximum $P$ by the PAPR.  We assume the PA is capable of sustaining $P$ watts indefinitely, i.e. it is only the waveform choice that lowers the average power. As PAPR varies by waveform and has an impact on the $C/N_0$ available the receiver, it should be included in any metric for comparison of waveforms.  We define the peak power to spectral noise density ratio $P/N_0$ as:
 \begin{equation}
 P/N_0 = C/N_0 + PAPR
 \end{equation} 
@@ -553,9 +553,97 @@ We reasoned that a time domain bottleneck applied to the magnitiude of the compl
 
 To train a model to optimise PAPR we need to apply a bottleneck in the time domain, and simultaneously apply a multipath channel model.  Applying the multipath model in the time domain introduces phase rotations and ISI, which would then require equalisation and removal inside the training loop.  While possible this would require significant additional CPU and algorithmic complexity using classical DSP or ML based equalisation, and require training at the higher rate $F_s$ sample rate ($F_s/R_s=160$ in our use case).
 
-An alternative, ``mixed rate" training model was therefore developed.  The transmit PSK symbols are IDFTed to the time domain, the bottleneck applied, then immediately DFTed back to the frequency domain.  The multipath model is then applied on the frequency domain PSK symbols.  Training using this model resulted in signals with a PAPR of around 0.5 dB and S/N performance close to the reference non-PAPR optimised 1-D bottleneck \emph{model05}.
- 
-After training, pilot symbols and a cyclic prefix are concatentaed with the ML signal carrying the payload voice information.  Classical PAPR compression techniques (gain and compression) are applied to reduce the pilot signal PAPR to around 3dB. As the pilot sequence is much shorter than the payload sequence in each ``modem frame", the overall PAPR remains beneath 1dB.
+An alternative, ``mixed rate" training model was therefore devised (Figure \ref{fig:mixed_rate_training}).  The transmit PSK symbols are IDFTed to the time domain, the bottleneck applied, then immediately DFTed back to the frequency domain.  The multipath model is then applied on the frequency domain PSK symbols.  Training using this model resulted in signals with a PAPR of around 0.5 dB and S/N performance close to the reference non-PAPR optimised 1-D bottleneck \emph{model05}.
+
+\begin{figure}[H]
+\caption{Mixed Rate training for PAPR minimisation and multipath channels. The magnitude of the complex rate $F_s$ time domain signal $x(n)$ passes through a bottleneck simulating the PA compression, before being converted back to the frequency domain where the multipath model $H$ and is applied and noise added using efficient rate $R_s$ OFDM techniques.}
+\label{fig:mixed_rate_training}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.5cm]
+
+\node [input] (rinput) {};
+\node [block, below of=rinput,node distance=1cm] (radae_enc) {\emph{radae} Encoder};
+\node [block, below of=radae_enc,node distance=2cm] (qpsk_map) {PSK map};
+\node [block, below of=qpsk_map,node distance=2cm] (idft) {IDFT};
+
+\node [block, right of=idft,node distance=3cm] (bottleneck) {$tanh(|x|)$};
+\node [block, right of=bottleneck,node distance=3cm] (DFT) {DFT};
+
+\node [block, above of=dft,node distance=2cm] (multipath) {$H$};
+\node [circ, above of=multipath,node distance=2cm, text width=0.5cm] (awgn) {$+$};
+\node [input, left of=awgn,node distance=1cm] (noise) {};
+\node [block, above of=awgn,node distance=2cm] (qpsk_demap) {PSK demap};
+\node [block, above of=qpsk_demap,node distance=2cm] (radae_dec) {\emph{radae} Decoder};
+\node [output, right of=radae_dec,node distance=2cm] (routput) {};
+
+\draw [->] node[above,text width=1cm] {$\bf{f}$} (rinput) -- (radae_enc);
+\draw [->] (radae_enc) -- node[left, text width=0.5cm] {$\bf{z}$} (qpsk_map);
+\draw [->] (qpsk_map) -- node[left, text width=0.5cm] {$\bf{q}$} (idft); 
+\draw [->] (idft) -- node[below, text width=0.5cm] {$F_s$} (bottleneck); 
+\draw [->] (bottleneck) -- node[below, text width=0.5cm] {$F_s$} (dft);
+\draw [->] (dft) -- (multipath); 
+\draw [->] (multipath) -- (awgn); 
+\draw [->] (noise) -- node[left, text width=0.75cm] {$\bf{r_i}$} (awgn); 
+\draw [->] (awgn)--  node[left, text width=0.5cm] {$\hat{\bf{q}}$} (qpsk_demap); 
+\draw [->] (qpsk_demap) -- node[left, text width=0.5cm] {$\hat{\bf{z}}$} (radae_dec); 
+\draw [->] (radae_dec) -- node[above, align=right, text width=1cm] {$\hat{\bf{f}}$} (routput) ;
+
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
+After training, pilot symbols and a cyclic prefix are concatenated with each ``modem frame`` of ML symbols carrying the payload voice information (Figure \ref{fig:mixed_rate_inf}).  Classical PAPR compression techniques (gain and compression provided by the bottleneck) are applied to set the pilot signal PAPR to around 3dB. As the pilot sequence is much shorter than the payload sequence in each ``modem frame", the average PAPR remains beneath 1dB.  Given pilot symbols with a magntitude of $|p_i|=\sqrt{2}$, the pilot gain is given by:
+\begin{equation}
+p_g = \frac{M 10^{P_b/20}}{\sqrt{N_c}}
+\end{equation}
+where $P_b$ is the backoff in dB, which was set to $P_b=-2$ dB by experment.
+
+\begin{figure}[h]
+\caption{Inference time PAPR optimised system, showing integration with classical DSP OFDM components. Pilot symbols $\bf{p}$ are inserted into the modem frame with a hand tuned gain $p_g$ to adjust PAPR. The pilots are constant and known to both the Tx and Rx. A Cyclic Prefix (CP) appended to each time domain symbol provides protection from ISI. Acquisition and equalisation is perfomed using classical pilot-based DSP.}
+\label{fig:mixed_rate_inf}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.5cm]
+
+\node [input] (rinput) {};
+\node [block, below of=rinput,node distance=1cm] (radae_enc) {\emph{radae} Encoder};
+\node [block, below of=radae_enc,node distance=2cm] (qpsk_map) {QPSK map};
+\node [block, below of=qpsk_map,node distance=2cm] (ofdm_frame) {OFDM framing};
+\node [circ, right of=ofdm_frame,node distance=2cm, text width=0.5cm] (mult) {$\times$};
+\node [input, right of=mult,node distance=1cm] (pilots) {};
+\node [input, below of=mult,node distance=1cm] (pilot_gain) {};
+\node [block, below of=ofdm_frame,node distance=2cm] (idft) {IDFT};
+\node [block, below of=idft,node distance=2cm] (bottleneck) {$tanh(|x|)$};
+\node [block, below of=bottleneck,node distance=2cm] (cp) {Insert CP};
+\node [block, right of=cp,node distance=3cm] (channel) {Radio Channel};
+\node [block, right of=channel,node distance=3cm,text width=2cm] (dsp_acq) {DSP Acquisition};
+\node [block, above of=dsp_acq,node distance=2cm] (dft) {DFT};
+\node [block, above of=dft,node distance=2cm,text width=2cm] (dsp_eq) {DSP Equalisation};
+\node [block, above of=dsp_eq,node distance=2cm] (qpsk_demap) {QPSK demap};
+\node [input, left of=dsp_eq,node distance=2cm] (pilots_rx) {};
+\node [block, above of=qpsk_demap,node distance=2cm] (radae_dec) {\emph{radae} Decoder};
+\node [output, right of=radae_dec,node distance=2cm] (routput) {};
+
+\draw [->] node[above,text width=1cm] {$\bf{f}$} (rinput) -- (radae_enc);
+\draw [->] (radae_enc) -- node[left, text width=0.5cm] {$\bf{z}$} (qpsk_map);
+\draw [->] (qpsk_map) -- node[left, text width=0.5cm] {$\bf{q}$} (ofdm_frame); 
+\draw [->] (ofdm_frame)-- (idft); 
+\draw [->] (mult)-- (ofdm_frame); 
+\draw [->] (pilots) node[right, text width=0.25cm] {$\bf{p}$} -- (mult); 
+\draw [->] (pilot_gain) node[below] {$p_g$} -- (mult); 
+\draw [->] (idft) --(bottleneck); 
+\draw [->] (bottleneck) -- (cp); 
+\draw [->] (cp) -- node[below] {$F_s$} (channel); 
+\draw [->] (channel) -- node[below] {$F_s$} (dsp_acq);
+\draw [->] (dsp_acq)-- (dft); 
+\draw [->] (dft)-- (dsp_eq); 
+\draw [->] (pilots_rx) node[left, text width=0.25cm] {$\bf{p}$} -- (dsp_eq); 
+\draw [->] (dsp_eq)--  node[left, text width=0.5cm] {$\hat{\bf{q}}$} (qpsk_demap); 
+\draw [->] (qpsk_demap) -- node[left, text width=0.5cm] {$\hat{\bf{z}}$} (radae_dec); 
+\draw [->] (radae_dec) -- node[above, align=right, text width=1cm] {$\hat{\bf{f}}$} (routput) ;
+
+\end{tikzpicture}
+\end{center}
+\end{figure}
 
 \subsection{Calibrated Noise}
 
@@ -575,6 +663,7 @@ X(k) &= \sum_{n=0}^{M-1} x(n) e^{-j(2 \pi n k/M)} \\
 
 We have $N_c$ carriers, and the bottleneck constrains the total time domain power of all carriers to be approximately 1:
 \begin{equation}
+\label{eq:papr_symbol_amp}
 \begin{split}
 N_cB^2 &= 1 \\
 B        &= \frac{1}{\sqrt{N_c}}
@@ -590,11 +679,11 @@ Using (\ref{eq:noise_sigma}) we can find an expression for $\sigma$ given $E_b/N
 \end{equation}
 The factor of $\sqrt{2}$ on the denominator accounts for $A_q$ being the amplitude of a PSK symbol, whereas (\ref{eq:noise_sigma}) is configured for BPSK symbols. For example if $A_b=1$, $A_q=\sqrt{2}$.
 
-These expressions were used as a baseline for applying noise to PAPR optimised models. It was found the measured $Eq/N_0$ were around 2.5dB higher than the targets.  Our theory is that in practice the symbol magnitudes $A_q$ vary across carriers and time and are best described as a model-dependant distribution (probably Rayleigh) rather than a constant.  Nevertheless the expressions in this section are close enough for practical training over a range of SNRs, and for inference where we measure and report the actual SNR.
+These expressions were used as a baseline for applying noise to PAPR optimised models. It was found the measured $Eq/N_0$ were around 2.5dB higher than the targets.  We observed that the constellation of the trained PSK signals resemble a 2D Gaussian distribution rather than constant magnitude symbols as assumed in (\ref{eq:papr_symbol_amp}).  Our theory is that in practice the symbol magnitudes $A_q$ vary across carriers and time and are best described as a model-dependant distribution (probably Rayleigh) rather than a constant.  Nevertheless the expressions in this section are close enough for training where we sweep $E_q/N_0$ over a range of SNRs. For evaluation at inference time, we inject noise based on the expressions above as an approximate ``set point", then measure and report the actual the SNR statistics for the simulation.
 
 \subsection{Simulated Results}
 
-The \emph{evaluate.sh} script was used to genereate samples for informal listening, and to compare to SSB (Table \ref{tab:papr_ssb}). $E_b/N_0$ controls the channel $C/No$ but does not map exactly to it due to model-model variations. In practice we measure $C/No$ and PAPR for each run of the RADAE simulation, then determine the amount of noise to inject for the SSB sample to obtain the target $P/N_0$. When applying a multipath model, the transmit power is normalised over the simulation run such that the average carrier power $C$ is the same before and after the multipath model is applied.
+The \emph{evaluate.sh} script was used to genereate samples for informal listening, and to compare to SSB (Table \ref{tab:papr_ssb}). $E_b/N_0$ controls the channel $C/No$ but the relationship varies due to model-model variations. In practice we measure $C/No$ and PAPR for each run of the RADAE simulation, then determine the amount of noise to inject for the SSB sample to obtain the target $P/N_0$. When applying a multipath model, the transmit power is normalised over the simulation run such that the average carrier power $C$ is the same before and after the multipath model is applied.
 
 The earlier, \emph{model05} RADAE waveform has a PAPR of 9-10dB.  Based on our experience of classical DSP OFDM waveforms we reason that by applying classical DSP PAPR reduction techniques this could be reduced to 5dB, with a 1dB loss in performance, leading to an effective PAPR of 6dB, similar to the SSB signal.  We have not tested this configuration, but reason that \emph{model17} will have a 6dB advantage over \emph{model05} for the same transmitter peak power.
 
@@ -605,9 +694,9 @@ The earlier, \emph{model05} RADAE waveform has a PAPR of 9-10dB.  Based on our e
  Waveform             & Channel & $E_b/N_0$ & PAPR & $C/N_0$ & $P/N_0$ & SNR \\
  \hline
  Radio Autoencoder    & AWGN & 16 & 0.80 & 48.21 & 49.01 & 13.44 \\
- Single Sideband      & AWGN & 16 & 6.66 & 42.35 & 49.91 & 7.58  \\
+ Single Sideband      & AWGN & 16 & 6.66 & 42.35 & 49.01 & 7.58  \\
  Radio Autoencoder    & MPP & 16 & 0.80 & 48.21 & 49.01 & 13.44 \\
- Single Sideband      & MPP & 16 & 6.66 & 42.35 & 49.91 & 7.58  \\
+ Single Sideband      & MPP & 16 & 6.66 & 42.35 & 49.01 & 7.58  \\
  \hline
 \end{tabular}
 \caption{Comparison of PAPR optimised RADAE \emph{model17} to SSB. The low PAPR RADAE waveform shows an improvement of around 6dB in receiver SNR over SSB, although the relationship between speech quality and SNR is of course different for both receivers.}

@@ -2,6 +2,10 @@
 
 A hybrid Machine Learning/DSP system for sending speech over HF radio channels.  The RADAE encoder takes vocoder features such as pitch, short term spectrum and voicing and generates a sequence of analog PSK symbols.  These are placed on OFDM carriers and sent over the HF radio channel. The decoder takes the received PSK symbols and produces vocoder features that can be sent to a speech decoder.  The system is trained to minimise the distortion of the vocoder features over HF channels.  Compared to classical DSP approaches to digital voice, the key innovation is jointly performing transformation, prediction, quantisation, channel coding, and modulation in the ML network.
 
+## Scope 
+
+The document is a log of the authors experimental work, with enough information for the advanced experimenter to reproduce aspects of the work.  It is not intended to be a polished distribution for general use.
+
 # Quickstart
 
 To Tx and Rx RADAE signal over the air using stored wavefiles you just need these sections:
@@ -79,7 +83,7 @@ cd build_linux
 cmake -DUNITTEST=1 ..
 make ch mksine tlininterp
 ```
-(optional if using HackRF) manually compile misc/tsrc 
+(optional if using HackRF) manually compile codec2-dev/misc/tsrc.c
 
 # Inference
 
@@ -129,9 +133,12 @@ Automates joint simulation of SSB and RADAE, generates wave files and spectrogra
    ```
 1. As above but MPP channel using Eb/No=6dB set point
    ```
-   ./evaluate.sh model17/checkpoints/checkpoint_epoch_100.pth wav/peter.wav 240521 6 --bottleneck 3 -d --peak --g_file g_nc20_test.f32
+   ./evaluate.sh model17/checkpoints/checkpoint_epoch_100.pth wav/peter.wav 240521 6 --bottleneck 3 -d --peak --g_file g_mpp.f32
    ```
-
+1. With dim=40 mixed rate model, and we run Eb/No 3dB higher than a dim=80 model.  `g_nc20_mpp.f32` is a time domain fading file so works for Nc=20 and Nc=10.
+   ```
+   ./evaluate.sh model18/checkpoints/checkpoint_epoch_100.pth wav/peter.wav 240524 9 --bottleneck 3 -d --peak --latent_dim 40 --g_file g_mpp.f32
+   ```
 
 # Seperate Tx and Rx
 
@@ -262,12 +269,19 @@ This section is optional - pre-trained models that run on a standard laptop CPU 
    octave:120> radae_plots; loss_EqNo_plot("loss_models",'model05_loss_EbNodB.txt','m5_Rs_mp','model07_loss_EbNodB.txt','m7_Fs_offets','model08_loss_EbNodB.txt','m8_Fs')
    ```
 
-# Tests
+1. (May 2024) Training dim=40 mixed rate model.  Note we need the Nc=10 version of the multipath H matrices `h_nc10_train_mpp.f32`.  Bottleneck 3 is a tanh() on the magnitude of the complex rate Fs time domain samples.  We bump the range of Eb/Nos trained over by 3dB `--range_EbNo_start -3` as a 10 carrier waveform will have 3dB more energy per symbol.
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model18 --latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3 --range_EbNo --plot_loss
+   ```
+
+# Test Modes
 
 1. BER test to check simulation modem calibration `--ber_test`
 2. Fixed multipath channel test `--mp_test`.
 
 # Models & samples
+
+A log of models trained by the author.
 
 | Model | Description | Train at | Samples |
 | ---- | ---- | ---- | ---- |
@@ -290,59 +304,34 @@ This section is optional - pre-trained models that run on a standard laptop CPU 
 | model14 | dim=80 with 2D bottleneck 3 on rate Fs, 10 hour --h_file h_nc20_test.f32 --range_EbNo_start 0, 0.7dB PAPR, "accident" as it introduces phase distortion with no EQ, but does a reasonable job (however speech quality < m5), handles phase and small freq offsets with no pilots, worth exploring further | Fs | |
 | model15 | repeat of model05/09 with 250 hour --h_file h_nc20_train_mpp.f32, after refactoring dataloader, loss v epoch curve v close to model09, ep 100 loss 0.150 | Rs | |
 | model16 | repeat of model05/09 with 10 hour --h_file h_nc20_test.f32, testing short h file, ep 100 loss 0.149 | Rs | |
-| model17 | `--bottleneck 3 --h_file h_nc20_train_mpp.f32` mixed rate Rs with time domain bottelneck 3, ep 100 loss 0.112 | Rs | 210521 |
-| model18 | `--latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3` like model17 but dim 40, ep 100 loss 0.123 | Rs | |
+| model17 | `--bottleneck 3 --h_file h_nc20_train_mpp.f32` mixed rate Rs with time domain bottelneck 3, ep 100 loss 0.112 | Rs | 240521 |
+| model18 | `--latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3` like model17 but dim 40, ep 100 loss 0.123 | Rs | 240524 |
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
-# Notes
+# Notes/Issues/Futher work
 
 1. Issue: vk5dgr_test.wav sounds poorer than LPCNet/wav/all.wav - same speaker, but former much louder.
 
-1. Test: Multipath with no noise should mean speech is not impaired, as no "symbol errors".
+1. Issue: One DJ2LS off air sample had a stronger, non overlapping signal in the passband, which was modulating the AGC of the SSB receiver, upsetting the RADAE decoder.  Might be useful to ensure the SSB receiver AGC bandwidth is narrow (if this is possible). Or maybe switch off AGC.
 
-1. Test: co-channel interference, interfering sinusoids, and impulse noise, non-flat passband.
+1. Test: co-channel interference, interfering sinusoids.
 
-1. Test: Try vocoder with several speakers and background noise.
-   + can hear some whitsles on vk5dgr_test.wav with vanilla fargan (maybe check if I have correct version)
+1. Test: Try vocoder with background noise.
 
-1. Can we include maximum likelyhood detection in rx side of the bottelneck?  E.g. a +2 received means very likely +1 was transmitted, and shouldn't have the same weight in decoding operation as a 0 received.  Probability of received symbol.
-
-1. Look at bottleneck vectors, PCA, any correlation?  Ameniable to VQ?  Further dim reduction? VQ would enable comparative test using classical FEC methods.
-
-1. How can we apply interleaving, e.g./ just spread symbol sover a longer modem frame, or let network spread them.
+1. How can we apply interleaving, e.g./ just spread symbols over a longer modem frame, or let network spread them.
 
 1. Diversity in frequency - classical DSP or with ML in the loop?
 
-1. Sweep different latent dimensions and choose best perf for given SNR.
+1. Sweep different latent dimensions (just 80 and 40 tried so far) and choose best perf for given SNR.
 
 1. Naming thoughts (what is it):
    * Neural modem - as network selects constellation, or "neural speech modem"
    * Neural channel coding - as network takes features and encoders them for transmisison of the channel
    * Radio VAE or Radio AE - don't feel this has much to do with variational autoencoders
    * Joint source and channel coding
-   
-1. Issue: ~We would like smooth degredation from high SNR to low SNR, rather than training and operating at one SNR.  Currently if trained at 10dB, not as good as model trained at 0dB when tested at 0dB.  Also, if trained at 0dB, quality is reduced when tested on high SNR channel, compared to model trained at high SNR.~  This has been dealt with by training at a range of SNRs.
+   * RADAE is the current working name, but is a mouthful and prone to different pronounciation. RAE might be better moving fwd.
 
-1. Issue: ~occasional pops in output speech (e.g. model01/03/04, vk5dgr_test 0 and 100dB, model03 all 100dB).  Speaker depedence, e.g. predictor struggling with uneven pitch tracks of some speakers?  Network encountering data it hasn't seen before? Some bug unrealted to training?~ model05 with multipath in loop is pop free
+1. Decide on offset from carrier frequency of SSB radio.  1500Hz offset like FreeDV, or some other fixed offset from carrier?  FreeDV offset is arbitrary and related to legacy modes so no need to continue this convention unless there is good reason.  What do other digital modes do?
 
-1. ~Test: level sensitivity, do we need/assume amplitude normalisation? ~ Yes - have used pilots to normalise amplitude
-
-1. ~Plot scatter diagram of Tx to see where symbols are being mapped.~
-
-1. ~Reshape pairs of symbols to QPSK, as I think effect of noise will be treated differently in a 2D mapping maybe sqrt(2) better.~
-
-1. ~Reshape into matrix with Nc=number of carriers columns to simulate OFDM.~
-
-1. ~Ability to inject different levels of noise at test time.~
-
-1. ~Using OFDM matrix, simulate symbol by symbol fading channel.  This is a key test.  Need an efficient way to generate fading data, maybe create using Octave for now, an hours worth, or rotate around different channels while training.~
-
-1. ~Confirm SNR calculations, maybe print them, or have SNR3k | Es/No as cmd line options~
-
-1. ~PAPR optimisation.  If we put a bottleneck on the peak power, the network should optimise for miminal PAPR (maximise RMS power) for a given noise level. Be interesting to observe envelope of waveform as it trains, and the phase of symbols. We might need to include sync symbols.~
-
-1.  Way to write/read bottleneck vectors (channel symbols)~
-
-1. ~Can we use loss function as an objective measure for comparing different schemes?~
-
+1. The Tx sigbal has poor sidelobe attenuation. Need a way to apply a Tx BPF without upsetting PAPR performance.  This must be done as part RADAE rather than letting end users guess as it's easy to mess up PAPR with ad-hoc filtering.  Could be (a) classical DSP at output (b) BPF in the training loop (how to handle delay?) (c) we could train network for a given stop band attenuation using an additional loss function term.
