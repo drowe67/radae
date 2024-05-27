@@ -52,6 +52,8 @@ parser.add_argument('--freq_offset', type=float, help='manually specify frequenc
 parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0)')
 parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude correction (fixes --gain)')
 parser.add_argument('--time_offset', type=int, default=0, help='sampling time offset in samples')
+parser.add_argument('--no_bpf', action='store_false', dest='bpf', help='disable BPF')
+parser.set_defaults(bpf=True)
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -102,10 +104,11 @@ if args.plots:
 
 Nc = model.Nc
 w = model.w.cpu().detach().numpy()
-bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
-centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
-print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}")
-rx = complex_bpf(model.Fs,bandwidth,centre,rx)
+if args.bpf:
+   bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
+   centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
+   print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}")
+   rx = complex_bpf(model.Fs,bandwidth,centre,rx)
 
 if args.plots:
    ax[1].specgram(rx,NFFT=256,Fs=model.Fs)

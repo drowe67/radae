@@ -4,7 +4,7 @@ A hybrid Machine Learning/DSP system for sending speech over HF radio channels. 
 
 ## Scope 
 
-The document is a log of the authors experimental work, with enough information for the advanced experimenter to reproduce aspects of the work.  It is not intended to be a polished distribution for general use.
+The document is a log of the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  It is not intended to be a polished distribution for general use.
 
 # Quickstart
 
@@ -183,7 +183,7 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
 
 1. Typical HF multipath channels evolve at around 1 Hz, so it's a good idea to use longer samples to get a meaningful average.  First generate the reference `z_100dB.f32` file for `all.wav`:
    ```
-   /inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null --rate_Fs --pilots --write_latent z_100dB.f32 --write_rx rx_100dB.f32 --EbNodB 100 --cp 0.004 --pilot_eq --eq_ls --ber_test
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null --rate_Fs --pilots --write_latent z_100dB.f32 --write_rx rx_100dB.f32 --EbNodB 100 --cp 0.004 --pilot_eq --eq_ls --ber_test
    ```
    Check that it's doing sensible things with no noise (BER=0):
    ```
@@ -335,3 +335,9 @@ Note the samples are generated with `evaluate.sh`, which runs inference at rate 
 1. Decide on offset from carrier frequency of SSB radio.  1500Hz offset like FreeDV, or some other fixed offset from carrier?  FreeDV offset is arbitrary and related to legacy modes so no need to continue this convention unless there is good reason.  What do other digital modes do?
 
 1. The Tx sigbal has poor sidelobe attenuation. Need a way to apply a Tx BPF without upsetting PAPR performance.  This must be done as part RADAE rather than letting end users guess as it's easy to mess up PAPR with ad-hoc filtering.  Could be (a) classical DSP at output (b) BPF in the training loop (how to handle delay?) (c) we could train network for a given stop band attenuation using an additional loss function term.
+
+1. Working SNR measure, perhaps pilot based.  Maybe use ML for this, e.g. train against known SNR?
+
+1. Way to characterise channels, e.g. visualise impulse response, measure delay spread.
+
+1. Automated tests: (a) just run inference and make sure nothing is broken (b) run in didgital mode, measure BER at one point, multipath test mode, will check out a lot of code (like pilot stuff).
