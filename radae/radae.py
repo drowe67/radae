@@ -419,7 +419,7 @@ class RADAE(nn.Module):
             Ns = self.Ns
             return int(((Ns+1)/Ns)*num_timesteps_at_rate_Rs*(self.M+self.Ncp))
         else:
-            return int(num_timesteps_at_rate_Rs*self.M)
+            return int(num_timesteps_at_rate_Rs*(self.M+self.Ncp))
         
     def num_10ms_times_steps_rounded_to_modem_frames(self, num_ten_ms_timesteps):
         num_modem_frames = num_ten_ms_timesteps // self.enc_stride // self.Nzmf

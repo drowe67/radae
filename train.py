@@ -54,8 +54,11 @@ parser.add_argument('--g_file', type=str, default="", help='path to rate Fs mult
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--freq_rand', action='store_true', help='random phase and freq offset for each sequence')
 parser.add_argument('--gain_rand', action='store_true', help='random rx gain -20 .. +20dB, SNR unchanged')
-parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
 parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
+parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
+parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ data symbols using classical DSP')
+parser.add_argument('--eq_ls', action='store_true', help='Use per carrier least squares EQ (default mean6)')
+parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0)')
 
 training_group = parser.add_argument_group(title="training parameters")
 training_group.add_argument('--batch-size', type=int, help="batch size, default: 32", default=32)
@@ -117,7 +120,8 @@ checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_Eb
 model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, 
               range_EbNo_start=args.range_EbNo_start, 
               rate_Fs=args.rate_Fs,
-              freq_rand=args.freq_rand,gain_rand=args.gain_rand, pilots=args.pilots, bottleneck=args.bottleneck)
+              freq_rand=args.freq_rand,gain_rand=args.gain_rand, bottleneck=args.bottleneck,
+              pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
