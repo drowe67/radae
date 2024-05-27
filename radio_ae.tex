@@ -704,7 +704,7 @@ The earlier, \emph{model05} RADAE waveform has a PAPR of 9-10dB.  Based on our e
 \label{tab:papr_ssb}
 \end{table}
 
-\subsection{Optimal Timing}
+\subsection{Timing Algorithm}
 
 Coarse and fine timing is determined by maximising the correlation function at some time offset $t$ samples from \cite{freedv_low}:
 \begin{equation}
@@ -761,17 +761,16 @@ A peak in $|D_t|$ may occur for any $-(N_{cp}-1) \le t \le 0$, however by inspec
 \end{center}
 \end{figure}
 
-Now consider the pilot sequence passing through a two path multipath channel simulation, where \emph{path1} is the fastest path to our receiver and \emph{path2} the slowest. The timing estimates $t$ that maximises $D_t$ will tend to point to the last $M$ samples of either \emph{path1} or \emph{path2}, depending on which path best maximnises $D_t$.  The two paths are time varying, but can be considered stationary over the timing estimator analysis window.  We denote the two possible timing estimates $t_1$ and $t_2$. Given $t_1$ or $t_2$, we wish to determine a $M$ sample window of samples starting at $t_{sam}$ for sampling the received OFDM symbol that minimise Inter symbol Interference (ISI).
-
-We set a timing reference at $t=0$ samples, the start of the received symbol for \emph{path1}.
+Now consider the pilot sequence passing through a two path multipath channel simulation, where \emph{path1} is the fastest path to our receiver and \emph{path2} the slowest. We set a timing reference at $t=0$ samples, the start of the received symbol for \emph{path1}. The time difference (delay spread) between the two paths is $N_{ds}$ samples. The timing estimates that maximises $D_t$ will tend to point to the last $M$ samples of either \emph{path1} or \emph{path2}, depending on which path best maximises $D_t$.  The two paths are time varying, but can be considered stationary over the timing estimator analysis window.  We denote the two possible timing estimates $t_1=N_{cp}$ and $t_2=N_{ds}+N_{cp}$. Given $t_1$ or $t_2$, we wish to determine a $M$ sample window of samples starting at $t_{sam}$ for sampling the received OFDM symbol that minimises Inter symbol Interference (ISI).
 
 \begin{figure} [H]
-\caption{Multipath channel, sum of signals from two paths.}
+\caption{Multipath channel, our received symbol is the sum of \emph{path1} and \emph{path2}. Grey regions are ISI from past and future symbols.  From the sum we must select $M$ samples that avoids any ISI.}
 \vspace{5mm}
-\label{fig:dt_max}
+\label{fig:timing_offset}
 \begin{center}
 \begin{tikzpicture}[>=triangle 45,x=1.0cm,y=1.0cm]
 
+% Ncp and M dimensions
 \draw [<->] (1,6.5) -- (2,6.5); \draw [<->] (2,6.5) -- (5,6.5);
 \node[align=center] at (1.5,6.75) {$N_{cp}$};
 \node[align=center] at (3.5,6.75) {$M$};
@@ -779,22 +778,69 @@ We set a timing reference at $t=0$ samples, the start of the received symbol for
 \draw [very thin,gray] (5,6.25) -- (5,6.75);
 \draw [very thin,gray] (2,6.25) -- (2,6.75);
 
-\draw (1,5) -- (5,5) -- (5,6) -- (1,6) -- (1,5);
+% path 1
+\draw (1,5) rectangle (5,6);
 \draw (2,5) -- (2,6);
 \node[align=left] at (0.5,5.5) {path1};
 
-\draw (1.5,3.5) -- (5.5,3.5) -- (5.5,4.5) -- (1.5,4.5) -- (1.5,3.5);
-\draw (2.5,4.5) -- (2.5,4.5);
+% path 2
+\draw (1.5,3.5) rectangle (5.5,4.5);
+\draw (2.5,3.5) -- (2.5,4.5);
 \node[align=left] at (0.5,4) {path2};
 
-\draw [very thin,gray,->] (1,2.25) -- (1,3);
-\node[align=center] at (1,2) {$t=0$};
+% Npd dimensions
+\draw [<->] (1,3) -- (1.5,3);
+\draw [very thin,gray] (1,2.75) -- (1,3.25);
+\draw [very thin,gray] (1.5,2.75) -- (1.5,3.25);
+\node[align=center] at (1.25,2.5) {$N_{ds}$};
 
+% past and future symbols
+\fill[fill=gray] (5,5) rectangle (5.5,6);
+\fill[fill=gray] (1,3.5) rectangle (1.5,4.5);
+
+% t,t1,t2
+\draw [very thin,gray,->] (1,1.5) -- (1,2);
+\node[align=center] at (1,1.25) {$t=0$};
+\draw [very thin,gray,->] (2,1.5) -- (2,2);
+\node[align=center] at (2,1.25) {$t1$};
+\draw [very thin,gray,->] (2.5,1.5) -- (2.5,2);
+\node[align=center] at (2.5,1.25) {$t2$};
 
 \end{tikzpicture}
-
 \end{center}
 \end{figure}
+
+Figure \ref{fig:timing_offset} illustrates the two paths and various constraints on selecting a suitable timing offset given we have either $t_1$ or $t_2$ from maximising $D_t$. To demodulate a symbol without ISI, we must select $M$ samples with the starting sample $t_{sam}$ such that:
+\begin{equation}
+N_{ds} \le t_{sam} \le N_{cp}
+\end{equation}
+One possible solution for the sampling instant is:
+\begin{equation}
+t_{sam} = t - N_{ds}
+\end{equation}
+where $N_{ds}$ is an estimate of the worst case delay spread.  Evaluating for $t=t_1$:
+\begin{equation} 
+\begin{split}
+t_{sam} &= t_1 - N_{ds} \\
+        &= N_{cp} - N_{ds} \\
+        &\ge N_{ds}\
+\end{split}
+\end{equation}
+if $N_{cp} > 2N_{ds}$. Evaluating for $t=t_2$:
+\begin{equation} 
+\begin{split}
+ t_{sam} &= t_2 - N_{ds} \\
+         &= N_{ds} + N_{cp} - N_{ds} \\
+         &= N_{cp}
+\end{split}
+\end{equation}
+This timing algoirthm was verified by simulation using data symbols for the MPP (2ms delay spread) channel.  A similar algorithm is used for the FreeDV OFDM modes. It has the disadvantage of requiring $N_{cp}>2N_{ds}$ which is wasteful of power. Further work:
+\begin{itemize}
+\item This algorithm is likely to be non-optimal and researching timing estimation is a useful area for further work.
+\item Additionally, in the April 2024 stored file OTA test campaign, no Cyclic Prefix was used (due to a configuration error) however good results were obtained from decoded speech samples, suggesting the RADAE decoder is quite robust to ISI, or perhaps ISI is interpreted as another source of noise and is handled by the decoder without breaking down (but perhaps with some loss in performance).
+\item An objective measure to determine distortion as a function of cyclic prefix length.
+\item A method of measuring and observing channel impulse responses (e.g. on international DX paths) would be very useful.
+\end{itemize} 
 
 \section{Glossary}
 
