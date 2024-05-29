@@ -537,7 +537,15 @@ class RADAE(nn.Module):
         
         return features_hat,z_hat
 
-
+    # Estimate SNR given a vector r of M received pilot samples
+    # r is the last M samples of pilot
+    # rate_Fs/time domain
+    def est_snr(self, r):
+        p = self.p[-self.M:]
+        Ct = torch.abs(torch.dot(torch.conj(r),p))**2 / torch.dot(torch.conj(r),r)
+        SNR_est = Ct/(torch.dot(torch.conj(p),p) - Ct)
+        return SNR_est
+    
     def forward(self, features, H, G=None):
         
         (num_batches, num_ten_ms_timesteps, num_features) = features.shape

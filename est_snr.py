@@ -53,21 +53,19 @@ def snr_est_test(model, target_SNR):
    mag = 1 + np.random.rand(1)*99                           # random channel gain of 1..100
    g = mag*np.exp(1j*phase)                                 # channel gain/phase
    tx = p*g
-
+ 
    S = np.dot(tx,np.conj(tx))                               # signal power/M samples
    N = S/target_SNR                                         # noise power/M samples
 
    # sequence of noise samples
    sigma = np.sqrt(N/M)/(2**0.5)                            # noise std dev per sample
    n = sigma*(np.random.normal(size=M) + 1j*np.random.normal(size=M))
+   r = g*p + n
+
    N_actual = np.sum(np.conj(n)*n)
    SNR_actual = S/N_actual                                  # will vary slightly from target
 
-   r = g*p + n
-   Ct = np.abs(np.dot(np.conj(r),p))**2 / np.dot(np.conj(r),r)
-   SNR_est = Ct/(np.dot(np.conj(p),p) - Ct)
-   #print(f"S:{S:f} N:{N:f}")
-   #print(f"Ct:{Ct:f} SNR_est:{SNR_est:f}")
+   SNR_est = model.est_snr(torch.tensor(r, dtype=torch.complex64))
 
    return SNR_actual.real, SNR_est.real
 
