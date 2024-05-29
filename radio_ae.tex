@@ -853,7 +853,7 @@ The April 2024 stored file OTA test campaign showed the need for a method of mea
 \label{eq:norm_cross}
 C_t^2 = \frac{|\bm{r}^H\bm{p}|^2}{\bm{r}^H\bm{r}}
 \end{equation}
-When we have a good fine timing alignment, the vector of received samples can be expressed as:
+When we have a good fine timing alignment and small frequency offset, the vector of received samples can be expressed as:
 \begin{equation}
 \label{eq:rx_vec}
 \bm{r} = g\bm{p} + \bm{n}
@@ -866,7 +866,7 @@ C_t^2 &= \frac{|(g\bm{p}+\bm{n})^H\bm{p}|^2}{|g|^2\bm{p}^H\bm{p} + 2(g\bm{p})^H\
       &= \frac{|g^H\bm{p}^H\bm{p} + \bm{n}^H \bm{p}|^2}{|g|^2\bm{p}^H\bm{p} + 2(g\bm{p})^H\bm{n} + \bm{n}^H\bm{n}}
 \end{split}
 \end{equation}
-If we assume the dot product of the noise and pilot terms e.g. $\bm{n}^H \bm{p}$ is small:
+If we assume the dot product of the noise and pilot e.g. $\bm{n}^H \bm{p}$ is small compared to the other terms:
 \begin{equation}
 \label{eq:norm_cross_approx}
 \begin{split}
@@ -892,6 +892,7 @@ S/N &= \frac{C_t^2}{ \bm{p}^H\bm{p} - C_t^2}
 
 Further work:
 \begin{itemize}
+\item what ios noise bandwidth, $Fs$?  What happens when we BPF?
 \item This is likely to work OK for AWGN but not sure about multipath.
 \item Should we use the received sequence at $t_1$/$t_2$ or $t_{sam}$?
 \item It may be better to choose a time shifted version of $\bm{p}$ as the prototype top avoid the sequence including ISI which would bias the SNR results.
