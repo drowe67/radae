@@ -546,6 +546,8 @@ The classical DSP OFDM processing requires less resources but hasn't been accura
 
 \section{Training and Testing Low PAPR Models}
 
+This section documents the low PAPR RADAE models developed in May 2024, and improvements from the April 2024 stored file OTA test campaign.
+
 \subsection{Mixed Rate Model}
 
 We wish to train a model to minimise PAPR over multipath channels.  Our previous models (e.g. \emph{model05}) were trained in the frequency domain at rate $R_s$ with the bottleneck applied to the magnitude of real valued symbols $z_i$.  Due to the neat properties of OFDM, we could ignore issues like phase/amplitude equalisation and ISI during training, and just apply magnitude only fading to each PSK symbol.  After training, classical DSP techniques were then wrapped around the core ML encoder to develop a practical, rate $F_s$ digital voice system.
@@ -714,19 +716,22 @@ where $\bm{p}$ is a $M$ sample vector of pilot samples:
 \begin{equation}
 p(n)=\sum_{c=1}^{Nc}P_c e^{j \omega_c n} \quad n=0,..,M
 \end{equation}
-and $\bm{r}$ is a vector of off air received pilot samples.  By insertion of the Cyclic Prefix we extend $r(n)$ to $N_{cp}+M$ samples, where any $M$ sample subset of $r_t(n)$:
+At the transmitter we take $p(n)$ and insert a Cyclic Prefix to extend it to $N_{cp}+M$ samples. The received pilot sequence is denoted $r(n)$. We assume we have a ``coarse timing" estimate and have located the received pilot samples to within one symbol. The vector $\bm{r}$ is the $M$ sample vector extracted from $r(n)$ at some fine time offset $t$:
 \begin{equation}
-r_t(n) = gp(n+t) \quad n=0,..,M, \quad -(N_{cp}-1) \le t \le 0
+\begin{split}
+r(n)   &= g p(n) \quad n=-(N_{cp}-1),...,0,..,M-1 \\
+r_t(n) &= g p(n+t) \quad n=0,..,M-1, \quad -(N_{cp}-1) \le t \le 0
+\end{split}
 \end{equation}
-is periodic in $M$ and $g$ is a complex scalar gain. The correlation as a function of the time offset $t$ is given by:
+where $g$ is a complex scalar gain. The correlation as a function of the time offset $t$ is given by:
 \begin{equation}
 \label{eq:dt_time_offset}
 \begin{split}
-D_t &= \sum_{n=0}^{M-1} \sum_{c=1}^{Nc}r(n+t)p(n) \\
+D_t &= \sum_{n=0}^{M-1} \sum_{c=1}^{Nc}r_t^*(n)p(n) \\
     &= g \sum_{n=0}^{M-1} \sum_{c=1}^{Nc} |P_c|^2 e^{-j \omega_c t}
 \end{split}
 \end{equation}
-A peak in $|D_t|$ may occur for any $-(N_{cp}-1) \le t \le 0$, however by inspecting (\ref{eq:dt_time_offset}) we can see that for $t \ne 0$ the phase shift term results in a reduction in $|D_t|$.  Therefore the maxima of $|D_t|$ will tend to be located at the $t=0$ point (Figure \ref{fig:dt_max}).
+Now $r_t(n)$ contains a complete $M$ sample cycle of $p(n)$ for any $-(N_{cp}-1) \le t \le 0$.  We could reason that a peak in $|D_t|$ may occur for any $-(N_{cp}-1) \le t \le 0$; however by inspecting (\ref{eq:dt_time_offset}) we can see that for $t \ne 0$ the $e^{-j \omega_c t}$ phase shift results in the terms of the summation pointing in different ``directions" on the complex plane.  To some extent these will add destuctively resulting in a reduction in $|D_t|$.  Therefore the maxima of $|D_t|$ will tend to be located at $t=0$ (Figure \ref{fig:dt_max}).
 
 \begin{figure} [H]
 \caption{The maxima in $D_t$ will tend to be located in the last $M$ samples of the received sequence $r(n)$.}
@@ -738,8 +743,6 @@ A peak in $|D_t|$ may occur for any $-(N_{cp}-1) \le t \le 0$, however by inspec
 \draw (1,5) -- (5,5) -- (5,6) -- (1,6) -- (1,5);
 \draw (2,5) -- (2,6);
 \node[align=left] at (0.5,5.5) {$r(n)$};
-\node[align=center] at (1.5,5.5) {CP};
-\node[align=center] at (3.5,5.5) {Pilot Samples};
 \draw [<->] (1,6.5) -- (2,6.5); \draw [<->] (2,6.5) -- (5,6.5);
 \node[align=center] at (1.5,6.75) {$N_{cp}$};
 \node[align=center] at (3.5,6.75) {$M$};
@@ -747,14 +750,14 @@ A peak in $|D_t|$ may occur for any $-(N_{cp}-1) \le t \le 0$, however by inspec
 \draw [very thin,gray] (5,6.25) -- (5,6.75);
 \draw [very thin,gray] (2,6.25) -- (2,6.75);
 
-\draw (2,3.5) -- (5,3.5) -- (5,4.5) -- (2,4.5) -- (2,3.5);
-\node[align=left] at (0.5,4) {$p(n)$};
-\node[align=center] at (3.5,4) {Pilot Samples};
+\draw (1.5,3.5) -- (4.5,3.5) -- (4.5,4.5) -- (1.5,4.5) -- (1.5,3.5);
+\node[align=left] at (0.5,4) {$r_t(n)$};
 
-\draw [very thin,gray,->] (2,2.25) -- (2,3);
-\node[align=center] at (2,2) {$t=0$};
+\draw (2,2) -- (5,2) -- (5,3) -- (2,3) -- (2,2);
+\node[align=left] at (0.5,2.5) {$r_0(n)$};
 
-\draw [<->] (1,4) -- (2,4);
+\draw [very thin,gray,->] (2,1.25) -- (2,1.75);
+\node[align=center] at (2,1) {$t=0$};
 
 \end{tikzpicture}
 
@@ -764,7 +767,7 @@ A peak in $|D_t|$ may occur for any $-(N_{cp}-1) \le t \le 0$, however by inspec
 Now consider the pilot sequence passing through a two path multipath channel simulation, where \emph{path1} is the fastest path to our receiver and \emph{path2} the slowest. We set a timing reference at $t=0$ samples, the start of the received symbol for \emph{path1}. The time difference (delay spread) between the two paths is $N_{ds}$ samples. The timing estimates that maximises $D_t$ will tend to point to the last $M$ samples of either \emph{path1} or \emph{path2}, depending on which path best maximises $D_t$.  The two paths are time varying, but can be considered stationary over the timing estimator analysis window.  We denote the two possible timing estimates $t_1=N_{cp}$ and $t_2=N_{ds}+N_{cp}$. Given $t_1$ or $t_2$, we wish to determine a $M$ sample window of samples starting at $t_{sam}$ for sampling the received OFDM symbol that minimises Inter symbol Interference (ISI).
 
 \begin{figure} [H]
-\caption{Multipath channel, our received symbol is the sum of \emph{path1} and \emph{path2}. Grey regions are ISI from past and future symbols.  From the sum we must select $M$ samples that avoids any ISI.}
+\caption{Multipath channel, our received symbol is the sum of \emph{path1} and \emph{path2}. Shaded regions are ISI from past and future symbols.  We must select $M$ samples such that we avoid any ISI.}
 \vspace{5mm}
 \label{fig:timing_offset}
 \begin{center}
@@ -834,14 +837,65 @@ if $N_{cp} > 2N_{ds}$. Evaluating for $t=t_2$:
          &= N_{cp}
 \end{split}
 \end{equation}
-This timing algoirthm was verified by simulation using data symbols for the MPP (2ms delay spread) channel.  A similar algorithm is used for the FreeDV OFDM modes. It has the disadvantage of requiring $N_{cp}>2N_{ds}$ which is wasteful of power. Further work:
+This timing algorithm was verified by simulation using data symbols for the MPP (2ms delay spread) channel.  A similar algorithm is used for the FreeDV OFDM modes. It has the disadvantage of requiring $N_{cp}>2N_{ds}$ which is wasteful of power. Further work:
 \begin{itemize}
-\item This algorithm is likely to be non-optimal and researching timing estimation is a useful area for further work.
-\item Additionally, in the April 2024 stored file OTA test campaign, no Cyclic Prefix was used (due to a configuration error) however good results were obtained from decoded speech samples, suggesting the RADAE decoder is quite robust to ISI, or perhaps ISI is interpreted as another source of noise and is handled by the decoder without breaking down (but perhaps with some loss in performance).
-\item An objective measure to determine distortion as a function of cyclic prefix length.
-\item A method of measuring and observing channel impulse responses (e.g. on international DX paths) would be very useful.
+\item Research other OFDM timing algorithms.
+\item Observe the timing algorithm in action for a range of multipath channels, e.g. evolution of the timing estimate over time as the multipath channel evolves.
+\item In the April 2024 stored file OTA test campaign, no Cyclic Prefix was used (due to a configuration error) however good results were obtained from decoded speech samples, suggesting the RADAE decoder is quite robust to ISI, or perhaps ISI is interpreted as another source of noise and is handled by the decoder without breaking down (but perhaps with some loss in performance). To explore this topic it would be useful to derive an objective measure (e.g. the ML loss function) to determine distortion as a function of cyclic prefix length.
+\item A method of measuring and observing channel impulse responses (e.g. on international DX paths) would be very useful to determine an appropriate $N_{cp}$.
+\item The vector of $M$ samples that maximises $D_t$ (e.g. $t_2$) may have ISI.  It may be better to use a time shifted version of $\bm{p}$ as the prototype time domain pilot sequence.
 \end{itemize} 
 
+\subsection{SNR Estimation}
+
+The April 2024 stored file OTA test campaign showed the need for a method of measuring the SNR of off air RADAE signals. Consider the normalised cross correlation function from \cite{freedv_low}:
+\begin{equation}
+\label{eq:norm_cross}
+C_t^2 = \frac{|\bm{r}^H\bm{p}|^2}{\bm{r}^H\bm{r}}
+\end{equation}
+When we have a good fine timing alignment, the vector of received samples can be expressed as:
+\begin{equation}
+\label{eq:rx_vec}
+\bm{r} = g\bm{p} + \bm{n}
+\end{equation}
+where $g$ is a scalar complex gain and $\bm{n}$ is a vector of noise samples.  Expanding (\ref{eq:norm_cross}):
+\begin{equation}
+\label{eq:norm_cross_exp}
+\begin{split}
+C_t^2 &= \frac{|(g\bm{p}+\bm{n})^H\bm{p}|^2}{|g|^2\bm{p}^H\bm{p} + 2(g\bm{p})^H\bm{n} + \bm{n}^H\bm{n}} \\
+      &= \frac{|g^H\bm{p}^H\bm{p} + \bm{n}^H \bm{p}|^2}{|g|^2\bm{p}^H\bm{p} + 2(g\bm{p})^H\bm{n} + \bm{n}^H\bm{n}}
+\end{split}
+\end{equation}
+If we assume the dot product of the noise and pilot terms e.g. $\bm{n}^H \bm{p}$ is small:
+\begin{equation}
+\label{eq:norm_cross_approx}
+\begin{split}
+C_t^2 &\approx \frac{|g^H\bm{p}^H\bm{p}|^2}{|g|^2\bm{p}^H\bm{p} + \bm{n}^H\bm{n}} \\
+      &= \frac{|g|^2 (\bm{p}^H\bm{p})^2}{|g|^2\bm{p}^H\bm{p} + \bm{n}^H\bm{n}}
+\end{split}
+\end{equation}
+Let us define the signal power $S$ as the energy per $M$ samples and noise power $N$ as the noise energy per $M$ samples. From (\ref{eq:rx_vec}):
+\begin{equation}
+\begin{split}
+S &= |g\bm{p}|^2 \\
+  &= |g|^2 \bm{p}^H\bm{p} \\
+N &= \bm{n}^H\bm{n}
+\end{split}
+\end{equation}
+Expressing (\ref{eq:norm_cross_approx}) in terms of $S$ and $N$ and solving for $S/N$:
+\begin{equation}
+\begin{split}
+C_t^2 &= \frac{S \bm{p}^H\bm{p}}{S + N} \\
+S/N &= \frac{C_t^2}{ \bm{p}^H\bm{p} - C_t^2}
+\end{split}
+\end{equation}
+
+Further work:
+\begin{itemize}
+\item This is likely to work OK for AWGN but not sure about multipath.
+\item Should we use the received sequence at $t_1$/$t_2$ or $t_{sam}$?
+\item It may be better to choose a time shifted version of $\bm{p}$ as the prototype top avoid the sequence including ISI which would bias the SNR results.
+\end{itemize}
 \section{Glossary}
 
 \begin{table} [H]
