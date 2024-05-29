@@ -45,10 +45,18 @@ device = torch.device("cpu")
 def snr_est_test(model, target_SNR):
 
    M = model.M
-   p = np.array(model.p)                                    # sequence of pilot samples
-   S = np.dot(p,np.conj(p))                                 # signal power/M samples
-   g = 1                                                    # channel gain/phase
+   p = np.array(model.p)                                    # sequence of pilot samples including CP
+   p = p[-M:]                                               # use last M samples, as per timing_est
+
+   # channel simulation   
+   phase = np.random.rand(1)*2*np.pi                        # random channel phase
+   mag = 1 + np.random.rand(1)*99                           # random channel gain of 1..100
+   g = mag*np.exp(1j*phase)                                 # channel gain/phase
+   tx = p*g
+
+   S = np.dot(tx,np.conj(tx))                               # signal power/M samples
    N = S/target_SNR                                         # noise power/M samples
+
    # sequence of noise samples
    sigma = np.sqrt(N/M)/(2**0.5)                            # noise std dev per sample
    n = sigma*(np.random.normal(size=M) + 1j*np.random.normal(size=M))
@@ -67,14 +75,12 @@ def snr_est_test(model, target_SNR):
 latent_dim = 40
 num_features = 20
 num_used_features = 20
-model = RADAE(num_features, latent_dim, EbNodB=100, rate_Fs=True, pilots=True)
+model = RADAE(num_features, latent_dim, EbNodB=100, rate_Fs=True, pilots=True, cyclic_prefix=0.004)
 
 """
  TODO 
- 1. Estimate over M sample subset when working with CP
- 2. Sweep over range of SNRs and check
- 3. Consider sweeping over time shifted p to see effect of mis-alignment
- 4. Consider running on time shifted p to match timing offset and avoid ISI
+ 1. Consider sweeping over time shifted p to see effect of mis-alignment
+ 2. Consider running on time shifted p to match timing offset and avoid ISI
 """
 
 SNRdB = []
