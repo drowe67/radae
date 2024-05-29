@@ -77,19 +77,20 @@ model = RADAE(num_features, latent_dim, EbNodB=100, rate_Fs=True, pilots=True)
  4. Consider running on time shifted p to match timing offset and avoid ISI
 """
 
+SNRdB = []
+SNR_estdB = []
+
+for i in range(25):
+   for aSNRdB in np.arange(-10,20):
+      SNR_actual, SNR_est = snr_est_test(model, 10**(aSNRdB/10))
+      SNRdB.append(aSNRdB)
+      SNR_estdB.append(10*np.log10(SNR_est))
+
 plt.figure(1)
-for i in range(10):
-   for SNRdB in np.arange(-10,20):
-      SNR_actual, SNR_est = snr_est_test(model, 10**(SNRdB/10))
-      SNR_actualdB = 10*np.log10(SNR_actual)
-      SNR_estdB = 10*np.log10(SNR_est)
-      print(f"SNRdB: {SNRdB:f} SNR_actual: {SNR_actualdB:f} SNR_est: {SNR_estdB:f}")
-      plt.plot(SNRdB, SNR_estdB,'b+')
-      plt.show(block=False)
-      plt.pause(0.001)
-
-input("hit[enter] to end.")
+plt.plot(SNRdB, SNR_estdB,'b+')
 plt.grid()
-plt.savefig('est_SNR.png')
-plt.close('all')
+plt.show()
 
+# save test file of test points for Latex plotting in Octave radae_plots.m:est_snr_plot()
+test_points = np.transpose(np.array((SNRdB,SNR_estdB)))
+np.savetxt('est_snr.txt',test_points,delimiter='\t')

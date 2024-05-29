@@ -166,3 +166,30 @@ function test_rate_Fs_bottleneck
   printf("EbNo: %f (target: %f)\n",EbNo,EbNo_target);
   
 end
+
+% Latex plotting for SNR estimator. run est_snr.py first
+function est_snr_plot(epslatex="")
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts();
+    end
+    points = load("est_snr.txt");
+
+    % point for mean line
+    mean_x = [];
+    mean_y = [];
+    for snrdB=-10:20
+      x = find(points(:,1) == snrdB);
+      mean_x = [mean_x; snrdB];
+      mean_y = [mean_y; mean(points(x,2))];
+    end
+
+    figure(1); clf;
+    plot(points(:,1), points(:,2),'b.');
+    hold on;
+    plot(mean_x,mean_y,'ro-');
+    hold off;
+    hold off; grid('minor'); xlabel('SNR (dB)'); ylabel('SNR Est (dB)');
+    if length(epslatex)
+        print_eps_restore(epslatex,"-S300,250",textfontsize,linewidth);
+    end
+endfunction
