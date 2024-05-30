@@ -848,7 +848,9 @@ This timing algorithm was verified by simulation using data symbols for the MPP 
 
 \subsection{SNR Estimation}
 
-The April 2024 stored file OTA test campaign showed the need for a method of measuring the SNR from off air RADAE signals. Consider the normalised cross correlation function from \cite{freedv_low}:
+The April 2024 stored file OTA test campaign showed the need for a method of measuring the SNR from off air RADAE signals.  In existing FreeDV modes, SNR estimation is performed by estimating the mean and variance of the payload symbol constellation points. However this method relies on known constellation points which is not a valid assumption for ML based constellations.  In our hybrid DSP-ML system, the only part of the signal that is known to both the Tx and Rx are the pilots.  This section presents a SNR estimation algorithm based on the time domain pilot symbol sequence.
+
+Consider the normalised cross correlation function from \cite{freedv_low}:
 \begin{equation}
 \label{eq:norm_cross}
 C_t^2 = \frac{|\bm{r}^H\bm{p}|^2}{\bm{r}^H\bm{r}}
@@ -889,10 +891,28 @@ C_t^2 &= \frac{S \bm{p}^H\bm{p}}{S + N} \\
 S/N &= \frac{C_t^2}{ \bm{p}^H\bm{p} - C_t^2}
 \end{split}
 \end{equation}
-This algorithm was simulated in \emph{est\_snr.py} with reasonable results over the range -10 to +20 dB SNR (Figure \ref{fig:est_snr}). While there is significant variance in the estimates at low SNRs, the mean appears correct therefore averaging SNR estimates over multiple modem frames should lead to reasonable SNR estimates.
+This algorithm was simulated in \emph{est\_snr.py} with reasonable results over the range -10 to +20 dB SNR on an AWGN channel (Figure \ref{fig:est_snr}).  While there is significant variance in the estimates at low SNRs, the mean appears correct which suggests averaging SNR estimates over multiple modem frames should lead to reasonable SNR estimates.
+
+The estimator was integrated into \emph{inference.py} and tested on rate $F_s$ AWGN and MPP signals. The estimated SNR values were adjusted to reference a 3000 Hz noise bandwidth. The estimator perfomed well for AWGN channels, however Table \ref{tab:snr_est_results} shows it performs poorly for multipath channels.  The problem may be the assumption in (\ref{eq:rx_vec}) of a single phase $arg[g]$ describing the channel.  In practice multipath channels have varying phase across frequency so the received sequence $\bm{r}$ may be quite distorted compared to $\bm{p}$, lowering the SNR estimates.
+
+\begin{table} [H]
+\centering
+\begin{tabular}{l r r r r}
+ \hline
+ Target Eb/No (dB)  & 20 & 10 & 3 & 0 \\
+ \hline
+ Target SNR (dB)    & 18.24 & 8.24 & 1.24 & -1.76  \\
+ Measured SNR (dB)  & 19.73 & 9.78 & 2.78 & -0.22 \\
+ Estimated SNR (dB) &  9.57 & 5.93 & 0.43 & -2.2 \\
+ Delta (dB)         & -10.16 & -3.85 & -2.35 & -1.98 \\
+ \hline
+\end{tabular}
+\caption{SNR estimator running in \emph{inference.py} on a MPP channel. AWGN performance was much better, with the estimate delta being around 0.25 dB}
+\label{tab:snr_est_results}
+\end{table}
 
 \begin{figure}[H]
-\caption{Scatter plot of actual versus estimated SNR values for a 15 carrier waveform, $M=160$ sample pilot sequence.}
+\caption{Scatter plot of actual versus estimated SNR values for a 15 carrier waveform, $M=160$ sample pilot sequence, AWGN channel.}
 \label{fig:est_snr}
 \begin{center}
 \input est_snr.tex
@@ -901,10 +921,9 @@ This algorithm was simulated in \emph{est\_snr.py} with reasonable results over 
 
 Further work:
 \begin{itemize}
-\item What is the noise bandwidth, $F_s$?  What happens when we BPF?
-\item This is likely to work OK for AWGN but not sure about multipath.
-\item Should we use the received sequence at $t_1$/$t_2$ or $t_{sam}$?
-\item It may be better to choose a time shifted version of $\bm{p}$ as the prototype to avoid the sequence including ISI which would bias the SNR results.
+\item Research other SNR estimators more robust to multipath channels.
+\item For the purpose of stored file experiments it is acceptable to send a separate signals (e.g. a carrier or set of known symbols) a few seconds before or after the test signal.
+\item Consider training a ML based SNR estimator.  The SNR of each training sequence could be considered an output on the network and a loss function term added.
 \end{itemize}
 \section{Glossary}
 

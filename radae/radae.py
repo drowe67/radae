@@ -349,7 +349,7 @@ class RADAE(nn.Module):
         Nzmf = 3                                        # number of latent vectors in a modem frame
         Nsmf = Nzmf*self.latent_dim // bps              # total number of QPSK symbols in a modem frame across all carriers
         
-        Ns = int(Nzmf*self.Tz / Ts)                    # duration of "modem frame" in QPSK symbols
+        Ns = int(Nzmf*self.Tz / Ts)                     # duration of "modem frame" in QPSK symbols
         print(self.Tz, Ts, Nzmf*self.Tz / Ts, Ns)
         #quit()
         Tmf = Ns*Ts                                     # period of modem frame (s), this must remain constant for real time operation
@@ -385,8 +385,12 @@ class RADAE(nn.Module):
            self.Winv[c,:] = torch.exp( 1j*torch.arange(self.M)*self.w[c])/self.M
            self.Wfwd[:,c] = torch.exp(-1j*torch.arange(self.M)*self.w[c])
         
+        # set up pilots in freq and time domain
         self.P = (2**(0.5))*barker_pilots(Nc)
         self.p = torch.matmul(self.P,self.Winv)
+        self.p_cp = torch.zeros(self.Ncp+self.M,dtype=torch.complex64)
+        self.p_cp[self.Ncp:] = self.p
+        self.p_cp[:self.Ncp] = self.p[-self.Ncp:]
 
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)
@@ -539,12 +543,14 @@ class RADAE(nn.Module):
 
     # Estimate SNR given a vector r of M received pilot samples
     # r is the last M samples of pilot
-    # rate_Fs/time domain
-    def est_snr(self, r):
-        p = self.p[-self.M:]
+    # rate_Fs/time domain, only works on 1D vectors (i.e. can broadcast or do multiple estimates)
+    def est_snr(self, r, time_offset=0):
+        st = self.Ncp+time_offset
+        en = st + self.M
+        p = self.p_cp[st:en]
         Ct = torch.abs(torch.dot(torch.conj(r),p))**2 / torch.dot(torch.conj(r),r)
         SNR_est = Ct/(torch.dot(torch.conj(p),p) - Ct)
-        return SNR_est
+        return SNR_est.real
     
     def forward(self, features, H, G=None):
         
@@ -686,6 +692,15 @@ class RADAE(nn.Module):
             rx = torch.reshape(rx,(num_batches,num_timesteps_at_rate_Rs,self.M+self.Ncp))
             rx_dash = rx[:,:,Ncp+self.time_offset:Ncp+self.time_offset+self.M]
 
+            snrs = torch.zeros(num_modem_frames)
+            print(num_modem_frames,self.Ns)
+            for i in range(num_modem_frames):
+                r = rx_dash[0,i*(self.Ns+1),:]
+                snrs[i] = self.est_snr(r,self.time_offset)
+               #print(snrs[i])
+            SNR_estdB = 10*torch.log10(torch.mean(snrs)) + 4.2597
+            print(f"SNRest_dB: {SNR_estdB:f}")
+            #quit()
             # DFT to transform M time domain samples to Nc carriers
             rx_sym = torch.matmul(rx_dash, self.Wfwd)
         else:

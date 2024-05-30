@@ -45,9 +45,10 @@ device = torch.device("cpu")
 def snr_est_test(model, target_SNR):
 
    M = model.M
-   p = np.array(model.p)                                    # sequence of pilot samples including CP
-   p = p[-M:]                                               # use last M samples, as per timing_est
-
+   p_cp = np.array(model.p_cp)                              # sequence of pilot samples including CP
+   time_offset = -16
+   p = p_cp[model.Ncp+time_offset:time_offset]              # subset of M samples
+   
    # channel simulation   
    phase = np.random.rand(1)*2*np.pi                        # random channel phase
    mag = 1 + np.random.rand(1)*99                           # random channel gain of 1..100
@@ -61,11 +62,11 @@ def snr_est_test(model, target_SNR):
    sigma = np.sqrt(N/M)/(2**0.5)                            # noise std dev per sample
    n = sigma*(np.random.normal(size=M) + 1j*np.random.normal(size=M))
    r = g*p + n
-
+   
    N_actual = np.sum(np.conj(n)*n)
    SNR_actual = S/N_actual                                  # will vary slightly from target
 
-   SNR_est = model.est_snr(torch.tensor(r, dtype=torch.complex64))
+   SNR_est = model.est_snr(torch.tensor(r, dtype=torch.complex64), time_offset)
 
    return SNR_actual.real, SNR_est.real
 
