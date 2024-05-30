@@ -542,8 +542,8 @@ class RADAE(nn.Module):
         return features_hat,z_hat
 
     # Estimate SNR given a vector r of M received pilot samples
-    # r is the last M samples of pilot
     # rate_Fs/time domain, only works on 1D vectors (i.e. can broadcast or do multiple estimates)
+    # unfortunately this doesn't work for multipath channels (good results for AWGN)
     def est_snr(self, r, time_offset=0):
         st = self.Ncp+time_offset
         en = st + self.M
@@ -688,19 +688,10 @@ class RADAE(nn.Module):
             # user supplied gain    
             rx = rx * self.gain
 
-            # remove cyclic prefix (assume genie timing)
+            # remove cyclic prefix
             rx = torch.reshape(rx,(num_batches,num_timesteps_at_rate_Rs,self.M+self.Ncp))
             rx_dash = rx[:,:,Ncp+self.time_offset:Ncp+self.time_offset+self.M]
 
-            snrs = torch.zeros(num_modem_frames)
-            print(num_modem_frames,self.Ns)
-            for i in range(num_modem_frames):
-                r = rx_dash[0,i*(self.Ns+1),:]
-                snrs[i] = self.est_snr(r,self.time_offset)
-               #print(snrs[i])
-            SNR_estdB = 10*torch.log10(torch.mean(snrs)) + 4.2597
-            print(f"SNRest_dB: {SNR_estdB:f}")
-            #quit()
             # DFT to transform M time domain samples to Nc carriers
             rx_sym = torch.matmul(rx_dash, self.Wfwd)
         else:
