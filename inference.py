@@ -54,6 +54,7 @@ parser.add_argument('--h_file', type=str, default="", help='path to rate Rs mult
 parser.add_argument('--g_file', type=str, default="", help='path to rate Fs Doppler spread samples, ...G1G2G1G2... .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--write_rx', type=str, default="", help='path to output file of rate Fs rx samples in ..IQIQ...f32 format')
+parser.add_argument('--rx_gain', type=float, default=1.0, help='gain to apply to --write_rx samples (default 1.0)')
 parser.add_argument('--write_tx', type=str, default="", help='path to output file of rate Fs tx samples in ..IQIQ...f32 format')
 parser.add_argument('--phase_offset', type=float, default=0, help='phase offset in rads')
 parser.add_argument('--freq_offset', type=float, help='freq offset in Hz')
@@ -220,7 +221,7 @@ if __name__ == '__main__':
    # write complex valued rate Fs time domain rx samples
    if len(args.write_rx):
       if args.rate_Fs:
-         rx = output["rx"].cpu().detach().numpy().flatten().astype('csingle')
+         rx = args.rx_gain*output["rx"].cpu().detach().numpy().flatten().astype('csingle')
          rx.tofile(args.write_rx)
       else:
          print("\nWARNING: Need --rate_Fs for --write_rx")

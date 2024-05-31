@@ -351,7 +351,7 @@ class RADAE(nn.Module):
         
         Ns = int(Nzmf*self.Tz / Ts)                     # duration of "modem frame" in QPSK symbols
         print(self.Tz, Ts, Nzmf*self.Tz / Ts, Ns)
-        #quit()
+        
         Tmf = Ns*Ts                                     # period of modem frame (s), this must remain constant for real time operation
         Nc = int(Nsmf // Ns)                            # number of carriers
         assert Ns*Nc*bps == Nzmf*latent_dim             # sanity check, one modem frame should contain all the latent features
@@ -388,9 +388,10 @@ class RADAE(nn.Module):
         # set up pilots in freq and time domain
         self.P = (2**(0.5))*barker_pilots(Nc)
         self.p = torch.matmul(self.P,self.Winv)
-        self.p_cp = torch.zeros(self.Ncp+self.M,dtype=torch.complex64)
-        self.p_cp[self.Ncp:] = self.p
-        self.p_cp[:self.Ncp] = self.p[-self.Ncp:]
+        if self.Ncp:
+            self.p_cp = torch.zeros(self.Ncp+self.M,dtype=torch.complex64)
+            self.p_cp[self.Ncp:] = self.p
+            self.p_cp[:self.Ncp] = self.p[-self.Ncp:]
 
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)

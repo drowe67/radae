@@ -93,16 +93,18 @@ filename="${filename%.*}"
 mkdir -p ${out_dir}
 
 # radae simulation
+# --rx_gain 0.1 minimises clipping at sox input (sox needs float values < 1.0)
 rx=$(mktemp).f32
 log=$(./inference.sh ${model} ${fullfile} ${out_dir}/${filename}_${EbNodB}dB_${channel}.wav \
-      --EbNodB ${EbNodB} --write_rx ${rx} --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 ${inference_args})
+      --EbNodB ${EbNodB} --write_rx ${rx} --rx_gain 0.1 --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 ${inference_args})
 CNodB=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f3)
 SNRdB=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f4)
 PAPRdB=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f5)
 PNodB=$(python3 -c "PNodB=${CNodB}+${PAPRdB}; print(\"%f\" % PNodB) ")
 
 # listen to the modem signal, just keep real channel, filter to simulate listening on a SSB Rx
-sox -r 8k -e float -b 32 -c 2 ${rx} -c 1 -e signed-integer -b 16 ${out_dir}/${filename}_${EbNodB}dB_${channel}_rx.wav sinc 0.3-2.7k remix 1 0
+# "norm" makes the max the same, note this means signal level will drop as we add noise
+sox -r 8k -e float -b 32 -c 2 ${rx} -c 1 -e signed-integer -b 16 ${out_dir}/${filename}_${EbNodB}dB_${channel}_rx.wav sinc 0.3-2.7k norm
 spectrogram "${out_dir}/${filename}_${EbNodB}dB_${channel}_rx.wav" "${out_dir}/${filename}_${EbNodB}dB_${channel}_spec.png"
 
 # SSB simulation
@@ -118,15 +120,16 @@ if [ $peak -eq 1 ]; then
   # Measure RMS value (after multipath fading if enabled), so we normalise the ups and downs of fading
   rms=$(measure_rms $speech_comp $ch_args --after_fade)
   # Now calculate peak power P required to get target P/No, the 60dB term is due to scaling in ch.c
-  No=$(python3 -c "import numpy as np; CdB=10*np.log10(${rms}*${rms}); PdB=CdB+${papr}; No=PdB-${PNodB}-60; print(\"%f\" % No) ")
+  No=$(python3 -c "import numpy as np; CdB=10*np.log10(${rms}*${rms}); PdB=CdB+${papr}; No=PdB-${PNodB}-60-6; print(\"%f\" % No) ")
 else
   # add noise at same C/No as radae signal, note we measure RMS value after multipath fading if enabled
   rms=$(measure_rms $speech_comp $ch_args --after_fade)
   # 60dB term is due to scaling in ch.c
-  No=$(python3 -c "import numpy as np; CdB=10*np.log10(${rms}*${rms}); No=CdB-${CNodB}-60; print(\"%f\" % No) ")
+  No=$(python3 -c "import numpy as np; CdB=10*np.log10(${rms}*${rms}); No=CdB-${CNodB}-60-6; print(\"%f\" % No) ")
 fi
 ch_log=$(mktemp)
-ch $speech_comp $speech_comp_noise --No ${No} --clip 16384 --after_fade $ch_args 2>${ch_log}
+# we back off gain and clip by 6dB to reduce clipping on output audio with high noise levels
+ch $speech_comp $speech_comp_noise --No ${No} --gain 0.5 --clip 8192 --after_fade $ch_args 2>${ch_log}
 # extract measured values
 snr=$(cat $ch_log| grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
 cno=$(cat $ch_log| grep "C/No" | tr -s ' ' | cut -d' ' -f5)
@@ -138,11 +141,8 @@ printf "Waveform           EbNo  PAPR  C/No  P/No  SNR\n" > $readme
 printf "Radio Autoencoder: %5.2f %5.2f %5.2f %5.2f %5.2f\n" $EbNodB $PAPRdB $CNodB $PNodB $SNRdB >> $readme
 printf "SSB..............: %5.2f %5.2f %5.2f %5.2f %5.2f\n" $EbNodB $papr $cno $pno $snr >> $readme
 
-# adjust peak output audio level to be similar to radae output, to ease listening
-radae_peak=$(measure_peak ${out_dir}/${filename}_${EbNodB}dB_${channel}.wav)
-ssb_peak=$(measure_peak $speech_comp_noise)
-gain=$(python3 -c "gain=${radae_peak}/${ssb_peak}; print(\"%f\" % gain)")
-sox -t .s16 -r 8000 -c 1 -v $gain $speech_comp_noise ${out_dir}/${filename}_${EbNodB}dB_${channel}_ssb.wav
+# norm output audio level to be similar to radae output, to ease listening
+sox -t .s16 -r 8000 -c 1 $speech_comp_noise ${out_dir}/${filename}_${EbNodB}dB_${channel}_ssb.wav norm
 
 spectrogram ${out_dir}/${filename}_${EbNodB}dB_${channel}_ssb.wav ${out_dir}/${filename}_${EbNodB}dB_${channel}_ssb_spec.png
 

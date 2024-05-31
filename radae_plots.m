@@ -24,7 +24,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
         rx=load_f32(rx_fn,1); 
         rx=rx(1:2:end)+j*rx(2:2:end); 
         figure(4); clf; plot(rx); title('rate Fs Scatter (IQ)'); mx = max(abs(rx))*1.5; axis([-mx mx -mx mx]);
-        figure(5); clf; plot(abs(rx(1:1000))); xlabel('Time (samples)'); ylabel('|rx|');
+        figure(5); clf; plot(real(rx)); xlabel('Time (samples)'); ylabel('rx');
         figure(6); clf; plot_specgram(rx, Fs=8000, 0, 3000);
         peak = max(abs(rx).^2);
         av = mean(abs(rx).^2);

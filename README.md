@@ -43,6 +43,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | ota_test.sh | Script to automate Over The Air (OTA) testing |
 | Radio Autoencoder Waveform Design.ods | Working for OFDM waveform, inclduing pilot and cyclic prefix overheads |
 | compare_models.sh | Builds loss versus Eq/No curves for models to objectively compare |
+| est_snr.py | Prototype pilot sequence based SNR estimator - doesn't work for multipath |
 
 # Installation
 
