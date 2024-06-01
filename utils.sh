@@ -51,6 +51,18 @@ function set_rms() {
     cp $raw_gain $raw
 }
 
+# Make peak power of a raw file $1 equal to the setpoint $2, buy adjusting the peak level
+function set_peak() {
+    raw=$1
+    setpoint_peak=$2
+
+    peak=$(measure_peak $raw)
+    gain=$(python3 -c "gain=${setpoint_peak}/${peak}; print(\"%f\" % gain)")
+    raw_gain=$(mktemp)
+    sox -t .s16 -r 8k -c 1 -v $gain $raw -t .s16 -r 8k -c 1 $raw_gain
+    cp $raw_gain $raw
+}
+
 function spectrogram() {
     echo "pkg load signal; rx=load_raw(\"$1\"); plot_specgram(rx, Fs=8000, 0, 3000); print('-dpng',\"$2\"); quit" | octave-cli -qf
 }

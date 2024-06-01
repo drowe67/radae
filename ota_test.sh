@@ -73,7 +73,9 @@ tx_file_only=0
 stationid=""
 speechFs=16000
 setpoint_rms=6000
+setpoint_peak=16384
 freq_offset=0
+peak=0
 
 source utils.sh
 
@@ -97,6 +99,7 @@ function print_help {
     echo "                              default /dev/ttyUSB0"
     echo "    -t                        Tx only, useful for manually observing SDRs"
     echo "    -x                        Generate tx.raw, tx.wav, tx.iq8 files and exit"
+    echo "    --peak                    Equalise peak power of RADAE and SSB (default is equal RMS power)"
     echo
     exit
 }
@@ -144,7 +147,7 @@ function process_rx {
     rx_radae=$(mktemp)
     sox $rx ${filename}_ssb.wav trim 3 $end_ssb
     sox $rx -e float -b 32 -c 2 ${rx_radae}.f32 trim $end_ssb remix 1 0
-    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 ${filename}_radae.wav --pilots --pilot_eq
+    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 ${filename}_radae.wav --pilots --pilot_eq --cp 0.004 --bottleneck 3 ---latent-dim 40
 }
 
 
@@ -185,6 +188,10 @@ case $key in
     -p)
         port="$2"	
         shift
+        shift
+    ;;
+    --peak)
+        peak=1	
         shift
     ;;
     -t)
@@ -245,7 +252,11 @@ fi
 
 # create 1000 Hz sinewave header used for tuning and C/No est
 tx_sine=$(mktemp)
-peak_amp=$(python3 -c "import numpy as np; peak_amp=${setpoint_rms}*np.sqrt(2); print(\"%f\" % peak_amp)")
+if [ $peak -eq 1 ]; then
+    peak_amp=$setpoint_peak
+else
+    peak_amp=$(python3 -c "import numpy as np; peak_amp=${setpoint_rms}*np.sqrt(2); print(\"%f\" % peak_amp)")
+fi
 mksine $tx_sine 1000 4 $peak_amp
 
 # create compressed SSB signal
@@ -270,13 +281,18 @@ speechfile_pad=$(mktemp).wav
 sox $speechfile $speechfile_pad pad 1@0
 
 # create modulated radae signal
-./inference.sh model05/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --EbNodB 100 --pilots --rate_Fs --write_rx ${tx_radae}.f32
-# to create real signal we just extract the "left" channel
+./inference.sh model18/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --EbNodB 100 --bottleneck 3 --latent-dim 40 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae}.f32
+# to create real signal we just extract the "left" channel (without remix it sums channels)
 sox -r 8k -e float -b 32 -c 2 ${tx_radae}.f32 -t .s16 -c 1 ${tx_radae}.raw remix 1 0
 
-# Make power of both signals the same, but adjusting the RMS levels to meet the setpoint
-set_rms $tx_ssb $setpoint_rms
-set_rms ${tx_radae}.raw $setpoint_rms
+# Make power of both signals the same, by adjusting the levels to meet the setpoint
+if [ $peak -eq 1 ]; then
+  set_peak $tx_ssb $setpoint_peak
+  set_peak ${tx_radae}.raw $setpoint_peak
+else
+  set_rms $tx_ssb $setpoint_rms
+  set_rms ${tx_radae}.raw $setpoint_rms
+fi
 
 # insert 1 second of silence between SSB and radae
 tx_radae_pad=$(mktemp).raw
