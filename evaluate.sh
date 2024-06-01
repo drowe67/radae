@@ -92,7 +92,8 @@ filename="${filename%.*}"
 
 mkdir -p ${out_dir}
 
-# radae simulation
+# radae simulation ------------------------------------------------------------
+
 # --rx_gain 0.1 minimises clipping at sox input (sox needs float values < 1.0)
 rx=$(mktemp).f32
 log=$(./inference.sh ${model} ${fullfile} ${out_dir}/${filename}_${EbNodB}dB_${channel}.wav \
@@ -102,12 +103,16 @@ SNRdB=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f4)
 PAPRdB=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f5)
 PNodB=$(python3 -c "PNodB=${CNodB}+${PAPRdB}; print(\"%f\" % PNodB) ")
 
-# listen to the modem signal, just keep real channel, filter to simulate listening on a SSB Rx
-# "norm" makes the max the same, note this means signal level will drop as we add noise
-sox -r 8k -e float -b 32 -c 2 ${rx} -c 1 -e signed-integer -b 16 ${out_dir}/${filename}_${EbNodB}dB_${channel}_rx.wav sinc 0.3-2.7k norm
+# Listen to the modem signal, just keep real channel, filter to simulate listening on a SSB Rx.
+# "norm" makes the max the same, note this means signal level will drop as we add noise. 
+# For some reason radae signal is normed to about 0.5 (SSB 1.0) (TODO fix some timnw)
+# "remix 1 0" uses just real (left) channel
+# disadvantage of "norm" is we can't eyeball the two signals to check peak level, need to rely on measurements+maths (shrug)
+sox -r 8k -e float -b 32 -c 2 ${rx} -c 1 -e signed-integer -b 16 ${out_dir}/${filename}_${EbNodB}dB_${channel}_rx.wav sinc 0.3-2.7k remix 1 0 norm
 spectrogram "${out_dir}/${filename}_${EbNodB}dB_${channel}_rx.wav" "${out_dir}/${filename}_${EbNodB}dB_${channel}_spec.png"
 
-# SSB simulation
+# SSB simulation --------------------------------------------------------------
+
 speech_8k=$(mktemp).s16
 speech_comp=$(mktemp).s16
 speech_comp_noise=$(mktemp).s16
@@ -135,7 +140,8 @@ snr=$(cat $ch_log| grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
 cno=$(cat $ch_log| grep "C/No" | tr -s ' ' | cut -d' ' -f5)
 pno=$(python3 -c "PNodB=${cno}+${papr}; print(\"%f\" % PNodB) ")
 
-# README of RADAE & SSB from measured values
+# README of RADAE & SSB from measured values -----------------------------------------------
+
 readme=${out_dir}/${filename}_${EbNodB}dB_${channel}_zREADME.txt
 printf "Waveform           EbNo  PAPR  C/No  P/No  SNR\n" > $readme
 printf "Radio Autoencoder: %5.2f %5.2f %5.2f %5.2f %5.2f\n" $EbNodB $PAPRdB $CNodB $PNodB $SNRdB >> $readme

@@ -34,6 +34,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | rx.sh | helper script for rx.py |
 | ofdm_sync.sh | generates curves to evaluate classical DSP sync performance |
 | evaluate.sh | script to compare radae to SSB, generates plots and speech samples |
+| evaluate_loop.sh | script to run evaluate.sh over a range of SNRs and channels |
 | doppler_spread.m | Octave script to generate Doppler spreading samples |
 | load_f32.m | Octave script to load .f32 samples |
 | multipath_samples.m | Octave script to generate multipath magnitude sample over a time/freq grid |
@@ -305,8 +306,8 @@ A log of models trained by the author.
 | model14 | dim=80 with 2D bottleneck 3 on rate Fs, 10 hour --h_file h_nc20_test.f32 --range_EbNo_start 0, 0.7dB PAPR, "accident" as it introduces phase distortion with no EQ, but does a reasonable job (however speech quality < m5), handles phase and small freq offsets with no pilots, worth exploring further | Fs | |
 | model15 | repeat of model05/09 with 250 hour --h_file h_nc20_train_mpp.f32, after refactoring dataloader, loss v epoch curve v close to model09, ep 100 loss 0.150 | Rs | |
 | model16 | repeat of model05/09 with 10 hour --h_file h_nc20_test.f32, testing short h file, ep 100 loss 0.149 | Rs | |
-| model17 | `--bottleneck 3 --h_file h_nc20_train_mpp.f32` mixed rate Rs with time domain bottelneck 3, ep 100 loss 0.112 | Rs | 240521 |
-| model18 | `--latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3` like model17 but dim 40, ep 100 loss 0.123 | Rs | 240524 |
+| model17 | `--bottleneck 3 --h_file h_nc20_train_mpp.f32` mixed rate Rs with time domain bottelneck 3, ep 100 loss 0.112 | Rs | 240601_m17 |
+| model18 | `--latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3` like model17 but dim 40, ep 100 loss 0.123 | Rs | 240601_m18 |
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
