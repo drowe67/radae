@@ -53,6 +53,7 @@ parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic pref
 parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude correction (fixes --gain)')
 parser.add_argument('--time_offset', type=int, default=0, help='sampling time offset in samples')
 parser.add_argument('--no_bpf', action='store_false', dest='bpf', help='disable BPF')
+parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
 parser.set_defaults(bpf=True)
 args = parser.parse_args()
 
@@ -68,7 +69,7 @@ num_used_features = 20
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, 
               pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = False, cyclic_prefix=args.cp,
-              coarse_mag=args.coarse_mag,time_offset=args.time_offset)
+              coarse_mag=args.coarse_mag,time_offset=args.time_offset, bottleneck=args.bottleneck)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 
@@ -174,8 +175,7 @@ if args.pilots:
          candidate = True
 
       # post process with a state machine that looks for 3 consecutive matches with about the same tmining offset      
-      if candidate:
-         print(f"state: {state:10s} Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:f}")
+      print(f"state: {state:10s} Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:f}")
 
       next_state = state
       if state == "search":

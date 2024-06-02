@@ -75,7 +75,7 @@ speechFs=16000
 setpoint_rms=6000
 setpoint_peak=16384
 freq_offset=0
-peak=0
+peak=1
 
 source utils.sh
 
@@ -99,7 +99,7 @@ function print_help {
     echo "                              default /dev/ttyUSB0"
     echo "    -t                        Tx only, useful for manually observing SDRs"
     echo "    -x                        Generate tx.raw, tx.wav, tx.iq8 files and exit"
-    echo "    --peak                    Equalise peak power of RADAE and SSB (default is equal RMS power)"
+    echo "    --rms                     Equalise RMS power of RADAE and SSB (default is equalpeak power)"
     echo
     exit
 }
@@ -147,7 +147,7 @@ function process_rx {
     rx_radae=$(mktemp)
     sox $rx ${filename}_ssb.wav trim 3 $end_ssb
     sox $rx -e float -b 32 -c 2 ${rx_radae}.f32 trim $end_ssb remix 1 0
-    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 ${filename}_radae.wav --pilots --pilot_eq --cp 0.004 --bottleneck 3 ---latent-dim 40
+    ./rx.sh model18/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 ${filename}_radae.wav --latent-dim 40 --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag
 }
 
 
@@ -190,8 +190,8 @@ case $key in
         shift
         shift
     ;;
-    --peak)
-        peak=1	
+    --rms)
+        peak=0
         shift
     ;;
     -t)
@@ -281,7 +281,8 @@ speechfile_pad=$(mktemp).wav
 sox $speechfile $speechfile_pad pad 1@0
 
 # create modulated radae signal
-./inference.sh model18/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --EbNodB 100 --bottleneck 3 --latent-dim 40 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae}.f32
+./inference.sh model18/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --EbNodB 100 \
+--latent-dim 40 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae}.f32
 # to create real signal we just extract the "left" channel (without remix it sums channels)
 sox -r 8k -e float -b 32 -c 2 ${tx_radae}.f32 -t .s16 -c 1 ${tx_radae}.raw remix 1 0
 

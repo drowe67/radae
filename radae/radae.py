@@ -392,6 +392,11 @@ class RADAE(nn.Module):
             self.p_cp = torch.zeros(self.Ncp+self.M,dtype=torch.complex64)
             self.p_cp[self.Ncp:] = self.p
             self.p_cp[:self.Ncp] = self.p[-self.Ncp:]
+        self.pilot_gain = 1.00
+        if self.bottleneck == 3:
+            pilot_backoff = 10**(-2/20)
+            # TODO: I think this expression should have abs(P[0]) in it, see also coarse_mag
+            self.pilot_gain = pilot_backoff*self.M/(Nc**0.5)
 
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)
@@ -493,14 +498,16 @@ class RADAE(nn.Module):
                 rx_ch_angle = torch.angle(rx_ch)
                 rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
 
-        # Optional "coarse" magntiude estimation and correction based on mean of all pilots across sequence. Unlike 
+        # Optional "coarse" magnitude estimation and correction based on mean of all pilots across sequence. Unlike 
         # regular PSK, ML network is sensitive to magnitude shifts.  We can't use the average mangnitude of the non-pilot symbols
         # as they have unknown amplitudes. TODO: For a practical, real world implementation, make this a frame by frame AGC type
         # algorithm, e.g. IIR smoothing of the RMS mag of each frames pilots 
         if self.coarse_mag:
             # est RMS magnitude
             mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
-            #print(mag)
+            if self.bottleneck == 3:
+                mag = mag*torch.abs(self.P[0])/self.pilot_gain
+            print(f"coarse mag: {mag:f}")
             rx_sym_pilots = rx_sym_pilots/mag
 
         return rx_sym_pilots
@@ -594,11 +601,7 @@ class RADAE(nn.Module):
             tx_sym = torch.reshape(tx_sym,(num_batches, num_modem_frames, self.Ns, self.Nc))
             tx_sym_pilots = torch.zeros(num_batches, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64,device=tx_sym.device)
             tx_sym_pilots[:,:,1:self.Ns+1,:] = tx_sym
-            pilot_gain = 1.0
-            if self.bottleneck == 3:
-                pilot_backoff = 10**(-2/20)
-                pilot_gain = pilot_backoff*self.M/(self.Nc**0.5)
-            tx_sym_pilots[:,:,0,:] = pilot_gain*self.P
+            tx_sym_pilots[:,:,0,:] = self.pilot_gain*self.P
             num_timesteps_at_rate_Rs = num_timesteps_at_rate_Rs + num_modem_frames
             tx_sym = torch.reshape(tx_sym_pilots,(num_batches, num_timesteps_at_rate_Rs, self.Nc))
 
