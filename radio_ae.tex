@@ -62,7 +62,7 @@ The encoder (Figure \ref{fig:radae_block}) takes as input a typical set of vocod
 
 In conventional digital speech systems, after the transformation/prediction stage we then quantise to a low bit rate, then use Forward Error  Correction (FEC) and modems to send the bits over a channel. However our work takes a novel twist – we train the autoencoder to generate PSK symbols that we send over the channel. It effectively combines quantisation, channel coding, and modulation. The symbols from the autoencoder tend to cluster around +/-1 like BPSK but are continuously valued, so can be considered discrete time, continuously valued PSK.
 
-The encoder and decoder are trained together as an autoencoder with the loss function  $L(\bf{f},\hat{\bf{f}})$ applied to the vocoder features.  We employ the \scalebox{0.8}[0.8]{FARGAN} vocoder for speech analysis and synthesis, however the concept is applicable to any neural and even classical vocoder with a similar feature set.
+The encoder and decoder are trained together as an autoencoder with the loss function  $L(\bf{f},\hat{\bf{f}})$ applied to the vocoder features.  We employ the \scalebox{0.8}[0.8]{FARGAN} vocoder \cite{valin2024low} for speech analysis and synthesis, however the concept is applicable to any neural and even classical vocoder with a similar feature set.
 
 Given a vector of vocoder features $\bf{f}$, we use an encoder to map them to a dimension $d$ latent vector $\bf{z}$ where $d$ is even.  Unlike digital modulation, each element $z_i$ of $\bf{z}$ is continuously valued and not constrained to a discrete set of points.  For bandwidth efficient transmission over the channel the elements of $\bf{z}$ are mapped to $d/2$ complex symbols $\bf{q}$. Compared to classical digital modulation, the elements of $\bf{z}$ can be considered BPSK symbols (continuously valued, analog bits), and the elements of $\bf{q}$ analog QPSK symbols.
 
@@ -710,6 +710,7 @@ The earlier, \emph{model05} RADAE waveform has a PAPR of 9-10dB.  Based on our e
 
 Coarse and fine timing is determined by maximising the correlation function at some time offset $t$ samples from \cite{freedv_low}:
 \begin{equation}
+\label{eq:dt}
 D_t = \bm{r}^H\bm{p}
 \end{equation}
 where $\bm{p}$ is a $M$ sample vector of pilot samples:
@@ -848,7 +849,7 @@ This timing algorithm was verified by simulation using data symbols for the MPP 
 
 \subsection{SNR Estimation}
 
-The April 2024 stored file OTA test campaign showed the need for a method of measuring the SNR from off air RADAE signals.  In existing FreeDV modes, SNR estimation is performed by estimating the mean and variance of the payload symbol constellation points. However this method relies on known constellation points which is not a valid assumption for ML based constellations.  In our hybrid DSP-ML system, the only part of the signal that is known to both the Tx and Rx are the pilots.  This section presents a SNR estimation algorithm based on the time domain pilot symbol sequence.
+The April 2024 stored file OTA test campaign showed the need for a method of measuring the SNR from off air RADAE signals.  In existing FreeDV modes, SNR estimation is performed by estimating the mean and variance of the payload symbol constellation points. However this method relies on known constellation points which is not a valid assumption for ML constellations.  In our hybrid DSP-ML system, the only part of the signal that is known to both the Tx and Rx are the pilots.  This section presents a SNR estimation algorithm based on the time domain pilot symbol sequence.
 
 Consider the normalised cross correlation function from \cite{freedv_low}:
 \begin{equation}
@@ -925,6 +926,67 @@ Further work:
 \item For the purpose of stored file experiments it is acceptable to send a separate signals (e.g. a carrier or set of known symbols) a few seconds before or after the test signal.
 \item Consider training a ML based SNR estimator.  The SNR of each training sequence could be considered an output on the network and a loss function term added.
 \end{itemize}
+
+\subsection{Acquisition}
+
+We wish to use classical DSP techniques for acquisition (e.g. coarse timing and frequency offset estimation).  Given the lack of structure in the ML symbols, the only ``known'' part of the signal is the periodic pilot sequence $r(n)=gp(n)$, send once per modem frame.  This is typically detected by maximising $D_t$ (\ref{eq:dt}) over a grid of time and frequency offsets.  From (\ref{eq:dt_time_offset}), if we assume constant pilot magnitude $|P_c|=P$ and ideal timing the maximum is:
+\begin{equation}
+|D_t| = g M N_c P^2
+\end{equation}
+This maximum is compared to a threshold $D_{thresh}$ that is computed from $\sigma$, the standard deviation of $D_t$:
+\begin{equation}
+\label{eq:corr_prob}
+D_{thresh} = \sigma\sqrt{-ln(P_{thresh})}
+\end{equation}
+using a sufficiently low probability $P_{thresh}$. If $D_t > D_{thresh}$, we can conclude that $p(n)$ has been detected.  Let us consider the probability of detection of two different $p(n)$ with the same S/N but different $N_c$. If we assume channel noise dominates $\sigma$, then the same noise power $N$ will produce the same $D_{thresh}$ for any $N_c$.  This reduces the problem to comparing $D_t$ for two $p(n)$ sequences with different $N_c$ but the same power.
+
+We denote the two choices of $N_c$ as $N_{c1}$ and $N_{c2}$. The signals are a series of impulses in the frequency domain of magnitude $P$. The power can be conveniently computed in the frequency domain as:
+\begin{equation}
+\begin{split}
+S_1 &= g_1^2 N_{c1} P^2 \\
+S_2 &= g_2^2 N_{c2} P^2
+\end{split}
+\end{equation}
+To achieve the same $S/N$ for constant $N$ we set $S_1=S_2$ and solve for $g_1$:
+\begin{equation}
+g_1=g_2 \sqrt{\frac{N_{c2}}{N_{c1}}}
+\end{equation}
+Computing the ratio of the two $D_t$ maxima:
+\begin{equation}
+\label{eq:dt_ratio}
+\begin{split}
+|D_{t1}| &= g_1 M N_{c1} P^2 \\
+|D_{t2}| &= g_2 M N_{c2} P^2 \\
+\frac{D_{t1}}{D_{t2}} &= \sqrt{\frac{N_{c1}}{N_{c2}}}
+\end{split}
+\end{equation}
+For example doubling the number of carriers $N_{c1}/N_{c2}=2$ increases the maximum by $D_{t1}/D_{t2}=\sqrt{2}$, significantly increasing the probability of detection for a given $S/N$.
+
+Table \ref{tab:acq_dtmax} shows some experimental results for \emph{model17} and \emph{model18}.  The acquisition performance of \emph{model17} ($N_c=30$) supports the theory that a larger $N_c$ gives better acquisition performance.  The high SNR $D_{thresh}$ baseline is due to the $\sigma$ of the noise free $|D_t|$ samples at non-ideal timing and frequency offsets. The mean $D_{t1}/D_{t2}=1.39$ (across all SNRs) compared to 1.41 predicted by (\ref{eq:dt_ratio}).
+ 
+\begin{table} [H]
+\centering
+\begin{tabular}{l r r r r r}
+ \hline
+ Model  & $N_c$ & $C/N_0$ & $D_{thresh}$ & $D_{tmax}$ & $N_{frames}$ \\
+ \hline
+ 17 & 30 & 132 & 3.1 & 5.2 & 4  \\
+ 18 & 15 & 132 & 3.1 & 4.1 & 4 \\
+ 17 & 30 & 42 & 3.2 & 5.4 & 4 \\
+ 18 & 15 & 42 & 3.1 & 4.0 & 4 \\
+ 17 & 30 & 35 & 3.6 & 5.8 & 4 \\
+ 18 & 15 & 35 & 3.3 & 4.2 & 8 \\
+ 17 & 30 & 32 & 4.1 & 5.8 & 4 \\
+ 18 & 15 & 32 & 3.5 & 4.2 & 24 \\
+ 17 & 30 & 30 & 4.6 & 6.5 & 4 \\
+ 18 & 15 & 30 & 4.3 & 4.2 & 68 \\
+ \hline
+\end{tabular}
+\caption{\emph{dt\_test.sh} simulation results for AWGN channel for \emph{model17} and \emph{model18} waveforms. $N_{frames}$ is the number of frames it takes to acquire using the \emph{rx.py} state machine.}
+\label{tab:acq_dtmax}
+\end{table}
+
+
 \section{Glossary}
 
 \begin{table} [H]

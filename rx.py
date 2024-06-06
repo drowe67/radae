@@ -121,7 +121,7 @@ if args.plots:
 if args.pilots:
    p = np.array(model.p)                       # pilot sequence
    frange = 100                                # coarse grid -frange/2 ... + frange/2
-   fstep = 5                                   # coarse grid spacing in Hz
+   fstep = 2.5                                   # coarse grid spacing in Hz
    Fs = model.Fs
    Rs = model.Rs
 
@@ -130,7 +130,7 @@ if args.pilots:
    D = np.zeros((Nmf,len(fcoarse_range)), dtype=np.csingle)
 
    tmax_candidate = 0 
-   Pacq_error = 0.0001
+   Pacq_error = 0.001
    acquired = False
    state = "search"
 
@@ -143,6 +143,7 @@ if args.pilots:
 
       f_ind + f_ind + 1
 
+   mf = 1
    while not acquired and len(rx) >= Nmf+M:
       # Search modem frame for maxima in correlation between pilots and received signal, over
       # a grid of time and frequency steps.  Note we only correlate on the M samples after the
@@ -175,7 +176,7 @@ if args.pilots:
          candidate = True
 
       # post process with a state machine that looks for 3 consecutive matches with about the same tmining offset      
-      print(f"state: {state:10s} Dthresh: {Dthresh:f} Dtmax: {Dtmax:f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:f}")
+      print(f"{mf:2d} state: {state:10s} Dthresh: {Dthresh:5.2f} Dtmax: {Dtmax:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
 
       next_state = state
       if state == "search":
@@ -195,6 +196,7 @@ if args.pilots:
                   
       # advance one frame and repeat
       rx = rx[Nmf:-1]
+      mf += 1
 
    if not acquired:
       print("Acquisition failed....")
