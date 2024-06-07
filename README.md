@@ -8,10 +8,9 @@ The document is a log of the authors experimental work, with just enough informa
 
 # Quickstart
 
-To Tx and Rx RADAE signal over the air using stored wavefiles you just need these sections:
-
-1. Installation
-2. Over the Air/Over the Cable (OTA/OTC)
+1. Installation section
+1. Inference section
+1. If you would like to transmit/receive test files over real HF channels: Over the Air/Over the Cable (OTA/OTC)
 
 # Attributions and License
 
@@ -94,17 +93,17 @@ make ch mksine tlininterp
 
 1. Generate `out.wav` at Eb/No = 10 dB:
    ```
-   ./inference.sh model01/checkpoints/checkpoint_epoch_100.pth wav/all.wav out.wav --EbNodB 10
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav out.wav --EbNodB 10
    ```
 
 1. Play output sample to your default `aplay` sound device at BPSK Eb/No = 3dB:
    ```
-   ./inference.sh model01/checkpoints/checkpoint_epoch_100.pth wav/vk5dgr_test.wav - --EbNodB 3
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav - --EbNodB 3
    ```
 
 1. Vanilla LPCNet-fargan (ie no analog VAE) for comparison:
    ```
-   ./inference.sh model01/checkpoints/checkpoint_epoch_100.pth wav/vk5dgr_test.wav - --passthru
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav - --passthru
    ```
 
 1. Multipath demo at approx 0dB B=3000 Hz SNR. First generate multipath channel samples using GNU Octave (only need to be generated once): 
@@ -160,7 +159,7 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_100dB.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
    ```
 
-1  An AWGN channel at Eb/No = 0dB, first generate `rx_0dB.f32`:
+1.  An AWGN channel at Eb/No = 0dB, first generate `rx_0dB.f32`:
    ```
    ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav /dev/null --rate_Fs --pilots --write_rx rx_0dB.f32 --EbNodB 0 --cp 0.004 --pilot_eq --eq_ls --ber_test
    ```
