@@ -10,7 +10,7 @@ The document is a log of the authors experimental work, with just enough informa
 
 1. Installation section
 1. Inference section
-1. If you would like to transmit/receive test files over real HF channels: Over the Air/Over the Cable (OTA/OTC)
+1. If you would like to transmit/receive test files over HF radios: Over the Air/Over the Cable (OTA/OTC)
 
 # Attributions and License
 
@@ -41,7 +41,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | radae_plots.m | Helper Octave script to generate various plots |
 | radio_ae.tex/pdf | Latex documenation |
 | ota_test.sh | Script to automate Over The Air (OTA) testing |
-| Radio Autoencoder Waveform Design.ods | Working for OFDM waveform, inclduing pilot and cyclic prefix overheads |
+| Radio Autoencoder Waveform Design.ods | Working for OFDM waveform, including pilot and cyclic prefix overheads |
 | compare_models.sh | Builds loss versus Eq/No curves for models to objectively compare |
 | est_snr.py | Prototype pilot sequence based SNR estimator - doesn't work for multipath |
 
@@ -51,7 +51,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 
 sox, python3, python3-matplotlib and python3-tqdm, octave, octave-signal.  Pytorch should be installed using the instructions from the [pytorch](https://pytorch.org/get-started/locally/) web site. 
 
-## LPCNet setup
+## FARGAN Vocoder
 
 ```
 cd ~
@@ -159,7 +159,7 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
    ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_100dB.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
    ```
 
-1.  An AWGN channel at Eb/No = 0dB, first generate `rx_0dB.f32`:
+1. An AWGN channel at Eb/No = 0dB, first generate `rx_0dB.f32`:
    ```
    ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav /dev/null --rate_Fs --pilots --write_rx rx_0dB.f32 --EbNodB 0 --cp 0.004 --pilot_eq --eq_ls --ber_test
    ```
@@ -206,7 +206,8 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
    ```
    ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null --rate_Fs --pilots --write_rx rx_0dB_mpp.f32 --EbNodB 0 --cp 0.004 --pilot_eq --eq_ls --ber_test --g_file g_mpp.f32
    ```
-   ```./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_0dB_mpp.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
+   ```
+   ./rx.sh model05/checkpoints/checkpoint_epoch_100.pth rx_0dB_mpp.f32 /dev/null --pilots --pilot_eq --cp 0.004 --plots --time_offset -16 --coarse_mag --ber_test z_100dB.f32
    ```
    Which gives us a BER of 0.172, about 1.5dB from the ideal Rayleigh multipath channel BER of 0.15 (which the MPP model approximates).
 
