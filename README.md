@@ -49,7 +49,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 
 ## Packages
 
-sox, python3, python3-matplotlib and python3-tqdm, octave, octave-signal.  Pytorch should be installed using the instructions from the [pytorch](https://pytorch.org/get-started/locally/) web site. 
+sox, python3, python3-matplotlib and python3-tqdm, octave, octave-signal, cmake.  Pytorch should be installed using the instructions from the [pytorch](https://pytorch.org/get-started/locally/) web site. 
 
 ## FARGAN Vocoder
 
@@ -86,6 +86,18 @@ cmake -DUNITTEST=1 ..
 make ch mksine tlininterp
 ```
 (optional if using HackRF) manually compile codec2-dev/misc/tsrc.c
+
+# Automated Tests
+
+The cmake/ctest framework is being used as a test framework.  Note at this stage there is no actual code that gets built:
+```
+cd radae
+cmake .
+ctest
+```
+
+1. BER test to check simulation modem calibration `--ber_test`
+2. Fixed multipath channel test `--mp_test`.
 
 # Inference
 
@@ -276,11 +288,6 @@ This section is optional - pre-trained models that run on a standard laptop CPU 
    ```
    python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model18 --latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3 --range_EbNo --plot_loss
    ```
-
-# Test Modes
-
-1. BER test to check simulation modem calibration `--ber_test`
-2. Fixed multipath channel test `--mp_test`.
 
 # Models & samples
 
