@@ -79,7 +79,8 @@ scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
 Supplies some utilities used for `ota_test.sh` and `evaluate.sh`
 ```
 cd ~
-git clone git@github.com:drowe67/codec2-dev.gitcd codec2
+git clone git@github.com:drowe67/codec2-dev.git
+cd codec2
 mkdir build_linux
 cd build_linux
 cmake -DUNITTEST=1 ..
