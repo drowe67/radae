@@ -67,6 +67,7 @@ parser.add_argument('--eq_ls', action='store_true', help='Use per carrier least 
 parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0)')
 parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude correction (fixes --gain)')
 parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
+parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss to arg, print PASS/FAIL')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -213,6 +214,14 @@ if __name__ == '__main__':
    features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
    features_hat.tofile(args.features_hat)
 
+   loss = distortion_loss(features,output['features_hat']).cpu().detach().numpy()[0]
+   print(f"loss: {loss:5.3f}")
+   if args.loss_test > 0.0:
+      if loss < args.loss_test:
+         print("PASS")
+      else:
+         print("FAIL")
+         
    # write real valued latent vectors
    if len(args.write_latent):
       z_hat = output["z_hat"].cpu().detach().numpy().flatten().astype('float32')
