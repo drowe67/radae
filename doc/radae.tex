@@ -1044,6 +1044,14 @@ Practical experience has taught us that reliable HF acquisition systems are chal
 \label{tab:acq_req}
 \end{table}
 
+\subsection{Acquisition Further work}
+
+\begin{itemize}
+\item Use ML to perform acquisition.  Question of suitable feature set (e.g. FFT mag samples), or do we run at rate $F_s$.
+\item A different pilot distribution might be smarter, e.g. staggered through carriers.
+\item In high SNR channels, $D_{tmax}>>D_{thresh}$ so we could make a decision in one frame, speeding acquisition.  We could solve (\ref{eq:corr_prob}) for the probability, and make a one frame sync decision if probability is very high.
+\end{itemize}
+
 \section{Glossary}
 
 \begin{table} [H]

@@ -5,8 +5,7 @@
 OPUS=${HOME}/opus
 PATH=${PATH}:${OPUS}
 
-features_in=features.f32
-features_out=out.f32
+features_out=features_rx_out.f32
 
 if [ $# -lt 3 ]; then
     echo "usage (write output to file):"
@@ -27,7 +26,6 @@ fi
 model=$1
 input_iqf32=$2
 output_speech=$3
-features_out=$(mktemp)
 
 # eat first 3 args before passing rest to inference.py in $@
 shift; shift; shift

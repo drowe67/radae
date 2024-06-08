@@ -45,7 +45,7 @@ add_test(NAME inference_ber_mpp
 
 # ML SYMBOL OP POINT LOSS TESTS ----------------------------------------------------------
 
-# all adjusted for -2.5dB-ish SNR operating point, should be loss < 0.3
+# all adjusted for -2.5dB-ish SNR operating point AWGN, should be loss < 0.3
 
 add_test(NAME inference_loss_model5
         COMMAND sh -c "./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
@@ -65,6 +65,18 @@ add_test(NAME inference_loss_model18
                        --loss_test 0.3")
                        set_tests_properties(inference_loss_model18 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# Stand alone PASS_REGULAR_EXPRESSION ------------------------------------------------------------------------------------
+
+# Generate rx.f32 rate Fs IQ samples, run through stand alone rx/py receiver, measure loss and acquisition time
+add_test(NAME rx_loss_acq_time
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null --EbNodB 3  --freq_offset 10 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32; \
+                       rm -f features_rx_out.f32; \
+                       ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss_test 0.3 --acq_time_test 0.8")
+                       set_tests_properties(rx_loss_acq_time PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 # TODO test evaluate.sh to prevent bit rot
 # TODO test ota_test.sh to prevent bit rot
+
 

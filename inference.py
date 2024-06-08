@@ -36,7 +36,7 @@ import argparse
 import numpy as np
 import torch
 
-from radae import RADAE, RADAEDataset, distortion_loss
+from radae import RADAE, distortion_loss
 
 parser = argparse.ArgumentParser()
 
@@ -46,7 +46,7 @@ parser.add_argument('features_hat', type=str, help='path to output feature file 
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
 parser.add_argument('--cuda-visible-devices', type=str, help="set to 0 to run using GPU rather than CPU", default="")
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
-parser.add_argument('--EbNodB', type=float, default=0, help='BPSK Eb/No in dB')
+parser.add_argument('--EbNodB', type=float, default=100, help='BPSK Eb/No in dB')
 parser.add_argument('--passthru', action='store_true', help='copy features in to feature out, bypassing ML network')
 parser.add_argument('--mp_test', action='store_true', help='Fixed notch test multipath channel (rate Rs)')
 parser.add_argument('--ber_test', action='store_true', help='send random PSK bits through channel model, measure BER')
@@ -221,7 +221,7 @@ if __name__ == '__main__':
          print("PASS")
       else:
          print("FAIL")
-         
+
    # write real valued latent vectors
    if len(args.write_latent):
       z_hat = output["z_hat"].cpu().detach().numpy().flatten().astype('float32')

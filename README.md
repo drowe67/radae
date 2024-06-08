@@ -45,6 +45,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | compare_models.sh | Builds loss versus Eq/No curves for models to objectively compare |
 | est_snr.py | Prototype pilot sequence based SNR estimator - doesn't work for multipath |
 | test folder | Helper scripts for ctests |
+| loss.py | Tool to calculate mean loss between two feature files, a useful objective measure |
 
 # Installation
 
@@ -90,12 +91,13 @@ make ch mksine tlininterp
 
 # Automated Tests
 
-The cmake/ctest framework is being used as a test framework.  Note at this stage there is no actual code that gets built:
+The cmake/ctest framework is being used as a test framework.  Note at this stage there is no actual code that gets built (so no `make` step). To configure and run the cests:
 ```
 cd radae
 cmake .
 ctest
 ```
+To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to run in verbose mode `ctest -V -R inference_model5`.
 
 1. BER test to check simulation modem calibration `--ber_test`
 2. Fixed multipath channel test `--mp_test`.
@@ -104,9 +106,9 @@ ctest
 
 `inference.py` is used for inference, which has been wrapped up in a helper script `inference.sh`.  Inference runs by default on the CPU, but will run on the GPU with the `--cuda-visible-devices 0` option.
 
-1. Generate `out.wav` at Eb/No = 10 dB:
+1. Generate `out.wav` at the default Eb/No = 100 dB:
    ```
-   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav out.wav --EbNodB 10
+   ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav out.wav
    ```
 
 1. Play output sample to your default `aplay` sound device at BPSK Eb/No = 3dB:

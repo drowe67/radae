@@ -5,9 +5,6 @@
 OPUS=${HOME}/opus
 PATH=${PATH}:${OPUS}
 
-features_in=features.f32
-features_out=out.f32
-
 if [ $# -lt 3 ]; then
     echo "usage (write output to file):"
     echo "  ./inference.sh model in.s16 out.wav [optional inference.py args]"
@@ -28,8 +25,8 @@ fi
 model=$1
 input_speech=$2
 output_speech=$3
-features_in=$(mktemp)
-features_out=$(mktemp)
+features_in=features_in.f32
+features_out=features_out.f32
 
 # eat first 3 args before passing rest to inference.py in $@
 shift; shift; shift
