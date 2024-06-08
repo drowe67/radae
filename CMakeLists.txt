@@ -15,7 +15,7 @@ enable_testing()
 add_test(NAME inference_basic
          COMMAND sh -c "./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --EbNodB 10")
 
-# A rate Fs test where we substitute digital QPSK symbols and check BER, good test of rate Fs subsystem
+# A rate Fs test where we substitute digital QPSK symbols and check BER; good test of rate Fs subsystem, pilot and CP insertion
 add_test(NAME inference_ber
          COMMAND sh -c "./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav /dev/null --rate_Fs --pilots \
                          --EbNodB 100 --cp 0.004 --pilot_eq --eq_ls --ber_test")

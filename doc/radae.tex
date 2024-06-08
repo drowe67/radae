@@ -2,7 +2,7 @@
 \usepackage{amsmath}
 \usepackage{hyperref}
 \usepackage{tikz}
-\usetikzlibrary{calc,arrows,shapes,positioning}
+\usetikzlibrary{calc,arrows,shapes,positioning,automata}
 \usepackage{tkz-euclide}
 \usepackage[numbib]{tocbibind}
 \usepackage{float}
@@ -30,7 +30,7 @@ pinstyle/.style = {pin edge={to-,thin,black}}
 
 This report presents an autoencoder derived from RDOVAE \cite{valin2023lowbitrate} to send speech over radio channels.  Our goal is to determine if reasonable speech quality can be obtained over a channel of bandwidth $B<3000$ Hz and SNR around 0dB, roughly the lower limit of Single Side Band (SSB) - a popular power and bandwidth efficient form of speech communication.
 
-This document describes the Radio Autoencoder \emph{radae} system, discusses channels simulation and calibration, and describes how we combined ML with classical DSP to create a practical proof of concept system that can send speech over real world VHF and HF radio channels.  Finally, we compare the capabilities of the Radio Autoencoder to existing systems for speech communication over HF and VHF/UHF radio.
+This document describes the Radio Autoencoder \emph{radae} system, discusses channel simulation and noise calibration, and describes how we combined ML with classical DSP to create a practical proof of concept system that can send speech over real world VHF and HF radio channels.  Finally, we compare the capabilities of the Radio Autoencoder to existing systems for speech communication over HF and VHF/UHF radio. TODO - update for later sections.
 
 \begin{figure}[h]
 \caption{Radio Autoencoder Concept}
@@ -706,7 +706,7 @@ The earlier, \emph{model05} RADAE waveform has a PAPR of 9-10dB.  Based on our e
 \label{tab:papr_ssb}
 \end{table}
 
-\subsection{Timing Algorithm}
+\section{Timing Algorithm}
 
 Coarse and fine timing is determined by maximising the correlation function at some time offset $t$ samples from \cite{freedv_low}:
 \begin{equation}
@@ -847,7 +847,7 @@ This timing algorithm was verified by simulation using data symbols for the MPP 
 \item The vector of $M$ samples that maximises $D_t$ (e.g. $t_2$) may have ISI.  It may be better to use a time shifted version of $\bm{p}$ as the prototype time domain pilot sequence.
 \end{itemize} 
 
-\subsection{SNR Estimation}
+\section{SNR Estimation}
 
 The April 2024 stored file OTA test campaign showed the need for a method of measuring the SNR from off air RADAE signals.  In existing FreeDV modes, SNR estimation is performed by estimating the mean and variance of the payload symbol constellation points. However this method relies on known constellation points which is not a valid assumption for ML constellations.  In our hybrid DSP-ML system, the only part of the signal that is known to both the Tx and Rx are the pilots.  This section presents a SNR estimation algorithm based on the time domain pilot symbol sequence.
 
@@ -927,9 +927,15 @@ Further work:
 \item Consider training a ML based SNR estimator.  The SNR of each training sequence could be considered an output on the network and a loss function term added.
 \end{itemize}
 
-\subsection{Acquisition}
+\section{Acquisition}
 
-We wish to use classical DSP techniques for acquisition (e.g. coarse timing and frequency offset estimation).  Given the lack of structure in the ML symbols, the only ``known'' part of the signal is the periodic pilot sequence $r(n)=gp(n)$, send once per modem frame.  This is typically detected by maximising $D_t$ (\ref{eq:dt}) over a grid of time and frequency offsets.  From (\ref{eq:dt_time_offset}), if we assume constant pilot magnitude $|P_c|=P$ and ideal timing the maximum is:
+In a practical PTT voice system a transmitter will start and stop transmissions at a time unknown to the remote receiver.  When a received signal is present, it will have unknown timing and frequency offsets. An acquisition system is required to determine if a valid signal is present, and to determine estimates of the frequency and timing offsets.  It must also determine when transmission ceases, to prevent decoding when no signal is present.
+ 
+Given the lack of structure in the ML symbols, the only ``known'' part of the signal is the periodic pilot sequence $r(n)=gp(n)$, send once per modem frame.  We have therefore chosen to use classical DSP techniques for acquisition. This is typically detected by maximising $D_t$ (\ref{eq:dt}) over a grid of time and frequency offsets. Once the pilot sequence is detected, a state machine is used to control when decoding of the received ML symbols starts and stops.
+
+\subsection{Pilot Detection}
+
+From (\ref{eq:dt_time_offset}), if we assume constant pilot magnitude $|P_c|=P$ and ideal timing the maximum is:
 \begin{equation}
 |D_t| = g M N_c P^2
 \end{equation}
@@ -982,10 +988,61 @@ Table \ref{tab:acq_dtmax} shows some experimental results for \emph{model17} and
  18 & 15 & 30 & 4.3 & 4.2 & 68 \\
  \hline
 \end{tabular}
-\caption{\emph{dt\_test.sh} simulation results for AWGN channel for \emph{model17} and \emph{model18} waveforms. $N_{frames}$ is the number of frames it takes to acquire using the \emph{rx.py} state machine.}
+\caption{\emph{dt\_test.sh} simulation results for AWGN channel for \emph{model17} and \emph{model18} waveforms. $N_{frames}$ is the number of frames it takes to sync using the \emph{rx.py} state machine. These results suggest a larger $N_c$ (\emph{model17}) has better performance.}
 \label{tab:acq_dtmax}
 \end{table}
 
+\subsection{Sync State Machine}
+
+Figure \ref{fig:sync_state_mach} illustrates the basic operation of the sync state machine. In the \emph{search} state we maximise $D_t$ over a grid of time and frequency values.  When it $D_t>D_{thresh}$ we enter the \emph{sync} state.  In the sync state $D_t$ is sampled over a smaller range of timing offsets to track sample clock offsets and the optimum sampling instant in a multipath channel.  When the signal disappears, $D_t$ will drop beneath $D_{thresh}$ and we will return to the \emph{search} state.  The pilot detector output $d$ is defined as:
+\begin{equation}
+d =	\begin{cases}
+      0, & D_t < D_{thresh} \\
+      1, & D_t \ge D_{thresh}
+	\end{cases}
+\end{equation}
+The state machine ``clock speed" is once per modem frame (120ms for the current, \emph{Candidate 2} waveform).
+
+\begin{figure} [H]
+\caption{Sync state machine}
+\vspace{5mm}
+\label{fig:sync_state_mach}
+\begin{center}
+\begin{tikzpicture}[>=triangle 45,node distance=2cm]
+
+\node[state, state] (search) {search};
+\node[state, state, right of=search] (sync) {sync};
+\draw (search) edge[loop above] node{$d=0$} (search)
+(sync) edge[loop above] node{$d=1$} (sync);
+\draw [->] (search) edge[bend left, above] node{$d=1$} (sync)
+(sync) edge[bend left, below] node{$d=0$} (search);
+
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
+Practical experience has taught us that reliable HF acquisition systems are challenging to build, they are often a source of hard to fix bugs and acquisition across a wide frequency range requires relatively high CPU.  It is therefore prudent to design carefully.  Table \ref{tab:acq_req} sets out some requirements for the acquisition system. No acquisition system is perfect, so we define behaviour in terms of probabilities and mean event times.  To design an acquisition system we set reasonable ``mean time" requirements, then derive the probabilities required to meet these requirements.  The ability to meet these these requirements can be determined by analysis and verified by simulation.
+
+\begin{table} [H]
+\centering
+\begin{tabular}{ m{0.3cm} | m{6.5cm} | m{2.1cm} | m{1.25cm}}
+ \hline
+  & Requirement & Symbol & Value \\
+ \hline
+  A1 & Frequency offset & & $\pm 50$ Hz \\
+  A2 & Prob we enter sync with no signal present  & $P(d=0 | \overline{sig})$ & \\
+  A3 & Prob we enter sync with signal present  & $P(d=1 | sig)$ &  \\
+  A4 & Prob we leave sync with signal present  & $P(d=0 | sig)$ &  \\
+  A5 & Prob we leave sync with no signal present  & $P(d=0 | \overline{sig})$ &  \\
+  A6 & Mean time between false syncs with no signal present & $T_{false}$ & $>$ 120 s\\
+  A7 & Mean time to sync when signal present & $T_{sync}$ & $<$ 0.5 s \\
+  A8 & Mean time to lose sync when signal present & $T_{false\_unsync}$ & $>600$ s\\
+  A9 & Mean time to lose sync when no signal present & $T_{unsync}$ & $<$ 0.5 s \\
+ \hline
+\end{tabular}
+\caption{Acquisition system requirements. The probabilities will be a function of SNR and channel type (multipath is always harder).}
+\label{tab:acq_req}
+\end{table}
 
 \section{Glossary}
 
