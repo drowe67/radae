@@ -44,6 +44,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | Radio Autoencoder Waveform Design.ods | Working for OFDM waveform, including pilot and cyclic prefix overheads |
 | compare_models.sh | Builds loss versus Eq/No curves for models to objectively compare |
 | est_snr.py | Prototype pilot sequence based SNR estimator - doesn't work for multipath |
+| test folder | Helper scripts for ctests |
 
 # Installation
 
@@ -156,7 +157,7 @@ Automates joint simulation of SSB and RADAE, generates wave files and spectrogra
 
 # Seperate Tx and Rx
 
-We separate the system into a transmitter `inference.py` and stand alone receiver `rx.py`.  Theses examples test the OFDM waveform, including pilot symbol insertion, cyclic prefix, least squares phase EQ, and coarse magnitude EQ.
+We separate the system into a transmitter `inference.py` and stand alone receiver `rx.py`.  These examples test the OFDM waveform, including pilot symbol insertion, cyclic prefix, least squares phase EQ, and coarse magnitude EQ.
 
 BER tests are useful to calibrate the system, and measure loss from classical DSP based synchronisation.  We have a good theoretical model for the expected BER on AWGN and multipath channels.
 
