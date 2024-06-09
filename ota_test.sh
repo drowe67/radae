@@ -131,11 +131,11 @@ function process_rx {
     rx=$(mktemp).wav
     sox $1 -c 1 -r 8k $rx
     # generate spectrogram
-    echo "pkg load signal; warning('off', 'all'); \
+    DISPLAY=""; echo "pkg load signal; warning('off', 'all'); \
           s=load_raw('$rx'); \
           plot_specgram(s, 8000, 200, 3000); print('${filename}_spec.jpg', '-djpg'); \
           quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
-    
+
     # extract sine wave at start and estimate C/No
     rx_sine=$(mktemp).f32
     sox $rx -e float -b 32 -c 2 ${rx_sine} trim 0 1
