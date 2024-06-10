@@ -46,6 +46,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | est_snr.py | Prototype pilot sequence based SNR estimator - doesn't work for multipath |
 | test folder | Helper scripts for ctests |
 | loss.py | Tool to calculate mean loss between two feature files, a useful objective measure |
+| ml_pilot.py | Training low PAPR pilot sequence |
 
 # Installation
 
