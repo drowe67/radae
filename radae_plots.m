@@ -193,3 +193,66 @@ function est_snr_plot(epslatex="")
         print_eps_restore(epslatex,"-S300,250",textfontsize,linewidth);
     end
 endfunction
+
+% plot D(t,f) surface from rx.py
+function D_plot(fn, r=40, c=960)
+    D=load_f32(fn,1);
+    D=D(1:2:end)+j*D(2:2:end);
+    frames = length(D)/(r*c)
+    f = 1
+    k = ' ';
+    do
+        figure(1);
+        st = (f-1)*(r*c) + 1; en = st + r*c - 1;
+        Df=reshape(D(st:en),r,c);
+        mesh(abs(Df))
+        printf("\rframe: %d  menu: n-next  b-back  q-quit", f);
+        fflush(stdout);
+        k = kbhit();
+        if k == 'n'
+            if f < frames; f = f + 1; endif
+        endif
+        if k == 'b';
+            if f > 0; f = f - 1; endif
+        endif
+    until (k == 'q')
+    printf("\n");
+end
+
+function p = rayleigh_pdf(sigma_r,x)
+  p = (x./(sigma_r*sigma_r)).*exp(-(x.^2)/(2*sigma_r*sigma_r));
+end
+
+% checking our scale parameter mapping for Rayleigh
+function test_rayleigh(epslatex="")
+  randn('seed',1);
+  N = 10E6;
+  sigma_n = 1;
+  noise1 = (sigma_n/sqrt(2))*(randn(1,N) + j*randn(1,N));
+  noise2 = (sigma_n/sqrt(2))*(randn(1,N) + j*randn(1,N));
+  X1 = abs(noise1);
+  X12 = abs(noise1) + abs(noise2);
+  
+  [h1 x1] = hist(X1,50);
+  [h12 x12] = hist(X12,50);
+  
+  % est scale param from mean of X1
+  sigma1_r = mean(X1)/sqrt(pi/2);
+  sigma12_r = sqrt(2)*sigma1_r;
+  p1 = rayleigh_pdf(sigma1_r, x1);
+  p12 = rayleigh_pdf(sigma12_r, x12);
+
+  if length(epslatex)
+    [textfontsize linewidth] = set_fonts();
+  end
+  figure(1); clf;
+  semilogy(x1,h1/trapz(x1,h1),'b;histogram X1;');
+  hold on;
+  semilogy(x12,h12/trapz(x12,h12),'g;histogram X1+X2;');
+  semilogy(x1,p1,'b+; X1 PDF;');
+  semilogy(x12,abs(p12),'g+; X1+X2 PDF;');
+  hold off; grid; axis([0 ceil(max(x12)) 1E-6 1]); legend('boxoff');
+  if length(epslatex)
+    print_eps_restore(epslatex,"-S300,250",textfontsize,linewidth);
+  end
+end

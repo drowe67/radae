@@ -8,6 +8,7 @@
 \usepackage{float}
 \usepackage{array}
 \usepackage{bm}
+\usepackage{siunitx}  
 
 \begin{document}
 
@@ -933,18 +934,18 @@ In a practical PTT voice system a transmitter will start and stop transmissions 
  
 Given the lack of structure in the ML symbols, the only ``known'' part of the signal is the periodic pilot sequence $r(n)=gp(n)$, send once per modem frame.  We have therefore chosen to use classical DSP techniques for acquisition. This is typically detected by maximising $D_t$ (\ref{eq:dt}) over a grid of time and frequency offsets. Once the pilot sequence is detected, a state machine is used to control when decoding of the received ML symbols starts and stops.
 
-\subsection{Pilot Detection}
+\subsection{Pilot Detection and $N_c$}
 
 From (\ref{eq:dt_time_offset}), if we assume constant pilot magnitude $|P_c|=P$ and ideal timing the maximum is:
 \begin{equation}
-|D_t| = g M N_c P^2
+|D_{tmax}| = g M N_c P^2
 \end{equation}
-This maximum is compared to a threshold $D_{thresh}$ that is computed from $\sigma$, the standard deviation of $D_t$:
+This maximum is compared to a threshold $D_{thresh}$ that is computed from $\sigma$, the standard deviation of $|D_t|$:
 \begin{equation}
 \label{eq:corr_prob}
 D_{thresh} = \sigma\sqrt{-ln(P_{thresh})}
 \end{equation}
-using a sufficiently low probability $P_{thresh}$. If $D_t > D_{thresh}$, we can conclude that $p(n)$ has been detected.  Let us consider the probability of detection of two different $p(n)$ with the same S/N but different $N_c$. If we assume channel noise dominates $\sigma$, then the same noise power $N$ will produce the same $D_{thresh}$ for any $N_c$.  This reduces the problem to comparing $D_t$ for two $p(n)$ sequences with different $N_c$ but the same power.
+using a sufficiently low probability $P_{thresh}$. If $|D_t| > D_{thresh}$, we can conclude that $p(n)$ has been detected.  Let us consider the probability of detection of two different $p(n)$ with the same S/N but different $N_c$. If we assume channel noise dominates $\sigma$, then the same noise power $N$ will produce the same $D_{thresh}$ for any $N_c$.  This reduces the problem to comparing $D_t$ for two $p(n)$ sequences with different $N_c$ but the same power.
 
 We denote the two choices of $N_c$ as $N_{c1}$ and $N_{c2}$. The signals are a series of impulses in the frequency domain of magnitude $P$. The power can be conveniently computed in the frequency domain as:
 \begin{equation}
@@ -992,13 +993,109 @@ Table \ref{tab:acq_dtmax} shows some experimental results for \emph{model17} and
 \label{tab:acq_dtmax}
 \end{table}
 
+\subsection{Pilot Detection over Multiple Frames}
+
+The pilot detector computes $|D_t|$ as the inner product of 
+\begin{equation}
+D_t = \sum_{n=0}^{M-1} r^*(n)p(n)
+\end{equation}
+When we have good time alignment with the received pilot:
+\begin{equation}
+\label{eq:dt_peak}
+\begin{split}
+r(n) &= gp(n) + noise(n) \\
+D_{tmax}   &= \sum_{n=0}^{M-1} g^*p^*(n)p(n) + \sum_{n=0}^{M-1} noise(n)*p(n)  \\
+|D_{tmax}| &\approx gN_cMP^2
+\end{split}
+\end{equation}
+as the noise and pilot samples are uncorrelated so their inner product is small. Consider the other possible signals $r(n)$ that may be processed by the pilot detector:
+\begin{equation}
+\label{eq:rv_cases}
+r(n) =\begin{cases}
+      r(n) = gp(n-t) + noise(n), \quad t \ne 0 \\
+      r(n) = noise(n) \\
+      r(n) = gtx(n) + noise(n)
+	\end{cases}
+\end{equation}
+In the cases (\ref{eq:rv_cases}) we model $|D_t|$ as a Rayleigh distributed random variable with scale parameter $\sigma_r$. The cases are further explained:
+\begin{enumerate}
+\item Non-time aligned pilot and additive noise.
+\item Noise only (no signal present).
+\item Non-pilot symbols from the transmitter (e.g. ML symbols) with additive noise. This is a common scenario in streaming voice, where we often attempt to acquire the signal well after transmission has started. For high SNRs, the power of $gtx(n)$ will dominate the received signal power and also the power (or variance $\sigma^2$) of $|D_t|$.  Note that for PAPR optimised waveforms, $gtx(n)$ may be several dB higher in power than the pilot $gp(n)$, degrading the ratio of $D_{tmax}$ compared to $\sigma$ compared to non-PAPR optimised waveforms.
+\end{enumerate}
+We would expect to see a peak (\ref{eq:dt_peak}) in $|D_t|$ every modem frame or every $N_{mf}$ samples. Consider the case where we sum $|D_t|$ from two adjacent modem frames:
+\begin{equation}
+\begin{split}
+|D_{t12}| &= \left|\sum_{n=0}^{M-1} r^*(n)p(n)\right| + \left|\sum_{n=0}^{M-1} r^*(n+N_{mf})p(n)\right| \\
+|D_{t12}| &= |D_{t1}| + |D_{t2}|
+\end{split}
+\end{equation}
+This can be seen as the sum of two random variables. Unfortunately there is no closed form expression for the sum of Rayleigh distributions \cite{1388722}. Let us attempt to use the properties of Gaussian random variables to find an approximation. The variance of the sum of two Gaussian random variables is:
+\begin{equation}
+Var(X1+X2) = Var(X1) + Var(X2) + 2Cov(X1,X2)
+\end{equation}
+Due to the additive noise component and time varying nature of $tx(n)$ we assume for all cases in (\ref{eq:rv_cases}) $|D_{t1}|$ and $|D_{t2}|$ are independent so $2Cov(|D_{t1}|,|D_{t2}|)=0$.  We also assume they have the same variance $Var(|D_{t1}|) = Var(|D_{t2}|)$ as the noise or signal power components in (\ref{eq:rv_cases}) are likely to have the same power when separated by just one modem frame:
+\begin{equation}
+\begin{split}
+Var(|D_{t1}|+|D_{t2}|) & = Var(|D_{t1}|) + Var(|D_{t2}|) + 2Cov(|D_{t1}|,|D_{t2}|) \\
+\sigma_{12}^2 &= \sigma^2 + \sigma^2 \\
+\sigma_{12} &= \sqrt{2}\sigma
+\end{split}
+\end{equation}
+Observing that the Rayleigh scale parameter is proportional to $\sigma$, we apply this approximation to the Rayleigh scale parameter:
+\begin{equation}
+\label{eq:rayleigh_sum}
+\sigma_{r12} \approx \sqrt{2}\sigma_r
+\end{equation}
+Figure \ref{fig:rayleigh_sum} shows the results of using this approximation. In the region of interest around $P_{12}(x)=\num{1e-4}$ the probability density derived from (\ref{eq:rayleigh_sum}) is around 5 times the measured histogram.  For a single Rayleigh random variable the probability of a non-pilot sample of $|D_t|$ exceeding $x$ is area of the region to the right of $x$ or $1-CDF(x)$:
+\begin{equation}
+P(|D_t|>x,\sigma_r) = e^{-x^2/(2\sigma_r^2)}
+\end{equation}
+Applying (\ref{eq:rayleigh_sum}) and the correction factor of 5 from Figure (\ref{fig:rayleigh_sum}) to the sum of two Rayleigh RVs:
+\begin{equation}
+\begin{split}
+P_{12}(|D_{t12}|>x,\sigma_r) &\approx 5e^{-x^2/(2\sigma_{r12}^2)} \\
+P_{12}(|D_{t12}|>x,\sigma_r) &= 5e^{-x^2/(4\sigma_r^2)}
+\end{split}
+\end{equation}
+
+\begin{figure}[H]
+\caption{Theoretical Rayleigh PDF using scale parameter from (\ref{eq:rayleigh_sum}) and simulation histogram for sum of two Rayleigh RVs $X1$ and $X2$.}
+\label{fig:rayleigh_sum}
+\begin{center}
+\input rayleigh_sum.tex
+\end{center}
+\end{figure}
+
+Consider the peak when we sum two adjacent modem frames:
+\begin{equation}
+\begin{split}
+|D_{tmax12}| &= |D_{tmax1}| + |D_{tmax2}| \\
+              &= 2|D_{tmax}| \\
+              &\approx 2gN_cMP^2
+\end{split}
+\end{equation}
+From (\ref{eq:corr_prob}) we can compare the probability of false detection of a pilot as:
+\begin{equation}
+\begin{split}
+P &= e^{-(|D_{tmax}|/\sigma)^2} \\
+P_{sum} &= e^{-(|D_{tsummax}|/\sigma_{sum})^2} \\
+P_{sum} &= e^{-(|2D_{tmax}|/(\sqrt{2}\sigma))^2} \\
+P_{sum} &= e^{-2(|D_{tmax}|/\sigma)^2} \\
+P_{sum} &= P^2
+\end{split}
+\end{equation}
+For example if $P=\num{1e-3}$, $P_{sum}=\num{1e-6}$ - a significant improvement. It can also be shown that the ratio $D_{tsummax}/\sigma = \sqrt(2)D_{tmax}/\sigma$, an improvement of 3dB. This is not quite the same as increasing the received signal power by 3dB, as when the signal power increases both the pilot and ``interfering" ML symbols in case 3 of (\ref{eq:rv_cases}) increases.
+
+
+
 \subsection{Sync State Machine}
 
-Figure \ref{fig:sync_state_mach} illustrates the basic operation of the sync state machine. In the \emph{search} state we maximise $D_t$ over a grid of time and frequency values.  When it $D_t>D_{thresh}$ we enter the \emph{sync} state.  In the sync state $D_t$ is sampled over a smaller range of timing offsets to track sample clock offsets and the optimum sampling instant in a multipath channel.  When the signal disappears, $D_t$ will drop beneath $D_{thresh}$ and we will return to the \emph{search} state.  The pilot detector output $d$ is defined as:
+Figure \ref{fig:sync_state_mach} illustrates the basic operation of the sync state machine. In the \emph{search} state we maximise $D_t$ over a grid of time and frequency values.  When it $|D_t|>D_{thresh}$ we enter the \emph{sync} state.  In the sync state $D_t$ is sampled over a smaller range of timing offsets to track sample clock offsets and the optimum sampling instant in a multipath channel.  When the signal disappears, $D_t$ will drop beneath $D_{thresh}$ and we will return to the \emph{search} state.  The pilot detector output $d$ is defined as:
 \begin{equation}
 d =	\begin{cases}
-      0, & D_t < D_{thresh} \\
-      1, & D_t \ge D_{thresh}
+      0, & |D_t| < D_{thresh} \\
+      1, & |D_t| \ge D_{thresh}
 	\end{cases}
 \end{equation}
 The state machine ``clock speed" is once per modem frame (120ms for the current, \emph{Candidate 2} waveform).

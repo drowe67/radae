@@ -54,6 +54,7 @@ parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude 
 parser.add_argument('--time_offset', type=int, default=0, help='sampling time offset in samples')
 parser.add_argument('--no_bpf', action='store_false', dest='bpf', help='disable BPF')
 parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
+parser.add_argument('--write_D', type=str, default="", help='Write D(t,f) matrix on last modem frame')
 parser.set_defaults(bpf=True)
 args = parser.parse_args()
 
@@ -119,18 +120,19 @@ if args.plots:
 # Acquisition - 1 sample resolution timing, coarse/fine freq offset estimation
 
 if args.pilots:
-   p = np.array(model.p)                       # pilot sequence
+   p = np.array(model.p) 
    frange = 100                                # coarse grid -frange/2 ... + frange/2
-   fstep = 2.5                                   # coarse grid spacing in Hz
+   fstep = 2.5                                 # coarse grid spacing in Hz
    Fs = model.Fs
    Rs = model.Rs
 
    # correlation at various time and freq offsets
    fcoarse_range = np.arange(-frange/2,frange/2,fstep)
    D = np.zeros((Nmf,len(fcoarse_range)), dtype=np.csingle)
+   D1 = np.zeros((Nmf,len(fcoarse_range)), dtype=np.csingle)
 
    tmax_candidate = 0 
-   Pacq_error = 0.001
+   Pacq_error = 0.0001
    acquired = False
    state = "search"
 
@@ -144,6 +146,10 @@ if args.pilots:
       f_ind + f_ind + 1
 
    mf = 1
+   if len(args.write_D):
+      print(D.shape)
+      fD=open(args.write_D,'wb')
+
    while not acquired and len(rx) >= Nmf+M:
       # Search modem frame for maxima in correlation between pilots and received signal, over
       # a grid of time and frequency steps.  Note we only correlate on the M samples after the
@@ -159,14 +165,18 @@ if args.pilots:
             w = 2*np.pi*f/Fs
             w_vec = np.exp(-1j*w*np.arange(M))
             D[t,f_ind] = np.dot(np.conj(w_vec*rx[t:t+M]),p)
+            D1[t,f_ind] = np.dot(np.conj(w_vec*rx[t+Nmf:t+Nmf+M]),p)
 
-            if np.abs(D[t,f_ind]) > Dtmax:
-               Dtmax = np.abs(D[t,f_ind])
+            if (np.abs(D[t,f_ind]) + np.abs(D1[t,f_ind]))/2 > Dtmax:
+               Dtmax = (np.abs(D[t,f_ind]) + np.abs(D1[t,f_ind]))/2
                tmax = t
                fmax = f 
                f_ind_max =  f_ind
             f_ind = f_ind + 1
       
+      if len(args.write_D):
+         D.tofile(fD)
+
       # Ref: freedv_low.pdf "Coarse Frequency Estimation"
       sigma_est = np.std(D)
       Dthresh = sigma_est*np.sqrt(-np.log(Pacq_error))
@@ -201,9 +211,9 @@ if args.pilots:
    if not acquired:
       print("Acquisition failed....")
       quit()
-
+      
    # frequency refinement, use two sets of pilots
-   ffine_range = np.arange(fmax-8,fmax+8,0.25)
+   ffine_range = np.arange(fmax-10,fmax+10,0.25)
    #print(ffine_range)
    D_fine = np.zeros(len(ffine_range), dtype=np.csingle)
    f_ind = 0
