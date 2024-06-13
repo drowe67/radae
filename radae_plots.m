@@ -236,6 +236,8 @@ function test_rayleigh(epslatex="")
   [h1 x1] = hist(X1,50);
   [h12 x12] = hist(X12,50);
   
+  % PDF -------------------
+
   % est scale param from mean of X1
   sigma1_r = mean(X1)/sqrt(pi/2);
   sigma12_r = sqrt(2)*sigma1_r;
@@ -245,13 +247,42 @@ function test_rayleigh(epslatex="")
   if length(epslatex)
     [textfontsize linewidth] = set_fonts();
   end
+
+  warning ("off", "Octave:negative-data-log-axis");
+  
   figure(1); clf;
   semilogy(x1,h1/trapz(x1,h1),'b;histogram X1;');
   hold on;
-  semilogy(x12,h12/trapz(x12,h12),'g;histogram X1+X2;');
   semilogy(x1,p1,'b+; X1 PDF;');
+  semilogy(x12,h12/trapz(x12,h12),'g;histogram X1+X2;');
   semilogy(x12,abs(p12),'g+; X1+X2 PDF;');
   hold off; grid; axis([0 ceil(max(x12)) 1E-6 1]); legend('boxoff');
+  xlabel('x'); ylabel('$f(x)$');
+  if length(epslatex)
+    print_eps_restore(sprintf("%s_pdf", epslatex),"-S300,250",textfontsize,linewidth);
+  end
+
+  % P(X1>x) = 1 - CDF(x)
+
+  P1 = exp(-(x1.^2/(2*sigma1_r^2)));
+  for i = 1:length(x1)
+    P1hist(i) = length(find(X1 > x1(i)))/N;
+  end
+  
+  P12 = 5*exp(-(x12.^2/(4*sigma1_r^2)));
+  for i = 1:length(x1)
+    P12hist(i) = length(find(X12 > x12(i)))/N;
+  end
+  
+  figure(2); clf;
+  semilogy(x1, P1hist, "b;Histogram $P(X1>x)$;");
+  hold on;
+  semilogy(x1, P1, "b+;$P(X1>x)$;");
+  semilogy(x12, P12hist, "g;Histogram $P(X1+X2>x)$;");
+  semilogy(x12, P12, "g+;$P(X1+X2>x)$;");
+  hold off;
+  grid; axis([0 ceil(max(x12)) 1E-6 1]); legend('boxoff');
+  xlabel('x'); ylabel('$P(RV>x)$');
   if length(epslatex)
     print_eps_restore(epslatex,"-S300,250",textfontsize,linewidth);
   end

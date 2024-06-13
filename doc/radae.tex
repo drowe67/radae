@@ -1017,7 +1017,13 @@ r(n) =\begin{cases}
       r(n) = gtx(n) + noise(n)
 	\end{cases}
 \end{equation}
-In the cases (\ref{eq:rv_cases}) we model $|D_t|$ as a Rayleigh distributed random variable with scale parameter $\sigma_r$. The cases are further explained:
+In the cases (\ref{eq:rv_cases}) we model $|D_t|$ as a Rayleigh distributed random variable with scale parameter $\sigma_r$ and probability density function:
+\begin{equation}
+\label{eq:rayliegh_pdf}
+f(x;\sigma_r )={\frac {x}{\sigma_r ^{2}}}e^{-x^{2}/(2\sigma_r ^{2})},\quad x\geq 0
+\end{equation}
+
+The cases in (\ref{eq:rv_cases}) are further explained:
 \begin{enumerate}
 \item Non-time aligned pilot and additive noise.
 \item Noise only (no signal present).
@@ -1042,56 +1048,77 @@ Var(|D_{t1}|+|D_{t2}|) & = Var(|D_{t1}|) + Var(|D_{t2}|) + 2Cov(|D_{t1}|,|D_{t2}
 \sigma_{12} &= \sqrt{2}\sigma
 \end{split}
 \end{equation}
-Observing that the Rayleigh scale parameter is proportional to $\sigma$, we apply this approximation to the Rayleigh scale parameter:
-\begin{equation}
-\label{eq:rayleigh_sum}
-\sigma_{r12} \approx \sqrt{2}\sigma_r
-\end{equation}
-Figure \ref{fig:rayleigh_sum} shows the results of using this approximation. In the region of interest around $P_{12}(x)=\num{1e-4}$ the probability density derived from (\ref{eq:rayleigh_sum}) is around 5 times the measured histogram.  For a single Rayleigh random variable the probability of a non-pilot sample of $|D_t|$ exceeding $x$ is area of the region to the right of $x$ or $1-CDF(x)$:
-\begin{equation}
-P(|D_t|>x,\sigma_r) = e^{-x^2/(2\sigma_r^2)}
-\end{equation}
-Applying (\ref{eq:rayleigh_sum}) and the correction factor of 5 from Figure (\ref{fig:rayleigh_sum}) to the sum of two Rayleigh RVs:
+Observing that the Rayleigh scale parameter is proportional to $\sigma$, we apply this approximation to the Rayleigh scale parameter to obtain an approximation of the PDF of the sum of two Rayleigh RVs, each have a scale parameter $\sigma_r$:
 \begin{equation}
 \begin{split}
-P_{12}(|D_{t12}|>x,\sigma_r) &\approx 5e^{-x^2/(2\sigma_{r12}^2)} \\
-P_{12}(|D_{t12}|>x,\sigma_r) &= 5e^{-x^2/(4\sigma_r^2)}
+\label{eq:rayleigh_sum}
+\sigma_{r12} &\approx \sqrt{2}\sigma_r \\
+f_{12}(x;\sigma_r ) &\approx {\frac {x}{2\sigma_r ^{2}}}e^{-x^{2}/(4\sigma_r ^{2})},\quad x\geq 0
 \end{split}
 \end{equation}
 
 \begin{figure}[H]
-\caption{Theoretical Rayleigh PDF using scale parameter from (\ref{eq:rayleigh_sum}) and simulation histogram for sum of two Rayleigh RVs $X1$ and $X2$.}
+\caption{PDF approximation from (\ref{eq:rayleigh_sum}) and simulation histogram for sum of two Rayleigh RVs $X1$ and $X2$.}
+\label{fig:rayleigh_sum_pdf}
+\begin{center}
+\input rayleigh_sum_pdf.tex
+\end{center}
+\end{figure}
+
+Figure \ref{fig:rayleigh_sum_pdf} shows the results of using this approximation. In the region of interest $x>\num{1e-4}$ the probability density derived from (\ref{eq:rayleigh_sum}) is around 5 times the measured histogram.  Now for a \emph{single} Rayleigh random variable the probability of a sample of $|D_t|$ exceeding $x$ is the area of the region to the right of $x$ or $1-CDF(x)$:
+\begin{equation}
+\label{eq:rayleigh_pf}
+P(|D_t|>x,\sigma_r) = e^{-x^2/(2\sigma_r^2)}
+\end{equation}
+Applying (\ref{eq:rayleigh_sum}) and the correction factor of 5 from Figure (\ref{fig:rayleigh_sum_pdf}) to the sum of two Rayleigh RVs:
+\begin{equation}
+\label{eq:rayleigh_pf12}
+\begin{split}
+P(|D_{t1}|+|D_{t2}| > x,\sigma_r) &\approx 5e^{-x^2/(2\sigma_{r12}^2)} \\
+                                  &= 5e^{-x^2/(4\sigma_r^2)}
+\end{split}
+\end{equation}
+Figure \ref{fig:rayleigh_sum} compares (\ref{eq:rayleigh_pf12}) to a histogram of simulated values.
+
+\begin{figure}[H]
+\caption{Probability of the sum of two Rayleigh RVs exceeding a threshold. Equation (\ref{eq:rayleigh_pf12}) has a good match to the simulation histogram for $x>\num{1e-2}$.}
 \label{fig:rayleigh_sum}
 \begin{center}
 \input rayleigh_sum.tex
 \end{center}
 \end{figure}
 
-Consider the peak when we sum two adjacent modem frames:
+Consider the detector output due to a correctly aligned pilot signal $|D_t|=|D_{tmax}|$. When we sum two adjacent modem frames:
 \begin{equation}
+\label{eq:pilot_sum}
 \begin{split}
-|D_{tmax12}| &= |D_{tmax1}| + |D_{tmax2}| \\
-              &= 2|D_{tmax}| \\
-              &\approx 2gN_cMP^2
+|D_{tmax12}| &= |D_{tmax1}| + |D_{tamx2}| \\
+             &= 2|D_{tmax}|
 \end{split}
 \end{equation}
-From (\ref{eq:corr_prob}) we can compare the probability of false detection of a pilot as:
+Given $|D_{t1}|$ and $|D_{t2}|$ have the same scale parameters $\sigma_r$, we can use (\ref{eq:rayleigh_pf}) and (\ref{eq:rayleigh_pf12}) we can compare the probability of false detection of a pilot, which occurs when a sample of $|D_t|$ from the cases (\ref{eq:rv_cases}) exceeds a threshold $D_{tmax}$:
 \begin{equation}
 \begin{split}
-P &= e^{-(|D_{tmax}|/\sigma)^2} \\
-P_{sum} &= e^{-(|D_{tsummax}|/\sigma_{sum})^2} \\
-P_{sum} &= e^{-(|2D_{tmax}|/(\sqrt{2}\sigma))^2} \\
-P_{sum} &= e^{-2(|D_{tmax}|/\sigma)^2} \\
-P_{sum} &= P^2
+P &= P(|D_t|>|D_{tmax}|,\sigma_r) \\
+  &= e^{-|D_{tmax}|^2/(2\sigma_r^2)} \\
+P_{12} &= P(|D_{t1}|+|D_{t2}|>|D_{tmax12}|,\sigma_r) \\
+       &= 5e^{-(|D_{tmax12}|/(4\sigma_r)^2} \\
+       &= 5e^{-(|2D_{tmax}|^2/(4\sigma_r))^2} \\
+       &= 5\left(e^{-|D_{tmax}|^2/(2\sigma_r^2)}\right)^2 \\
+P_{12} &= 5P^2
 \end{split}
 \end{equation}
-For example if $P=\num{1e-3}$, $P_{sum}=\num{1e-6}$ - a significant improvement. It can also be shown that the ratio $D_{tsummax}/\sigma = \sqrt(2)D_{tmax}/\sigma$, an improvement of 3dB. This is not quite the same as increasing the received signal power by 3dB, as when the signal power increases both the pilot and ``interfering" ML symbols in case 3 of (\ref{eq:rv_cases}) increases.
-
-
+For example if $P=\num{1e-3}$, $P_{12}=\num{5e-6}$, a significant improvement. Note this relationship holds for any $\sigma_r$ and $D_{tmax}$. We can now set out a procedure for pilot detection:
+\begin{enumerate}
+\item Sample $|D_{t1}|$ and $|D_{t2}|$ over a range of time and frequency offsets.
+\item Determine the sample $|D_{tmax12}|$ from the set of summed samples $|D_{t12}|$.
+\item Determine $\sigma_r$.  Note this the Rayleigh scale parameter for $|D_{t1}|$ or $|D_{t2}|$ alone, not the sum. One convenient way is to use the Rayleigh distribution property $\sigma_r=\frac{E[|D_{t1}|]}{\sqrt{\pi/2}} $. It may be useful to average across both RVs $\sigma_r=(\sigma_{r1}+\sigma_{r2})/2$.
+\item Evaluate (\ref{eq:rayleigh_pf12}) to determine the probability of this being a non-pilot sample, as input to the sync state machine.  Alternatively this can be framed in terms of comparing $|D_{tmax12}|$ to a target threshold $D_{thresh}$, calculated for a desired false detection probability.
+\end{enumerate}
 
 \subsection{Sync State Machine}
 
-Figure \ref{fig:sync_state_mach} illustrates the basic operation of the sync state machine. In the \emph{search} state we maximise $D_t$ over a grid of time and frequency values.  When it $|D_t|>D_{thresh}$ we enter the \emph{sync} state.  In the sync state $D_t$ is sampled over a smaller range of timing offsets to track sample clock offsets and the optimum sampling instant in a multipath channel.  When the signal disappears, $D_t$ will drop beneath $D_{thresh}$ and we will return to the \emph{search} state.  The pilot detector output $d$ is defined as:
+Figure \ref{fig:sync_state_mach} illustrates the basic operation of the sync state machine. In the \emph{search} state we maximise $D_t$ over a grid of time and frequency values.  When $|D_t|>D_{thresh}$ we enter the \emph{sync} state.  In the sync state $D_t$ is sampled over a smaller range of timing offsets to track sample clock offsets and the optimum sampling instant in a multipath channel.  When the signal disappears, $D_t$ will drop beneath $D_{thresh}$ and we will return to the \emph{search} state.  The pilot detector output $d$ is defined as:
 \begin{equation}
 d =	\begin{cases}
       0, & |D_t| < D_{thresh} \\
