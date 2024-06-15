@@ -54,7 +54,7 @@ parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude 
 parser.add_argument('--time_offset', type=int, default=0, help='sampling time offset in samples')
 parser.add_argument('--no_bpf', action='store_false', dest='bpf', help='disable BPF')
 parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
-parser.add_argument('--write_D', type=str, default="", help='Write D(t,f) matrix on last modem frame')
+parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matrix on last modem frame')
 parser.set_defaults(bpf=True)
 args = parser.parse_args()
 
@@ -128,8 +128,8 @@ if args.pilots:
 
    # correlation at various time and freq offsets
    fcoarse_range = np.arange(-frange/2,frange/2,fstep)
-   D = np.zeros((Nmf,len(fcoarse_range)), dtype=np.csingle)
-   D1 = np.zeros((Nmf,len(fcoarse_range)), dtype=np.csingle)
+   Dt1 = np.zeros((Nmf,len(fcoarse_range)), dtype=np.csingle)
+   Dt2 = np.zeros((Nmf,len(fcoarse_range)), dtype=np.csingle)
 
    tmax_candidate = 0 
    Pacq_error = 0.0001
@@ -146,15 +146,15 @@ if args.pilots:
       f_ind + f_ind + 1
 
    mf = 1
-   if len(args.write_D):
-      print(D.shape)
-      fD=open(args.write_D,'wb')
+   if len(args.write_Dt):
+      print(Dt1.shape)
+      fD=open(args.write_Dt,'wb')
 
    while not acquired and len(rx) >= Nmf+M:
       # Search modem frame for maxima in correlation between pilots and received signal, over
       # a grid of time and frequency steps.  Note we only correlate on the M samples after the
       # cyclic prefix, so tmax will be Ncp samples after the start of the modem frame
-      Dtmax = 0
+      Dtmax12 = 0
       tmax = 0
       fmax = 0
 
@@ -164,29 +164,31 @@ if args.pilots:
             #D[t,f_ind] = np.dot(np.conj(rx[t:t+M]),p_w[f_ind,:])
             w = 2*np.pi*f/Fs
             w_vec = np.exp(-1j*w*np.arange(M))
-            D[t,f_ind] = np.dot(np.conj(w_vec*rx[t:t+M]),p)
-            D1[t,f_ind] = np.dot(np.conj(w_vec*rx[t+Nmf:t+Nmf+M]),p)
-
-            if (np.abs(D[t,f_ind]) + np.abs(D1[t,f_ind]))/2 > Dtmax:
-               Dtmax = (np.abs(D[t,f_ind]) + np.abs(D1[t,f_ind]))/2
+            Dt1[t,f_ind] = np.dot(np.conj(w_vec*rx[t:t+M]),p)
+            Dt2[t,f_ind] = np.dot(np.conj(w_vec*rx[t+Nmf:t+Nmf+M]),p)
+            Dt12 = np.abs(Dt1[t,f_ind]) + np.abs(Dt2[t,f_ind])
+            if Dt12 > Dtmax12:
+               Dtmax12 = Dt12
                tmax = t
                fmax = f 
                f_ind_max =  f_ind
             f_ind = f_ind + 1
       
-      if len(args.write_D):
-         D.tofile(fD)
+      if len(args.write_Dt):
+         Dt1.tofile(fD)
 
-      # Ref: freedv_low.pdf "Coarse Frequency Estimation"
-      sigma_est = np.std(D)
-      Dthresh = sigma_est*np.sqrt(-np.log(Pacq_error))
+      # Ref: radae.pdf "Pilot Detecion over Multiple Frames"
+      sigma_r1 = np.mean(np.abs(Dt1))/((np.pi/2)**0.5)
+      sigma_r2 = np.mean(np.abs(Dt2))/((np.pi/2)**0.5)
+      sigma_r = (sigma_r1 + sigma_r2)/2.0
+      Dthresh = 2*sigma_r*np.sqrt(-np.log(Pacq_error/5.0))
 
       candidate = False
-      if Dtmax > Dthresh:
+      if Dtmax12 > Dthresh:
          candidate = True
 
       # post process with a state machine that looks for 3 consecutive matches with about the same tmining offset      
-      print(f"{mf:2d} state: {state:10s} Dthresh: {Dthresh:5.2f} Dtmax: {Dtmax:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
+      print(f"{mf:2d} state: {state:10s} Dthresh: {Dthresh:5.2f} Dtmax12: {Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
 
       next_state = state
       if state == "search":
@@ -218,6 +220,8 @@ if args.pilots:
    D_fine = np.zeros(len(ffine_range), dtype=np.csingle)
    f_ind = 0
    fmax_fine = fmax
+   Dtmax = 0
+
    for f in ffine_range:
       w = 2*np.pi*f/Fs
       # current pilot samples at start of this modem frame
@@ -236,14 +240,14 @@ if args.pilots:
    if args.plots:
       fig, ax = plt.subplots(2, 1,figsize=(6,12))
       ax[0].set_title('Dt complex plane')
-      ax[0].plot(D[:,f_ind_max].real, D[:,f_ind_max].imag,'b+')
+      ax[0].plot(Dt1[:,f_ind_max].real, Dt1[:,f_ind_max].imag,'b+')
       circle1 = plt.Circle((0,0), radius=Dthresh, color='r')
       ax[0].add_patch(circle1)
-      ax[1].hist(np.abs(D[:,f_ind_max]))
+      ax[1].hist(np.abs(Dt1[:,f_ind_max]))
       ax[1].set_title('|Dt| histogram')
 
       fig1, ax1 = plt.subplots(2, 1,figsize=(6,12))
-      ax1[0].plot(fcoarse_range, np.abs(D[tmax,:]),'b+')
+      ax1[0].plot(fcoarse_range, np.abs(Dt1[tmax,:]),'b+')
       ax1[0].set_title('|Dt| against f (coarse)')
       ax1[1].plot(ffine_range, np.abs(D_fine),'b+')
       ax1[1].set_title('|Dt| against f (fine)')
