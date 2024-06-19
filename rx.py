@@ -95,7 +95,7 @@ Nmf = int((Ns+1)*(M+Ncp))   # number of samples in one modem frame
 
 # load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
 rx = np.fromfile(args.rx, dtype=np.csingle)
-print(f"samples: {len(rx):d} Nmf: {Nmf:d} modem frames: {len(rx) // Nmf}")
+print(f"samples: {len(rx):d} Nmf: {Nmf:d} modem frames: {len(rx)/Nmf}")
 
 # TODO: fix contrast of spectrogram - it's not very useful
 if args.plots:
@@ -150,7 +150,7 @@ if args.pilots:
       print(Dt1.shape)
       fD=open(args.write_Dt,'wb')
 
-   while not acquired and len(rx) >= Nmf+M:
+   while not acquired and len(rx) >= 2*Nmf+M:
       # Search modem frame for maxima in correlation between pilots and received signal, over
       # a grid of time and frequency steps.  Note we only correlate on the M samples after the
       # cyclic prefix, so tmax will be Ncp samples after the start of the modem frame

@@ -4,7 +4,7 @@ A hybrid Machine Learning/DSP system for sending speech over HF radio channels. 
 
 ## Scope 
 
-The document is a log of the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  It is not intended to be a polished distribution for general use.
+The document is a log of the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  It is not intended to be a polished distribution for general use.  Unless otherwise stated, the code is this repo is intended to run only on Ubuntu Linux.
 
 # Quickstart
 
