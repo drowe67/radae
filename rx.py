@@ -55,6 +55,8 @@ parser.add_argument('--time_offset', type=int, default=0, help='sampling time of
 parser.add_argument('--no_bpf', action='store_false', dest='bpf', help='disable BPF')
 parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
 parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matrix on last modem frame')
+parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
+parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
 parser.set_defaults(bpf=True)
 args = parser.parse_args()
 
@@ -74,10 +76,9 @@ model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 
-def complex_bpf(Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
+def complex_bpf(Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
    B = bandwidth_Hz/Fs_Hz
    alpha = 2*np.pi*centre_freq_Hz/Fs_Hz
-   Ntap=101
    h = np.zeros(Ntap, dtype=np.csingle)
 
    for i in range(Ntap):
@@ -107,10 +108,11 @@ if args.plots:
 Nc = model.Nc
 w = model.w.cpu().detach().numpy()
 if args.bpf:
+   Ntap=101
    bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
    centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
    print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}")
-   rx = complex_bpf(model.Fs,bandwidth,centre,rx)
+   rx = complex_bpf(Ntap, model.Fs, bandwidth,centre, rx)
 
 if args.plots:
    ax[1].specgram(rx,NFFT=256,Fs=model.Fs)
@@ -131,6 +133,11 @@ if args.pilots:
    Dt1 = np.zeros((Nmf,len(fcoarse_range)), dtype=np.csingle)
    Dt2 = np.zeros((Nmf,len(fcoarse_range)), dtype=np.csingle)
 
+   # optional acq_test variables 
+   tmax_candidate_target = Ncp + Ntap/2
+   acq_pass = 0
+   acq_fail = 0
+   
    tmax_candidate = 0 
    Pacq_error = 0.0001
    acquired = False
@@ -200,8 +207,19 @@ if args.pilots:
          if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
             valid_count = valid_count + 1
             if valid_count > 3:
-               acquired = True
-               print("Acquired!")
+               if args.acq_test:
+                  next_state = "search"
+                  # allow 2ms spread in timing (MPP channel extremes) and +/- 5 Hz in freq, which fine freq can take care of
+                  coarse_timing_ok = np.abs(tmax_candidate - tmax_candidate_target) < 0.0025*Fs
+                  coarse_freq_ok = np.abs(fmax - args.fmax_target) <= 5.0
+                  print(f"Acquired! Timing: {coarse_timing_ok:d} Freq: {coarse_freq_ok:d}")
+                  if coarse_timing_ok and coarse_freq_ok:
+                     acq_pass = acq_pass + 1
+                  else:
+                     acq_fail = acq_fail + 1
+               else:
+                  print("Acquired!")
+                  acquired = True
          else:
             next_state = "search"
       state = next_state
@@ -211,7 +229,13 @@ if args.pilots:
       mf += 1
 
    if not acquired:
-      print("Acquisition failed....")
+      if args.acq_test:
+         acq_time = (Nmf*mf/Fs)/acq_pass
+         print(f"Acq Test Passes: {acq_pass:d} Fails: {acq_fail:d} Mean Acq time: {acq_time:5.2f} s")
+         if acq_time < 1.0:
+            print("PASS")
+      else:
+         print("Acquisition failed....")
       quit()
       
    # frequency refinement, use two sets of pilots
