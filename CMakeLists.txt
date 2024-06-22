@@ -91,13 +91,19 @@ add_test(NAME ota_test
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss_test 0.3 --acq_time_test 0.8")
                        set_tests_properties(ota_test PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# Estimating C/No on multipath channels using a chirp
+
+add_test(NAME chirp_mpp
+        COMMAND sh -c "./test/chirp_mpp.sh ${CODEC2_DEV_BUILD_DIR} -16")
+                       set_tests_properties(chirp_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 # Acquisition tests ------------------------------------------------------------------------------------
 
 # noise-only test, should not acquire for 120s (currently set at 10s as it's too slow)
 add_test(NAME acq_noise
         COMMAND sh -c "dd if=/dev/zero of=/dev/stdout bs=16000 count=10 | \
                        ${CODEC2_DEV_BUILD_DIR}/src/ch - rx.int16 --No -20; \  # real int16 output
-                       python3 int16tof32.py rx.int16 rx.f32 --zeropad; \      # ..IQIQI.. .f32 with Q == 0
+                       python3 int16tof32.py rx.int16 rx.f32 --zeropad; \     # ..IQIQI.. .f32 with Q == 0
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
                        --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16")
                        set_tests_properties(acq_noise PROPERTIES PASS_REGULAR_EXPRESSION "Acquisition failed")
@@ -109,7 +115,7 @@ add_test(NAME acq_mpp
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 \
                        --EbNodB 3 --freq_offset 10 --g_file g_mpp.f32 --write_rx rx.f32; \
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null --pilots --pilot_eq --bottleneck 3 --cp 0.004 --acq_test --fmax_target 10")
-                       set_tests_properties( acq_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+                       set_tests_properties(acq_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # TODO: Add (a) interfering sine wave (b) stationary notch or perhaps slow fading
 

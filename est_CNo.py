@@ -32,7 +32,7 @@ fhigh_bin = int(bins_per_Hz * args.fhigh)
 C_plus_N = np.sum(Rx[flow_bin:fhigh_bin])
 C_plus_N_dB = 10*np.log10(C_plus_N)
 
-noise_st = fhigh_bin
+noise_st = fhigh_bin + int(0.1*fhigh_bin)
 noise_en = noise_st + int(0.1*fhigh_bin)
 
 Nbw = (noise_en-noise_st)/bins_per_Hz
@@ -50,9 +50,12 @@ print(f"Measured: {CNodB:6.2f}  {SNRdB:6.2f}")
 
 if args.plots:
     fig, ax = plt.subplots(1, 1)
-    ax.plot(RxdB[:int(bins_per_Hz*B)])
-    ax.plot([flow_bin,fhigh_bin],[CdB,CdB],'r')
-    ax.plot([noise_st,noise_en],[NodB,NodB],'b')
+    bin_3k = int(bins_per_Hz*B3k)
+    x = np.arange(bin_3k)/bins_per_Hz
+    mx = np.max(RxdB)
+    ax.plot(x, RxdB[:bin_3k])
+    ax.plot([args.flow,args.fhigh],[mx,mx],'r')
+    ax.plot([int(noise_st/bins_per_Hz),int(noise_en/bins_per_Hz)],[mx,mx],'k')
     plt.show(block=False)
     plt.pause(0.001)
     input("hit[enter] to end.")
