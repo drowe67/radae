@@ -1,3 +1,11 @@
+"""
+Estimate C/No from a file of samples:
+1. Measure C+N in a bandwidth B that contains all the signal power
+2. Measure No in an adjacent band that contains just noise
+3. Est C = C+N - NoB
+4. Est C/No
+"""
+
 import os
 import argparse
 import numpy as np
@@ -5,42 +13,46 @@ from matplotlib import pyplot as plt
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('rx', type=str, help='path to sine wave + noise input file of rate Fs rx samples in ..IQIQ...f32 format')
+parser.add_argument('rx', type=str, help='path to signal + noise input file of rate Fs rx samples in ..IQIQ...f32 format')
 parser.add_argument('--plots', action='store_true', help='display various plots')
+parser.add_argument('--flow', type=float, default=400.0, help='lower freq limit for C+N band (default 400 Hz)')
+parser.add_argument('--fhigh', type=float, default=2000.0, help='upper limit for C+N band (default 2000 Hz)')
 args = parser.parse_args()
 
-# TODO: need a way to read this in from current model
 Fs = 8000
-Rb = 2000
-B = 3000
+B3k = 3000
 
 rx = np.fromfile(args.rx, dtype=np.csingle)
-Fs2 = Fs // 2
-S = np.abs(np.fft.fft(rx[:Fs]))**2
-SdB = 10*np.log10(np.abs(S))
+Rx = np.abs(np.fft.fft(rx))**2
+RxdB = 10*np.log10(Rx)
+bins_per_Hz = len(rx) / Fs
 
-# capture the power from a few bins either side on the max
-sine_bin = np.argmax(S[:Fs])
-C = np.sum(S[sine_bin-5:sine_bin+5])
+flow_bin = int(bins_per_Hz * args.flow)
+fhigh_bin = int(bins_per_Hz * args.fhigh)
+C_plus_N = np.sum(Rx[flow_bin:fhigh_bin])
+C_plus_N_dB = 10*np.log10(C_plus_N)
+
+noise_st = fhigh_bin
+noise_en = noise_st + int(0.1*fhigh_bin)
+
+Nbw = (noise_en-noise_st)/bins_per_Hz
+No = np.sum(Rx[noise_st:noise_en])/Nbw
+
+C = C_plus_N - No*(args.fhigh-args.flow)
 CdB = 10*np.log10(C)
-
-noise_st = sine_bin + int(Fs*0.05)
-noise_en = sine_bin + int(Fs*0.15)
-No = np.mean(S[noise_st:noise_en])
 NodB = 10*np.log10(No)
 
 CNodB = CdB-NodB
-EbNodB = CNodB - 10*np.log10(Rb)
-SNRdB = CNodB - 10*np.log10(B)
+SNRdB = CNodB - 10*np.log10(B3k)
 
-print(f"          Eb/No   C/No     SNR3k  Rb")
-print(f"Measured: {EbNodB:6.2f}  {CNodB:6.2f}  {SNRdB:6.2f}  {Rb:d}")
+print(f"          C/No     SNR3k")
+print(f"Measured: {CNodB:6.2f}  {SNRdB:6.2f}")
 
 if args.plots:
     fig, ax = plt.subplots(1, 1)
-    ax.plot(SdB[:Fs2])
-    ax.plot(sine_bin,CdB,'rX')
-    ax.plot([noise_st,noise_en],[NodB,NodB],'r')
+    ax.plot(RxdB[:int(bins_per_Hz*B)])
+    ax.plot([flow_bin,fhigh_bin],[CdB,CdB],'r')
+    ax.plot([noise_st,noise_en],[NodB,NodB],'b')
     plt.show(block=False)
     plt.pause(0.001)
     input("hit[enter] to end.")
