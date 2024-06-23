@@ -44,6 +44,7 @@ parser.add_argument('f32', type=str, help='path to output IQ .f32 file')
 parser.add_argument('Nsec', type=float, default=4.0, help='output file length in seconds')
 parser.add_argument('--flow', type=float, default=400.0, help='lower freq limit for chirp (default 400 Hz)')
 parser.add_argument('--fhigh', type=float, default=2000.0, help='upper limit for chirp (default 2000 Hz)')
+parser.add_argument('--amp', type=float, default=0.25, help='magnitude of chirp (default 0.25)')
 args = parser.parse_args()
 
 Fs = 8000
@@ -52,7 +53,6 @@ x = np.zeros(Nsam, dtype=np.csingle)
 freq = args.flow/Fs
 delta_freq = (args.fhigh - args.flow)/Fs
 phase = 0
-amp = 0.25
 
 for n in np.arange(Nsam):
     phase += 2*np.pi*freq/Fs
@@ -62,6 +62,6 @@ for n in np.arange(Nsam):
         delta_freq = -(args.fhigh - args.flow)/Fs
     if freq < args.flow:
         delta_freq = (args.fhigh - args.flow)/Fs
-    x[n] = amp*np.exp(1j*phase)
+    x[n] = args.amp*np.exp(1j*phase)
 
 x.tofile(args.f32)

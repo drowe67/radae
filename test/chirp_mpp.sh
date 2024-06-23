@@ -23,8 +23,10 @@ chirp_noise_f32=$(mktemp)
 python3 chirp.py ${chirp_f32} 4
 python3 f32toint16.py ${chirp_f32} ${chirp_int16} --real
 ch_log=$(mktemp)
-${CODEC2_DEV_BUILD_DIR}/src/ch ${chirp_int16} ${chirp_noise_int16} --No ${No} --complex --mpp --fading_dir . --after_fade 2>${ch_log}
-python3 int16tof32.py ${chirp_noise_int16} ${chirp_noise_f32}
+# Note --ssbfilt 1 (default) removes -ve freq part of complex noise 
+# which ensures C/No remains unaffected by real() operation at output 
+${CODEC2_DEV_BUILD_DIR}/src/ch ${chirp_int16} ${chirp_noise_int16} --No ${No} --mpp --fading_dir . --after_fade 2>${ch_log}
+python3 int16tof32.py ${chirp_noise_int16} ${chirp_noise_f32} --zeropad
 est_log=$(mktemp)
 python3 est_CNo.py ${chirp_noise_f32} >${est_log}
 

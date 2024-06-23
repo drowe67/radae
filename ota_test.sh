@@ -136,17 +136,21 @@ function process_rx {
           plot_specgram(s, 8000, 200, 3000); print('${filename}_spec.jpg', '-djpg'); \
           quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
 
-    # extract sine wave at start and estimate C/No
-    rx_sine=$(mktemp).f32
-    sox $rx -e float -b 32 -c 2 ${rx_sine} trim 0 1
-    python3 est_CNo.py  ${rx_sine}
+    # extract chirp at start and estimate C/No
+    rx_chirp=$(mktemp)
+    sox $rx -t .s16 ${rx_chirp}.raw trim 0 4
+    python3 int16tof32.py ${rx_chirp}.raw ${rx_chirp}.f32 --zeropad
+    python3 est_CNo.py ${rx_chirp}.f32
 
-    # assume first half is voice, so extract that, and decode radae
+    # 4 sec chirp - 1 sec silence - x sec SSB - 1 sec silence - x sec RADAE
+    # start_radae = 4+1+x
     total_duration=$(sox --info -D $rx)
-    end_ssb=$(python3 -c "x=(${total_duration}-4)/2+1; print(\"%f\" % x)")
+    x=$(python3 -c "x=(${total_duration}-6)/2; print(\"%f\" % x)")
+    start_radae=$(python3 -c "start_radae=5+${x}; print(\"%f\" % start_radae)")
     rx_radae=$(mktemp)
-    sox $rx ${filename}_ssb.wav trim 3 $end_ssb
-    sox $rx -e float -b 32 -c 2 ${rx_radae}.f32 trim $end_ssb remix 1 0
+    sox $rx ${filename}_ssb.wav trim 5 $x
+    sox $rx -t .s16 ${rx_radae}.raw trim $start_radae
+    python3 int16tof32.py ${rx_radae}.raw ${rx_radae}.f32 --zeropad
     ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 ${filename}_radae.wav --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16
 }
 
@@ -250,14 +254,17 @@ fi
 
 # create Tx file ------------------------
 
-# create 1000 Hz sinewave header used for tuning and C/No est
-tx_sine=$(mktemp)
+# create 400-2000 Hz chirp header used for C/No est.  We generate 4.5s of chirp, to allow for trimming of
+# rx wave file - we need >=4 seconds of received chirp for C/No est at Rx
+tx_chirp=$(mktemp)
 if [ $peak -eq 1 ]; then
-    peak_amp=$setpoint_peak
+    amp=$(python3 -c "import numpy as np; amp=0.25*${setpoint_peak}/8192.0; print(\"%f\" % amp)")
 else
-    peak_amp=$(python3 -c "import numpy as np; peak_amp=${setpoint_rms}*np.sqrt(2); print(\"%f\" % peak_amp)")
+    # TODO: rms option untested as of June 2024
+    amp=$(python3 -c "import numpy as np; amp=0.25*${setpoint_rms}*sqrt(2.0)/8192.0; print(\"%f\" % amp)")
 fi
-mksine $tx_sine 1000 4 $peak_amp
+python3 chirp.py ${chirp}.f32 4.5 --amp ${amp}
+python3 f32toint16.py ${chirp}.f32 ${chirp}.raw --real
 
 # create compressed SSB signal
 speechfile_raw_8k=$(mktemp)
@@ -282,8 +289,8 @@ sox $speechfile $speechfile_pad pad 1@0
 
 # create modulated radae signal
 ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --EbNodB 100 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae}.f32
-# to create real signal we just extract the "left" channel (without remix it sums channels)
-sox -r 8k -e float -b 32 -c 2 ${tx_radae}.f32 -t .s16 -c 1 ${tx_radae}.raw remix 1 0
+# extract real (I) channel
+python3 f32toint16.py ${tx_radae}.f32 ${tx_radae}.raw --real --scale 16383
 
 # Make power of both signals the same, by adjusting the levels to meet the setpoint
 if [ $peak -eq 1 ]; then
@@ -294,12 +301,12 @@ else
   set_rms ${tx_radae}.raw $setpoint_rms
 fi
 
-# insert 1 second of silence between SSB and radae
-tx_radae_pad=$(mktemp).raw
-sox -t .s16 -r 8k -c 1 ${tx_radae}.raw -t .s16 -r 8k -c 1 $tx_radae_pad pad 1@0
+# insert 1 second of silence between signals
+sox -t .s16 -r 8k -c 1 $tx_ssb -t .s16 -r 8k -c 1 ${tx_ssb}_pad.raw pad 1@0
+sox -t .s16 -r 8k -c 1 ${tx_radae}.raw -t .s16 -r 8k -c 1 ${tx_radae}_pad.raw pad 1@0
 
 # cat signals together so we can send them over a radio at the same time
-cat $tx_sine $tx_ssb $tx_radae_pad > tx.raw
+cat ${chirp}.raw ${tx_ssb}_pad.raw ${tx_radae}_pad.raw > tx.raw
 sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
 
 # generate a 4MSP .iq8 file suitable for replaying by HackRF (can disable if not using HackRF)
