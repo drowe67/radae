@@ -82,20 +82,24 @@ add_test(NAME rx_loss_acq_time
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss_test 0.3 --acq_time_test 0.8")
                        set_tests_properties(rx_loss_acq_time PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# High SNR ota_test.sh
-add_test(NAME ota_test
-        COMMAND sh -c "./ota_test.sh -x wav/brian_g8sez.wav --peak; \
-                       ${CODEC2_DEV_BUILD_DIR}/src/ch tx.wav - --No -20 | sox -t .s16 -r 8000 -c 1 - rx.wav; \
-                       rm -f features_rx_out.f32; \
-                       ./ota_test.sh -r rx.wav; \
-                       python3 loss.py features_in.f32 features_rx_out.f32 --loss_test 0.3 --acq_time_test 0.8")
-                       set_tests_properties(ota_test PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
-
 # Estimating C/No on multipath channels using a chirp
-
 add_test(NAME chirp_mpp
         COMMAND sh -c "./test/chirp_mpp.sh ${CODEC2_DEV_BUILD_DIR} -16")
                        set_tests_properties(chirp_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# Low SNR ota_test.sh, with chirp measurement, AWGN
+add_test(NAME ota_test_awgn
+        COMMAND sh -c "./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -21")
+                       set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+                       set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "CNodB PASS")
+
+
+# Low SNR ota_test.sh, with chirp measurement, MPP
+add_test(NAME ota_test_mpp
+        COMMAND sh -c "./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -25 --mpp --freq -25")
+                       set_tests_properties(ota_test_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+                       set_tests_properties(ota_test_mpp PROPERTIES PASS_REGULAR_EXPRESSION "CNodB PASS")
+
 
 # Acquisition tests ------------------------------------------------------------------------------------
 

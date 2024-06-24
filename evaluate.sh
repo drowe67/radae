@@ -105,7 +105,7 @@ PNodB=$(python3 -c "PNodB=${CNodB}+${PAPRdB}; print(\"%f\" % PNodB) ")
 
 # Listen to the modem signal, just keep real channel, filter to simulate listening on a SSB Rx.
 # "norm" makes the max the same, note this means signal level will drop as we add noise. 
-# For some reason radae signal is normed to about 0.5 (SSB 1.0) (TODO fix some timnw)
+# For some reason radae signal is normed to about 0.5 (SSB 1.0) (TODO fix some time)
 # "remix 1 0" uses just real (left) channel
 # disadvantage of "norm" is we can't eyeball the two signals to check peak level, need to rely on measurements+maths (shrug)
 sox -r 8k -e float -b 32 -c 2 ${rx} -c 1 -e signed-integer -b 16 ${out_dir}/${filename}_${EbNodB}dB_${channel}_rx.wav sinc 0.3-2.7k remix 1 0 norm
