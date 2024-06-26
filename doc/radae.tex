@@ -1065,7 +1065,7 @@ f_{12}(x;\sigma_r ) &\approx {\frac {x}{2\sigma_r ^{2}}}e^{-x^{2}/(4\sigma_r ^{2
 \end{center}
 \end{figure}
 
-Figure \ref{fig:rayleigh_sum_pdf} shows the results of using this approximation. In the region of interest $x>\num{1e-4}$ the probability density derived from (\ref{eq:rayleigh_sum}) is around 5 times the measured histogram.  Now for a \emph{single} Rayleigh random variable the probability of a sample of $|D_t|$ exceeding $x$ is the area of the region to the right of $x$ or $1-CDF(x)$:
+Figure \ref{fig:rayleigh_sum_pdf} shows the results of using this approximation. In the region of interest $f(x)\approx\num{1e-4}$ the probability density derived from (\ref{eq:rayleigh_sum}) is around 5 times the measured histogram.  Now for a \emph{single} Rayleigh random variable the probability of a sample of $|D_t|$ exceeding $x$ is the area of the region to the right of $x$ or $1-CDF(x)$:
 \begin{equation}
 \label{eq:rayleigh_pf}
 P(|D_t|>x,\sigma_r) = e^{-x^2/(2\sigma_r^2)}
@@ -1081,7 +1081,7 @@ P(|D_{t1}|+|D_{t2}| > x,\sigma_r) &\approx 5e^{-x^2/(2\sigma_{r12}^2)} \\
 Figure \ref{fig:rayleigh_sum} compares (\ref{eq:rayleigh_pf12}) to a histogram of simulated values.
 
 \begin{figure}[H]
-\caption{Probability of the sum of two Rayleigh RVs exceeding a threshold. Equation (\ref{eq:rayleigh_pf12}) has a good match to the simulation histogram for $x>\num{1e-2}$.}
+\caption{Probability of the sum of two Rayleigh RVs exceeding a threshold. Equation (\ref{eq:rayleigh_pf12}) has a good match to the simulation histogram for $P(RV>x)<\num{1e-2}$.}
 \label{fig:rayleigh_sum}
 \begin{center}
 \input rayleigh_sum.tex

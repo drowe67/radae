@@ -78,4 +78,5 @@ if args.acq_time_test > 0:
    if min_start*0.01 > args.acq_time_test:
       print("FAIL")
       quit()
-print("PASS")
+if args.loss_test > 0.0 or args.acq_time_test:
+   print("PASS")

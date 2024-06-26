@@ -50,7 +50,7 @@ args = parser.parse_args()
 Fs = 8000
 Nsam = int(args.Nsec*Fs)
 x = np.zeros(Nsam, dtype=np.csingle)
-freq = args.flow/Fs
+freq = args.flow
 delta_freq = (args.fhigh - args.flow)/Fs
 phase = 0
 

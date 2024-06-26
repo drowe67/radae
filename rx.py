@@ -107,6 +107,7 @@ if args.plots:
 
 Nc = model.Nc
 w = model.w.cpu().detach().numpy()
+Ntap = 0
 if args.bpf:
    Ntap=101
    bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
@@ -137,7 +138,7 @@ if args.pilots:
    tmax_candidate_target = Ncp + Ntap/2
    acq_pass = 0
    acq_fail = 0
-   
+
    tmax_candidate = 0 
    Pacq_error = 0.0001
    acquired = False
@@ -291,7 +292,7 @@ features_hat, z_hat = model.receiver(rx)
 
 z_hat = z_hat.cpu().detach().numpy().flatten().astype('float32')
 
-# BER test useful for calibrating link.  To mneasure BER we compare the received symnbols 
+# BER test useful for calibrating link.  To measure BER we compare the received symnbols 
 # to the known transmitted symbols.  However due to acquisition delays we may have lost several
 # modem frames in the received sequence.
 if len(args.ber_test):
