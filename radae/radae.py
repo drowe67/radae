@@ -268,6 +268,71 @@ class CoreDecoder(nn.Module):
 
         return features
 
+#Decode symbols to reconstruct the vocoder features
+class CoreDecoderStatefull(nn.Module):
+
+    FRAMES_PER_STEP = 4
+
+    def __init__(self, input_dim, output_dim):
+        """ core decoder for RADAE
+
+            Computes features from latents, initial state, and quantization index
+
+        """
+
+        super(CoreDecoderStatefull, self).__init__()
+
+        # hyper parameters
+        self.input_dim  = input_dim
+        self.output_dim = output_dim
+        self.input_size = self.input_dim
+
+        # Layers are organized like a DenseNet
+        self.dense_1    = nn.Linear(self.input_size, 96)
+        self.gru1 = nn.GRU(96, 96, batch_first=True)
+        self.conv1 = MyConv(192, 32)
+        self.gru2 = nn.GRU(224, 96, batch_first=True)
+        self.conv2 = MyConv(320, 32)
+        self.gru3 = nn.GRU(352, 96, batch_first=True)
+        self.conv3 = MyConv(448, 32)
+        self.gru4 = nn.GRU(480, 96, batch_first=True)
+        self.conv4 = MyConv(576, 32)
+        self.gru5 = nn.GRU(608, 96, batch_first=True)
+        self.conv5 = MyConv(704, 32)
+        self.output  = nn.Linear(736, self.FRAMES_PER_STEP * self.output_dim)
+        self.glu1 = GLU(96)
+        self.glu2 = GLU(96)
+        self.glu3 = GLU(96)
+        self.glu4 = GLU(96)
+        self.glu5 = GLU(96)
+
+        nb_params = sum(p.numel() for p in self.parameters())
+        print(f"decoder: {nb_params} weights")
+        # initialize weights
+        self.apply(init_weights)
+
+    def forward(self, z):
+
+        # run decoding layer stack
+        x = n(torch.tanh(self.dense_1(z)))
+
+        x = torch.cat([x, n(self.glu1(n(self.gru1(x)[0])))], -1)
+        x = torch.cat([x, n(self.conv1(x))], -1)
+        x = torch.cat([x, n(self.glu2(n(self.gru2(x)[0])))], -1)
+        x = torch.cat([x, n(self.conv2(x))], -1)
+        x = torch.cat([x, n(self.glu3(n(self.gru3(x)[0])))], -1)
+        x = torch.cat([x, n(self.conv3(x))], -1)
+        x = torch.cat([x, n(self.glu4(n(self.gru4(x)[0])))], -1)
+        x = torch.cat([x, n(self.conv4(x))], -1)
+        x = torch.cat([x, n(self.glu5(n(self.gru5(x)[0])))], -1)
+        x = torch.cat([x, n(self.conv5(x))], -1)
+
+        # output layer and reshaping. We produce FRAMES_PER_STEP vocoder feature
+        # vectors for every decoded vector of symbols
+        x10 = self.output(x)
+        features = torch.reshape(x10, (x10.size(0), x10.size(1) * self.FRAMES_PER_STEP, x10.size(2) // self.FRAMES_PER_STEP))
+
+        return features
 
 class RADAE(nn.Module):
     def __init__(self,
@@ -323,6 +388,7 @@ class RADAE(nn.Module):
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
         self.core_decoder =  nn.DataParallel(CoreDecoder(latent_dim, feature_dim))
+        self.core_decoder_statefull =  nn.DataParallel(CoreDecoderStatefull(latent_dim, feature_dim))
         #self.core_encoder = CoreEncoder(feature_dim, latent_dim)
         #self.core_decoder = CoreDecoder(latent_dim, feature_dim)
 

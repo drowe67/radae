@@ -60,6 +60,9 @@ checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
 
+# we need to load trained weights into the stateful decoder, as it wasn't trained
+model.core_decoder_statefull.load_state_dict(model.core_decoder.state_dict())
+
 # dataloader
 feature_file = args.features
 features_in = np.reshape(np.fromfile(feature_file, dtype=np.float32), (1, -1, nb_total_features))
@@ -75,15 +78,18 @@ if __name__ == '__main__':
    features = features.to(device)
    z = model.core_encoder(features)
    features_hat = model.core_decoder(z)
- 
+   features_hat_statefull = model.core_decoder_statefull(z)
+
    loss = distortion_loss(features,features_hat).cpu().detach().numpy()[0]
-   print(f"loss: {loss:5.3f}")
+   loss_statefull = distortion_loss(features,features_hat_statefull).cpu().detach().numpy()[0]
+   loss_delta =  distortion_loss(features_hat,features_hat_statefull).cpu().detach().numpy()[0]
+   print(f"loss: {loss:5.3f} {loss_statefull:5.3f} {loss_delta:5.3f}")
    if args.loss_test > 0.0:
-      if loss < args.loss_test:
+      if loss_statefull < args.loss_test and loss_delta < 0.01:
          print("PASS")
       else:
          print("FAIL")
 
-   features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
-   features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
-   features_hat.tofile(args.features_hat)
+   features_hat_statefull = torch.cat([features_hat_statefull, torch.zeros_like(features_hat_statefull)[:,:,:16]], dim=-1)
+   features_hat_statefull = features_hat_statefull.cpu().detach().numpy().flatten().astype('float32')
+   features_hat_statefull.tofile(args.features_hat)
