@@ -28,6 +28,11 @@ add_test(NAME inference_model18
          COMMAND sh -c "./inference.sh model18/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --latent-dim 40 \
                         --EbNodB 0 --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3")
 
+# Stateful decoder
+add_test(NAME stateful_decoder
+         COMMAND sh -c "./stateful_decoder.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav /dev/null --loss_test 0.2")
+         set_tests_properties(stateful_decoder PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 # DIGITAL SYMBOL BER TESTS ----------------------------------------------------------
 
 # Substitute digital QPSK symbols and check BER; tests rate Fs subsystem, pilot and CP insertion, eq_ls

@@ -350,7 +350,6 @@ class RADAE(nn.Module):
         Nsmf = Nzmf*self.latent_dim // bps              # total number of QPSK symbols in a modem frame across all carriers
         
         Ns = int(Nzmf*self.Tz / Ts)                     # duration of "modem frame" in QPSK symbols
-        print(self.Tz, Ts, Nzmf*self.Tz / Ts, Ns)
         
         Tmf = Ns*Ts                                     # period of modem frame (s), this must remain constant for real time operation
         Nc = int(Nsmf // Ns)                            # number of carriers
