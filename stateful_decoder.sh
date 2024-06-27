@@ -27,6 +27,7 @@ input_speech=$2
 output_speech=$3
 features_in=features_in.f32
 features_out=features_out.f32
+rm -f $features_in $features_out
 
 # eat first 3 args before passing rest to stateful_decoder.py in $@
 shift; shift; shift

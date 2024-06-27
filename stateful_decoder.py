@@ -62,7 +62,7 @@ model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
 
-# some of the layer names have been changed
+# some of the layer names have been changed due to use of custom GRUStatefull layer
 def key_transformation(old_key):
    for gru in range(1,6):
       if old_key == f"module.gru{gru:d}.weight_ih_l0":
@@ -97,8 +97,16 @@ if __name__ == '__main__':
    model.to(device)
    features = features.to(device)
    z = model.core_encoder(features)
+   
+   # vanilla decoder that works on long sequences
    features_hat = model.core_decoder(z)
-   features_hat_statefull = model.core_decoder_statefull(z)
+   
+   # stateful decoder that works on one vector of features at a time, and preserves internal state
+   features_hat_statefull = torch.zeros_like(features)
+   print(z.shape,features_hat_statefull.shape)
+
+   for i in range(z.shape[1]):
+      features_hat_statefull[0,4*i:4*(i+1),:] = model.core_decoder_statefull(z[:,i:i+1,:])
 
    loss = distortion_loss(features,features_hat).cpu().detach().numpy()[0]
    loss_statefull = distortion_loss(features,features_hat_statefull).cpu().detach().numpy()[0]

@@ -296,7 +296,8 @@ class CoreDecoder(nn.Module):
 
         return features
 
-#Decode symbols to reconstruct the vocoder features
+# Decode symbols to reconstruct the vocoder features, statefull version that processes one
+# z vector at a time, and maintains it's own internal state
 class CoreDecoderStatefull(nn.Module):
 
     FRAMES_PER_STEP = 4
@@ -304,7 +305,7 @@ class CoreDecoderStatefull(nn.Module):
     def __init__(self, input_dim, output_dim):
         """ core decoder for RADAE
 
-            Computes features from latents, initial state, and quantization index
+            Computes features from latent z
 
         """
 
@@ -341,35 +342,23 @@ class CoreDecoderStatefull(nn.Module):
 
     def forward(self, z):
 
-        # TODO : all layers in stateful loop, move loop outside this function, pass/return states, ext callable state init function
+        # we can only process 40ms at a time
+        assert z.shape == (1,1,self.dense_1.in_features)
 
-        # Layer1 stateful prototype ----------------------------------
+        x = n(torch.tanh(self.dense_1(z)))
+        x = torch.cat([x, n(self.glu1(n(self.gru1(x))))], -1)
+        x = torch.cat([x, n(self.conv1(x))], -1)
+        x = torch.cat([x, n(self.glu2(n(self.gru2(x))))], -1)
+        x = torch.cat([x, n(self.conv2(x))], -1)
+        x = torch.cat([x, n(self.glu3(n(self.gru3(x))))], -1)
+        x = torch.cat([x, n(self.conv3(x))], -1)
+        x = torch.cat([x, n(self.glu4(n(self.gru4(x))))], -1)
+        x = torch.cat([x, n(self.conv4(x))], -1)
+        x = torch.cat([x, n(self.glu5(n(self.gru5(x))))], -1)
+        x = torch.cat([x, n(self.conv5(x))], -1)
+        x = self.output(x)
 
-        x_ = torch.zeros(1,z.shape[1],self.output.in_features)
-
-        for seq in range(z.shape[1]):
-
-            x = n(torch.tanh(self.dense_1(z[:,seq:seq+1,:])))
-            x = torch.cat([x, n(self.glu1(n(self.gru1(x))))], -1)
-            x = torch.cat([x, n(self.conv1(x))], -1)
-            x = torch.cat([x, n(self.glu2(n(self.gru2(x))))], -1)
-            x = torch.cat([x, n(self.conv2(x))], -1)
-            x = torch.cat([x, n(self.glu3(n(self.gru3(x))))], -1)
-            x = torch.cat([x, n(self.conv3(x))], -1)
-            x = torch.cat([x, n(self.glu4(n(self.gru4(x))))], -1)
-            x = torch.cat([x, n(self.conv4(x))], -1)
-            x = torch.cat([x, n(self.glu5(n(self.gru5(x))))], -1)
-            x = torch.cat([x, n(self.conv5(x))], -1)
-
-            # for loop ouput
-            x_[0,seq,:] = x
-
-        # output layer and reshaping. We produce FRAMES_PER_STEP vocoder feature
-        # vectors for every decoded vector of symbols
-        x10 = self.output(x_)
-        features = torch.reshape(x10, (x10.size(0), x10.size(1) * self.FRAMES_PER_STEP, x10.size(2) // self.FRAMES_PER_STEP))
-        print("features out:",features.shape)
-
+        features = torch.reshape(x,(1,self.FRAMES_PER_STEP,self.output_dim))
         return features
 
 class RADAE(nn.Module):
