@@ -104,9 +104,7 @@ class MyConv(nn.Module):
         self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=2, padding='valid', dilation=dilation)
     def forward(self, x, state=None):
         device = x.device
-        #print("Myconv x",x.shape,x[:,0:self.dilation,:].shape)
         conv_in = torch.cat([torch.zeros_like(x[:,0:self.dilation,:], device=device), x], -2).permute(0, 2, 1)
-        #print("MyConv conv_in", conv_in.shape)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
 #Wrapper for 1D conv layer, does 0 pre-pend externally
@@ -116,12 +114,11 @@ class MyConv1(nn.Module):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.dilation=dilation
-        self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=2, padding='valid', dilation=dilation)
+        self.kernel_size = 2
+        self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=self.kernel_size, padding='valid', dilation=dilation)
     def forward(self, x, state=None):
         device = x.device
-        #print("MyConv1 x",x.shape,x[:,0:1,:].shape)
         conv_in = x.permute(0, 2, 1)
-        #print("MyConv1 conv_in", conv_in.shape)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
 
@@ -332,41 +329,30 @@ class CoreDecoderStatefull(nn.Module):
     def forward(self, z):
 
         # TODO : all layers in stateful loop, move loop outside this function, pass/return states, ext callable state init function
+
         print("dec input",z.shape)
-        #quit()
-        # run decoding layer stack
-        #x = n(torch.tanh(self.dense_1(z)))
-        #print("before GRU1",x.shape)
-        gru1_states = torch.zeros(1,1,96)
-        #y = torch.zeros(1,z.shape[1],96)
-        x = torch.zeros(1,z.shape[1],192)
+
+        # Layer1 stateful prototype ----------------------------------
+
+        # GRU has internal states
+        gru1_states = torch.zeros(1,1,self.gru1.hidden_size)
+        x = torch.zeros(1,z.shape[1],self.dense_1.out_features+self.gru1.hidden_size)
         for seq in range(z.shape[1]):
-            #print(z[:,seq:seq+1,:].shape)
-            #quit()
             x_ = n(torch.tanh(self.dense_1(z[:,seq:seq+1,:])))
-            #print(x[:,seq,:].shape)
-            #quit()
             y,gru1_states = self.gru1(x_,gru1_states)
             x[0,seq,:] = torch.cat([x_, n(self.glu1(n(y)))], -1)
-            #print(x_.shape)
-            #quit()
-            #x[0,seq,:] = torch.cat([x_, n(self.conv1(x_))], -1)
-            #print(x1.shape)
-            #quit
-            #y[0,seq,:] = self.gru1(x[:,seq,:],gru1_states)[0]
-        #print("after for",x.shape)
-        #quit()
-        #x = torch.cat([x, n(self.glu1(n(y)))], -1)
-        #print("after layer1",x.shape)
-        #quit()
-        #print("before pre-pend 0",x.shape, x[:,0:1,:].shape)
-        #y = self.conv1(x)
-        #print("after conv",y.shape)
-        y = torch.cat([torch.zeros_like(x[:,0:1,:], device=x.device), x], -2)
-        #print("after pre-pend 0",y.shape, y[:,0:1,:].shape)
-        x = torch.cat([x, n(self.conv1(y))], -1)
-        #print("after cat",x.shape)
-        #quit()
+        
+        # conv1 has memory of previous timestep
+        conv1_in = torch.zeros_like(x[:,0:self.conv1.kernel_size,:], device=x.device)
+        y = torch.zeros_like(x[:,:,:self.conv1.output_dim], device=x.device)
+        for seq in range(x.shape[1]):
+            conv1_in[0,0,:] = conv1_in[0,1,:]
+            conv1_in[0,1,:] = x[0,seq,:]
+            y[0,seq,:] = self.conv1(conv1_in)
+        x = torch.cat([x, n(y)], -1)
+
+        # Remaining layers 
+
         x = torch.cat([x, n(self.glu2(n(self.gru2(x)[0])))], -1)
         x = torch.cat([x, n(self.conv2(x))], -1)
         x = torch.cat([x, n(self.glu3(n(self.gru3(x)[0])))], -1)
