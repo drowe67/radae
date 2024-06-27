@@ -107,18 +107,20 @@ class MyConv(nn.Module):
         conv_in = torch.cat([torch.zeros_like(x[:,0:self.dilation,:], device=device), x], -2).permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
-#Wrapper for 1D conv layer, does 0 pre-pend externally
-class MyConv1(nn.Module):
+# Wrapper for conv1D layer that maintains state internally
+class Conv1DStatefull(nn.Module):
     def __init__(self, input_dim, output_dim, dilation=1):
-        super(MyConv1, self).__init__()
+        super(Conv1DStatefull, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.dilation=dilation
         self.kernel_size = 2
+        self.conv_in = torch.zeros(1,self.kernel_size,self.input_dim)
         self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=self.kernel_size, padding='valid', dilation=dilation)
-    def forward(self, x, state=None):
-        device = x.device
-        conv_in = x.permute(0, 2, 1)
+    def forward(self, x):
+        self.conv_in[0,0:self.kernel_size-1,:] = self.conv_in[0,1:self.kernel_size,:]
+        self.conv_in[0,1,:] = x
+        conv_in = self.conv_in.permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
 
@@ -305,7 +307,7 @@ class CoreDecoderStatefull(nn.Module):
         # Layers are organized like a DenseNet
         self.dense_1    = nn.Linear(self.input_size, 96)
         self.gru1 = nn.GRU(96, 96, batch_first=True)
-        self.conv1 = MyConv1(192, 32)
+        self.conv1 = Conv1DStatefull(192, 32)
         self.gru2 = nn.GRU(224, 96, batch_first=True)
         self.conv2 = MyConv(320, 32)
         self.gru3 = nn.GRU(352, 96, batch_first=True)
@@ -343,15 +345,16 @@ class CoreDecoderStatefull(nn.Module):
         x_ = torch.zeros(1,z.shape[1],self.gru2.input_size)
 
         for seq in range(z.shape[1]):
+
             x = n(torch.tanh(self.dense_1(z[:,seq:seq+1,:])))
  
             gru1_out,gru1_states = self.gru1(x,gru1_states)
             x = torch.cat([x, n(self.glu1(n(gru1_out)))], -1)
  
-            conv1_in[0,0,:] = conv1_in[0,1,:]
-            conv1_in[0,1,:] = x
-            conv1_out = self.conv1(conv1_in)
-            x_[0,seq,:] = torch.cat([x, n(conv1_out)], -1)
+            x = torch.cat([x, n(self.conv1(x))], -1)
+
+            # for loop ouput
+            x_[0,seq,:] = x
 
         # Remaining layers 
 
