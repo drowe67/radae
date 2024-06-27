@@ -64,22 +64,15 @@ model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 # some of the layer names have been changed
 def key_transformation(old_key):
-   if old_key == "module.gru1.weight_ih_l0":
-      return "module.gru1.gru.weight_ih_l0"
-   if old_key == "module.gru1.weight_hh_l0":
-      return "module.gru1.gru.weight_hh_l0"
-   if old_key == "module.gru1.bias_ih_l0":
-      return "module.gru1.gru.bias_ih_l0"
-   if old_key == "module.gru1.bias_hh_l0":
-      return "module.gru1.gru.bias_hh_l0"
-   if old_key == "module.gru2.weight_ih_l0":
-      return "module.gru2.gru.weight_ih_l0"
-   if old_key == "module.gru2.weight_hh_l0":
-      return "module.gru2.gru.weight_hh_l0"
-   if old_key == "module.gru2.bias_ih_l0":
-      return "module.gru2.gru.bias_ih_l0"
-   if old_key == "module.gru2.bias_hh_l0":
-      return "module.gru2.gru.bias_hh_l0"
+   for gru in range(1,3):
+      if old_key == f"module.gru{gru:d}.weight_ih_l0":
+         return f"module.gru{gru:d}.gru.weight_ih_l0"
+      if old_key == f"module.gru{gru:d}.weight_hh_l0":
+         return f"module.gru{gru:d}.gru.weight_hh_l0"
+      if old_key == f"module.gru{gru:d}.bias_ih_l0":
+         return f"module.gru{gru:d}.gru.bias_ih_l0"
+      if old_key == f"module.gru{gru:d}.bias_hh_l0":
+         return f"module.gru{gru:d}.gru.bias_hh_l0"
    return old_key
 
 state_dict = model.core_decoder.state_dict()
