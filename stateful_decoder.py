@@ -72,6 +72,14 @@ def key_transformation(old_key):
       return "module.gru1.gru.bias_ih_l0"
    if old_key == "module.gru1.bias_hh_l0":
       return "module.gru1.gru.bias_hh_l0"
+   if old_key == "module.gru2.weight_ih_l0":
+      return "module.gru2.gru.weight_ih_l0"
+   if old_key == "module.gru2.weight_hh_l0":
+      return "module.gru2.gru.weight_hh_l0"
+   if old_key == "module.gru2.bias_ih_l0":
+      return "module.gru2.gru.bias_ih_l0"
+   if old_key == "module.gru2.bias_hh_l0":
+      return "module.gru2.gru.bias_hh_l0"
    return old_key
 
 state_dict = model.core_decoder.state_dict()

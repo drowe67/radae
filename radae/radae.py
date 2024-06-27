@@ -109,12 +109,12 @@ class MyConv(nn.Module):
 
 # Wrapper for GRU layer that maintains state internally, processes (1,1,input_dim) at a time
 class GRUStatefull(nn.Module):
-    def __init__(self, input_dim, hidden_dim):
+    def __init__(self, input_dim, hidden_dim, batch_first):
         super(GRUStatefull, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.states = torch.zeros(1,1,self.hidden_dim)
-        self.gru = nn.GRU(input_dim, hidden_dim, batch_first=True)
+        self.gru = nn.GRU(input_dim, hidden_dim, batch_first=batch_first)
     def forward(self, x):
         gru_out,self.states = self.gru(x,self.states)
         return gru_out
@@ -317,10 +317,10 @@ class CoreDecoderStatefull(nn.Module):
 
         # Layers are organized like a DenseNet
         self.dense_1    = nn.Linear(self.input_size, 96)
-        self.gru1 = GRUStatefull(96, 96)
+        self.gru1 = GRUStatefull(96, 96, batch_first=True)
         self.conv1 = Conv1DStatefull(192, 32)
-        self.gru2 = nn.GRU(224, 96, batch_first=True)
-        self.conv2 = MyConv(320, 32)
+        self.gru2 = GRUStatefull(224, 96, batch_first=True)
+        self.conv2 = Conv1DStatefull(320, 32)
         self.gru3 = nn.GRU(352, 96, batch_first=True)
         self.conv3 = MyConv(448, 32)
         self.gru4 = nn.GRU(480, 96, batch_first=True)
@@ -345,22 +345,22 @@ class CoreDecoderStatefull(nn.Module):
 
         # Layer1 stateful prototype ----------------------------------
 
-        x_ = torch.zeros(1,z.shape[1],self.gru2.input_size)
+        x_ = torch.zeros(1,z.shape[1],self.gru3.input_size)
 
         for seq in range(z.shape[1]):
 
             x = n(torch.tanh(self.dense_1(z[:,seq:seq+1,:])))
             x = torch.cat([x, n(self.glu1(n(self.gru1(x))))], -1)
             x = torch.cat([x, n(self.conv1(x))], -1)
+            x = torch.cat([x, n(self.glu2(n(self.gru2(x))))], -1)
+            x = torch.cat([x, n(self.conv2(x))], -1)
 
             # for loop ouput
             x_[0,seq,:] = x
 
         # Remaining layers 
 
-        x = torch.cat([x_, n(self.glu2(n(self.gru2(x_)[0])))], -1)
-        x = torch.cat([x, n(self.conv2(x))], -1)
-        x = torch.cat([x, n(self.glu3(n(self.gru3(x)[0])))], -1)
+        x = torch.cat([x_, n(self.glu3(n(self.gru3(x_)[0])))], -1)
         x = torch.cat([x, n(self.conv3(x))], -1)
         x = torch.cat([x, n(self.glu4(n(self.gru4(x)[0])))], -1)
         x = torch.cat([x, n(self.conv4(x))], -1)
