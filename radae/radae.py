@@ -104,10 +104,26 @@ class MyConv(nn.Module):
         self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=2, padding='valid', dilation=dilation)
     def forward(self, x, state=None):
         device = x.device
-        print("Myconv x",x.shape,x[:,0:self.dilation,:].shape)
+        #print("Myconv x",x.shape,x[:,0:self.dilation,:].shape)
         conv_in = torch.cat([torch.zeros_like(x[:,0:self.dilation,:], device=device), x], -2).permute(0, 2, 1)
-        print("MyConv conv_in", conv_in.shape)
+        #print("MyConv conv_in", conv_in.shape)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
+
+#Wrapper for 1D conv layer, does 0 pre-pend externally
+class MyConv1(nn.Module):
+    def __init__(self, input_dim, output_dim, dilation=1):
+        super(MyConv1, self).__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.dilation=dilation
+        self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=2, padding='valid', dilation=dilation)
+    def forward(self, x, state=None):
+        device = x.device
+        #print("MyConv1 x",x.shape,x[:,0:1,:].shape)
+        conv_in = x.permute(0, 2, 1)
+        #print("MyConv1 conv_in", conv_in.shape)
+        return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
+
 
 #Gated Linear Unit activation
 class GLU(nn.Module):
@@ -292,7 +308,7 @@ class CoreDecoderStatefull(nn.Module):
         # Layers are organized like a DenseNet
         self.dense_1    = nn.Linear(self.input_size, 96)
         self.gru1 = nn.GRU(96, 96, batch_first=True)
-        self.conv1 = MyConv(192, 32)
+        self.conv1 = MyConv1(192, 32)
         self.gru2 = nn.GRU(224, 96, batch_first=True)
         self.conv2 = MyConv(320, 32)
         self.gru3 = nn.GRU(352, 96, batch_first=True)
@@ -343,12 +359,14 @@ class CoreDecoderStatefull(nn.Module):
         #x = torch.cat([x, n(self.glu1(n(y)))], -1)
         #print("after layer1",x.shape)
         #quit()
-        print("before conv",x.shape)
-        y = self.conv1(x)
-        print("after conv",y.shape)
-        x = torch.cat([x, n(self.conv1(x))], -1)
-        print("after cat",x.shape)
-        quit()
+        #print("before pre-pend 0",x.shape, x[:,0:1,:].shape)
+        #y = self.conv1(x)
+        #print("after conv",y.shape)
+        y = torch.cat([torch.zeros_like(x[:,0:1,:], device=x.device), x], -2)
+        #print("after pre-pend 0",y.shape, y[:,0:1,:].shape)
+        x = torch.cat([x, n(self.conv1(y))], -1)
+        #print("after cat",x.shape)
+        #quit()
         x = torch.cat([x, n(self.glu2(n(self.gru2(x)[0])))], -1)
         x = torch.cat([x, n(self.conv2(x))], -1)
         x = torch.cat([x, n(self.glu3(n(self.gru3(x)[0])))], -1)
