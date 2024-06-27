@@ -64,7 +64,7 @@ model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 # some of the layer names have been changed
 def key_transformation(old_key):
-   for gru in range(1,3):
+   for gru in range(1,6):
       if old_key == f"module.gru{gru:d}.weight_ih_l0":
          return f"module.gru{gru:d}.gru.weight_ih_l0"
       if old_key == f"module.gru{gru:d}.weight_hh_l0":

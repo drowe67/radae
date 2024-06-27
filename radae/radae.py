@@ -321,12 +321,12 @@ class CoreDecoderStatefull(nn.Module):
         self.conv1 = Conv1DStatefull(192, 32)
         self.gru2 = GRUStatefull(224, 96, batch_first=True)
         self.conv2 = Conv1DStatefull(320, 32)
-        self.gru3 = nn.GRU(352, 96, batch_first=True)
-        self.conv3 = MyConv(448, 32)
-        self.gru4 = nn.GRU(480, 96, batch_first=True)
-        self.conv4 = MyConv(576, 32)
-        self.gru5 = nn.GRU(608, 96, batch_first=True)
-        self.conv5 = MyConv(704, 32)
+        self.gru3 = GRUStatefull(352, 96, batch_first=True)
+        self.conv3 = Conv1DStatefull(448, 32)
+        self.gru4 = GRUStatefull(480, 96, batch_first=True)
+        self.conv4 = Conv1DStatefull(576, 32)
+        self.gru5 = GRUStatefull(608, 96, batch_first=True)
+        self.conv5 = Conv1DStatefull(704, 32)
         self.output  = nn.Linear(736, self.FRAMES_PER_STEP * self.output_dim)
         self.glu1 = GLU(96)
         self.glu2 = GLU(96)
@@ -345,7 +345,7 @@ class CoreDecoderStatefull(nn.Module):
 
         # Layer1 stateful prototype ----------------------------------
 
-        x_ = torch.zeros(1,z.shape[1],self.gru3.input_size)
+        x_ = torch.zeros(1,z.shape[1],self.output.in_features)
 
         for seq in range(z.shape[1]):
 
@@ -354,22 +354,19 @@ class CoreDecoderStatefull(nn.Module):
             x = torch.cat([x, n(self.conv1(x))], -1)
             x = torch.cat([x, n(self.glu2(n(self.gru2(x))))], -1)
             x = torch.cat([x, n(self.conv2(x))], -1)
+            x = torch.cat([x, n(self.glu3(n(self.gru3(x))))], -1)
+            x = torch.cat([x, n(self.conv3(x))], -1)
+            x = torch.cat([x, n(self.glu4(n(self.gru4(x))))], -1)
+            x = torch.cat([x, n(self.conv4(x))], -1)
+            x = torch.cat([x, n(self.glu5(n(self.gru5(x))))], -1)
+            x = torch.cat([x, n(self.conv5(x))], -1)
 
             # for loop ouput
             x_[0,seq,:] = x
 
-        # Remaining layers 
-
-        x = torch.cat([x_, n(self.glu3(n(self.gru3(x_)[0])))], -1)
-        x = torch.cat([x, n(self.conv3(x))], -1)
-        x = torch.cat([x, n(self.glu4(n(self.gru4(x)[0])))], -1)
-        x = torch.cat([x, n(self.conv4(x))], -1)
-        x = torch.cat([x, n(self.glu5(n(self.gru5(x)[0])))], -1)
-        x = torch.cat([x, n(self.conv5(x))], -1)
-        print("after for",x.shape)
         # output layer and reshaping. We produce FRAMES_PER_STEP vocoder feature
         # vectors for every decoded vector of symbols
-        x10 = self.output(x)
+        x10 = self.output(x_)
         features = torch.reshape(x10, (x10.size(0), x10.size(1) * self.FRAMES_PER_STEP, x10.size(2) // self.FRAMES_PER_STEP))
         print("features out:",features.shape)
 
