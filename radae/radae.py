@@ -313,10 +313,23 @@ class CoreDecoderStatefull(nn.Module):
 
     def forward(self, z):
 
+        # TODO : all layers in stateful loop, move loop outside this function, pass/return states, ext callable state init function
+        #print("dec input",z.shape)
         # run decoding layer stack
         x = n(torch.tanh(self.dense_1(z)))
-
-        x = torch.cat([x, n(self.glu1(n(self.gru1(x)[0])))], -1)
+        #print("before GRU1",x.shape)
+        gru1_states = torch.zeros(1,96)
+        y = torch.zeros(1,x.shape[1],96)
+        for seq in range(x.shape[1]):
+            #print(x[:,seq,:].shape)
+            #quit()
+            y[0,seq,:],gru1_states = self.gru1(x[:,seq,:],gru1_states)
+            #y[0,seq,:] = self.gru1(x[:,seq,:],gru1_states)[0]
+        #print("after GRU1",y.shape)
+        #quit()
+        x = torch.cat([x, n(self.glu1(n(y)))], -1)
+        #print("after layer1",x.shape)
+        #quit()
         x = torch.cat([x, n(self.conv1(x))], -1)
         x = torch.cat([x, n(self.glu2(n(self.gru2(x)[0])))], -1)
         x = torch.cat([x, n(self.conv2(x))], -1)
