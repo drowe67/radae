@@ -336,24 +336,26 @@ class CoreDecoderStatefull(nn.Module):
 
         # GRU has internal states
         gru1_states = torch.zeros(1,1,self.gru1.hidden_size)
-        x = torch.zeros(1,z.shape[1],self.dense_1.out_features+self.gru1.hidden_size)
-        for seq in range(z.shape[1]):
-            x_ = n(torch.tanh(self.dense_1(z[:,seq:seq+1,:])))
-            y,gru1_states = self.gru1(x_,gru1_states)
-            x[0,seq,:] = torch.cat([x_, n(self.glu1(n(y)))], -1)
-        
         # conv1 has memory of previous timestep
-        conv1_in = torch.zeros_like(x[:,0:self.conv1.kernel_size,:], device=x.device)
-        y = torch.zeros_like(x[:,:,:self.conv1.output_dim], device=x.device)
-        for seq in range(x.shape[1]):
+        conv1_dim = self.dense_1.out_features + self.gru1.hidden_size
+        conv1_in = torch.zeros(1,self.conv1.kernel_size,conv1_dim, device=z.device)
+        # storage for output sequence
+        x_ = torch.zeros(1,z.shape[1],self.gru2.input_size)
+
+        for seq in range(z.shape[1]):
+            x = n(torch.tanh(self.dense_1(z[:,seq:seq+1,:])))
+ 
+            gru1_out,gru1_states = self.gru1(x,gru1_states)
+            x = torch.cat([x, n(self.glu1(n(gru1_out)))], -1)
+ 
             conv1_in[0,0,:] = conv1_in[0,1,:]
-            conv1_in[0,1,:] = x[0,seq,:]
-            y[0,seq,:] = self.conv1(conv1_in)
-        x = torch.cat([x, n(y)], -1)
+            conv1_in[0,1,:] = x
+            conv1_out = self.conv1(conv1_in)
+            x_[0,seq,:] = torch.cat([x, n(conv1_out)], -1)
 
         # Remaining layers 
 
-        x = torch.cat([x, n(self.glu2(n(self.gru2(x)[0])))], -1)
+        x = torch.cat([x_, n(self.glu2(n(self.gru2(x_)[0])))], -1)
         x = torch.cat([x, n(self.conv2(x))], -1)
         x = torch.cat([x, n(self.glu3(n(self.gru3(x)[0])))], -1)
         x = torch.cat([x, n(self.conv3(x))], -1)
