@@ -107,7 +107,19 @@ class MyConv(nn.Module):
         conv_in = torch.cat([torch.zeros_like(x[:,0:self.dilation,:], device=device), x], -2).permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
-# Wrapper for conv1D layer that maintains state internally
+# Wrapper for GRU layer that maintains state internally, processes (1,1,input_dim) at a time
+class GRUStatefull(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super(GRUStatefull, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.states = torch.zeros(1,1,self.hidden_dim)
+        self.gru = nn.GRU(input_dim, hidden_dim, batch_first=True)
+    def forward(self, x):
+        gru_out,self.states = self.gru(x,self.states)
+        return gru_out
+
+# Wrapper for conv1D layer that maintains state internally, processes (1,1,input_dim) at a time
 class Conv1DStatefull(nn.Module):
     def __init__(self, input_dim, output_dim, dilation=1):
         super(Conv1DStatefull, self).__init__()
@@ -115,14 +127,13 @@ class Conv1DStatefull(nn.Module):
         self.output_dim = output_dim
         self.dilation=dilation
         self.kernel_size = 2
-        self.conv_in = torch.zeros(1,self.kernel_size,self.input_dim)
+        self.states = torch.zeros(1,self.kernel_size,self.input_dim)
         self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=self.kernel_size, padding='valid', dilation=dilation)
     def forward(self, x):
-        self.conv_in[0,0:self.kernel_size-1,:] = self.conv_in[0,1:self.kernel_size,:]
-        self.conv_in[0,1,:] = x
-        conv_in = self.conv_in.permute(0, 2, 1)
+        self.states[0,0:self.kernel_size-1,:] = self.states[0,1:self.kernel_size,:]
+        self.states[0,1,:] = x
+        conv_in = self.states.permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
-
 
 #Gated Linear Unit activation
 class GLU(nn.Module):
@@ -306,7 +317,7 @@ class CoreDecoderStatefull(nn.Module):
 
         # Layers are organized like a DenseNet
         self.dense_1    = nn.Linear(self.input_size, 96)
-        self.gru1 = nn.GRU(96, 96, batch_first=True)
+        self.gru1 = GRUStatefull(96, 96)
         self.conv1 = Conv1DStatefull(192, 32)
         self.gru2 = nn.GRU(224, 96, batch_first=True)
         self.conv2 = MyConv(320, 32)
@@ -332,25 +343,14 @@ class CoreDecoderStatefull(nn.Module):
 
         # TODO : all layers in stateful loop, move loop outside this function, pass/return states, ext callable state init function
 
-        print("dec input",z.shape)
-
         # Layer1 stateful prototype ----------------------------------
 
-        # GRU has internal states
-        gru1_states = torch.zeros(1,1,self.gru1.hidden_size)
-        # conv1 has memory of previous timestep
-        conv1_dim = self.dense_1.out_features + self.gru1.hidden_size
-        conv1_in = torch.zeros(1,self.conv1.kernel_size,conv1_dim, device=z.device)
-        # storage for output sequence
         x_ = torch.zeros(1,z.shape[1],self.gru2.input_size)
 
         for seq in range(z.shape[1]):
 
             x = n(torch.tanh(self.dense_1(z[:,seq:seq+1,:])))
- 
-            gru1_out,gru1_states = self.gru1(x,gru1_states)
-            x = torch.cat([x, n(self.glu1(n(gru1_out)))], -1)
- 
+            x = torch.cat([x, n(self.glu1(n(self.gru1(x))))], -1)
             x = torch.cat([x, n(self.conv1(x))], -1)
 
             # for loop ouput

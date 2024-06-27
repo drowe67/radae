@@ -32,6 +32,7 @@
 
 import os
 import argparse
+from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -58,10 +59,28 @@ num_used_features = 20
 model = RADAE(num_features, latent_dim, 100.0)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
-checkpoint['state_dict'] = model.state_dict()
 
-# we need to load trained weights into the stateful decoder, as it wasn't trained
-model.core_decoder_statefull.load_state_dict(model.core_decoder.state_dict())
+# Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+
+# some of the layer names have been changed
+def key_transformation(old_key):
+   if old_key == "module.gru1.weight_ih_l0":
+      return "module.gru1.gru.weight_ih_l0"
+   if old_key == "module.gru1.weight_hh_l0":
+      return "module.gru1.gru.weight_hh_l0"
+   if old_key == "module.gru1.bias_ih_l0":
+      return "module.gru1.gru.bias_ih_l0"
+   if old_key == "module.gru1.bias_hh_l0":
+      return "module.gru1.gru.bias_hh_l0"
+   return old_key
+
+state_dict = model.core_decoder.state_dict()
+new_state_dict = OrderedDict()
+for key, value in state_dict.items():
+   new_key = key_transformation(key)
+   new_state_dict[new_key] = value
+   
+model.core_decoder_statefull.load_state_dict(new_state_dict)
 
 # dataloader
 feature_file = args.features
