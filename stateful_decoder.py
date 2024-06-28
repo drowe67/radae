@@ -1,9 +1,8 @@
 """
-/* Copyright (c) 2024 modifications for radio autoencoder project
-   by David Rowe */
-   
-/* Copyright (c) 2022 Amazon
-   Written by Jan Buethe */
+
+   Compares stateful decoder (that operates one frame at a time) to 
+   vanilla decoder.
+
 /*
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions
@@ -84,12 +83,9 @@ for key, value in state_dict.items():
 model.core_decoder_statefull.load_state_dict(new_state_dict)
 
 # dataloader
-feature_file = args.features
-features_in = np.reshape(np.fromfile(feature_file, dtype=np.float32), (1, -1, nb_total_features))
+features_in = np.reshape(np.fromfile(args.features, dtype=np.float32), (1, -1, nb_total_features))
 nb_features_rounded = model.num_10ms_times_steps_rounded_to_modem_frames(features_in.shape[1])
-features = features_in[:,:nb_features_rounded,:]
-features = features[:, :, :num_used_features]
-features = torch.tensor(features)
+features = torch.tensor(features_in[:,:nb_features_rounded,:num_used_features])
 print(f"Processing: {nb_features_rounded} feature vectors")
 
 if __name__ == '__main__':
@@ -103,8 +99,6 @@ if __name__ == '__main__':
    
    # stateful decoder that works on one vector of features at a time, and preserves internal state
    features_hat_statefull = torch.zeros_like(features)
-   print(z.shape,features_hat_statefull.shape)
-
    for i in range(z.shape[1]):
       features_hat_statefull[0,4*i:4*(i+1),:] = model.core_decoder_statefull(z[:,i:i+1,:])
 

@@ -7,9 +7,9 @@ PATH=${PATH}:${OPUS}
 
 if [ $# -lt 3 ]; then
     echo "usage (write output to file):"
-    echo "  ./inference.sh model in.s16 out.wav [optional inference.py args]"
+    echo "  ./stateful_decoder.sh model in.s16 out.wav [optional stateful_decoder.py args]"
     echo "usage (play output with aplay):"
-    echo "  ./inference.sh model in.s16 - [optional inference.py args]"
+    echo "  ./stateful_decoder.sh model in.s16 - [optional stateful_decoder.py args]"
     exit 1
 fi
 
