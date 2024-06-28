@@ -2,6 +2,10 @@
 /*
   Radio Autoencoder receiver: rate Fs complex samples in, features out.
 
+  Bare bones acquisition that find a valid modem frame, and decodes the
+  entire sample using a fixed timning and freq offset estimate.  Works
+  OK for 10 second samples, tested on many HF channels around the world.
+
   Copyright (c) 2024 by David Rowe */
 
 /*
@@ -35,7 +39,7 @@ import argparse
 import numpy as np
 from matplotlib import pyplot as plt
 import torch
-from radae import RADAE
+from radae import RADAE,complex_bpf
 
 parser = argparse.ArgumentParser()
 
@@ -75,19 +79,6 @@ model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate
               coarse_mag=args.coarse_mag,time_offset=args.time_offset, bottleneck=args.bottleneck)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
-
-def complex_bpf(Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
-   B = bandwidth_Hz/Fs_Hz
-   alpha = 2*np.pi*centre_freq_Hz/Fs_Hz
-   h = np.zeros(Ntap, dtype=np.csingle)
-
-   for i in range(Ntap):
-      n = i-(Ntap-1)/2
-      h[i] = B*np.sinc(n*B)
-   
-   x_baseband = x*np.exp(-1j*alpha*np.arange(len(x)))
-   x_filt = np.convolve(x_baseband,h)
-   return x_filt*np.exp(1j*alpha*np.arange(len(x_filt)))
 
 M = model.M
 Ncp = model.Ncp
