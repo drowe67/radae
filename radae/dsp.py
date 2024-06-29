@@ -88,6 +88,9 @@ class acquisition():
       # a grid of time and frequency steps.  Note we only correlate on the M samples after the
       # cyclic prefix, so tmax will be Ncp samples after the start of the modem frame
 
+      # TODO: explore stregies to speed up such as under sampled timing, fft for efficient correlation,
+      # or ML based acquisition
+      
       for t in range(Nmf):
          f_ind = 0
          for f in self.fcoarse_range:
@@ -114,4 +117,37 @@ class acquisition():
          candidate = True
      
       self.Dt1 = Dt1
-      return candidate, Dthresh, Dtmax12, tmax, fmax, f_ind_max 
+      self.Dthresh = Dthresh
+      self.Dtmax12 = Dtmax12
+      self.f_ind_max = f_ind_max
+
+      return candidate, tmax, fmax
+   
+   def refine(self, rx, tmax, fmax, ffine_range):
+      # TODO: should search over a fine timing range as well, if coarse search is under sampled to save CPU
+      Fs = self.Fs
+      p = self.p
+      M = self.M
+      Nmf = self.Nmf
+   
+      D_fine = np.zeros(len(ffine_range), dtype=np.csingle)
+      f_ind = 0
+      fmax_fine = fmax
+      Dtmax = 0
+
+      for f in ffine_range:
+         w = 2*np.pi*f/Fs
+         # current pilot samples at start of this modem frame
+         w_vec = np.exp(-1j*w*np.arange(M))
+         D_fine[f_ind] = np.dot(np.conj(w_vec*rx[tmax:tmax+M]),p)
+         # next pilot samples at end of this modem frame
+         w_vec = np.exp(-1j*w*(Nmf+np.arange(M)))
+         D_fine[f_ind] = D_fine[f_ind] + np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),p)
+
+         if np.abs(D_fine[f_ind]) > Dtmax:
+            Dtmax = np.abs(D_fine[f_ind])
+            fmax = f 
+         f_ind = f_ind + 1
+
+         self.D_fine = D_fine
+      return fmax

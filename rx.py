@@ -137,12 +137,12 @@ if args.pilots:
       fD=open(args.write_Dt,'wb')
 
    while not acquired and len(rx) >= 2*Nmf+M:
-      candidate, Dthresh, Dtmax12, tmax, fmax, f_ind_max = acq.detect_pilots(rx[:2*Nmf+M])
+      candidate, tmax, fmax = acq.detect_pilots(rx[:2*Nmf+M])
       if len(args.write_Dt):
          acq.Dt1.tofile(fD)
       
       # post process with a state machine that looks for 3 consecutive matches with about the same tmining offset      
-      print(f"{mf:2d} state: {state:10s} Dthresh: {Dthresh:5.2f} Dtmax12: {Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
+      print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
 
       next_state = state
       if state == "search":
@@ -184,43 +184,25 @@ if args.pilots:
       else:
          print("Acquisition failed....")
       quit()
-      
+
    # frequency refinement, use two sets of pilots
    ffine_range = np.arange(fmax-10,fmax+10,0.25)
-   #print(ffine_range)
-   D_fine = np.zeros(len(ffine_range), dtype=np.csingle)
-   f_ind = 0
-   fmax_fine = fmax
-   Dtmax = 0
-
-   for f in ffine_range:
-      w = 2*np.pi*f/Fs
-      # current pilot samples at start of this modem frame
-      w_vec = np.exp(-1j*w*np.arange(M))
-      D_fine[f_ind] = np.dot(np.conj(w_vec*rx[tmax:tmax+M]),p)
-      # next pilot samples at end of this modem frame
-      w_vec = np.exp(-1j*w*(Nmf+np.arange(M)))
-      D_fine[f_ind] = D_fine[f_ind] + np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),p)
-
-      if np.abs(D_fine[f_ind]) > Dtmax:
-         Dtmax = np.abs(D_fine[f_ind])
-         fmax = f 
-      f_ind = f_ind + 1
+   fmax = acq.refine(rx, tmax, fmax, ffine_range)
    print(f"refined fmax: {fmax:f}")
 
    if args.plots:
       fig, ax = plt.subplots(2, 1,figsize=(6,12))
       ax[0].set_title('Dt complex plane')
-      ax[0].plot(acq.Dt1[:,f_ind_max].real, acq.Dt1[:,f_ind_max].imag,'b+')
-      circle1 = plt.Circle((0,0), radius=Dthresh, color='r')
+      ax[0].plot(acq.Dt1[:,acq.f_ind_max].real, acq.Dt1[:,acq.f_ind_max].imag,'b+')
+      circle1 = plt.Circle((0,0), radius=acq.Dthresh, color='r')
       ax[0].add_patch(circle1)
-      ax[1].hist(np.abs(acq.Dt1[:,f_ind_max]))
+      ax[1].hist(np.abs(acq.Dt1[:,acq.f_ind_max]))
       ax[1].set_title('|Dt| histogram')
 
       fig1, ax1 = plt.subplots(2, 1,figsize=(6,12))
       ax1[0].plot(acq.fcoarse_range, np.abs(acq.Dt1[tmax,:]),'b+')
       ax1[0].set_title('|Dt| against f (coarse)')
-      ax1[1].plot(ffine_range, np.abs(D_fine),'b+')
+      ax1[1].plot(ffine_range, np.abs(acq.D_fine),'b+')
       ax1[1].set_title('|Dt| against f (fine)')
    
    rx = rx[tmax-Ncp:]
