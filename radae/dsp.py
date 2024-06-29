@@ -1,7 +1,7 @@
 """
 
   Classical DSP support code.
-  
+
   Copyright (c) 2024 by David Rowe
 
 /*
@@ -44,3 +44,74 @@ def complex_bpf(Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
    x_baseband = x*np.exp(-1j*alpha*np.arange(len(x)))
    x_filt = np.convolve(x_baseband,h)
    return x_filt*np.exp(1j*alpha*np.arange(len(x_filt)))
+
+class acquisition():
+   def __init__(self,Fs,Rs,M,Nmf,p,frange=100,fstep=2.5,Pacq_error = 0.0001):
+      self.Fs = Fs
+      self.Rs = Rs
+      self.M = M
+      self.Nmf = Nmf
+      self.p = p
+      self.frange = frange
+      self.fstep=fstep
+      self.Pacq_error = Pacq_error
+      self.fcoarse_range = np.arange(-frange/2,frange/2,fstep)
+
+      # pre-calculate to speeds things up a bit
+      # TODO is p_w being used?
+      p_w = np.zeros((len(self.fcoarse_range), M), dtype=np.csingle)
+      f_ind = 0
+      for f in self.fcoarse_range:
+         w = 2*np.pi*f/Fs
+         p_w[f_ind,] = np.exp(1j*w*np.arange(M)) * p
+
+         f_ind + f_ind + 1
+      self.p_w = p_w
+
+   def detect_pilots(self, rx):
+      Fs = self.Fs
+      p = self.p
+      M = self.M
+      Nmf = self.Nmf
+
+      # We need a buffer of two and bit modem frames, and search of one Nmf, TODO to reduce
+      # latency this could be reduced to a one symbol (M sample) search and Nmf+2*M sample buffer
+      assert len(rx) == self.Nmf*2+M
+
+      Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
+      Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
+      Dtmax12 = 0
+      tmax = 0
+      fmax = 0
+
+      # Search modem frame for maxima in correlation between pilots and received signal, over
+      # a grid of time and frequency steps.  Note we only correlate on the M samples after the
+      # cyclic prefix, so tmax will be Ncp samples after the start of the modem frame
+
+      for t in range(Nmf):
+         f_ind = 0
+         for f in self.fcoarse_range:
+            w = 2*np.pi*f/Fs
+            w_vec = np.exp(-1j*w*np.arange(M))
+            Dt1[t,f_ind] = np.dot(np.conj(w_vec*rx[t:t+M]),p)
+            Dt2[t,f_ind] = np.dot(np.conj(w_vec*rx[t+Nmf:t+Nmf+M]),p)
+            Dt12 = np.abs(Dt1[t,f_ind]) + np.abs(Dt2[t,f_ind])
+            if Dt12 > Dtmax12:
+               Dtmax12 = Dt12
+               tmax = t
+               fmax = f 
+               f_ind_max =  f_ind
+            f_ind = f_ind + 1
+
+      # Ref: radae.pdf "Pilot Detection over Multiple Frames"
+      sigma_r1 = np.mean(np.abs(Dt1))/((np.pi/2)**0.5)
+      sigma_r2 = np.mean(np.abs(Dt2))/((np.pi/2)**0.5)
+      sigma_r = (sigma_r1 + sigma_r2)/2.0
+      Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error/5.0))
+
+      candidate = False
+      if Dtmax12 > Dthresh:
+         candidate = True
+     
+      self.Dt1 = Dt1
+      return candidate, Dthresh, Dtmax12, tmax, fmax, f_ind_max 
