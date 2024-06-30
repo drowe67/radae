@@ -1,12 +1,15 @@
 """
-/*
-  Radio Autoencoder receiver: rate Fs complex samples in, features out.
 
-  Bare bones acquisition that find a valid modem frame, and decodes the
-  entire sample using a fixed timning and freq offset estimate.  Works
-  OK for 10 second samples, tested on many HF channels around the world.
+  Radio Autoencoder streaming receiver: 
+  
+  rate Fs complex float samples in, features out.
+  rate Fs real int16 samples in, features out.
 
-  Copyright (c) 2024 by David Rowe */
+  Designed to connected to a SDR to perform real time RADAE decoding on 
+  received sample streams.  Full function state machine and continous 
+  updates of timing, freq offsets and amplituide estimates.
+  
+  Copyright (c) 2024 by David Rowe
 
 /*
    Redistribution and use in source and binary forms, with or without
@@ -34,8 +37,7 @@
 */
 """
 
-import os
-import argparse
+import os, sys, argparse, struct
 import numpy as np
 from matplotlib import pyplot as plt
 import torch
@@ -44,25 +46,22 @@ from radae import RADAE,complex_bpf,acquisition
 parser = argparse.ArgumentParser()
 
 parser.add_argument('model_name', type=str, help='path to model in .pth format')
-parser.add_argument('rx', type=str, help='path to input file of rate Fs rx samples in ..IQIQ...f32 format')
+parser.add_argument('rxfile', type=argparse.FileType("rb"), default=sys.stdin, help='path to input file of rate Fs rx samples in ..IQIQ...f32 format (default stdin)')
 parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
-parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
 parser.add_argument('--ber_test', type=str, default="", help='symbols are PSK bits, compare to z.f32 file to calculate BER')
-parser.add_argument('--plots', action='store_true', help='display various plots')
-parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ data symbols using classical DSP')
-parser.add_argument('--freq_offset', type=float, help='manually specify frequency offset')
-parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0)')
-parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude correction (fixes --gain)')
-parser.add_argument('--time_offset', type=int, default=0, help='sampling time offset in samples')
 parser.add_argument('--no_bpf', action='store_false', dest='bpf', help='disable BPF')
-parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
+parser.add_argument('--bottleneck', type=int, default=3, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
 parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matrix on last modem frame')
 parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
 parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
 parser.set_defaults(bpf=True)
 args = parser.parse_args()
+
+# handle use of stdin
+if hasattr(args.rxfile, "buffer"):
+   args.samplefile = args.samplefile.buffer
 
 # make sure we don't use a GPU
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
@@ -75,8 +74,8 @@ num_used_features = 20
 
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, 
-              pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = False, cyclic_prefix=args.cp,
-              coarse_mag=args.coarse_mag,time_offset=args.time_offset, bottleneck=args.bottleneck)
+              pilots=True, pilot_eq=True, eq_mean6 = False, cyclic_prefix=0.004,
+              coarse_mag=True,time_offset=-16, bottleneck=args.bottleneck)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 
@@ -85,19 +84,13 @@ Ncp = model.Ncp
 Ns = model.Ns               # number of data symbols between pilots
 Nmf = int((Ns+1)*(M+Ncp))   # number of samples in one modem frame
 Nc = model.Nc
-w = model.w.cpu().detach().numpy()
 
+"""
 # load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
 rx = np.fromfile(args.rx, dtype=np.csingle)
 print(f"samples: {len(rx):d} Nmf: {Nmf:d} modem frames: {len(rx)/Nmf}")
 
-# TODO: fix contrast of spectrogram - it's not very useful
-if args.plots:
-   fig, ax = plt.subplots(2, 1,figsize=(6,12))
-   ax[0].specgram(rx,NFFT=256,Fs=model.Fs)
-   ax[0].set_title('Before BPF')
-   ax[0].axis([0,len(rx)/model.Fs,0,3000])
-
+w = model.w.cpu().detach().numpy()
 Ntap = 0
 if args.bpf:
    Ntap=101
@@ -110,40 +103,54 @@ if args.plots:
    ax[1].specgram(rx,NFFT=256,Fs=model.Fs)
    ax[1].axis([0,len(rx)/model.Fs,0,3000])
    ax[1].set_title('After BPF')
+"""
 
+p = np.array(model.p) 
+frange = 100                                # coarse grid -frange/2 ... + frange/2
+fstep = 2.5                                 # coarse grid spacing in Hz
+Fs = model.Fs
+Rs = model.Rs
 
-# Acquisition - 1 sample resolution timing, coarse/fine freq offset estimation
+acq = acquisition(Fs,Rs,M,Nmf,p)
 
-if args.pilots:
-   p = np.array(model.p) 
-   frange = 100                                # coarse grid -frange/2 ... + frange/2
-   fstep = 2.5                                 # coarse grid spacing in Hz
-   Fs = model.Fs
-   Rs = model.Rs
+"""
+# optional acq_test variables 
+tmax_candidate_target = Ncp + Ntap/2
+acq_pass = 0
+acq_fail = 0
+"""
 
-   acq = acquisition(Fs,Rs,M,Nmf,p)
- 
-   # optional acq_test variables 
-   tmax_candidate_target = Ncp + Ntap/2
-   acq_pass = 0
-   acq_fail = 0
+tmax_candidate = 0 
+acquired = False
+state = "search"
+mf = 1
 
-   tmax_candidate = 0 
-   acquired = False
-   state = "search"
-   mf = 1
-   
-   if len(args.write_Dt):
-      fD=open(args.write_Dt,'wb')
+fmt="<ff"
+rx = np.zeros(2*Nmf+M,np.csingle)
+rx_buf = np.zeros(Nmf,np.csingle)
+decode_buf = np.zeros(0,np.csingle)
+nbuf = 0
+rx_phase = 1 + 1j*0
+rx_phase_vec = np.zeros(Nmf,np.csingle)
 
-   while not acquired and len(rx) >= 2*Nmf+M:
-      candidate, tmax, fmax = acq.detect_pilots(rx[:2*Nmf+M])
-      if len(args.write_Dt):
-         acq.Dt1.tofile(fD)
+while True:
+   buffer = args.rxfile.read(struct.calcsize(fmt))
+   if not buffer:
+      break
+   sampleIQ = struct.unpack(fmt, buffer)
+   rx_buf[nbuf] = sampleIQ[0] + 1j*sampleIQ[1]
+   nbuf += 1
+   if nbuf == Nmf:
+      rx[:Nmf+M] = rx[Nmf:]
+      rx[Nmf+M:] = rx_buf
       
-      # post process with a state machine that looks for 3 consecutive matches with about the same timing offset      
+      if state == "search" or state == "candidate":
+         candidate, tmax, fmax = acq.detect_pilots(rx)
+   
+      # print current state and "candidate" input variable
       print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
 
+      # iterate state machine  
       next_state = state
       if state == "search":
          if candidate:
@@ -151,69 +158,34 @@ if args.pilots:
             tmax_candidate = tmax
             valid_count = 1
       elif state == "candidate":
+         # look for 3 consecutive matches with about the same timing offset  
          if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
             valid_count = valid_count + 1
             if valid_count > 3:
-               if args.acq_test:
-                  next_state = "search"
-                  # allow 2ms spread in timing (MPP channel extremes) and +/- 5 Hz in freq, which fine freq can take care of
-                  coarse_timing_ok = np.abs(tmax_candidate - tmax_candidate_target) < 0.0025*Fs
-                  coarse_freq_ok = np.abs(fmax - args.fmax_target) <= 5.0
-                  print(f"Acquired! Timing: {coarse_timing_ok:d} Freq: {coarse_freq_ok:d}")
-                  if coarse_timing_ok and coarse_freq_ok:
-                     acq_pass = acq_pass + 1
-                  else:
-                     acq_fail = acq_fail + 1
-               else:
-                  print("Acquired!")
-                  acquired = True
+               next_state = "sync"
+               acquired = True
+               ffine_range = np.arange(fmax-10,fmax+10,0.25)
+               fmax = acq.refine(rx, tmax, fmax, ffine_range)
+               w = 2*np.pi*fmax/Fs
          else:
             next_state = "search"
+      elif state == "sync":
+         for n in range(Nmf):
+            rx_phase = rx_phase*np.exp(-1j*w)
+            rx_phase_vec[n] = rx_phase
+         decode_buf = np.append(decode_buf,rx[tmax-Ncp:tmax-Ncp+Nmf]*rx_phase_vec)
       state = next_state
-                  
-      # advance one frame and repeat
-      rx = rx[Nmf:-1]
+      nbuf = 0           
       mf += 1
 
-   if not acquired:
-      if args.acq_test:
-         acq_time = (Nmf*mf/Fs)/acq_pass
-         print(f"Acq Test Passes: {acq_pass:d} Fails: {acq_fail:d} Mean Acq time: {acq_time:5.2f} s")
-         if acq_time < 1.0:
-            print("PASS")
-      else:
-         print("Acquisition failed....")
-      quit()
 
-   # frequency refinement, use two sets of pilots
-   ffine_range = np.arange(fmax-10,fmax+10,0.25)
-   fmax = acq.refine(rx, tmax, fmax, ffine_range)
-   print(f"refined fmax: {fmax:f}")
+if not acquired:
+   print("Acquisition failed....")
+   quit()
 
-   if args.plots:
-      fig, ax = plt.subplots(2, 1,figsize=(6,12))
-      ax[0].set_title('Dt complex plane')
-      ax[0].plot(acq.Dt1[:,acq.f_ind_max].real, acq.Dt1[:,acq.f_ind_max].imag,'b+')
-      circle1 = plt.Circle((0,0), radius=acq.Dthresh, color='r')
-      ax[0].add_patch(circle1)
-      ax[1].hist(np.abs(acq.Dt1[:,acq.f_ind_max]))
-      ax[1].set_title('|Dt| histogram')
-
-      fig1, ax1 = plt.subplots(2, 1,figsize=(6,12))
-      ax1[0].plot(acq.fcoarse_range, np.abs(acq.Dt1[tmax,:]),'b+')
-      ax1[0].set_title('|Dt| against f (coarse)')
-      ax1[1].plot(ffine_range, np.abs(acq.D_fine),'b+')
-      ax1[1].set_title('|Dt| against f (fine)')
-   
-   rx = rx[tmax-Ncp:]
-   if args.freq_offset is not None:
-      fmax = args.freq_offset
-      print(fmax)
-   w = 2*np.pi*fmax/Fs
-   rx = rx*np.exp(-1j*w*np.arange(len(rx)))
-
-# push model to device and run receiver
-rx = torch.tensor(rx, dtype=torch.complex64)
+# run vanilla (non streaming) decoder for now 
+# TODO: replace with stateful/streaming decoder
+rx = torch.tensor(decode_buf, dtype=torch.complex64)
 model.to(device)
 rx = rx.to(device)
 features_hat, z_hat = model.receiver(rx)
@@ -252,13 +224,3 @@ features_hat.tofile(args.features_hat)
 # write real valued latent vectors
 if len(args.write_latent):
    z_hat.tofile(args.write_latent)
-
-if args.plots:
-   plt.figure(4)
-   plt.plot(z_hat[0:-2:2], z_hat[1:-1:2],'+')
-   plt.title('Scatter')
-   plt.show(block=False)
-   plt.pause(0.001)
-   input("hit[enter] to end.")
-   plt.close('all')
-

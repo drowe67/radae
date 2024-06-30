@@ -135,6 +135,7 @@ class acquisition():
       for f in ffine_range:
          w = 2*np.pi*f/Fs
          # current pilot samples at start of this modem frame
+         # TODO should this be using |Dt|?
          w_vec = np.exp(-1j*w*np.arange(M))
          D_fine[f_ind] = np.dot(np.conj(w_vec*rx[tmax:tmax+M]),p)
          # next pilot samples at end of this modem frame
