@@ -85,6 +85,8 @@ Ns = model.Ns               # number of data symbols between pilots
 Nmf = int((Ns+1)*(M+Ncp))   # number of samples in one modem frame
 Nc = model.Nc
 
+# TODO: we need a streaming BPF with state
+
 """
 # load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
 rx = np.fromfile(args.rx, dtype=np.csingle)
@@ -147,7 +149,7 @@ while True:
       if state == "search" or state == "candidate":
          candidate, tmax, fmax = acq.detect_pilots(rx)
    
-      # print current state and "candidate" input variable
+      # print current state
       print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
 
       # iterate state machine  
@@ -212,10 +214,6 @@ if len(args.ber_test):
          best_BER = BER
          print(f"f: {f:2d} n_bits: {n_bits:d} n_errors: {n_errors:d} BER: {BER:5.3f}")
       z = z[num_latents_per_modem_frame:]
-   #errors = torch.sign(-z*z_hat) > 0
-   #errors = torch.reshape(errors,(-1,latent_dim))
-   #print(errors.shape)
-   #print(torch.sum(errors,dim=1))
 
 features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
 features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
