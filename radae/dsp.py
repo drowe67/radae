@@ -88,19 +88,34 @@ class acquisition():
       # TODO: explore strategies to speed up such as under sampled timing, fft for efficient correlation,
       # or ML based acquisition
 
+      rx = np.conj(rx)
       for t in range(Nmf):
          f_ind = 0
+         # matrix multiply to speed up calculation of correlation
+         # number of cols in first equal to number of rows in second
+         Dt1[t,:] = np.matmul(rx[t:t+M],np.transpose(self.p_w))
+         Dt2[t,:] = np.matmul(rx[t+Nmf:t+Nmf+M],np.transpose(self.p_w))
+         Dt12 = np.abs(Dt1[t,:]) + np.abs(Dt2[t,:])
+         local_max = np.max(Dt12)
+         if local_max > Dtmax12:
+            Dtmax12 = local_max 
+            f_ind_max = np.argmax(Dt12)
+            fmax = self.fcoarse_range[f_ind_max]
+            tmax = t
+         """
+         #print(Dt12.shape,Dt12)
          for f in self.fcoarse_range:
-            Dt1[t,f_ind] = np.dot(np.conj(rx[t:t+M]),self.p_w[f_ind,:])
-            Dt2[t,f_ind] = np.dot(np.conj(rx[t+Nmf:t+Nmf+M]),self.p_w[f_ind,:])
-            Dt12 = np.abs(Dt1[t,f_ind]) + np.abs(Dt2[t,f_ind])
-            if Dt12 > Dtmax12:
-               Dtmax12 = Dt12
+            #Dt1[t,f_ind] = np.dot(rx[t:t+M],self.p_w[f_ind,:])
+            #Dt2[t,f_ind] = np.dot(rx[t+Nmf:t+Nmf+M],self.p_w[f_ind,:])
+            #Dt12 = np.abs(Dt1[t,f_ind]) + np.abs(Dt2[t,f_ind])
+            #print(f_ind,Dt12[f_ind])
+            if Dt12[f_ind] > Dtmax12:
+               Dtmax12 = Dt12[f_ind]
                tmax = t
                fmax = f 
                f_ind_max =  f_ind
             f_ind = f_ind + 1
-
+         """
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
       sigma_r1 = np.mean(np.abs(Dt1))/((np.pi/2)**0.5)
       sigma_r2 = np.mean(np.abs(Dt2))/((np.pi/2)**0.5)
