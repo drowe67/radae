@@ -52,22 +52,19 @@ class acquisition():
       self.M = M
       self.Nmf = Nmf
       self.p = p
-      self.frange = frange
-      self.fstep=fstep
       self.Pacq_error = Pacq_error
       self.fcoarse_range = np.arange(-frange/2,frange/2,fstep)
 
       # pre-calculate to speeds things up a bit
-      # TODO is p_w being used?
       p_w = np.zeros((len(self.fcoarse_range), M), dtype=np.csingle)
       f_ind = 0
       for f in self.fcoarse_range:
          w = 2*np.pi*f/Fs
-         p_w[f_ind,] = np.exp(1j*w*np.arange(M)) * p
-
-         f_ind + f_ind + 1
+         w_vec = np.exp(1j*w*np.arange(M))
+         p_w[f_ind,:] = w_vec * p
+         f_ind = f_ind + 1
       self.p_w = p_w
-
+      
    def detect_pilots(self, rx):
       Fs = self.Fs
       p = self.p
@@ -88,16 +85,14 @@ class acquisition():
       # a grid of time and frequency steps.  Note we only correlate on the M samples after the
       # cyclic prefix, so tmax will be Ncp samples after the start of the modem frame
 
-      # TODO: explore stregies to speed up such as under sampled timing, fft for efficient correlation,
+      # TODO: explore strategies to speed up such as under sampled timing, fft for efficient correlation,
       # or ML based acquisition
-      
+
       for t in range(Nmf):
          f_ind = 0
          for f in self.fcoarse_range:
-            w = 2*np.pi*f/Fs
-            w_vec = np.exp(-1j*w*np.arange(M))
-            Dt1[t,f_ind] = np.dot(np.conj(w_vec*rx[t:t+M]),p)
-            Dt2[t,f_ind] = np.dot(np.conj(w_vec*rx[t+Nmf:t+Nmf+M]),p)
+            Dt1[t,f_ind] = np.dot(np.conj(rx[t:t+M]),self.p_w[f_ind,:])
+            Dt2[t,f_ind] = np.dot(np.conj(rx[t+Nmf:t+Nmf+M]),self.p_w[f_ind,:])
             Dt12 = np.abs(Dt1[t,f_ind]) + np.abs(Dt2[t,f_ind])
             if Dt12 > Dtmax12:
                Dtmax12 = Dt12
@@ -124,7 +119,7 @@ class acquisition():
       return candidate, tmax, fmax
    
    def refine(self, rx, tmax, fmax, ffine_range):
-      # TODO: should search over a fine timing range as well, if coarse search is under sampled to save CPU
+      # TODO: should search over a fine timing range as well, e.g. if coarse timing search is under sampled to save CPU
       Fs = self.Fs
       p = self.p
       M = self.M

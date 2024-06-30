@@ -84,6 +84,8 @@ M = model.M
 Ncp = model.Ncp
 Ns = model.Ns               # number of data symbols between pilots
 Nmf = int((Ns+1)*(M+Ncp))   # number of samples in one modem frame
+Nc = model.Nc
+w = model.w.cpu().detach().numpy()
 
 # load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
 rx = np.fromfile(args.rx, dtype=np.csingle)
@@ -96,8 +98,6 @@ if args.plots:
    ax[0].set_title('Before BPF')
    ax[0].axis([0,len(rx)/model.Fs,0,3000])
 
-Nc = model.Nc
-w = model.w.cpu().detach().numpy()
 Ntap = 0
 if args.bpf:
    Ntap=101
