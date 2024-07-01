@@ -672,39 +672,38 @@ class RADAE(nn.Module):
         Ns = self.Ns + 1
         assert self.per_carrier_eq
         assert self.eq_mean6 == False   # we are using least squares algorithm
+        assert self.phase_mag_eq == False
 
         # First, estimate the (complex) value of each received pilot symbol
         rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
-        # 3-pilot least squares fit across frequency
+        # 3-pilot least squares fit across frequency, ref: freedv_low.pdf
         for i in torch.arange(num_modem_frames):
             for c in range(Nc):
                 c_mid = c
-                # handle edges, alternative is extra "wingman" pilots
+                # handle edge carriers, alternative is extra "wingman" pilots
                 if c == 0:
                     c_mid = 1
                 if c == Nc-1:
                     c_mid = Nc-2
-                local_path_delay_s = 0.0025      # guess at actual path delay
+                local_path_delay_s = 0.0025      # guess at actual path delay, means a little bit of noise on scatter
                 a = local_path_delay_s*self.Fs
+                # TODO: I think A & P can be computed off line
                 A = torch.tensor([[1, torch.exp(-1j*self.w[c_mid-1]*a)], [1, torch.exp(-1j*self.w[c_mid]*a)], [1, torch.exp(-1j*self.w[c_mid+1]*a)]])
                 P = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
                 h = torch.reshape(rx_sym_pilots[0,0,Ns*i,c_mid-1:c_mid+2]/self.P[c_mid-1:c_mid+2],(3,1))
                 g = torch.matmul(P,h)
                 rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
 
-        # Linearly interpolate between two pilots to EQ data symbols (phase and optionally mag)
+        # Linearly interpolate between two pilots to EQ data symbol phase
         for i in torch.arange(num_modem_frames):
             for c in torch.arange(0,Nc):
                 slope = (rx_pilots[i+1,c] - rx_pilots[i,c])/(self.Ns+1)
                 # assume pilots at index 0 and Ns+1, we want to linearly interpolate channel at 1...Ns 
                 rx_ch = slope*torch.arange(0,self.Ns+2) + rx_pilots[i,c]
-                if self.phase_mag_eq:
-                    rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_ch[1:self.Ns+1]
-                else:
-                    rx_ch_angle = torch.angle(rx_ch)
-                    rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
+                rx_ch_angle = torch.angle(rx_ch)
+                rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
 
-        # TODO: try to average coarse_mag estimate across several frames
+        # TODO: we may need to average coarse_mag estimate across several frames, especially for multipath channels
         if self.coarse_mag:
             # est RMS magnitude
             mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
@@ -717,9 +716,8 @@ class RADAE(nn.Module):
     
     #  One frame version of rate Fs receiver for streaming implementation TODO: refactor into dsp.py
     def receiver_one(self, rx):
-        Ns = self.Ns
-        if self.pilots:
-            Ns = Ns + 1
+        Ns = self.Ns + 1
+
         # we expect: Pilots - data symbols - Pilots
         num_timesteps_at_rate_Rs = len(rx) // (self.M+self.Ncp)
         num_modem_frames = num_timesteps_at_rate_Rs // Ns
