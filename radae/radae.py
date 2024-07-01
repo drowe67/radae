@@ -196,7 +196,7 @@ class CoreEncoder(nn.Module):
         self.z_dense = nn.Linear(864, self.output_dim)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"encoder: {nb_params} weights")
+        print(f"encoder: {nb_params} weights", file=sys.stderr)
 
         # initialize weights
         self.apply(init_weights)
@@ -271,7 +271,7 @@ class CoreDecoder(nn.Module):
         self.glu5 = GLU(96)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"decoder: {nb_params} weights")
+        print(f"decoder: {nb_params} weights", file=sys.stderr)
         # initialize weights
         self.apply(init_weights)
 
@@ -338,7 +338,7 @@ class CoreDecoderStatefull(nn.Module):
         self.glu5 = GLU(96)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"decoder: {nb_params} weights")
+        print(f"decoder: {nb_params} weights", file=sys.stderr)
         # initialize weights
         self.apply(init_weights)
 
@@ -495,7 +495,7 @@ class RADAE(nn.Module):
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)
     
-        print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}")
+        print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}", file=sys.stderr)
 
         self.Tmf = Tmf
         self.bps = bps
@@ -729,7 +729,7 @@ class RADAE(nn.Module):
             mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
             if self.bottleneck == 3:
                 mag = mag*torch.abs(self.P[0])/self.pilot_gain
-            print(f"coarse mag: {mag:f}")
+            print(f"coarse mag: {mag:f}", file=sys.stderr)
             rx_sym_pilots = rx_sym_pilots/mag
 
         return rx_sym_pilots

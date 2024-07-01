@@ -43,10 +43,9 @@ from matplotlib import pyplot as plt
 import torch
 from radae import RADAE,complex_bpf,acquisition
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description='RADAE streaming receiver, IQ.f32 on stdin to features.f32 on stdout')
 
 parser.add_argument('model_name', type=str, help='path to model in .pth format')
-parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
 parser.add_argument('--rxfile', type=argparse.FileType("rb"), default=sys.stdin, help='path to input file of rate Fs rx samples in ..IQIQ...f32 format (default stdin)')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
@@ -58,10 +57,6 @@ parser.add_argument('--acq_test',  action='store_true', help='Acquisition test m
 parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
 parser.set_defaults(bpf=True)
 args = parser.parse_args()
-
-# handle use of stdin
-if hasattr(args.rxfile, "buffer"):
-   args.rxfile = args.rxfile.buffer
 
 # make sure we don't use a GPU
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
@@ -134,11 +129,10 @@ rx_buf = np.zeros(2*Nmf+M+Ncp,np.csingle)
 rx = np.zeros(0,np.csingle)
 rx_phase = 1 + 1j*0
 rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
-features_hat = torch.zeros(0,model.dec_stride*model.Nzmf,model.feature_dim)
-print("features_hat", features_hat.shape)
+z_hat = torch.zeros(0,model.Nzmf,model.latent_dim)
 
 while True:
-   buffer = args.rxfile.read(Nmf*struct.calcsize("<ff"))
+   buffer = sys.stdin.buffer.read(Nmf*struct.calcsize("ff"))
    if not buffer:
       break
    rx_buf[:Nmf+M+Ncp] = rx_buf[Nmf:]                           # out with the old
@@ -148,7 +142,7 @@ while True:
       candidate, tmax, fmax = acq.detect_pilots(rx_buf)
 
    # print current state
-   print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
+   print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
 
    # iterate state machine  
    next_state = state
@@ -170,61 +164,53 @@ while True:
       else:
          next_state = "search"
    elif state == "sync":
+      # correct frequency offset, note we preserve state of phase
       for n in range(Nmf+M+Ncp):
          rx_phase = rx_phase*np.exp(-1j*w)
          rx_phase_vec[n] = rx_phase
-      #rx = np.append(rx,rx_buf[tmax-Ncp:tmax-Ncp+Nmf]*rx_phase_vec)
       rx = torch.tensor(rx_buf[tmax-Ncp:tmax-Ncp+Nmf+M+Ncp]*rx_phase_vec, dtype=torch.complex64)
-      rx = rx.to(device) # TODO do we need this?
-      afeatures_hat, z_hat = model.receiver_one(rx)
-      features_hat = torch.cat([features_hat,afeatures_hat])
+      # run through stateful RADAE receiver
+      features_hat, az_hat = model.receiver_one(rx)
+      # add unused features and send to stdout
+      features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
+      features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
+      sys.stdout.buffer.write(features_hat)
+      #sys.stdout.flush()
+      if len(args.write_latent):
+         z_hat = torch.cat([z_hat,az_hat])
 
    state = next_state
    mf += 1
 
 
 if not acquired:
-   print("Acquisition failed....")
+   print("Acquisition failed....", file=sys.stderr)
    quit()
 
-features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
-features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
-features_hat.tofile(args.features_hat)
-quit()
+if len(args.write_latent) or len(args.ber_test):
+   z_hat = z_hat.cpu().detach().numpy().flatten().astype('float32')
 
-# run vanilla (non streaming) decoder for now 
-# TODO: replace with stateful/streaming decoder
-rx = torch.tensor(rx, dtype=torch.complex64)
-rx = rx.to(device)
-features_hat, z_hat = model.receiver(rx)
+   # BER test useful for calibrating link.  To measure BER we compare the received symnbols 
+   # to the known transmitted symbols.  However due to acquisition delays we may have lost several
+   # modem frames in the received sequence.
+   if len(args.ber_test):
+      # every time acq shifted Nmf (one modem frame of samples), we shifted this many latents:
+      num_latents_per_modem_frame = model.Nzmf*model.latent_dim
+      #print(num_latents_per_modem_frame)
+      z = np.fromfile(args.ber_test, dtype=np.float32)
+      #print(z.shape, z_hat.shape)
+      best_BER = 1
+      # to find best alignment look for lowerest BER over a range of shifts
+      for f in np.arange(20):
+         n_syms = min(len(z),len(z_hat))
+         n_errors = np.sum(-z[:n_syms]*z_hat[:n_syms]>0)
+         n_bits = len(z)
+         BER = n_errors/n_bits
+         if BER < best_BER:
+            best_BER = BER
+            print(f"f: {f:2d} n_bits: {n_bits:d} n_errors: {n_errors:d} BER: {BER:5.3f}", file=sys.stderr)
+         z = z[num_latents_per_modem_frame:]
 
-z_hat = z_hat.cpu().detach().numpy().flatten().astype('float32')
-
-# BER test useful for calibrating link.  To measure BER we compare the received symnbols 
-# to the known transmitted symbols.  However due to acquisition delays we may have lost several
-# modem frames in the received sequence.
-if len(args.ber_test):
-   # every time acq shifted Nmf (one modem frame of samples), we shifted this many latents:
-   num_latents_per_modem_frame = model.Nzmf*model.latent_dim
-   #print(num_latents_per_modem_frame)
-   z = np.fromfile(args.ber_test, dtype=np.float32)
-   #print(z.shape, z_hat.shape)
-   best_BER = 1
-   # to find best alignment look for lowerest BER over a range of shifts
-   for f in np.arange(20):
-      n_syms = min(len(z),len(z_hat))
-      n_errors = np.sum(-z[:n_syms]*z_hat[:n_syms]>0)
-      n_bits = len(z)
-      BER = n_errors/n_bits
-      if BER < best_BER:
-         best_BER = BER
-         print(f"f: {f:2d} n_bits: {n_bits:d} n_errors: {n_errors:d} BER: {BER:5.3f}")
-      z = z[num_latents_per_modem_frame:]
-
-features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
-features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
-features_hat.tofile(args.features_hat)
-
-# write real valued latent vectors
-if len(args.write_latent):
-   z_hat.tofile(args.write_latent)
+   # write real valued latent vectors
+   if len(args.write_latent):
+      z_hat.tofile(args.write_latent)

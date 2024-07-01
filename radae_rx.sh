@@ -30,7 +30,7 @@ output_speech=$3
 # eat first 3 args before passing rest to inference.py in $@
 shift; shift; shift
 
-cat ${input_iqf32} | python3 radae_rx.py ${model} ${features_out} "$@"
+cat ${input_iqf32} | python3 radae_rx.py ${model} "$@" >${features_out} 
 if [ $output_speech == "-" ]; then
     tmp=$(mktemp)
     lpcnet_demo -fargan-synthesis ${features_out} ${tmp}
