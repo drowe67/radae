@@ -31,6 +31,7 @@
 """
 
 import numpy as np
+import torch
 
 def complex_bpf(Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
    B = bandwidth_Hz/Fs_Hz
@@ -151,3 +152,97 @@ class acquisition():
 
          self.D_fine = D_fine
       return fmax
+   
+
+# Single modem frame streaming receiver. TODO: is there a better way to pass a bunch of constnats around?
+class receiver_one():
+   def __init__(self,latent_dim,Fs,M,Ncp,Wfwd,Nc,Ns,w,P,bottleneck,pilot_gain,time_offset):
+      self.latent_dim = latent_dim
+      self.Fs = Fs
+      self.M = M
+      self.Ncp = Ncp
+      self.Wfwd = Wfwd
+      self.Nc = Nc
+      self.Ns = Ns
+      self.w = w
+      self.P = P
+      self.bottleneck = bottleneck
+      self.pilot_gain = pilot_gain
+      self.time_offset = time_offset
+
+   # One frame version of do_pilot_eq() for streaming implementation
+   def do_pilot_eq_one(self, num_modem_frames, rx_sym_pilots):
+      Nc = self.Nc 
+      Ns = self.Ns + 1
+
+      # First, estimate the (complex) value of each received pilot symbol
+      rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
+      # 3-pilot least squares fit across frequency, ref: freedv_low.pdf
+      for i in torch.arange(num_modem_frames):
+         for c in range(Nc):
+               c_mid = c
+               # handle edge carriers, alternative is extra "wingman" pilots
+               if c == 0:
+                  c_mid = 1
+               if c == Nc-1:
+                  c_mid = Nc-2
+               local_path_delay_s = 0.0025      # guess at actual path delay, means a little bit of noise on scatter
+               a = local_path_delay_s*self.Fs
+               # TODO: I think A & P can be computed off line
+               A = torch.tensor([[1, torch.exp(-1j*self.w[c_mid-1]*a)], [1, torch.exp(-1j*self.w[c_mid]*a)], [1, torch.exp(-1j*self.w[c_mid+1]*a)]])
+               P = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
+               h = torch.reshape(rx_sym_pilots[0,0,Ns*i,c_mid-1:c_mid+2]/self.P[c_mid-1:c_mid+2],(3,1))
+               g = torch.matmul(P,h)
+               rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
+
+      # Linearly interpolate between two pilots to EQ data symbol phase
+      for i in torch.arange(num_modem_frames):
+         for c in torch.arange(0,Nc):
+               slope = (rx_pilots[i+1,c] - rx_pilots[i,c])/(self.Ns+1)
+               # assume pilots at index 0 and Ns+1, we want to linearly interpolate channel at 1...Ns 
+               rx_ch = slope*torch.arange(0,self.Ns+2) + rx_pilots[i,c]
+               rx_ch_angle = torch.angle(rx_ch)
+               rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
+
+      # TODO: we may need to average coarse_mag estimate across several frames, especially for multipath channels
+      # est RMS magnitude
+      mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
+      if self.bottleneck == 3:
+            mag = mag*torch.abs(self.P[0])/self.pilot_gain
+      #print(f"coarse mag: {mag:f}", file=sys.stderr)
+      rx_sym_pilots = rx_sym_pilots/mag
+
+      return rx_sym_pilots
+   
+   #  One frame version of rate Fs receiver for streaming implementation
+   def receiver_one(self, rx):
+      Ns = self.Ns + 1
+
+      # we expect: Pilots - data symbols - Pilots
+      num_timesteps_at_rate_Rs = len(rx) // (self.M+self.Ncp)
+      num_modem_frames = num_timesteps_at_rate_Rs // Ns
+      assert num_modem_frames == 1
+      assert num_timesteps_at_rate_Rs == (Ns+1)
+
+      # remove cyclic prefix
+      rx = torch.reshape(rx,(1,num_timesteps_at_rate_Rs,self.M+self.Ncp))
+      rx_dash = rx[:,:,self.Ncp+self.time_offset:self.Ncp+self.time_offset+self.M]
+      
+      # DFT to transform M time domain samples to Nc carriers
+      rx_sym = torch.matmul(rx_dash, self.Wfwd)
+      
+      # Pilot based EQ
+      rx_sym_pilots = torch.reshape(rx_sym,(1, num_modem_frames, num_timesteps_at_rate_Rs, self.Nc))
+      rx_sym_pilots = self.do_pilot_eq_one(num_modem_frames,rx_sym_pilots)
+      rx_sym = torch.ones(1, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
+      rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
+
+      # demap QPSK symbols
+      rx_sym = torch.reshape(rx_sym, (1, -1, self.latent_dim//2))
+      z_hat = torch.zeros(1,rx_sym.shape[1], self.latent_dim)
+
+      z_hat[:,:,::2] = rx_sym.real
+      z_hat[:,:,1::2] = rx_sym.imag
+      
+      return z_hat
+

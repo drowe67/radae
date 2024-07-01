@@ -555,6 +555,7 @@ class RADAE(nn.Module):
         return num_ten_ms_timesteps_rounded
     
     # Use classical DSP pilot based equalisation. Note just for inference atm
+    # TODO consider moving to dsp.py, or perhaps another file. Down side is it has a lot of flags and options
     def do_pilot_eq(self, num_modem_frames, rx_sym_pilots):
         Nc = self.Nc 
 
@@ -666,91 +667,6 @@ class RADAE(nn.Module):
         
         return features_hat,z_hat
     
-    # One frame version of do_pilot_eq() for streaming implementation TODO: refactor into dsp.py
-    def do_pilot_eq_one(self, num_modem_frames, rx_sym_pilots):
-        Nc = self.Nc 
-        Ns = self.Ns + 1
-        assert self.per_carrier_eq
-        assert self.eq_mean6 == False   # we are using least squares algorithm
-        assert self.phase_mag_eq == False
-
-        # First, estimate the (complex) value of each received pilot symbol
-        rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
-        # 3-pilot least squares fit across frequency, ref: freedv_low.pdf
-        for i in torch.arange(num_modem_frames):
-            for c in range(Nc):
-                c_mid = c
-                # handle edge carriers, alternative is extra "wingman" pilots
-                if c == 0:
-                    c_mid = 1
-                if c == Nc-1:
-                    c_mid = Nc-2
-                local_path_delay_s = 0.0025      # guess at actual path delay, means a little bit of noise on scatter
-                a = local_path_delay_s*self.Fs
-                # TODO: I think A & P can be computed off line
-                A = torch.tensor([[1, torch.exp(-1j*self.w[c_mid-1]*a)], [1, torch.exp(-1j*self.w[c_mid]*a)], [1, torch.exp(-1j*self.w[c_mid+1]*a)]])
-                P = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
-                h = torch.reshape(rx_sym_pilots[0,0,Ns*i,c_mid-1:c_mid+2]/self.P[c_mid-1:c_mid+2],(3,1))
-                g = torch.matmul(P,h)
-                rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
-
-        # Linearly interpolate between two pilots to EQ data symbol phase
-        for i in torch.arange(num_modem_frames):
-            for c in torch.arange(0,Nc):
-                slope = (rx_pilots[i+1,c] - rx_pilots[i,c])/(self.Ns+1)
-                # assume pilots at index 0 and Ns+1, we want to linearly interpolate channel at 1...Ns 
-                rx_ch = slope*torch.arange(0,self.Ns+2) + rx_pilots[i,c]
-                rx_ch_angle = torch.angle(rx_ch)
-                rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
-
-        # TODO: we may need to average coarse_mag estimate across several frames, especially for multipath channels
-        if self.coarse_mag:
-            # est RMS magnitude
-            mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
-            if self.bottleneck == 3:
-                mag = mag*torch.abs(self.P[0])/self.pilot_gain
-            #print(f"coarse mag: {mag:f}", file=sys.stderr)
-            rx_sym_pilots = rx_sym_pilots/mag
-
-        return rx_sym_pilots
-    
-    #  One frame version of rate Fs receiver for streaming implementation TODO: refactor into dsp.py
-    def receiver_one(self, rx):
-        Ns = self.Ns + 1
-
-        # we expect: Pilots - data symbols - Pilots
-        num_timesteps_at_rate_Rs = len(rx) // (self.M+self.Ncp)
-        num_modem_frames = num_timesteps_at_rate_Rs // Ns
-        assert num_modem_frames == 1
-        assert num_timesteps_at_rate_Rs == (Ns+1)
-        assert self.pilots and self.pilot_eq
-
-        # remove cyclic prefix
-        rx = torch.reshape(rx,(1,num_timesteps_at_rate_Rs,self.M+self.Ncp))
-        rx_dash = rx[:,:,self.Ncp+self.time_offset:self.Ncp+self.time_offset+self.M]
-        
-        # DFT to transform M time domain samples to Nc carriers
-        rx_sym = torch.matmul(rx_dash, self.Wfwd)
-        
-        # Pilot based EQ
-        rx_sym_pilots = torch.reshape(rx_sym,(1, num_modem_frames, num_timesteps_at_rate_Rs, self.Nc))
-        rx_sym_pilots = self.do_pilot_eq_one(num_modem_frames,rx_sym_pilots)
-        rx_sym = torch.ones(1, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
-        rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
-
-        # demap QPSK symbols
-        rx_sym = torch.reshape(rx_sym, (1, -1, self.latent_dim//2))
-        z_hat = torch.zeros(1,rx_sym.shape[1], self.latent_dim)
-
-        z_hat[:,:,::2] = rx_sym.real
-        z_hat[:,:,1::2] = rx_sym.imag
-        assert(z_hat.shape[1] == self.Nzmf)
-        features_hat = torch.zeros(1,self.dec_stride*z_hat.shape[1],self.feature_dim)
-        for i in range(self.Nzmf):
-            features_hat[0,i*self.dec_stride:(i+1)*self.dec_stride,:] = self.core_decoder_statefull(z_hat[:,i:i+1,:])
-        
-        return features_hat,z_hat
-
     # Estimate SNR given a vector r of M received pilot samples
     # rate_Fs/time domain, only works on 1D vectors (i.e. can broadcast or do multiple estimates)
     # unfortunately this doesn't work for multipath channels (good results for AWGN)

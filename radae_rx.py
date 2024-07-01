@@ -41,7 +41,7 @@ import os, sys, argparse, struct
 import numpy as np
 from matplotlib import pyplot as plt
 import torch
-from radae import RADAE,complex_bpf,acquisition
+from radae import RADAE,complex_bpf,acquisition,receiver_one
 
 parser = argparse.ArgumentParser(description='RADAE streaming receiver, IQ.f32 on stdin to features.f32 on stdout')
 
@@ -76,7 +76,16 @@ checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
 model.core_decoder_statefull_load_state_dict()
-model.to(device)
+
+model.to(device) # TODO do we need this?
+
+# check a bunch of model options we rely on for receiver to work
+assert model.pilots and model.pilot_eq
+assert model.per_carrier_eq
+assert model.eq_mean6 == False   # we are using least squares algorithm
+assert model.phase_mag_eq == False
+assert model.coarse_mag
+receiver = receiver_one(model.latent_dim,model.Fs,model.M,model.Ncp,model.Wfwd,model.Nc,model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain,model.time_offset)
 
 M = model.M
 Ncp = model.Ncp
@@ -130,7 +139,7 @@ rx_buf = np.zeros(2*Nmf+M+Ncp,np.csingle)
 rx = np.zeros(0,np.csingle)
 rx_phase = 1 + 1j*0
 rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
-z_hat = torch.zeros(0,model.Nzmf,model.latent_dim)
+z_hat_log = torch.zeros(0,model.Nzmf,model.latent_dim)
 
 while True:
    buffer = sys.stdin.buffer.read(Nmf*struct.calcsize("ff"))
@@ -170,15 +179,20 @@ while True:
          rx_phase = rx_phase*np.exp(-1j*w)
          rx_phase_vec[n] = rx_phase
       rx = torch.tensor(rx_buf[tmax-Ncp:tmax-Ncp+Nmf+M+Ncp]*rx_phase_vec, dtype=torch.complex64)
-      # run through stateful RADAE receiver
-      features_hat, az_hat = model.receiver_one(rx)
+      # run through RADAE receiver DSP
+      z_hat = receiver.receiver_one(rx)
+      # decode z_hat to features
+      assert(z_hat.shape[1] == model.Nzmf)
+      features_hat = torch.zeros(1,model.dec_stride*z_hat.shape[1],model.feature_dim)
+      for i in range(model.Nzmf):
+         features_hat[0,i*model.dec_stride:(i+1)*model.dec_stride,:] = model.core_decoder_statefull(z_hat[:,i:i+1,:])
       # add unused features and send to stdout
       features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
       features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
       sys.stdout.buffer.write(features_hat)
       #sys.stdout.flush()
       if len(args.write_latent):
-         z_hat = torch.cat([z_hat,az_hat])
+         z_hat_log = torch.cat([z_hat_log,z_hat])
 
    state = next_state
    mf += 1
@@ -189,7 +203,7 @@ if not acquired:
    quit()
 
 if len(args.write_latent) or len(args.ber_test):
-   z_hat = z_hat.cpu().detach().numpy().flatten().astype('float32')
+   z_hat = z_hat_log.cpu().detach().numpy().flatten().astype('float32')
 
    # BER test useful for calibrating link.  To measure BER we compare the received symnbols 
    # to the known transmitted symbols.  However due to acquisition delays we may have lost several
