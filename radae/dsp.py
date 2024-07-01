@@ -46,10 +46,11 @@ def complex_bpf(Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
    return x_filt*np.exp(1j*alpha*np.arange(len(x_filt)))
 
 class acquisition():
-   def __init__(self,Fs,Rs,M,Nmf,p,frange=100,fstep=2.5,Pacq_error = 0.0001):
+   def __init__(self,Fs,Rs,M,Ncp,Nmf,p,frange=100,fstep=2.5,Pacq_error = 0.0001):
       self.Fs = Fs
       self.Rs = Rs
       self.M = M
+      self.Ncp = Ncp
       self.Nmf = Nmf
       self.p = p
       self.Pacq_error = Pacq_error
@@ -69,11 +70,12 @@ class acquisition():
       Fs = self.Fs
       p = self.p
       M = self.M
+      Ncp = self.Ncp
       Nmf = self.Nmf
 
       # We need a buffer of two and bit modem frames, and search of one Nmf, TODO to reduce
       # latency this could be reduced to a one symbol (M sample) search and Nmf+2*M sample buffer
-      assert len(rx) == self.Nmf*2+M
+      assert len(rx) == self.Nmf*2+M+Ncp
 
       Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
       Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)

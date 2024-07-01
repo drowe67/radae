@@ -78,6 +78,9 @@ model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate
               coarse_mag=True,time_offset=-16, bottleneck=args.bottleneck)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
+# Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+model.core_decoder_statefull_load_state_dict()
+model.to(device)
 
 M = model.M
 Ncp = model.Ncp
@@ -113,7 +116,7 @@ fstep = 2.5                                 # coarse grid spacing in Hz
 Fs = model.Fs
 Rs = model.Rs
 
-acq = acquisition(Fs,Rs,M,Nmf,p)
+acq = acquisition(Fs,Rs,M,Ncp,Nmf,p)
 
 """
 # optional acq_test variables 
@@ -127,17 +130,19 @@ acquired = False
 state = "search"
 mf = 1
 
-rx_buf = np.zeros(2*Nmf+M,np.csingle)
+rx_buf = np.zeros(2*Nmf+M+Ncp,np.csingle)
 rx = np.zeros(0,np.csingle)
 rx_phase = 1 + 1j*0
-rx_phase_vec = np.zeros(Nmf,np.csingle)
+rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
+features_hat = torch.zeros(0,model.dec_stride*model.Nzmf,model.feature_dim)
+print("features_hat", features_hat.shape)
 
 while True:
    buffer = args.rxfile.read(Nmf*struct.calcsize("<ff"))
    if not buffer:
       break
-   rx_buf[:Nmf+M] = rx_buf[Nmf:]                           # out with the old
-   rx_buf[Nmf+M:] = np.frombuffer(buffer,np.csingle)       # in with the new
+   rx_buf[:Nmf+M+Ncp] = rx_buf[Nmf:]                           # out with the old
+   rx_buf[Nmf+M+Ncp:] = np.frombuffer(buffer,np.csingle)       # in with the new
    
    if state == "search" or state == "candidate":
       candidate, tmax, fmax = acq.detect_pilots(rx_buf)
@@ -165,10 +170,15 @@ while True:
       else:
          next_state = "search"
    elif state == "sync":
-      for n in range(Nmf):
+      for n in range(Nmf+M+Ncp):
          rx_phase = rx_phase*np.exp(-1j*w)
          rx_phase_vec[n] = rx_phase
-      rx = np.append(rx,rx_buf[tmax-Ncp:tmax-Ncp+Nmf]*rx_phase_vec)
+      #rx = np.append(rx,rx_buf[tmax-Ncp:tmax-Ncp+Nmf]*rx_phase_vec)
+      rx = torch.tensor(rx_buf[tmax-Ncp:tmax-Ncp+Nmf+M+Ncp]*rx_phase_vec, dtype=torch.complex64)
+      rx = rx.to(device) # TODO do we need this?
+      afeatures_hat, z_hat = model.receiver_one(rx)
+      features_hat = torch.cat([features_hat,afeatures_hat])
+
    state = next_state
    mf += 1
 
@@ -177,10 +187,14 @@ if not acquired:
    print("Acquisition failed....")
    quit()
 
+features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
+features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
+features_hat.tofile(args.features_hat)
+quit()
+
 # run vanilla (non streaming) decoder for now 
 # TODO: replace with stateful/streaming decoder
 rx = torch.tensor(rx, dtype=torch.complex64)
-model.to(device)
 rx = rx.to(device)
 features_hat, z_hat = model.receiver(rx)
 

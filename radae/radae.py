@@ -41,6 +41,7 @@ import sys
 import os
 from torch.nn.utils.parametrizations import weight_norm
 from matplotlib import pyplot as plt
+from collections import OrderedDict
 
 # Quantization and loss utility functions
 
@@ -130,7 +131,7 @@ class Conv1DStatefull(nn.Module):
         self.states = torch.zeros(1,self.kernel_size,self.input_dim)
         self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=self.kernel_size, padding='valid', dilation=dilation)
     def forward(self, x):
-        
+
         self.states[0,0:self.kernel_size-1,:] = self.states[0,1:self.kernel_size,:]
         self.states[0,1,:] = x
         conv_in = self.states.permute(0, 2, 1)
@@ -507,7 +508,30 @@ class RADAE(nn.Module):
         self.Nc = Nc
         self.Nzmf = Nzmf
 
-    
+    # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+    def core_decoder_statefull_load_state_dict(self):
+
+        # some of the layer names have been changed due to use of custom GRUStatefull layer
+        def key_transformation(old_key):
+            for gru in range(1,6):
+                if old_key == f"module.gru{gru:d}.weight_ih_l0":
+                    return f"module.gru{gru:d}.gru.weight_ih_l0"
+                if old_key == f"module.gru{gru:d}.weight_hh_l0":
+                    return f"module.gru{gru:d}.gru.weight_hh_l0"
+                if old_key == f"module.gru{gru:d}.bias_ih_l0":
+                    return f"module.gru{gru:d}.gru.bias_ih_l0"
+                if old_key == f"module.gru{gru:d}.bias_hh_l0":
+                    return f"module.gru{gru:d}.gru.bias_hh_l0"
+            return old_key
+
+        state_dict = self.core_decoder.state_dict()
+        new_state_dict = OrderedDict()
+        for key, value in state_dict.items():
+            new_key = key_transformation(key)
+            new_state_dict[new_key] = value
+
+        self.core_decoder_statefull.load_state_dict(new_state_dict)
+   
     def move_device(self, device):
         # TODO: work out why we need this step
         self.Winv = self.Winv.to(device)
@@ -639,6 +663,118 @@ class RADAE(nn.Module):
         z_hat[:,:,1::2] = rx_sym.imag
             
         features_hat = self.core_decoder(z_hat)
+        
+        return features_hat,z_hat
+    
+    # One frame version of do_pilot_eq() for streaming implementation TODO: refactor into dsp.py
+    def do_pilot_eq_one(self, num_modem_frames, rx_sym_pilots):
+        Nc = self.Nc 
+        Ns = self.Ns + 1
+        #print("rx_sym_pilots",rx_sym_pilots.shape)
+        
+        # First, estimate the (complex) value of each received pilot symbol
+        rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
+        if self.per_carrier_eq:
+            # estimate pilot symbol for each carrier by smoothing information from adjacent pilots; moderate loss, but
+            # handles multipath and timing offsets
+            for i in torch.arange(num_modem_frames+1):
+                if self.eq_mean6:
+                    #  3-pilot local mean across frequency
+                    rx_pilots[i,0] = torch.mean(rx_sym_pilots[0,i,0,0:3]/self.P[0:3])
+                    #rx_pilots[i,0] = rx_sym_pilots[0,i,0,0]/self.P[0]
+                    for c in torch.arange(1,Nc-1):
+                        rx_pilots[i,c] = torch.mean(rx_sym_pilots[0,i,0,c-1:c+2]/self.P[c-1:c+2])
+                    rx_pilots[i,Nc-1] = torch.mean(rx_sym_pilots[0,i,0,Nc-3:Nc]/self.P[Nc-3:Nc])
+                    #rx_pilots[i,Nc-1] = rx_sym_pilots[0,i,0,Nc-1]/self.P[Nc-1]
+                else:
+                    #  3-pilot least squares fit across frequency
+                    for c in range(Nc):
+                        c_mid = c
+                        # handle edges, alternative is extra "wingman" pilots
+                        if c == 0:
+                            c_mid = 1
+                        if c == Nc-1:
+                            c_mid = Nc-2
+                        local_path_delay_s = 0.0025      # guess at actual path delay
+                        a = local_path_delay_s*self.Fs
+                        A = torch.tensor([[1, torch.exp(-1j*self.w[c_mid-1]*a)], [1, torch.exp(-1j*self.w[c_mid]*a)], [1, torch.exp(-1j*self.w[c_mid+1]*a)]])
+                        P = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
+                        h = torch.reshape(rx_sym_pilots[0,0,Ns*i,c_mid-1:c_mid+2]/self.P[c_mid-1:c_mid+2],(3,1))
+                        g = torch.matmul(P,h)
+                        rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
+                 
+        else:
+            # average all pilots together. Low loss, but won't handle multipath and is sensitive to timing offsets
+            for i in torch.arange(num_modem_frames):
+                rx_pilots[i,:] = torch.mean(rx_sym_pilots[0,i,0,:]/self.P)
+
+        # Linearly interpolate between two pilots to EQ data symbols (phase and optionally mag)
+        for i in torch.arange(num_modem_frames):
+            for c in torch.arange(0,Nc):
+                slope = (rx_pilots[i+1,c] - rx_pilots[i,c])/(self.Ns+1)
+                # assume pilots at index 0 and Ns+1, we want to linearly interpolate channel at 1...Ns 
+                rx_ch = slope*torch.arange(0,self.Ns+2) + rx_pilots[i,c]
+                if self.phase_mag_eq:
+                    rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]/rx_ch[1:self.Ns+1]
+                else:
+                    rx_ch_angle = torch.angle(rx_ch)
+                    rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
+
+        # Optional "coarse" magnitude estimation and correction based on mean of all pilots across sequence. Unlike 
+        # regular PSK, ML network is sensitive to magnitude shifts.  We can't use the average mangnitude of the non-pilot symbols
+        # as they have unknown amplitudes. TODO: For a practical, real world implementation, make this a frame by frame AGC type
+        # algorithm, e.g. IIR smoothing of the RMS mag of each frames pilots 
+        if self.coarse_mag:
+            # est RMS magnitude
+            mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
+            if self.bottleneck == 3:
+                mag = mag*torch.abs(self.P[0])/self.pilot_gain
+            print(f"coarse mag: {mag:f}")
+            rx_sym_pilots = rx_sym_pilots/mag
+
+        return rx_sym_pilots
+    
+    #  One frame version of rate Fs receiver for streaming implementation TODO: refactor into dsp.py
+    def receiver_one(self, rx):
+        Ns = self.Ns
+        if self.pilots:
+            Ns = Ns + 1
+        # we expect: Pilots - data symbols - Pilots
+        num_timesteps_at_rate_Rs = len(rx) // (self.M+self.Ncp)
+        num_modem_frames = num_timesteps_at_rate_Rs // Ns
+        #print(len(rx),Ns,num_timesteps_at_rate_Rs,num_modem_frames)
+        assert num_modem_frames == 1
+        assert num_timesteps_at_rate_Rs == (Ns+1)
+        #num_timesteps_at_rate_Rs = Ns * num_modem_frames
+        #rx = rx[:num_timesteps_at_rate_Rs*(self.M+self.Ncp)]
+
+        # remove cyclic prefix
+        rx = torch.reshape(rx,(1,num_timesteps_at_rate_Rs,self.M+self.Ncp))
+        rx_dash = rx[:,:,self.Ncp+self.time_offset:self.Ncp+self.time_offset+self.M]
+        
+        # DFT to transform M time domain samples to Nc carriers
+        rx_sym = torch.matmul(rx_dash, self.Wfwd)
+        
+        if self.pilots:
+            #print(rx_sym.shape)
+            rx_sym_pilots = torch.reshape(rx_sym,(1, num_modem_frames, num_timesteps_at_rate_Rs, self.Nc))
+            if self.pilot_eq:
+                rx_sym_pilots = self.do_pilot_eq_one(num_modem_frames,rx_sym_pilots)
+            rx_sym = torch.ones(1, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
+            rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
+
+        # demap QPSK symbols
+        rx_sym = torch.reshape(rx_sym, (1, -1, self.latent_dim//2))
+        z_hat = torch.zeros(1,rx_sym.shape[1], self.latent_dim)
+
+        z_hat[:,:,::2] = rx_sym.real
+        z_hat[:,:,1::2] = rx_sym.imag
+        #print(rx_sym.shape,z_hat.shape)
+        assert(z_hat.shape[1] == self.Nzmf)
+        features_hat = torch.zeros(1,self.dec_stride*z_hat.shape[1],self.feature_dim)
+        for i in range(self.Nzmf):
+            features_hat[0,i*self.dec_stride:(i+1)*self.dec_stride,:] = self.core_decoder_statefull(z_hat[:,i:i+1,:])
+        #print("feature_hat",features_hat.shape)
         
         return features_hat,z_hat
 

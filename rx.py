@@ -121,7 +121,7 @@ if args.pilots:
    Fs = model.Fs
    Rs = model.Rs
 
-   acq = acquisition(Fs,Rs,M,Nmf,p)
+   acq = acquisition(Fs,Rs,M,Ncp,Nmf,p)
  
    # optional acq_test variables 
    tmax_candidate_target = Ncp + Ntap/2
@@ -137,7 +137,7 @@ if args.pilots:
       fD=open(args.write_Dt,'wb')
 
    while not acquired and len(rx) >= 2*Nmf+M:
-      candidate, tmax, fmax = acq.detect_pilots(rx[:2*Nmf+M])
+      candidate, tmax, fmax = acq.detect_pilots(rx[:2*Nmf+M+Ncp])
       if len(args.write_Dt):
          acq.Dt1.tofile(fD)
       

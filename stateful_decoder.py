@@ -31,7 +31,6 @@
 
 import os
 import argparse
-from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -58,29 +57,8 @@ num_used_features = 20
 model = RADAE(num_features, latent_dim, 100.0)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
-
 # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
-
-# some of the layer names have been changed due to use of custom GRUStatefull layer
-def key_transformation(old_key):
-   for gru in range(1,6):
-      if old_key == f"module.gru{gru:d}.weight_ih_l0":
-         return f"module.gru{gru:d}.gru.weight_ih_l0"
-      if old_key == f"module.gru{gru:d}.weight_hh_l0":
-         return f"module.gru{gru:d}.gru.weight_hh_l0"
-      if old_key == f"module.gru{gru:d}.bias_ih_l0":
-         return f"module.gru{gru:d}.gru.bias_ih_l0"
-      if old_key == f"module.gru{gru:d}.bias_hh_l0":
-         return f"module.gru{gru:d}.gru.bias_hh_l0"
-   return old_key
-
-state_dict = model.core_decoder.state_dict()
-new_state_dict = OrderedDict()
-for key, value in state_dict.items():
-   new_key = key_transformation(key)
-   new_state_dict[new_key] = value
-   
-model.core_decoder_statefull.load_state_dict(new_state_dict)
+model.core_decoder_statefull_load_state_dict()
 
 # dataloader
 features_in = np.reshape(np.fromfile(args.features, dtype=np.float32), (1, -1, nb_total_features))
@@ -100,7 +78,7 @@ if __name__ == '__main__':
    # stateful decoder that works on one vector of features at a time, and preserves internal state
    features_hat_statefull = torch.zeros_like(features)
    for i in range(z.shape[1]):
-      features_hat_statefull[0,4*i:4*(i+1),:] = model.core_decoder_statefull(z[:,i:i+1,:])
+      features_hat_statefull[0,model.dec_stride*i:model.dec_stride*(i+1),:] = model.core_decoder_statefull(z[:,i:i+1,:])
 
    loss = distortion_loss(features,features_hat).cpu().detach().numpy()[0]
    loss_statefull = distortion_loss(features,features_hat_statefull).cpu().detach().numpy()[0]
