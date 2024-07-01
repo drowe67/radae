@@ -46,8 +46,8 @@ from radae import RADAE,complex_bpf,acquisition
 parser = argparse.ArgumentParser()
 
 parser.add_argument('model_name', type=str, help='path to model in .pth format')
-parser.add_argument('rxfile', type=argparse.FileType("rb"), default=sys.stdin, help='path to input file of rate Fs rx samples in ..IQIQ...f32 format (default stdin)')
 parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
+parser.add_argument('--rxfile', type=argparse.FileType("rb"), default=sys.stdin, help='path to input file of rate Fs rx samples in ..IQIQ...f32 format (default stdin)')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
 parser.add_argument('--ber_test', type=str, default="", help='symbols are PSK bits, compare to z.f32 file to calculate BER')
@@ -61,7 +61,7 @@ args = parser.parse_args()
 
 # handle use of stdin
 if hasattr(args.rxfile, "buffer"):
-   args.samplefile = args.samplefile.buffer
+   args.rxfile = args.rxfile.buffer
 
 # make sure we don't use a GPU
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
@@ -127,58 +127,50 @@ acquired = False
 state = "search"
 mf = 1
 
-fmt="<ff"
-rx = np.zeros(2*Nmf+M,np.csingle)
-rx_buf = np.zeros(Nmf,np.csingle)
-decode_buf = np.zeros(0,np.csingle)
-nbuf = 0
+rx_buf = np.zeros(2*Nmf+M,np.csingle)
+rx = np.zeros(0,np.csingle)
 rx_phase = 1 + 1j*0
 rx_phase_vec = np.zeros(Nmf,np.csingle)
 
 while True:
-   buffer = args.rxfile.read(struct.calcsize(fmt))
+   buffer = args.rxfile.read(Nmf*struct.calcsize("<ff"))
    if not buffer:
       break
-   sampleIQ = struct.unpack(fmt, buffer)
-   rx_buf[nbuf] = sampleIQ[0] + 1j*sampleIQ[1]
-   nbuf += 1
-   if nbuf == Nmf:
-      rx[:Nmf+M] = rx[Nmf:]
-      rx[Nmf+M:] = rx_buf
-      
-      if state == "search" or state == "candidate":
-         candidate, tmax, fmax = acq.detect_pilots(rx)
+   rx_buf[:Nmf+M] = rx_buf[Nmf:]                           # out with the old
+   rx_buf[Nmf+M:] = np.frombuffer(buffer,np.csingle)       # in with the new
    
-      # print current state
-      print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
+   if state == "search" or state == "candidate":
+      candidate, tmax, fmax = acq.detect_pilots(rx_buf)
 
-      # iterate state machine  
-      next_state = state
-      if state == "search":
-         if candidate:
-            next_state = "candidate"
-            tmax_candidate = tmax
-            valid_count = 1
-      elif state == "candidate":
-         # look for 3 consecutive matches with about the same timing offset  
-         if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
-            valid_count = valid_count + 1
-            if valid_count > 3:
-               next_state = "sync"
-               acquired = True
-               ffine_range = np.arange(fmax-10,fmax+10,0.25)
-               fmax = acq.refine(rx, tmax, fmax, ffine_range)
-               w = 2*np.pi*fmax/Fs
-         else:
-            next_state = "search"
-      elif state == "sync":
-         for n in range(Nmf):
-            rx_phase = rx_phase*np.exp(-1j*w)
-            rx_phase_vec[n] = rx_phase
-         decode_buf = np.append(decode_buf,rx[tmax-Ncp:tmax-Ncp+Nmf]*rx_phase_vec)
-      state = next_state
-      nbuf = 0           
-      mf += 1
+   # print current state
+   print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
+
+   # iterate state machine  
+   next_state = state
+   if state == "search":
+      if candidate:
+         next_state = "candidate"
+         tmax_candidate = tmax
+         valid_count = 1
+   elif state == "candidate":
+      # look for 3 consecutive matches with about the same timing offset  
+      if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
+         valid_count = valid_count + 1
+         if valid_count > 3:
+            next_state = "sync"
+            acquired = True
+            ffine_range = np.arange(fmax-10,fmax+10,0.25)
+            fmax = acq.refine(rx_buf, tmax, fmax, ffine_range)
+            w = 2*np.pi*fmax/Fs
+      else:
+         next_state = "search"
+   elif state == "sync":
+      for n in range(Nmf):
+         rx_phase = rx_phase*np.exp(-1j*w)
+         rx_phase_vec[n] = rx_phase
+      rx = np.append(rx,rx_buf[tmax-Ncp:tmax-Ncp+Nmf]*rx_phase_vec)
+   state = next_state
+   mf += 1
 
 
 if not acquired:
@@ -187,7 +179,7 @@ if not acquired:
 
 # run vanilla (non streaming) decoder for now 
 # TODO: replace with stateful/streaming decoder
-rx = torch.tensor(decode_buf, dtype=torch.complex64)
+rx = torch.tensor(rx, dtype=torch.complex64)
 model.to(device)
 rx = rx.to(device)
 features_hat, z_hat = model.receiver(rx)
