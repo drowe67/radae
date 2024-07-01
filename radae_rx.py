@@ -55,6 +55,7 @@ parser.add_argument('--bottleneck', type=int, default=3, help='1-1D rate Rs, 2-2
 parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matrix on last modem frame')
 parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
 parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
+parser.add_argument('-v', type=int, default=2, help='Verbose level (default 2)')
 parser.set_defaults(bpf=True)
 args = parser.parse_args()
 
@@ -141,8 +142,8 @@ while True:
    if state == "search" or state == "candidate":
       candidate, tmax, fmax = acq.detect_pilots(rx_buf)
 
-   # print current state
-   print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
+   if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate")):
+      print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
 
    # iterate state machine  
    next_state = state

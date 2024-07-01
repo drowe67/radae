@@ -729,7 +729,7 @@ class RADAE(nn.Module):
             mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
             if self.bottleneck == 3:
                 mag = mag*torch.abs(self.P[0])/self.pilot_gain
-            print(f"coarse mag: {mag:f}", file=sys.stderr)
+            #print(f"coarse mag: {mag:f}", file=sys.stderr)
             rx_sym_pilots = rx_sym_pilots/mag
 
         return rx_sym_pilots
