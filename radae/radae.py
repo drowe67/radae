@@ -555,7 +555,8 @@ class RADAE(nn.Module):
         return num_ten_ms_timesteps_rounded
     
     # Use classical DSP pilot based equalisation. Note just for inference atm
-    # TODO consider moving to dsp.py, or perhaps another file. Down side is it has a lot of flags and options
+    # TODO consider moving to dsp.py, or perhaps another file, to reduce the size o fthios file. 
+    # Down side is it has a lot of flags and options that would need passing
     def do_pilot_eq(self, num_modem_frames, rx_sym_pilots):
         Nc = self.Nc 
 

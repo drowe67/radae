@@ -95,6 +95,7 @@ add_test(NAME chirp_mpp
 # Low SNR ota_test.sh, with chirp measurement, AWGN
 add_test(NAME ota_test_awgn
         COMMAND sh -c "./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -21")
+                       # FIXME: this will pass if either condition is true
                        set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
                        set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "CNodB PASS")
 
@@ -102,6 +103,7 @@ add_test(NAME ota_test_awgn
 # Low SNR ota_test.sh, with chirp measurement, MPP
 add_test(NAME ota_test_mpp
         COMMAND sh -c "./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -25 --mpp --freq -25")
+                       # FIXME: this will pass if either condition is true
                        set_tests_properties(ota_test_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
                        set_tests_properties(ota_test_mpp PROPERTIES PASS_REGULAR_EXPRESSION "CNodB PASS")
 
@@ -129,6 +131,11 @@ add_test(NAME acq_mpp
 # TODO: Add (a) interfering sine wave (b) stationary notch or perhaps slow fading
 
 # Streaming receiver --------------------------------------------------------------------------------------
+
+# complex bandpass filter
+add_test(NAME complex_bpf
+        COMMAND python3 -c "from radae import complex_bpf_test; complex_bpf_test(0)")
+                       set_tests_properties(complex_bpf PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # basic test of streaming rx, fairly high SNR
 add_test(NAME streaming_rx

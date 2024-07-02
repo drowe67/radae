@@ -104,7 +104,8 @@ if args.bpf:
    bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
    centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
    print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}")
-   rx = complex_bpf(Ntap, model.Fs, bandwidth,centre, rx)
+   bpf = complex_bpf(Ntap, model.Fs, bandwidth,centre)
+   rx = bpf.bpf(rx)
 
 if args.plots:
    ax[1].specgram(rx,NFFT=256,Fs=model.Fs)

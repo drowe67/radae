@@ -32,19 +32,79 @@
 
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
 
-def complex_bpf(Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz, x):
-   B = bandwidth_Hz/Fs_Hz
-   alpha = 2*np.pi*centre_freq_Hz/Fs_Hz
-   h = np.zeros(Ntap, dtype=np.csingle)
+class complex_bpf():
+   def __init__(self, Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz):
+      self.Ntap = Ntap
+      B = bandwidth_Hz/Fs_Hz
+      self.alpha = 2*np.pi*centre_freq_Hz/Fs_Hz
 
-   for i in range(Ntap):
-      n = i-(Ntap-1)/2
-      h[i] = B*np.sinc(n*B)
-   
-   x_baseband = x*np.exp(-1j*alpha*np.arange(len(x)))
-   x_filt = np.convolve(x_baseband,h)
-   return x_filt*np.exp(1j*alpha*np.arange(len(x_filt)))
+      # generate real low pass filter coeffs with bandwidth B/2 Ref: rect_ft.pdf
+      self.h = np.zeros(Ntap, dtype=np.csingle)
+      for i in range(Ntap):
+         n = i-(Ntap-1)/2
+         self.h[i] = B*np.sinc(n*B)
+
+      self.mem = np.zeros(self.Ntap-1, dtype=np.csingle)
+      self.phase = 1 + 0j
+
+   def bpf(self, x):
+      n = len(x)
+      phase_vec = self.phase*np.exp(-1j*self.alpha*np.arange(1,n+1))
+      x_baseband = x*phase_vec                                         # mix down to baseband
+      x_mem = np.concatenate([self.mem,x_baseband])                    # pre-pend filter memory
+      x_filt = np.zeros(n, dtype=np.csingle)
+      for i in np.arange(n):
+         x_filt[i] = np.dot(np.flip(x_mem[i:i+self.Ntap]),self.h)
+      self.mem = x_mem[-self.Ntap-1:]                                  # save filter state for next time
+      self.phase = phase_vec[-1]                                       # save phase state for next time
+      return x_filt*np.conj(phase_vec)                                 # mix back up to centre freq
+
+def complex_bpf_test(plot_en=0):
+   Ntap=101
+   Fs_Hz = 8000
+   bandwidth_Hz = 800
+   centre_freq_Hz = 1000
+   print(f"Input BPF bandwidth: {bandwidth_Hz:f} centre: {centre_freq_Hz:f}")
+   bpf = complex_bpf(Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz)
+
+   # -ve freq component of cos() should be attenuated by at least 40dB
+   def complex_bpf_test(rx_bpf, pass_str, plot_en):
+
+      Rx_bpf = np.abs(np.fft.fft(rx_bpf*np.hanning(len(rx_bpf))))**2
+      power_pos = np.sum(Rx_bpf[:Fs_Hz//2])
+      power_neg = np.sum(Rx_bpf[Fs_Hz//2:])
+      print(f"power_pos: {power_pos:f} power_neg: {power_neg:f} ratio: {10*np.log10(power_pos/power_neg):f} dB")
+      # useful to visualise some plots to debug
+      if plot_en:
+         plt.figure(1)
+         plt.plot(rx_bpf[Ntap-1:].real,rx_bpf[Ntap-1:].imag)
+         plt.figure(2)
+         plt.plot(10*np.log10(Rx_bpf))
+         plt.show()
+      if 10*np.log10(power_pos/power_neg) > 40.0:
+         print(pass_str)
+         return True
+      return False         
+
+   # one filtering operation on entire sample
+   rx = np.cos(2*np.pi*centre_freq_Hz*np.arange(Fs_Hz)/Fs_Hz)    # 1 sec real sinewave
+   rx_bpf = bpf.bpf(rx)
+   print(rx.shape,rx_bpf.shape)
+   ok1 = complex_bpf_test(rx_bpf[Ntap-1:],"OK1",plot_en)
+ 
+   # test filtering in smaller chunks
+   Nmf = 960
+   Nframes = len(rx)//Nmf
+   rx_bpf2 = np.zeros(0,dtype=np.csingle)
+   for f in range(Nframes):
+       rx_bpf2 = np.concatenate([rx_bpf2,bpf.bpf(rx[f*Nmf:(f+1)*Nmf])])
+   print(Nframes, rx_bpf2.shape)
+   ok2 = complex_bpf_test(rx_bpf2[Ntap-1:],"OK2",plot_en)
+      
+   if ok1 and ok2:
+      print("PASS")
 
 class acquisition():
    def __init__(self,Fs,Rs,M,Ncp,Nmf,p,frange=100,fstep=2.5,Pacq_error = 0.0001):
