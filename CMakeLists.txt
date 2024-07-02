@@ -95,6 +95,7 @@ add_test(NAME chirp_mpp
 # Low SNR ota_test.sh, with chirp measurement, AWGN
 add_test(NAME ota_test_awgn
         COMMAND sh -c "./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -21")
+                       # FIXME: this will pass if either condition is true
                        set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
                        set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "CNodB PASS")
 
@@ -102,6 +103,7 @@ add_test(NAME ota_test_awgn
 # Low SNR ota_test.sh, with chirp measurement, MPP
 add_test(NAME ota_test_mpp
         COMMAND sh -c "./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -25 --mpp --freq -25")
+                       # FIXME: this will pass if either condition is true
                        set_tests_properties(ota_test_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
                        set_tests_properties(ota_test_mpp PROPERTIES PASS_REGULAR_EXPRESSION "CNodB PASS")
 
@@ -127,5 +129,22 @@ add_test(NAME acq_mpp
                        set_tests_properties(acq_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # TODO: Add (a) interfering sine wave (b) stationary notch or perhaps slow fading
+
+# Streaming receiver --------------------------------------------------------------------------------------
+
+# complex bandpass filter
+add_test(NAME complex_bpf
+        COMMAND python3 -c "from radae import complex_bpf_test; complex_bpf_test(0)")
+                       set_tests_properties(complex_bpf PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# basic test of streaming rx, fairly high SNR
+add_test(NAME streaming_rx
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --EbNodB 10 --freq_offset 11 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32; \
+                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 1 > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss_test 0.15 --acq_time_test 0.5")
+                       set_tests_properties(streaming_rx PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# evaluate.sh -----------------------------------------------------------------------------------------------
 
 # TODO test evaluate.sh to prevent bit rot

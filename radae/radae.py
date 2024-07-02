@@ -41,6 +41,7 @@ import sys
 import os
 from torch.nn.utils.parametrizations import weight_norm
 from matplotlib import pyplot as plt
+from collections import OrderedDict
 
 # Quantization and loss utility functions
 
@@ -130,6 +131,7 @@ class Conv1DStatefull(nn.Module):
         self.states = torch.zeros(1,self.kernel_size,self.input_dim)
         self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=self.kernel_size, padding='valid', dilation=dilation)
     def forward(self, x):
+
         self.states[0,0:self.kernel_size-1,:] = self.states[0,1:self.kernel_size,:]
         self.states[0,1,:] = x
         conv_in = self.states.permute(0, 2, 1)
@@ -194,7 +196,7 @@ class CoreEncoder(nn.Module):
         self.z_dense = nn.Linear(864, self.output_dim)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"encoder: {nb_params} weights")
+        print(f"encoder: {nb_params} weights", file=sys.stderr)
 
         # initialize weights
         self.apply(init_weights)
@@ -269,7 +271,7 @@ class CoreDecoder(nn.Module):
         self.glu5 = GLU(96)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"decoder: {nb_params} weights")
+        print(f"decoder: {nb_params} weights", file=sys.stderr)
         # initialize weights
         self.apply(init_weights)
 
@@ -336,7 +338,7 @@ class CoreDecoderStatefull(nn.Module):
         self.glu5 = GLU(96)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"decoder: {nb_params} weights")
+        print(f"decoder: {nb_params} weights", file=sys.stderr)
         # initialize weights
         self.apply(init_weights)
 
@@ -493,7 +495,7 @@ class RADAE(nn.Module):
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)
     
-        print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}")
+        print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}", file=sys.stderr)
 
         self.Tmf = Tmf
         self.bps = bps
@@ -506,7 +508,30 @@ class RADAE(nn.Module):
         self.Nc = Nc
         self.Nzmf = Nzmf
 
-    
+    # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+    def core_decoder_statefull_load_state_dict(self):
+
+        # some of the layer names have been changed due to use of custom GRUStatefull layer
+        def key_transformation(old_key):
+            for gru in range(1,6):
+                if old_key == f"module.gru{gru:d}.weight_ih_l0":
+                    return f"module.gru{gru:d}.gru.weight_ih_l0"
+                if old_key == f"module.gru{gru:d}.weight_hh_l0":
+                    return f"module.gru{gru:d}.gru.weight_hh_l0"
+                if old_key == f"module.gru{gru:d}.bias_ih_l0":
+                    return f"module.gru{gru:d}.gru.bias_ih_l0"
+                if old_key == f"module.gru{gru:d}.bias_hh_l0":
+                    return f"module.gru{gru:d}.gru.bias_hh_l0"
+            return old_key
+
+        state_dict = self.core_decoder.state_dict()
+        new_state_dict = OrderedDict()
+        for key, value in state_dict.items():
+            new_key = key_transformation(key)
+            new_state_dict[new_key] = value
+
+        self.core_decoder_statefull.load_state_dict(new_state_dict)
+   
     def move_device(self, device):
         # TODO: work out why we need this step
         self.Winv = self.Winv.to(device)
@@ -530,6 +555,8 @@ class RADAE(nn.Module):
         return num_ten_ms_timesteps_rounded
     
     # Use classical DSP pilot based equalisation. Note just for inference atm
+    # TODO consider moving to dsp.py, or perhaps another file, to reduce the size o fthios file. 
+    # Down side is it has a lot of flags and options that would need passing
     def do_pilot_eq(self, num_modem_frames, rx_sym_pilots):
         Nc = self.Nc 
 
@@ -640,7 +667,7 @@ class RADAE(nn.Module):
         features_hat = self.core_decoder(z_hat)
         
         return features_hat,z_hat
-
+    
     # Estimate SNR given a vector r of M received pilot samples
     # rate_Fs/time domain, only works on 1D vectors (i.e. can broadcast or do multiple estimates)
     # unfortunately this doesn't work for multipath channels (good results for AWGN)
