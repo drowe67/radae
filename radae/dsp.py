@@ -106,6 +106,7 @@ def complex_bpf_test(plot_en=0):
    if ok1 and ok2:
       print("PASS")
 
+
 class acquisition():
    def __init__(self,Fs,Rs,M,Ncp,Nmf,p,frange=100,fstep=2.5,Pacq_error = 0.0001):
       self.Fs = Fs

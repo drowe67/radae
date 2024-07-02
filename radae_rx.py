@@ -92,34 +92,17 @@ Ncp = model.Ncp
 Ns = model.Ns               # number of data symbols between pilots
 Nmf = int((Ns+1)*(M+Ncp))   # number of samples in one modem frame
 Nc = model.Nc
-
-# TODO: we need a streaming BPF with state
-
-"""
-# load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
-rx = np.fromfile(args.rx, dtype=np.csingle)
-print(f"samples: {len(rx):d} Nmf: {Nmf:d} modem frames: {len(rx)/Nmf}")
-
-w = model.w.cpu().detach().numpy()
-Ntap = 0
+p = np.array(model.p) 
+Fs = model.Fs
+Rs = model.Rs
+w = np.array(model.w)
+print(w.shape, file=sys.stderr)
 if args.bpf:
    Ntap=101
    bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
    centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
-   print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}")
-   rx = complex_bpf(Ntap, model.Fs, bandwidth,centre, rx)
-
-if args.plots:
-   ax[1].specgram(rx,NFFT=256,Fs=model.Fs)
-   ax[1].axis([0,len(rx)/model.Fs,0,3000])
-   ax[1].set_title('After BPF')
-"""
-
-p = np.array(model.p) 
-frange = 100                                # coarse grid -frange/2 ... + frange/2
-fstep = 2.5                                 # coarse grid spacing in Hz
-Fs = model.Fs
-Rs = model.Rs
+   print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
+   bpf = complex_bpf(Ntap, model.Fs, bandwidth,centre)
 
 acq = acquisition(Fs,Rs,M,Ncp,Nmf,p)
 
@@ -145,9 +128,11 @@ while True:
    buffer = sys.stdin.buffer.read(Nmf*struct.calcsize("ff"))
    if not buffer:
       break
+   buffer_complex = np.frombuffer(buffer,np.csingle)
+   if args.bpf:
+      buffer_complex = bpf.bpf(buffer_complex)
    rx_buf[:Nmf+M+Ncp] = rx_buf[Nmf:]                           # out with the old
-   rx_buf[Nmf+M+Ncp:] = np.frombuffer(buffer,np.csingle)       # in with the new
-   
+   rx_buf[Nmf+M+Ncp:] = buffer_complex                         # in with the new
    if state == "search" or state == "candidate":
       candidate, tmax, fmax = acq.detect_pilots(rx_buf)
 
