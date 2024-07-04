@@ -96,7 +96,7 @@ p = np.array(model.p)
 Fs = model.Fs
 Rs = model.Rs
 w = np.array(model.w)
-print(w.shape, file=sys.stderr)
+
 if args.bpf:
    Ntap=101
    bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
@@ -136,9 +136,11 @@ while True:
    rx_buf[Nmf+M+Ncp:] = buffer_complex                         # in with the new
    if state == "search" or state == "candidate":
       candidate, tmax, fmax = acq.detect_pilots(rx_buf)
+   else:
+      candidate = acq.check_pilots(rx_buf,tmax,fmax)
 
    if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
-      print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
+      print(f"{mf:2d} state: {state:10s} valid: {candidate:d} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
 
    # iterate state machine  
    next_state = state
@@ -156,7 +158,7 @@ while True:
             next_state = "sync"
             acquired = True
             ffine_range = np.arange(fmax-10,fmax+10,0.25)
-            tmp,fmax = acq.refine(rx_buf, tmax, fmax, ffine_range)
+            fmax = acq.refine(rx_buf, tmax, fmax, ffine_range)
             w = 2*np.pi*fmax/Fs
       else:
          next_state = "search"

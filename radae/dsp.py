@@ -33,6 +33,7 @@
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
+import sys
 
 class complex_bpf():
    def __init__(self, Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz):
@@ -156,7 +157,6 @@ class acquisition():
 
       rx = np.conj(rx)
       for t in range(Nmf):
-         f_ind = 0
          # matrix multiply to speed up calculation of correlation
          # number of cols in first equal to number of rows in second
          Dt1[t,:] = np.matmul(rx[t:t+M],self.p_w)
@@ -180,6 +180,7 @@ class acquisition():
          candidate = True
      
       self.Dt1 = Dt1
+      self.Dt2 = Dt2
       self.Dthresh = Dthresh
       self.Dtmax12 = Dtmax12
       self.f_ind_max = f_ind_max
@@ -187,7 +188,8 @@ class acquisition():
       return candidate, tmax, fmax
    
    def refine(self, rx, tmax, fmax, ffine_range):
-      # TODO: should search over a fine timing range as well, e.g. if coarse timing search is under sampled to save CPU
+      # TODO: should search over a fine timing range as well, e.g. if we use an 
+      # under sampled to save CPU in detect_pilots()
       Fs = self.Fs
       p = self.p
       M = self.M
@@ -196,7 +198,6 @@ class acquisition():
       Dt1 = np.zeros(len(ffine_range), dtype=np.csingle)
       Dt2 = np.zeros(len(ffine_range), dtype=np.csingle)
       f_ind = 0
-      fmax_fine = fmax
       Dtmax = 0
 
       for f in ffine_range:
@@ -214,24 +215,52 @@ class acquisition():
             fmax = f 
          f_ind = f_ind + 1
       
-      sigma_rx1 = np.std(rx)
-      sigma_r1 = sigma_rx1*self.sigma_p/np.sqrt(10.0-5*np.pi/2)
-      sigma_rx2 = np.std(rx)
-      sigma_r2 = sigma_rx2*self.sigma_p/np.sqrt(10.0-5*np.pi/2)
+      self.D_fine = Dt1
+      
+      return fmax
+   
+   # spot check using current freq and timing offset.  
+   def check_pilots(self, rx, tmax, fmax):
+      Fs = self.Fs
+      p = self.p
+      M = self.M
+      Ncp = self.Ncp
+      Nmf = self.Nmf
+
+      assert len(rx) == self.Nmf*2+M+Ncp
+
+      # This grid of time-freq Dt samples is already populated by detect_pilots().  Update
+      # one random timestep, so we keep an to date estimate of sigma_r, e.g. if channel noise or
+      # signal levels evolve.  TODO: consider alternatives like IIR filter update of sigma_r
+
+      rx_conj = np.conj(rx)
+      t = np.random.randint(Nmf)
+      self.Dt1[t,:] = np.matmul(rx_conj[t:t+M],self.p_w)
+      self.Dt2[t,:] = np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w)
+
+      # Ref: radae.pdf "Pilot Detection over Multiple Frames"
+      sigma_r1 = np.mean(np.abs(self.Dt1))/((np.pi/2)**0.5)
+      sigma_r2 = np.mean(np.abs(self.Dt2))/((np.pi/2)**0.5)
       sigma_r = (sigma_r1 + sigma_r2)/2.0
       Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error/5.0))
 
-      candidate = False
-      if Dtmax > Dthresh:
-         candidate = True
-
-      self.D_fine = Dt1
+      # compare to maxima at current timing and freq offset
+      w = 2*np.pi*fmax/Fs
+      # TODO should this be using |Dt|?
+      w_vec = np.exp(-1j*w*np.arange(M))
+      Dtmax12 = np.abs(np.dot(np.conj(w_vec*rx[tmax:tmax+M]),p))
+      Dtmax12 += np.abs(np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),p))
+ 
+      valid = False
+      if Dtmax12 > Dthresh:
+         valid = True
+     
       self.Dthresh = Dthresh
-      self.Dtmax12 = Dtmax
-      return candidate,fmax
-   
+      self.Dtmax12 = Dtmax12
 
-# Single modem frame streaming receiver. TODO: is there a better way to pass a bunch of constnats around?
+      return valid
+
+# Single modem frame streaming receiver. TODO: is there a better way to pass a bunch of constants around?
 class receiver_one():
    def __init__(self,latent_dim,Fs,M,Ncp,Wfwd,Nc,Ns,w,P,bottleneck,pilot_gain,time_offset):
       self.latent_dim = latent_dim
