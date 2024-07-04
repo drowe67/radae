@@ -57,16 +57,17 @@ sigma_p = np.sqrt(np.dot(np.conj(p),p).real)
 # We assume received signal is just AWGN noise
 Nsam = 1000
 N = 100
-sigma_rx = np.sqrt(N)
+sigma_rx_targ = np.sqrt(N)
 Dt=np.zeros(Nsam,dtype=np.csingle)
 for i in range(Nsam):
-   n = sigma_rx*(np.random.normal(size=M) + 1j*np.random.normal(size=M))/(2**0.5)
+   n = sigma_rx_targ*(np.random.normal(size=M) + 1j*np.random.normal(size=M))/(2**0.5)
    r = n
    Dt[i] = np.dot(np.conj(r),p)
 
 # now try approximation of |Dt|
 
 sigma_dt = np.std(np.abs(Dt))
+sigma_rx = np.std(r)
 sigma_dt_est = sigma_rx*sigma_p/np.sqrt(5)
 error = sigma_dt/sigma_dt_est
 print(f"Std(|Dt|): {sigma_dt:f} {sigma_dt_est:f} Error: {error:f} sigma_rx: {sigma_rx:f} sigma_p: {sigma_p:f}")
