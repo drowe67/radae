@@ -156,7 +156,7 @@ while True:
             next_state = "sync"
             acquired = True
             ffine_range = np.arange(fmax-10,fmax+10,0.25)
-            fmax = acq.refine(rx_buf, tmax, fmax, ffine_range)
+            tmp,fmax = acq.refine(rx_buf, tmax, fmax, ffine_range)
             w = 2*np.pi*fmax/Fs
       else:
          next_state = "search"

@@ -128,6 +128,8 @@ class acquisition():
          f_ind = f_ind + 1
       self.p_w = p_w
       
+      self.sigma_p = np.sqrt(np.dot(np.conj(p),p).real)
+
    def detect_pilots(self, rx):
       Fs = self.Fs
       p = self.p
@@ -191,7 +193,8 @@ class acquisition():
       M = self.M
       Nmf = self.Nmf
    
-      D_fine = np.zeros(len(ffine_range), dtype=np.csingle)
+      Dt1 = np.zeros(len(ffine_range), dtype=np.csingle)
+      Dt2 = np.zeros(len(ffine_range), dtype=np.csingle)
       f_ind = 0
       fmax_fine = fmax
       Dtmax = 0
@@ -201,18 +204,31 @@ class acquisition():
          # current pilot samples at start of this modem frame
          # TODO should this be using |Dt|?
          w_vec = np.exp(-1j*w*np.arange(M))
-         D_fine[f_ind] = np.dot(np.conj(w_vec*rx[tmax:tmax+M]),p)
+         Dt1[f_ind] = np.dot(np.conj(w_vec*rx[tmax:tmax+M]),p)
          # next pilot samples at end of this modem frame
          w_vec = np.exp(-1j*w*(Nmf+np.arange(M)))
-         D_fine[f_ind] = D_fine[f_ind] + np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),p)
+         Dt2[f_ind] = np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),p)
 
-         if np.abs(D_fine[f_ind]) > Dtmax:
-            Dtmax = np.abs(D_fine[f_ind])
+         if np.abs(Dt1[f_ind]+Dt2[f_ind]) > Dtmax:
+            Dtmax = np.abs(Dt1[f_ind]+Dt2[f_ind])
             fmax = f 
          f_ind = f_ind + 1
+      
+      sigma_rx1 = np.std(rx)
+      sigma_r1 = sigma_rx1*self.sigma_p/np.sqrt(10.0-5*np.pi/2)
+      sigma_rx2 = np.std(rx)
+      sigma_r2 = sigma_rx2*self.sigma_p/np.sqrt(10.0-5*np.pi/2)
+      sigma_r = (sigma_r1 + sigma_r2)/2.0
+      Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error/5.0))
 
-         self.D_fine = D_fine
-      return fmax
+      candidate = False
+      if Dtmax > Dthresh:
+         candidate = True
+
+      self.D_fine = Dt1
+      self.Dthresh = Dthresh
+      self.Dtmax12 = Dtmax
+      return candidate,fmax
    
 
 # Single modem frame streaming receiver. TODO: is there a better way to pass a bunch of constnats around?

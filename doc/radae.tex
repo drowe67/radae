@@ -1133,7 +1133,10 @@ Once synchronised we do not wish to calculate a large number of $|D_t|$ samples 
 \end{equation}
 where $\sigma_{rx}$ and $\sigma_p$ are the standard deviation of $r(n)$ and $p(n)$.  It can be seen that $|D_t|$ is proportional to $\sigma_{rx}$ and $\sigma_p$.  Using a simulation \emph{est\_sigma\_dt.py} an approximation for the standard deviation of $|D_t|$ was found to be:
 \begin{equation}
-Std(|D_t|) \approx \frac{\sigma_{rx}\sigma_p}{\sqrt{5}}
+\begin{split}
+Std(|D_t|) &\approx \frac{\sigma_{rx}\sigma_p}{\sqrt{5}} \\
+\sigma_p &= \sum_{n=0}^{M-1} p^*(n)p(n)
+\end{split}
 \end{equation}
 Using the properties of Rayleigh distribution the scale factor can be found:
 \begin{equation}
