@@ -353,3 +353,5 @@ Note the samples are generated with `evaluate.sh`, which runs inference at rate 
 1. Run time SNR measure.  Maybe use ML for this, e.g. train against known SNR?
 
 1. Way to characterise channels, e.g. visualise impulse response, measure delay spread.
+
+1. Have a second pilot sequence that can be sent by Tx to signal "end of over" and provide a solid squelch, rather than using run on in state machine.

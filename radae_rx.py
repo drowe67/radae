@@ -118,6 +118,10 @@ acquired = False
 state = "search"
 prev_state = state
 mf = 1
+valid_count = 0
+Tunsync = 2.0                        # allow some time before lossing sync to ride over fades
+Nmf_unsync = int(Tunsync*Fs/Nmf)
+print(Nmf_unsync)
 
 rx_buf = np.zeros(2*Nmf+M+Ncp,np.csingle)
 rx = np.zeros(0,np.csingle)
@@ -137,32 +141,8 @@ while True:
    if state == "search" or state == "candidate":
       candidate, tmax, fmax = acq.detect_pilots(rx_buf)
    else:
+      # we're in sync, so checlk we can still see pilots and run receiver
       candidate = acq.check_pilots(rx_buf,tmax,fmax)
-
-   if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
-      print(f"{mf:2d} state: {state:10s} valid: {candidate:d} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
-
-   # iterate state machine  
-   next_state = state
-   prev_state = state
-   if state == "search":
-      if candidate:
-         next_state = "candidate"
-         tmax_candidate = tmax
-         valid_count = 1
-   elif state == "candidate":
-      # look for 3 consecutive matches with about the same timing offset  
-      if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
-         valid_count = valid_count + 1
-         if valid_count > 3:
-            next_state = "sync"
-            acquired = True
-            ffine_range = np.arange(fmax-10,fmax+10,0.25)
-            fmax = acq.refine(rx_buf, tmax, fmax, ffine_range)
-            w = 2*np.pi*fmax/Fs
-      else:
-         next_state = "search"
-   elif state == "sync":
       # correct frequency offset, note we preserve state of phase
       for n in range(Nmf+M+Ncp):
          rx_phase = rx_phase*np.exp(-1j*w)
@@ -182,6 +162,39 @@ while True:
       #sys.stdout.flush()
       if len(args.write_latent):
          z_hat_log = torch.cat([z_hat_log,z_hat])
+
+   if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
+      print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {valid_count:2d} Dthresh: {acq.Dthresh:5.2f} ",end='', file=sys.stderr)
+      print(f"Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
+
+   # iterate state machine  
+   next_state = state
+   prev_state = state
+   if state == "search":
+      if candidate:
+         next_state = "candidate"
+         tmax_candidate = tmax
+         valid_count = 1
+   elif state == "candidate":
+      # look for 3 consecutive matches with about the same timing offset  
+      if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
+         valid_count = valid_count + 1
+         if valid_count > 3:
+            next_state = "sync"
+            acquired = True
+            valid_count = Nmf_unsync
+            ffine_range = np.arange(fmax-10,fmax+10,0.25)
+            fmax = acq.refine(rx_buf, tmax, fmax, ffine_range)
+            w = 2*np.pi*fmax/Fs
+      else:
+         next_state = "search"
+   elif state == "sync":
+      if candidate:
+         valid_count = Nmf_unsync
+      else:
+         valid_count -= 1
+         if valid_count == 0:
+            next_state = "search"
 
    state = next_state
    mf += 1
