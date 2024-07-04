@@ -1123,28 +1123,7 @@ Once synchronised we continue to search for the pilot sequence over a small timi
 
 The pilot detection algorithm in Section \ref{sec:pilot_detection} requires a statistic of $|D_t|$ (such as mean or variance) in order to calculate the Rayleigh scale parameter $\sigma_r$.  This must contains samples that are mainly from the cases in (\ref{eq:rv_cases}) where the pilot is not strongly correlated with the received signal.  During acquisition this is achieved by sampling $|D_t|$ over a large grid of time and frequency offsets.
 
-Once synchronised we do not wish to calculate a large number of $|D_t|$ samples due to CPU constraints.  This section presents a low complexity algorithm for estimating $\sigma_r$ from the received signal.  Consider a single sample of the random variable $|D_t|$ at time $t$:
-\begin{equation}
-\begin{split}
-|D_t| &= \sum_{n=0}^{M-1} r^*(n)p(n) \\
-      &= \sum_{n=0}^{M-1} \sigma_{rx}r_n^*(n)\sigma_p p_n(n) \\
-      &= \sigma_{rx}\sigma_p\sum_{n=0}^{M-1}r_n^*(n)p_n(n)
-\end{split}
-\end{equation}
-where $\sigma_{rx}$ and $\sigma_p$ are the standard deviation of $r(n)$ and $p(n)$.  It can be seen that $|D_t|$ is proportional to $\sigma_{rx}$ and $\sigma_p$.  Using a simulation \emph{est\_sigma\_dt.py} an approximation for the standard deviation of $|D_t|$ was found to be:
-\begin{equation}
-\begin{split}
-Std(|D_t|) &\approx \frac{\sigma_{rx}\sigma_p}{\sqrt{5}} \\
-\sigma_p &= \sum_{n=0}^{M-1} p^*(n)p(n)
-\end{split}
-\end{equation}
-Using the properties of Rayleigh distribution the scale factor can be found:
-\begin{equation}
-\begin{split}
-\sigma_r &= \frac{Std(|D_t|)}{\sqrt{(4-\pi)/2}} \\
-         &= \frac{\sigma_{rx}\sigma_p}{\sqrt{10 - 5\pi/2}}
-\end{split}
-\end{equation}
+Once synchronised we do not wish to calculate a large number of $|D_t|$ samples due to CPU constraints.  This is currently achieved by repeated sub-sampling of the time-freq $|D_t|$, for example one random time step per frame.
 
 \subsection{Sync State Machine}
 
