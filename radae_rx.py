@@ -127,7 +127,7 @@ z_hat_log = torch.zeros(0,model.Nzmf,model.latent_dim)
 
 while True:
    buffer = sys.stdin.buffer.read(Nmf*struct.calcsize("ff"))
-   if not buffer:
+   if len(buffer) != Nmf*struct.calcsize("ff"):
       break
    buffer_complex = np.frombuffer(buffer,np.csingle)
    if args.bpf:

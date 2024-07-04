@@ -68,6 +68,8 @@ parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic pref
 parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude correction (fixes --gain)')
 parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
 parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss to arg, print PASS/FAIL')
+parser.add_argument('--prepend_noise', type=float, default=0.0, help='insert time (sec) of just rate Fs channel noise (no RADAE signal) at start (default 0)')
+parser.add_argument('--append_noise', type=float, default=0.0, help='insert time (sec) of just rate Fs channel noise (no RADAE signal) at end (default 0)')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -231,6 +233,15 @@ if __name__ == '__main__':
    if len(args.write_rx):
       if args.rate_Fs:
          rx = args.rx_gain*output["rx"].cpu().detach().numpy().flatten().astype('csingle')
+         if args.prepend_noise > 0.0:
+            num_noise = int(model.Fs*args.prepend_noise)
+            n = output["sigma"]*(np.random.randn(num_noise) +1j*np.random.randn(num_noise)).astype(np.csingle)/np.sqrt(2)
+            rx = np.concatenate([n[0,:],rx])
+         rx.tofile(args.write_rx)
+         if args.append_noise > 0.0:
+            num_noise = int(model.Fs*args.append_noise)
+            n = output["sigma"]*(np.random.randn(num_noise) +1j*np.random.randn(num_noise)).astype(np.csingle)/np.sqrt(2)
+            rx = np.concatenate([rx,n[0,:]])
          rx.tofile(args.write_rx)
       else:
          print("\nWARNING: Need --rate_Fs for --write_rx")
@@ -238,8 +249,8 @@ if __name__ == '__main__':
    # write complex valued rate Fs time domain tx samples
    if len(args.write_tx):
       if args.bottleneck == 3:
-         rx = output["tx"].cpu().detach().numpy().flatten().astype('csingle')
-         rx.tofile(args.write_tx)
+         tx = output["tx"].cpu().detach().numpy().flatten().astype('csingle')
+         tx.tofile(args.write_tx)
       else:
          print("\nWARNING: Need --bottleneck 3 for --write_tx")
    
