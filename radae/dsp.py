@@ -230,13 +230,18 @@ class acquisition():
       assert len(rx) == self.Nmf*2+M+Ncp
 
       # This grid of time-freq Dt samples is already populated by detect_pilots().  Update
-      # one random timestep, so we keep an to date estimate of sigma_r, e.g. if channel noise or
-      # signal levels evolve.  TODO: consider alternatives like IIR filter update of sigma_r
+      # 5% of the timesteps, so we keep an to date estimate of sigma_r, e.g. if channel noise or
+      # signal levels evolve.  This should allow it to adapt over a few seconds, but is a little
+      # CPU intensive (e.g. 0.05*960=48 updates/modem frame).
+      # TODO: (a) consider alternatives like IIR filter update of sigma_r, (b) compute actual
+      # time constant so it's indep of any changes, e.g. in frame rate
 
       rx_conj = np.conj(rx)
-      t = np.random.randint(Nmf)
-      self.Dt1[t,:] = np.matmul(rx_conj[t:t+M],self.p_w)
-      self.Dt2[t,:] = np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w)
+      Nupdate = int(0.05*self.Dt1.shape[0])
+      for i in range(Nupdate):
+         t = np.random.randint(Nmf)
+         self.Dt1[t,:] = np.matmul(rx_conj[t:t+M],self.p_w)
+         self.Dt2[t,:] = np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w)
 
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
       sigma_r1 = np.mean(np.abs(self.Dt1))/((np.pi/2)**0.5)
@@ -246,7 +251,6 @@ class acquisition():
 
       # compare to maxima at current timing and freq offset
       w = 2*np.pi*fmax/Fs
-      # TODO should this be using |Dt|?
       w_vec = np.exp(-1j*w*np.arange(M))
       Dtmax12 = np.abs(np.dot(np.conj(w_vec*rx[tmax:tmax+M]),p))
       Dtmax12 += np.abs(np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),p))
