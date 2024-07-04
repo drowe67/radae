@@ -58,6 +58,7 @@ features_hat = load_features(args.features_hat)
 features_seq_length = features.shape[1]
 features_hat_seq_length = features_hat.shape[1]
 print(features.shape, features_hat.shape)
+assert features_hat_seq_length
 assert features_hat_seq_length <= features_seq_length
 
 # So features_hat will be shorter than features sequence.  Time align them based on min loss

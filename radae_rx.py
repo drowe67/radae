@@ -116,6 +116,7 @@ acq_fail = 0
 tmax_candidate = 0 
 acquired = False
 state = "search"
+prev_state = state
 mf = 1
 
 rx_buf = np.zeros(2*Nmf+M+Ncp,np.csingle)
@@ -136,11 +137,12 @@ while True:
    if state == "search" or state == "candidate":
       candidate, tmax, fmax = acq.detect_pilots(rx_buf)
 
-   if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate")):
+   if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
       print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
 
    # iterate state machine  
    next_state = state
+   prev_state = state
    if state == "search":
       if candidate:
          next_state = "candidate"
