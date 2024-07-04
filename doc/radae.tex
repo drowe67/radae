@@ -994,6 +994,7 @@ Table \ref{tab:acq_dtmax} shows some experimental results for \emph{model17} and
 \end{table}
 
 \subsection{Pilot Detection over Multiple Frames}
+\label{sec:pilot_detection}
 
 The pilot detector computes $|D_t|$ as the inner product of 
 \begin{equation}
@@ -1115,6 +1116,32 @@ For example if $P=\num{1e-3}$, $P_{12}=\num{5e-6}$, a significant improvement. N
 \item Determine $\sigma_r$.  Note this the Rayleigh scale parameter for $|D_{t1}|$ or $|D_{t2}|$ alone, not the sum. One convenient way is to use the Rayleigh distribution property $\sigma_r=\frac{E[|D_{t1}|]}{\sqrt{\pi/2}} $. It may be useful to average across both RVs $\sigma_r=(\sigma_{r1}+\sigma_{r2})/2$.
 \item Evaluate (\ref{eq:rayleigh_pf12}) to determine the probability of this being a non-pilot sample, as input to the sync state machine.  Alternatively this can be framed in terms of comparing $|D_{tmax12}|$ to a target threshold $D_{thresh}$, calculated for a desired false detection probability.
 \end{enumerate}
+
+\subsection{Pilot Tracking}
+
+Once synchronised we continue to search for the pilot sequence over a small timing and frequency window, in order to track time and frequency offsets as they evolve and detect the sudden absence of the pilot signal that would indicate transmission has stopped.
+
+The pilot detection algorithm in Section \ref{sec:pilot_detection} requires a statistic of $|D_t|$ (such as mean or variance) in order to calculate the Rayleigh scale parameter $\sigma_r$.  This must contains samples that are mainly from the cases in (\ref{eq:rv_cases}) where the pilot is not strongly correlated with the received signal.  During acquisition this is achieved by sampling $|D_t|$ over a large grid of time and frequency offsets.
+
+Once synchronised we do not wish to calculate a large number of $|D_t|$ samples due to CPU constraints.  This section presents a low complexity algorithm for estimating $\sigma_r$ from the received signal.  Consider a single sample of the random variable $|D_t|$ at time $t$:
+\begin{equation}
+\begin{split}
+|D_t| &= \sum_{n=0}^{M-1} r^*(n)p(n) \\
+      &= \sum_{n=0}^{M-1} \sigma_{rx}r_n^*(n)\sigma_p p_n(n) \\
+      &= \sigma_{rx}\sigma_p\sum_{n=0}^{M-1}r_n^*(n)p_n(n)
+\end{split}
+\end{equation}
+where $\sigma_{rx}$ and $\sigma_p$ are the standard deviation of $r(n)$ and $p(n)$.  It can be seen that $|D_t|$ is proportional to $\sigma_{rx}$ and $\sigma_p$.  Using a simulation \emph{est\_sigma\_dt.py} an approximation for the standard deviation of $|D_t|$ was found to be:
+\begin{equation}
+Std(|D_t|) \approx \frac{\sigma_{rx}\sigma_p}{\sqrt{5}}
+\end{equation}
+Using the properties of Rayleigh distribution the scale factor can be found:
+\begin{equation}
+\begin{split}
+\sigma_r &= \frac{Std(|D_t|)}{\sqrt{(4-\pi)/2}} \\
+         &= \frac{\sigma_{rx}\sigma_p}{\sqrt{10 - 5\pi/2}}
+\end{split}
+\end{equation}
 
 \subsection{Sync State Machine}
 
