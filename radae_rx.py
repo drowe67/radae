@@ -119,7 +119,7 @@ state = "search"
 prev_state = state
 mf = 1
 valid_count = 0
-Tunsync = 2.0                        # allow some time before lossing sync to ride over fades
+Tunsync = 3.0                        # allow some time before lossing sync to ride over fades
 Nmf_unsync = int(Tunsync*Fs/Nmf)
 endofover = False
 
@@ -142,9 +142,13 @@ while True:
       candidate, tmax, fmax = acq.detect_pilots(rx_buf)
    else:
       # we're in sync, so checlk we can still see pilots and run receiver
+      ffine_range = np.arange(fmax-0.5,fmax+0.5,0.1)
+      fmax = 0.9*fmax+0.1*acq.refine(rx_buf, tmax, fmax, ffine_range)
       candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
       if not endofover:
          # correct frequency offset, note we preserve state of phase
+         # TODO do we need preserve state of phase?  We're passing entire vector and there isn't any memory (I think)
+         w = 2*np.pi*fmax/Fs
          for n in range(Nmf+M+Ncp):
             rx_phase = rx_phase*np.exp(-1j*w)
             rx_phase_vec[n] = rx_phase
@@ -186,7 +190,6 @@ while True:
             valid_count = Nmf_unsync
             ffine_range = np.arange(fmax-10,fmax+10,0.25)
             fmax = acq.refine(rx_buf, tmax, fmax, ffine_range)
-            w = 2*np.pi*fmax/Fs
       else:
          next_state = "search"
    elif state == "sync":

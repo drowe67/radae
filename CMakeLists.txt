@@ -93,17 +93,17 @@ add_test(NAME chirp_mpp
                        set_tests_properties(chirp_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # Low SNR ota_test.sh, with chirp measurement, AWGN
+# FIXME: this will pass if either condition is true
 add_test(NAME ota_test_awgn
         COMMAND sh -c "./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -21")
-                       # FIXME: this will pass if either condition is true
                        set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
                        set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "CNodB PASS")
 
 
+# FIXME: this will pass if either condition is true
 # Low SNR ota_test.sh, with chirp measurement, MPP
 add_test(NAME ota_test_mpp
         COMMAND sh -c "./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -25 --mpp --freq -25")
-                       # FIXME: this will pass if either condition is true
                        set_tests_properties(ota_test_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
                        set_tests_properties(ota_test_mpp PROPERTIES PASS_REGULAR_EXPRESSION "CNodB PASS")
 
@@ -144,6 +144,15 @@ add_test(NAME streaming_rx
                        cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 1 > features_rx_out.f32; \
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(streaming_rx PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# TODO: this is failing at low SNRs, track down reason for increeased loss compared to rx.py/inference.py
+# state machine, low SNR AWGN 
+add_test(NAME streaming_rx_awgn
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --EbNodB 10 --freq_offset 0 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3  --prepend_noise 1 --append_noise 3 --end_of_over --write_rx rx.f32;\
+                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss_test 0.3 --acq_time_test 0.5")
+                       set_tests_properties(streaming_rx_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # evaluate.sh -----------------------------------------------------------------------------------------------
 

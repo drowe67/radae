@@ -40,6 +40,7 @@ parser.add_argument('features', type=str, help='path to input feature file in .f
 parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
 parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss to arg, print PASS/FAIL')
 parser.add_argument('--acq_time_test', type=float, default=0, help='compare acquisition time to threshold arg, print PASS/FAIL')
+parser.add_argument('--clip_end', type=int, default=0, help='remove this many frames from end, useful to remove end of over noise (default 0)')
 args = parser.parse_args()
 
 device = torch.device("cpu")
@@ -55,6 +56,7 @@ def load_features(filename):
 
 features = load_features(args.features)
 features_hat = load_features(args.features_hat)
+features_hat = features_hat[:,:features_hat.shape[1]-args.clip_end,:]
 features_seq_length = features.shape[1]
 features_hat_seq_length = features_hat.shape[1]
 print(features.shape, features_hat.shape)
