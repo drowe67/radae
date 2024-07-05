@@ -3,8 +3,9 @@
   Radio Autoencoder receiver: rate Fs complex samples in, features out.
 
   Bare bones acquisition that find a valid modem frame, and decodes the
-  entire sample using a fixed timning and freq offset estimate.  Works
-  OK for 10 second samples, tested on many HF channels around the world.
+  entire sample using a fixed timing and freq offset estimate.  Works
+  OK for 10 second samples, tested on many HF channels around the world
+  in April 2024 OTA test campaign.
 
   Copyright (c) 2024 by David Rowe */
 
@@ -122,7 +123,7 @@ if args.pilots:
    Fs = model.Fs
    Rs = model.Rs
 
-   acq = acquisition(Fs,Rs,M,Ncp,Nmf,p)
+   acq = acquisition(Fs,Rs,M,Ncp,Nmf,p,model.pend)
  
    # optional acq_test variables 
    tmax_candidate_target = Ncp + Ntap/2

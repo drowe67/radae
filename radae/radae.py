@@ -386,6 +386,7 @@ class RADAE(nn.Module):
                  cyclic_prefix = 0,
                  time_offset = 0,
                  coarse_mag = False,
+                 end_of_over = False
                 ):
 
         super(RADAE, self).__init__()
@@ -413,6 +414,7 @@ class RADAE(nn.Module):
         self.eq_mean6 = eq_mean6
         self.time_offset = time_offset
         self.coarse_mag = coarse_mag
+        self.end_of_over = end_of_over
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
@@ -482,10 +484,17 @@ class RADAE(nn.Module):
         # set up pilots in freq and time domain
         self.P = (2**(0.5))*barker_pilots(Nc)
         self.p = torch.matmul(self.P,self.Winv)
+        self.Pend = torch.clone(self.P)
+        self.Pend[1::2] = -1*self.Pend[1::2]
+        self.pend = torch.matmul(self.Pend,self.Winv)
+        #print(self.P,self.Pend, file=sys.stderr)
         if self.Ncp:
             self.p_cp = torch.zeros(self.Ncp+self.M,dtype=torch.complex64)
             self.p_cp[self.Ncp:] = self.p
             self.p_cp[:self.Ncp] = self.p[-self.Ncp:]
+            self.pend_cp = torch.zeros(self.Ncp+self.M,dtype=torch.complex64)
+            self.pend_cp[self.Ncp:] = self.pend
+            self.pend_cp[:self.Ncp] = self.pend[-self.Ncp:]
         self.pilot_gain = 1.00
         if self.bottleneck == 3:
             pilot_backoff = 10**(-2/20)
@@ -721,6 +730,8 @@ class RADAE(nn.Module):
             tx_sym_pilots = torch.zeros(num_batches, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64,device=tx_sym.device)
             tx_sym_pilots[:,:,1:self.Ns+1,:] = tx_sym
             tx_sym_pilots[:,:,0,:] = self.pilot_gain*self.P
+            if self.end_of_over:
+                tx_sym_pilots[:,-2:,0,:] = self.pilot_gain*self.Pend
             num_timesteps_at_rate_Rs = num_timesteps_at_rate_Rs + num_modem_frames
             tx_sym = torch.reshape(tx_sym_pilots,(num_batches, num_timesteps_at_rate_Rs, self.Nc))
 

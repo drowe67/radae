@@ -109,13 +109,14 @@ def complex_bpf_test(plot_en=0):
 
 
 class acquisition():
-   def __init__(self,Fs,Rs,M,Ncp,Nmf,p,frange=100,fstep=2.5,Pacq_error = 0.0001):
+   def __init__(self,Fs,Rs,M,Ncp,Nmf,p,pend,frange=100,fstep=2.5,Pacq_error = 0.0001):
       self.Fs = Fs
       self.Rs = Rs
       self.M = M
       self.Ncp = Ncp
       self.Nmf = Nmf
       self.p = p
+      self.pend = pend
       self.Pacq_error = Pacq_error
       self.fcoarse_range = np.arange(-frange/2,frange/2,fstep)
 
@@ -130,6 +131,7 @@ class acquisition():
       self.p_w = p_w
       
       self.sigma_p = np.sqrt(np.dot(np.conj(p),p).real)
+      self.Dtmax12_eoo = 0
 
    def detect_pilots(self, rx):
       Fs = self.Fs
@@ -175,9 +177,7 @@ class acquisition():
       sigma_r = (sigma_r1 + sigma_r2)/2.0
       Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error/5.0))
 
-      candidate = False
-      if Dtmax12 > Dthresh:
-         candidate = True
+      candidate = Dtmax12 > Dthresh
      
       self.Dt1 = Dt1
       self.Dt2 = Dt2
@@ -223,6 +223,7 @@ class acquisition():
    def check_pilots(self, rx, tmax, fmax):
       Fs = self.Fs
       p = self.p
+      pend = self.pend
       M = self.M
       Ncp = self.Ncp
       Nmf = self.Nmf
@@ -254,15 +255,18 @@ class acquisition():
       w_vec = np.exp(-1j*w*np.arange(M))
       Dtmax12 = np.abs(np.dot(np.conj(w_vec*rx[tmax:tmax+M]),p))
       Dtmax12 += np.abs(np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),p))
+      valid = Dtmax12 > Dthresh
  
-      valid = False
-      if Dtmax12 > Dthresh:
-         valid = True
+      # compare with end of over sequence
+      Dtmax12_eoo = np.abs(np.dot(np.conj(w_vec*rx[tmax:tmax+M]),pend))
+      Dtmax12_eoo += np.abs(np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),pend))
+      endofover = Dtmax12_eoo > Dthresh
      
       self.Dthresh = Dthresh
       self.Dtmax12 = Dtmax12
+      self.Dtmax12_eoo = Dtmax12_eoo
 
-      return valid
+      return valid,endofover
 
 # Single modem frame streaming receiver. TODO: is there a better way to pass a bunch of constants around?
 class receiver_one():

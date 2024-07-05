@@ -70,6 +70,7 @@ parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2
 parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss to arg, print PASS/FAIL')
 parser.add_argument('--prepend_noise', type=float, default=0.0, help='insert time (sec) of just rate Fs channel noise (no RADAE signal) at start (default 0)')
 parser.add_argument('--append_noise', type=float, default=0.0, help='insert time (sec) of just rate Fs channel noise (no RADAE signal) at end (default 0)')
+parser.add_argument('--end_of_over', action='store_true', help='insert end of over pilot sequence on last two modem frames (default off)')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -93,7 +94,8 @@ num_used_features = 20
 model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rate_Fs=args.rate_Fs, 
               phase_offset=args.phase_offset, freq_offset=args.freq_offset, df_dt=args.df_dt,
               gain=args.gain, pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls,
-              cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, bottleneck=args.bottleneck)
+              cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, 
+              bottleneck=args.bottleneck, end_of_over=args.end_of_over)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
@@ -233,6 +235,7 @@ if __name__ == '__main__':
    if len(args.write_rx):
       if args.rate_Fs:
          rx = args.rx_gain*output["rx"].cpu().detach().numpy().flatten().astype('csingle')
+         # add "end of over" sequence
          if args.prepend_noise > 0.0:
             num_noise = int(model.Fs*args.prepend_noise)
             n = output["sigma"]*(np.random.randn(num_noise) +1j*np.random.randn(num_noise)).astype(np.csingle)/np.sqrt(2)

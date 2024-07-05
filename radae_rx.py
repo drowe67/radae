@@ -104,7 +104,7 @@ if args.bpf:
    print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
    bpf = complex_bpf(Ntap, model.Fs, bandwidth,centre)
 
-acq = acquisition(Fs,Rs,M,Ncp,Nmf,p)
+acq = acquisition(Fs,Rs,M,Ncp,Nmf,p,model.pend)
 
 """
 # optional acq_test variables 
@@ -121,7 +121,7 @@ mf = 1
 valid_count = 0
 Tunsync = 2.0                        # allow some time before lossing sync to ride over fades
 Nmf_unsync = int(Tunsync*Fs/Nmf)
-print(Nmf_unsync)
+endofover = False
 
 rx_buf = np.zeros(2*Nmf+M+Ncp,np.csingle)
 rx = np.zeros(0,np.csingle)
@@ -142,30 +142,31 @@ while True:
       candidate, tmax, fmax = acq.detect_pilots(rx_buf)
    else:
       # we're in sync, so checlk we can still see pilots and run receiver
-      candidate = acq.check_pilots(rx_buf,tmax,fmax)
-      # correct frequency offset, note we preserve state of phase
-      for n in range(Nmf+M+Ncp):
-         rx_phase = rx_phase*np.exp(-1j*w)
-         rx_phase_vec[n] = rx_phase
-      rx = torch.tensor(rx_buf[tmax-Ncp:tmax-Ncp+Nmf+M+Ncp]*rx_phase_vec, dtype=torch.complex64)
-      # run through RADAE receiver DSP
-      z_hat = receiver.receiver_one(rx)
-      # decode z_hat to features
-      assert(z_hat.shape[1] == model.Nzmf)
-      features_hat = torch.zeros(1,model.dec_stride*z_hat.shape[1],model.feature_dim)
-      for i in range(model.Nzmf):
-         features_hat[0,i*model.dec_stride:(i+1)*model.dec_stride,:] = model.core_decoder_statefull(z_hat[:,i:i+1,:])
-      # add unused features and send to stdout
-      features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
-      features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
-      sys.stdout.buffer.write(features_hat)
-      #sys.stdout.flush()
-      if len(args.write_latent):
-         z_hat_log = torch.cat([z_hat_log,z_hat])
+      candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
+      if not endofover:
+         # correct frequency offset, note we preserve state of phase
+         for n in range(Nmf+M+Ncp):
+            rx_phase = rx_phase*np.exp(-1j*w)
+            rx_phase_vec[n] = rx_phase
+         rx = torch.tensor(rx_buf[tmax-Ncp:tmax-Ncp+Nmf+M+Ncp]*rx_phase_vec, dtype=torch.complex64)
+         # run through RADAE receiver DSP
+         z_hat = receiver.receiver_one(rx)
+         # decode z_hat to features
+         assert(z_hat.shape[1] == model.Nzmf)
+         features_hat = torch.zeros(1,model.dec_stride*z_hat.shape[1],model.feature_dim)
+         for i in range(model.Nzmf):
+            features_hat[0,i*model.dec_stride:(i+1)*model.dec_stride,:] = model.core_decoder_statefull(z_hat[:,i:i+1,:])
+         # add unused features and send to stdout
+         features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
+         features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
+         sys.stdout.buffer.write(features_hat)
+         #sys.stdout.flush()
+         if len(args.write_latent):
+            z_hat_log = torch.cat([z_hat_log,z_hat])
 
    if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
-      print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {valid_count:2d} Dthresh: {acq.Dthresh:5.2f} ",end='', file=sys.stderr)
-      print(f"Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
+      print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:5.2f} ",end='', file=sys.stderr)
+      print(f"Dtmax12: {acq.Dtmax12:5.2f} {acq.Dtmax12_eoo:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
 
    # iterate state machine  
    next_state = state
@@ -195,7 +196,8 @@ while True:
          valid_count -= 1
          if valid_count == 0:
             next_state = "search"
-
+      if endofover:
+         next_state = "search"
    state = next_state
    mf += 1
 
