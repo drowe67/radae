@@ -71,6 +71,7 @@ parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss t
 parser.add_argument('--prepend_noise', type=float, default=0.0, help='insert time (sec) of just rate Fs channel noise (no RADAE signal) at start (default 0)')
 parser.add_argument('--append_noise', type=float, default=0.0, help='insert time (sec) of just rate Fs channel noise (no RADAE signal) at end (default 0)')
 parser.add_argument('--end_of_over', action='store_true', help='insert end of over pilot sequence on last two modem frames (default off)')
+parser.add_argument('--correct_freq_offset', action='store_true', help='correct --freq_offset before decoding here (default off)')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -95,7 +96,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rat
               phase_offset=args.phase_offset, freq_offset=args.freq_offset, df_dt=args.df_dt,
               gain=args.gain, pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls,
               cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, 
-              bottleneck=args.bottleneck, end_of_over=args.end_of_over)
+              bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
@@ -234,17 +235,33 @@ if __name__ == '__main__':
    # write complex valued rate Fs time domain rx samples
    if len(args.write_rx):
       if args.rate_Fs:
-         rx = args.rx_gain*output["rx"].cpu().detach().numpy().flatten().astype('csingle')
-         # add "end of over" sequence
+         rx = output["rx"]
+         sigma = output["sigma"].item()
+         
+         if args.end_of_over:
+            # appends a frame containing a final pilot so the last RADAE frame
+            # has a good phase referemce, and two "end of over" symbols
+            M = model.M
+            Ncp = model.Ncp
+            Nmf = int((model.Ns+1)*(M+Ncp))
+            eoe = torch.zeros(1,Nmf+M+Ncp,dtype=torch.complex64)
+            eoe[0,:M+Ncp] = model.p_cp
+            eoe[0,M+Ncp:2*(M+Ncp)] = model.pend_cp
+            eoe[0,Nmf:Nmf+(M+Ncp)] = model.pend_cp
+            eoe *= model.pilot_gain
+            if args.bottleneck == 3:
+               eoe = torch.tanh(torch.abs(eoe)) * torch.exp(1j*torch.angle(eoe))
+            eoe = eoe + sigma*torch.randn_like(eoe)
+            rx = torch.concatenate([rx,eoe],dim=1)
          if args.prepend_noise > 0.0:
             num_noise = int(model.Fs*args.prepend_noise)
-            n = output["sigma"]*(np.random.randn(num_noise) +1j*np.random.randn(num_noise)).astype(np.csingle)/np.sqrt(2)
-            rx = np.concatenate([n[0,:],rx])
-         rx.tofile(args.write_rx)
+            n = sigma*torch.randn(1,num_noise)
+            rx = torch.concatenate([n,rx],dim=1)
          if args.append_noise > 0.0:
             num_noise = int(model.Fs*args.append_noise)
-            n = output["sigma"]*(np.random.randn(num_noise) +1j*np.random.randn(num_noise)).astype(np.csingle)/np.sqrt(2)
-            rx = np.concatenate([rx,n[0,:]])
+            n = sigma*torch.randn(1,num_noise)
+            rx = torch.concatenate([rx,n],dim=1)
+         rx = args.rx_gain*rx.cpu().detach().numpy().flatten().astype('csingle')
          rx.tofile(args.write_rx)
       else:
          print("\nWARNING: Need --rate_Fs for --write_rx")

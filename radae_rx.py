@@ -141,7 +141,7 @@ while True:
    if state == "search" or state == "candidate":
       candidate, tmax, fmax = acq.detect_pilots(rx_buf)
    else:
-      # we're in sync, so checlk we can still see pilots and run receiver
+      # we're in sync, so check we can still see pilots and run receiver
       ffine_range = np.arange(fmax-0.5,fmax+0.5,0.1)
       fmax = 0.9*fmax+0.1*acq.refine(rx_buf, tmax, fmax, ffine_range)
       candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)

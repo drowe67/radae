@@ -386,7 +386,7 @@ class RADAE(nn.Module):
                  cyclic_prefix = 0,
                  time_offset = 0,
                  coarse_mag = False,
-                 end_of_over = False
+                 correct_freq_offset = False
                 ):
 
         super(RADAE, self).__init__()
@@ -414,7 +414,7 @@ class RADAE(nn.Module):
         self.eq_mean6 = eq_mean6
         self.time_offset = time_offset
         self.coarse_mag = coarse_mag
-        self.end_of_over = end_of_over
+        self.correct_freq_offset = correct_freq_offset
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
@@ -730,8 +730,6 @@ class RADAE(nn.Module):
             tx_sym_pilots = torch.zeros(num_batches, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64,device=tx_sym.device)
             tx_sym_pilots[:,:,1:self.Ns+1,:] = tx_sym
             tx_sym_pilots[:,:,0,:] = self.pilot_gain*self.P
-            if self.end_of_over:
-                tx_sym_pilots[:,-2:,0,:] = self.pilot_gain*self.Pend
             num_timesteps_at_rate_Rs = num_timesteps_at_rate_Rs + num_modem_frames
             tx_sym = torch.reshape(tx_sym_pilots,(num_batches, num_timesteps_at_rate_Rs, self.Nc))
 
@@ -808,7 +806,7 @@ class RADAE(nn.Module):
             else:
                 # similar to rate Rs, but scale noise by M samples/symbol
                 sigma = (EbNo*(self.M))**(-0.5)
-            
+
             rx = tx + sigma*torch.randn_like(tx)
 
             # insert per sequence random gain variations, -20 ... +20 dB (training time)
@@ -821,10 +819,17 @@ class RADAE(nn.Module):
 
             # user supplied gain    
             rx = rx * self.gain
-
+            rx_dash = torch.clone(rx)
+            
+            # inference time correction of freq offset, allows us to produce a rx.f32 file
+            # with a freq offset while decoding correcting here
+            if self.correct_freq_offset:
+                assert self.freq_offset
+                rx_dash = rx_dash*torch.conj(lin_phase)
+                
             # remove cyclic prefix
-            rx = torch.reshape(rx,(num_batches,num_timesteps_at_rate_Rs,self.M+self.Ncp))
-            rx_dash = rx[:,:,Ncp+self.time_offset:Ncp+self.time_offset+self.M]
+            rx_dash = torch.reshape(rx_dash,(num_batches,num_timesteps_at_rate_Rs,self.M+self.Ncp))
+            rx_dash = rx_dash[:,:,Ncp+self.time_offset:Ncp+self.time_offset+self.M]
 
             # DFT to transform M time domain samples to Nc carriers
             rx_sym = torch.matmul(rx_dash, self.Wfwd)

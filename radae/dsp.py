@@ -258,7 +258,7 @@ class acquisition():
       valid = Dtmax12 > Dthresh
  
       # compare with end of over sequence
-      Dtmax12_eoo = np.abs(np.dot(np.conj(w_vec*rx[tmax:tmax+M]),pend))
+      Dtmax12_eoo = np.abs(np.dot(np.conj(w_vec*rx[tmax+M+Ncp:tmax+2*M+Ncp]),pend))
       Dtmax12_eoo += np.abs(np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),pend))
       endofover = Dtmax12_eoo > Dthresh
      

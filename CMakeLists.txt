@@ -137,20 +137,20 @@ add_test(NAME complex_bpf
         COMMAND python3 -c "from radae import complex_bpf_test; complex_bpf_test(0)")
                        set_tests_properties(complex_bpf PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# basic test of streaming rx, fairly high SNR
-add_test(NAME streaming_rx
+# basic test of streaming rx, high SNR
+add_test(NAME streaming_rx_basic
         COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --EbNodB 10 --freq_offset 11 \
-                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32; \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
                        cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 1 > features_rx_out.f32; \
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss_test 0.15 --acq_time_test 0.5")
-                       set_tests_properties(streaming_rx PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+                       set_tests_properties(streaming_rx_basic PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# TODO: this is failing at low SNRs, track down reason for increeased loss compared to rx.py/inference.py
-# state machine, low SNR AWGN 
+# introduce noise-only segments at either end to give state machine/end of over a work out
+# TODO: radae_rx is about 1dB worse than inference.py (loss for given Eb/No)
 add_test(NAME streaming_rx_awgn
-        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --EbNodB 10 --freq_offset 0 \
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --EbNodB 1 --freq_offset 0 \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3  --prepend_noise 1 --append_noise 3 --end_of_over --write_rx rx.f32;\
-                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth > features_rx_out.f32; \
+                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 1 > features_rx_out.f32; \
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss_test 0.3 --acq_time_test 0.5")
                        set_tests_properties(streaming_rx_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
