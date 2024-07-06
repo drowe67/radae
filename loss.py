@@ -31,6 +31,7 @@ import os
 import argparse
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
 
 from radae import distortion_loss
 
@@ -41,6 +42,7 @@ parser.add_argument('features_hat', type=str, help='path to output feature file 
 parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss to arg, print PASS/FAIL')
 parser.add_argument('--acq_time_test', type=float, default=0, help='compare acquisition time to threshold arg, print PASS/FAIL')
 parser.add_argument('--clip_end', type=int, default=0, help='remove this many frames from end, useful to remove end of over noise (default 0)')
+parser.add_argument('--plot', action='store_true', help='plot loss versus time')
 args = parser.parse_args()
 
 device = torch.device("cpu")
@@ -83,3 +85,13 @@ if args.acq_time_test > 0:
       quit()
 if args.loss_test > 0.0 or args.acq_time_test:
    print("PASS")
+
+if args.plot:
+   # need frame by frame loss
+   nframes = features_hat_seq_length - min_start
+   print(min_start,nframes)
+   loss = np.zeros(nframes)
+   for f in range(nframes):
+      loss[f] = distortion_loss(features[:,f+min_start:f+min_start+1,:],features_hat[:,f:f+1,:]).cpu().detach().numpy()[0]
+   plt.plot(loss)
+   plt.show()
