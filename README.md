@@ -352,6 +352,8 @@ Note the samples are generated with `evaluate.sh`, which runs inference at rate 
 
 1. Working SNR measure, perhaps pilot based.  Maybe use ML for this, e.g. train against known SNR?
 
+1. Roughness on david & peter samples.  Try combining quantized and unquantized features to figure out which features are causing most of the issues. Compare to passthrough, e.g. try increasing weight of voicing measure. It could be about the balance between low and high SNR. Either the range, or how the distortion gets weighted depending on the SNR. For example "flat" weighting would bias towards low SNR since the low SNR distortion tends to be a lot higher.
+
 1. Way to characterise channels, e.g. visualise impulse response, measure delay spread.
 
 1. Automated tests: (a) just run inference and make sure nothing is broken (b) run in didgital mode, measure BER at one point, multipath test mode, will check out a lot of code (like pilot stuff).
