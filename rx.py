@@ -62,6 +62,7 @@ parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2
 parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matrix on last modem frame')
 parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
 parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
+parser.add_argument('--rx_one',  action='store_true', help='Use single frame receiver')
 parser.set_defaults(bpf=True)
 args = parser.parse_args()
 
@@ -80,6 +81,9 @@ model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate
               coarse_mag=args.coarse_mag,time_offset=args.time_offset, bottleneck=args.bottleneck)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
+if args.rx_one:
+   # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+   model.core_decoder_statefull_load_state_dict()
 
 M = model.M
 Ncp = model.Ncp
@@ -218,7 +222,18 @@ if args.pilots:
 rx = torch.tensor(rx, dtype=torch.complex64)
 model.to(device)
 rx = rx.to(device)
-features_hat, z_hat = model.receiver(rx)
+if args.rx_one:
+   Nmodem_frames = (len(rx)+Nmf+M+Ncp)//model.Nmf
+   """
+   for f in range(Nmodem_frames):
+      z_hat = receiver.receiver_one(rx[i*Nmf:i*Nmf+Nmf+M+Ncp])
+      assert(z_hat.shape[1] == model.Nzmf)
+      features_hat = torch.zeros(1,model.dec_stride*z_hat.shape[1],model.feature_dim)
+      for i in range(model.Nzmf):
+         features_hat[0,i*model.dec_stride:(i+1)*model.dec_stride,:] = model.core_decoder_statefull(z_hat[:,i:i+1,:])
+   """
+else:
+   features_hat, z_hat = model.receiver(rx)
 
 z_hat = z_hat.cpu().detach().numpy().flatten().astype('float32')
 
