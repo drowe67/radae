@@ -46,6 +46,7 @@ parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss t
 parser.add_argument('--acq_time_test', type=float, default=0, help='compare acquisition time to threshold arg, print PASS/FAIL')
 parser.add_argument('--clip_end', type=int, default=0, help='remove this many frames from end, useful to remove end of over noise (default 0)')
 parser.add_argument('--plot', action='store_true', help='plot loss versus time')
+parser.add_argument('--compare', action='store_true', help='plot loss versus time')
 args = parser.parse_args()
 
 device = torch.device("cpu")
@@ -104,6 +105,10 @@ if args.loss_test > 0.0 or args.acq_time_test:
 
 if args.features_hat2:
    min_loss2, min_start2, loss2 = find_loss(args.features, args.features_hat2)
+   if args.compare:
+      print(np.abs(min_loss-min_loss2))
+      if np.abs(min_loss-min_loss2) < 0.01:
+         print("PASS")
 
 if args.plot:
    if args.features_hat2:

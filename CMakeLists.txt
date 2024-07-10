@@ -146,7 +146,7 @@ add_test(NAME rx_stateful
                        cp features_rx_out.f32 features_rx_stateful_out.f32;
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
                        --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16;
-                       python3 loss.py features_in.f32 features_rx_out.f32 --features_hat2 features_rx_stateful_out.f32;")
+                       python3 loss.py features_in.f32 features_rx_out.f32 --features_hat2 features_rx_stateful_out.f32 --compare;")
                        set_tests_properties(rx_stateful PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # compare rx.py in vanilla and streaming mode, tests streaming receiver DSP and ML
@@ -158,7 +158,7 @@ add_test(NAME rx_streaming
                        cp features_rx_out.f32 features_rx_one_out.f32;
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
                        --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16;
-                       python3 loss.py features_in.f32 features_rx_out.f32 --features_hat2 features_rx_one_out.f32;")
+                       python3 loss.py features_in.f32 features_rx_out.f32 --features_hat2 features_rx_one_out.f32 --compare;")
                        set_tests_properties(rx_streaming PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # basic test of streaming rx code, run rx.py in vanilla and streaming mode, compare against non-streaming rx.sh
