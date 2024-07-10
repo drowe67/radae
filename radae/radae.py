@@ -386,7 +386,8 @@ class RADAE(nn.Module):
                  cyclic_prefix = 0,
                  time_offset = 0,
                  coarse_mag = False,
-                 correct_freq_offset = False
+                 correct_freq_offset = False,
+                 stateful_decoder = False
                 ):
 
         super(RADAE, self).__init__()
@@ -415,6 +416,7 @@ class RADAE(nn.Module):
         self.time_offset = time_offset
         self.coarse_mag = coarse_mag
         self.correct_freq_offset = correct_freq_offset
+        self.stateful_decoder = stateful_decoder
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
@@ -672,8 +674,15 @@ class RADAE(nn.Module):
         
         z_hat[:,:,::2] = rx_sym.real
         z_hat[:,:,1::2] = rx_sym.imag
-            
-        features_hat = self.core_decoder(z_hat)
+        
+        if self.stateful_decoder:
+            print("stateful!")
+            features_hat = torch.empty(1,0,self.feature_dim)
+            for i in range(z_hat.shape[1]):
+                features_hat = torch.cat([features_hat, self.core_decoder_statefull(z_hat[:,i:i+1,:])],dim=1)
+        else:
+            features_hat = self.core_decoder(z_hat)
+        print(features_hat.shape,z_hat.shape)
         
         return features_hat,z_hat
     

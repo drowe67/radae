@@ -40,7 +40,7 @@ import argparse
 import numpy as np
 from matplotlib import pyplot as plt
 import torch
-from radae import RADAE,complex_bpf,acquisition
+from radae import RADAE,complex_bpf,acquisition,receiver_one
 
 parser = argparse.ArgumentParser()
 
@@ -63,6 +63,7 @@ parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matri
 parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
 parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
 parser.add_argument('--rx_one',  action='store_true', help='Use single frame receiver')
+parser.add_argument('--stateful',  action='store_true', help='use stateful core decoder')
 parser.set_defaults(bpf=True)
 args = parser.parse_args()
 
@@ -78,12 +79,11 @@ num_used_features = 20
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, 
               pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = False, cyclic_prefix=args.cp,
-              coarse_mag=args.coarse_mag,time_offset=args.time_offset, bottleneck=args.bottleneck)
+              coarse_mag=args.coarse_mag,time_offset=args.time_offset, bottleneck=args.bottleneck,
+              stateful_decoder=args.stateful)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
-if args.rx_one:
-   # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
-   model.core_decoder_statefull_load_state_dict()
+model.core_decoder_statefull_load_state_dict()
 
 M = model.M
 Ncp = model.Ncp
@@ -222,16 +222,23 @@ if args.pilots:
 rx = torch.tensor(rx, dtype=torch.complex64)
 model.to(device)
 rx = rx.to(device)
+
 if args.rx_one:
-   Nmodem_frames = (len(rx)+Nmf+M+Ncp)//model.Nmf
-   """
+   receiver = receiver_one(model.latent_dim,model.Fs,model.M,model.Ncp,model.Wfwd,
+                           model.Nc,model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain,model.time_offset)
+   Nmodem_frames = (len(rx)-(M+Ncp))//Nmf
+   features_hat = torch.empty(1,0,model.feature_dim)
+   z_hat = torch.empty(1,0,model.latent_dim)
+   #print(Nmodem_frames,features_hat.shape)
+
    for f in range(Nmodem_frames):
-      z_hat = receiver.receiver_one(rx[i*Nmf:i*Nmf+Nmf+M+Ncp])
-      assert(z_hat.shape[1] == model.Nzmf)
-      features_hat = torch.zeros(1,model.dec_stride*z_hat.shape[1],model.feature_dim)
+      z_hat1 = receiver.receiver_one(rx[f*Nmf:(f+1)*Nmf+M+Ncp])
+      #print(z_hat1.shape)
+      assert(z_hat1.shape[1] == model.Nzmf)
       for i in range(model.Nzmf):
-         features_hat[0,i*model.dec_stride:(i+1)*model.dec_stride,:] = model.core_decoder_statefull(z_hat[:,i:i+1,:])
-   """
+         features_hat = torch.cat([features_hat, model.core_decoder_statefull(z_hat1[:,i:i+1,:])],dim=1)
+      z_hat = torch.cat([z_hat, z_hat1],dim=1)
+      #print(f,features_hat.shape,z_hat.shape)
 else:
    features_hat, z_hat = model.receiver(rx)
 
