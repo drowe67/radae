@@ -629,7 +629,7 @@ class RADAE(nn.Module):
                 rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
 
         # Optional "coarse" magnitude estimation and correction based on mean of all pilots across sequence. Unlike 
-        # regular PSK, ML network is sensitive to magnitude shifts.  We can't use the average mangnitude of the non-pilot symbols
+        # regular PSK, ML network is sensitive to magnitude shifts.  We can't use the average magnitude of the non-pilot symbols
         # as they have unknown amplitudes. TODO: For a practical, real world implementation, make this a frame by frame AGC type
         # algorithm, e.g. IIR smoothing of the RMS mag of each frames pilots 
         if self.coarse_mag:
@@ -832,8 +832,7 @@ class RADAE(nn.Module):
             
             # inference time correction of freq offset, allows us to produce a rx.f32 file
             # with a freq offset while decoding correcting here
-            if self.correct_freq_offset:
-                assert self.freq_offset
+            if self.freq_offset and self.correct_freq_offset:
                 rx_dash = rx_dash*torch.conj(lin_phase)
                 
             # remove cyclic prefix

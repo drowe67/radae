@@ -270,7 +270,7 @@ class acquisition():
 
 # Single modem frame streaming receiver. TODO: is there a better way to pass a bunch of constants around?
 class receiver_one():
-   def __init__(self,latent_dim,Fs,M,Ncp,Wfwd,Nc,Ns,w,P,bottleneck,pilot_gain,time_offset):
+   def __init__(self,latent_dim,Fs,M,Ncp,Wfwd,Nc,Ns,w,P,bottleneck,pilot_gain,time_offset,coarse_mag):
       self.latent_dim = latent_dim
       self.Fs = Fs
       self.M = M
@@ -283,7 +283,8 @@ class receiver_one():
       self.bottleneck = bottleneck
       self.pilot_gain = pilot_gain
       self.time_offset = time_offset
-
+      self.coarse_mag = coarse_mag
+      
    # One frame version of do_pilot_eq() for streaming implementation
    def do_pilot_eq_one(self, num_modem_frames, rx_sym_pilots):
       Nc = self.Nc 
@@ -292,7 +293,7 @@ class receiver_one():
       # First, estimate the (complex) value of each received pilot symbol
       rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
       # 3-pilot least squares fit across frequency, ref: freedv_low.pdf
-      for i in torch.arange(num_modem_frames):
+      for i in torch.arange(num_modem_frames+1):
          for c in range(Nc):
                c_mid = c
                # handle edge carriers, alternative is extra "wingman" pilots
@@ -320,11 +321,12 @@ class receiver_one():
 
       # TODO: we may need to average coarse_mag estimate across several frames, especially for multipath channels
       # est RMS magnitude
-      mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
-      if self.bottleneck == 3:
+      if self.coarse_mag:
+         mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
+         if self.bottleneck == 3:
             mag = mag*torch.abs(self.P[0])/self.pilot_gain
-      #print(f"coarse mag: {mag:f}", file=sys.stderr)
-      rx_sym_pilots = rx_sym_pilots/mag
+         #print(f"coarse mag: {mag:f}", file=sys.stderr)
+         rx_sym_pilots = rx_sym_pilots/mag
 
       return rx_sym_pilots
    

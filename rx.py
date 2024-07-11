@@ -225,7 +225,8 @@ rx = rx.to(device)
 
 if args.rx_one:
    receiver = receiver_one(model.latent_dim,model.Fs,model.M,model.Ncp,model.Wfwd,
-                           model.Nc,model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain,model.time_offset)
+                           model.Nc,model.Ns,model.w,model.P,model.bottleneck,
+                           model.pilot_gain,model.time_offset,model.coarse_mag)
    Nmodem_frames = (len(rx)-(M+Ncp))//Nmf
    features_hat = torch.empty(1,0,model.feature_dim)
    z_hat = torch.empty(1,0,model.latent_dim)

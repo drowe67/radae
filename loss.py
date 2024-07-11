@@ -106,7 +106,7 @@ if args.loss_test > 0.0 or args.acq_time_test:
 if args.features_hat2:
    min_loss2, min_start2, loss2 = find_loss(args.features, args.features_hat2)
    if args.compare:
-      print(np.abs(min_loss-min_loss2))
+      print(f"loss1: {min_loss:5.3f} loss2: {min_loss2:5.3f} delta: {np.abs(min_loss-min_loss2):5.3f}")
       if np.abs(min_loss-min_loss2) < 0.01:
          print("PASS")
 
