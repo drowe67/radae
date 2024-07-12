@@ -85,7 +85,9 @@ assert model.per_carrier_eq
 assert model.eq_mean6 == False   # we are using least squares algorithm
 assert model.phase_mag_eq == False
 assert model.coarse_mag
-receiver = receiver_one(model.latent_dim,model.Fs,model.M,model.Ncp,model.Wfwd,model.Nc,model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain,model.time_offset)
+receiver = receiver_one(model.latent_dim,model.Fs,model.M,model.Ncp,model.Wfwd,model.Nc,
+                        model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain,
+                        model.time_offset,model.coarse_mag)
 
 M = model.M
 Ncp = model.Ncp
