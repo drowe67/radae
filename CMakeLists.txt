@@ -198,6 +198,16 @@ add_test(NAME radae_rx_mpp
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_end 300")
                        set_tests_properties(radae_rx_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# Low SNR AWGN ~5 Hz/min = 5/60 Hz/s freq drift
+add_test(NAME radae_rx_dfdt
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --EbNodB 1 --freq_offset 13 --df_dt 0.1 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
+                       --prepend_noise 1 --append_noise 3 --end_of_over; \
+                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 0.8")
+                       set_tests_properties(radae_rx_dfdt PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 # evaluate.sh -----------------------------------------------------------------------------------------------
 
 # TODO test evaluate.sh to prevent bit rot

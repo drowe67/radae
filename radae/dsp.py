@@ -319,8 +319,7 @@ class receiver_one():
                rx_ch_angle = torch.angle(rx_ch)
                rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
 
-      # TODO: we may need to average coarse_mag estimate across several frames, especially for multipath channels
-      # est RMS magnitude
+      # est ampl across one just two sets of pilots seems to work OK (loss isn't impacted)
       if self.coarse_mag:
          mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
          if self.bottleneck == 3:
