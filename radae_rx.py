@@ -173,8 +173,8 @@ while True:
             z_hat_log = torch.cat([z_hat_log,z_hat])
 
    if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
-      print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:5.2f} ",end='', file=sys.stderr)
-      print(f"Dtmax12: {acq.Dtmax12:5.2f} {acq.Dtmax12_eoo:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
+      print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ",end='', file=sys.stderr)
+      print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
 
    # iterate state machine  
    next_state = state
