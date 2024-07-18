@@ -187,7 +187,7 @@ class acquisition():
 
       return candidate, tmax, fmax
    
-   def refine(self, rx, tmax, fmax, ffine_range):
+   def refine(self, rx, tmax, fmax, tfine_range, ffine_range):
       # TODO: should search over a fine timing range as well, e.g. if we use an 
       # under sampled to save CPU in detect_pilots()
       Fs = self.Fs
@@ -195,29 +195,35 @@ class acquisition():
       M = self.M
       Nmf = self.Nmf
    
-      Dt1 = np.zeros(len(ffine_range), dtype=np.csingle)
-      Dt2 = np.zeros(len(ffine_range), dtype=np.csingle)
-      f_ind = 0
+      Dt1 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
+      Dt2 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
+      t_ind = 0
       Dtmax = 0
 
-      for f in ffine_range:
-         w = 2*np.pi*f/Fs
-         # current pilot samples at start of this modem frame
-         # TODO should this be using |Dt|?
-         w_vec = np.exp(-1j*w*np.arange(M))
-         Dt1[f_ind] = np.dot(np.conj(w_vec*rx[tmax:tmax+M]),p)
-         # next pilot samples at end of this modem frame
-         w_vec = np.exp(-1j*w*(Nmf+np.arange(M)))
-         Dt2[f_ind] = np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),p)
+      for t in tfine_range:
+         f_ind = 0
+         for f in ffine_range:
+            w = 2*np.pi*f/Fs
+            # current pilot samples at start of this modem frame
+            # TODO should this be using |Dt|?
+            w_vec = np.exp(-1j*w*np.arange(M))
+            #print(f"t_ind: {t_ind:d} f_ind: {f_ind:d}")
+            Dt1[t_ind,f_ind] = np.dot(np.conj(w_vec*rx[t:t+M]),p)
+            # next pilot samples at end of this modem frame
+            w_vec = np.exp(-1j*w*(Nmf+np.arange(M)))
+            Dt2[t_ind,f_ind] = np.dot(np.conj(w_vec*rx[t+Nmf:t+Nmf+M]),p)
 
-         if np.abs(Dt1[f_ind]+Dt2[f_ind]) > Dtmax:
-            Dtmax = np.abs(Dt1[f_ind]+Dt2[f_ind])
-            fmax = f 
-         f_ind = f_ind + 1
+            if np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind]) > Dtmax:
+               Dtmax = np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind])
+               tmax = t
+               tmax_ind = t_ind
+               fmax = f 
+            f_ind = f_ind + 1
+         t_ind = t_ind + 1
+       
+      self.D_fine = Dt1[tmax_ind,:]
       
-      self.D_fine = Dt1
-      
-      return fmax
+      return tmax, fmax
    
    # spot check using current freq and timing offset.  
    def check_pilots(self, rx, tmax, fmax):

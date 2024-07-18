@@ -145,7 +145,9 @@ while True:
    else:
       # we're in sync, so check we can still see pilots and run receiver
       ffine_range = np.arange(fmax-0.5,fmax+0.5,0.1)
-      fmax = 0.9*fmax+0.1*acq.refine(rx_buf, tmax, fmax, ffine_range)
+      tfine_range = np.arange(tmax-1,tmax+2)
+      tmax,fmax_hat = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
+      fmax = 0.9*fmax + 0.1*fmax_hat
       candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
       if not endofover:
          # correct frequency offset, note we preserve state of phase
@@ -191,7 +193,8 @@ while True:
             acquired = True
             valid_count = Nmf_unsync
             ffine_range = np.arange(fmax-10,fmax+10,0.25)
-            fmax = acq.refine(rx_buf, tmax, fmax, ffine_range)
+            tfine_range = np.arange(tmax-1,tmax+2)
+            tmax,fmax = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
       else:
          next_state = "search"
    elif state == "sync":

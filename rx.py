@@ -193,7 +193,9 @@ if args.pilots:
 
    # frequency refinement, use two sets of pilots
    ffine_range = np.arange(fmax-10,fmax+10,0.25)
-   fmax = acq.refine(rx, tmax, fmax, ffine_range)
+   tfine_range = np.arange(tmax-1,tmax+2)
+   
+   tmax,fmax = acq.refine(rx, tmax, fmax, tfine_range, ffine_range)
    print(f"refined fmax: {fmax:f}")
 
    if args.plots:
