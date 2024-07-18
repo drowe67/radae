@@ -210,7 +210,7 @@ add_test(NAME radae_rx_dfdt
 
 # ability to handle small differences in sample rate between tx and rx (delta Fs)
 add_test(NAME radae_rx_dfs
-        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --EbNodB 10 --freq_offset 11 \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
                        cat rx.f32 | python3 f32toint16.py --scale 8192 | sox -t .s16 -r 8000 -c 2 - -t .s16 -r 8001 -c 2 - | python3 int16tof32.py > rx_.f32; \

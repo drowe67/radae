@@ -158,7 +158,7 @@ Automates joint simulation of SSB and RADAE, generates wave files and spectrogra
    ./evaluate.sh model18/checkpoints/checkpoint_epoch_100.pth wav/peter.wav 240524 9 --bottleneck 3 -d --peak --latent_dim 40 --g_file g_mpp.f32
    ```
 
-# Seperate Tx and Rx
+# Simulation of Seperate Tx and Rx
 
 We separate the system into a transmitter `inference.py` and stand alone receiver `rx.py`.  These examples test the OFDM waveform, including pilot symbol insertion, cyclic prefix, least squares phase EQ, and coarse magnitude EQ.
 
@@ -246,6 +246,15 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
    ./ota_test.sh -d -r ~/Downloads/kiwisdr_usb.wav
    ```
    The output will be a `~/Downloads/kiwisdr_usb_radae.wav` and `~/Downloads/kiwisdr_usb_ssb.wav`, which you can listen to and compare, `~/Downloads/kiwisdr_usb_spec.png` is the spectrogram.  The C/No will be estimated and displayed but this is unreliable at present for non-AWGN channels.  The `ota_test.sh` script is capable of automatically recording from KiwiSDRs, however this code hasn't been debugged yet.
+
+# Streaming
+
+## Profiling example
+
+```
+ctest -V -R radae_rx_basic
+cat rx.f32 | python3 -m cProfile -s time radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 --no_stdout | more
+```
 
 # Training
 

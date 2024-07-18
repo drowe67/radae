@@ -56,7 +56,9 @@ parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matri
 parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
 parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
 parser.add_argument('-v', type=int, default=2, help='Verbose level (default 2)')
+parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
 parser.set_defaults(bpf=True)
+parser.set_defaults(use_stdout=True)
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -131,88 +133,85 @@ rx_phase = 1 + 1j*0
 rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
 z_hat_log = torch.zeros(0,model.Nzmf,model.latent_dim)
 
-while True:
-   buffer = sys.stdin.buffer.read(Nmf*struct.calcsize("ff"))
-   if len(buffer) != Nmf*struct.calcsize("ff"):
-      break
-   buffer_complex = np.frombuffer(buffer,np.csingle)
-   if args.bpf:
-      buffer_complex = bpf.bpf(buffer_complex)
-   rx_buf[:Nmf+M+Ncp] = rx_buf[Nmf:]                           # out with the old
-   rx_buf[Nmf+M+Ncp:] = buffer_complex                         # in with the new
-   if state == "search" or state == "candidate":
-      candidate, tmax, fmax = acq.detect_pilots(rx_buf)
-   else:
-      # we're in sync, so check we can still see pilots and run receiver
-      ffine_range = np.arange(fmax-0.5,fmax+0.5,0.1)
-      tfine_range = np.arange(tmax-1,tmax+2)
-      tmax,fmax_hat = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
-      fmax = 0.9*fmax + 0.1*fmax_hat
-      candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
-      if not endofover:
-         # correct frequency offset, note we preserve state of phase
-         # TODO do we need preserve state of phase?  We're passing entire vector and there isn't any memory (I think)
-         w = 2*np.pi*fmax/Fs
-         for n in range(Nmf+M+Ncp):
-            rx_phase = rx_phase*np.exp(-1j*w)
-            rx_phase_vec[n] = rx_phase
-         rx = torch.tensor(rx_buf[tmax-Ncp:tmax-Ncp+Nmf+M+Ncp]*rx_phase_vec, dtype=torch.complex64)
-         # run through RADAE receiver DSP
-         z_hat = receiver.receiver_one(rx)
-         # decode z_hat to features
-         assert(z_hat.shape[1] == model.Nzmf)
-         features_hat = torch.zeros(1,model.dec_stride*z_hat.shape[1],model.feature_dim)
-         for i in range(model.Nzmf):
-            features_hat[0,i*model.dec_stride:(i+1)*model.dec_stride,:] = model.core_decoder_statefull(z_hat[:,i:i+1,:])
-         # add unused features and send to stdout
-         features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
-         features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
-         sys.stdout.buffer.write(features_hat)
-         #sys.stdout.flush()
-         if len(args.write_latent):
-            z_hat_log = torch.cat([z_hat_log,z_hat])
-
-   if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
-      print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ",end='', file=sys.stderr)
-      print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
-
-   # iterate state machine  
-   next_state = state
-   prev_state = state
-   if state == "search":
-      if candidate:
-         next_state = "candidate"
-         tmax_candidate = tmax
-         valid_count = 1
-   elif state == "candidate":
-      # look for 3 consecutive matches with about the same timing offset  
-      if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
-         valid_count = valid_count + 1
-         if valid_count > 3:
-            next_state = "sync"
-            acquired = True
-            valid_count = Nmf_unsync
-            ffine_range = np.arange(fmax-10,fmax+10,0.25)
-            tfine_range = np.arange(tmax-1,tmax+2)
-            tmax,fmax = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
+with torch.inference_mode():
+   while True:
+      buffer = sys.stdin.buffer.read(Nmf*struct.calcsize("ff"))
+      if len(buffer) != Nmf*struct.calcsize("ff"):
+         break
+      buffer_complex = np.frombuffer(buffer,np.csingle)
+      if args.bpf:
+         buffer_complex = bpf.bpf(buffer_complex)
+      rx_buf[:Nmf+M+Ncp] = rx_buf[Nmf:]                           # out with the old
+      rx_buf[Nmf+M+Ncp:] = buffer_complex                         # in with the new
+      if state == "search" or state == "candidate":
+         candidate, tmax, fmax = acq.detect_pilots(rx_buf)
       else:
-         next_state = "search"
-   elif state == "sync":
-      if candidate:
-         valid_count = Nmf_unsync
-      else:
-         valid_count -= 1
-         if valid_count == 0:
+         # we're in sync, so check we can still see pilots and run receiver
+         ffine_range = np.arange(fmax-0.5,fmax+0.5,0.1)
+         tfine_range = np.arange(tmax-1,tmax+2)
+         tmax,fmax_hat = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
+         fmax = 0.9*fmax + 0.1*fmax_hat
+         candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
+         if not endofover:
+            # correct frequency offset, note we preserve state of phase
+            # TODO do we need preserve state of phase?  We're passing entire vector and there isn't any memory (I think)
+            w = 2*np.pi*fmax/Fs
+            for n in range(Nmf+M+Ncp):
+               rx_phase = rx_phase*np.exp(-1j*w)
+               rx_phase_vec[n] = rx_phase
+            rx = torch.tensor(rx_buf[tmax-Ncp:tmax-Ncp+Nmf+M+Ncp]*rx_phase_vec, dtype=torch.complex64)
+            # run through RADAE receiver DSP
+            z_hat = receiver.receiver_one(rx)
+            # decode z_hat to features
+            assert(z_hat.shape[1] == model.Nzmf)
+            features_hat = torch.zeros(1,model.dec_stride*z_hat.shape[1],model.feature_dim)
+            for i in range(model.Nzmf):
+               features_hat[0,i*model.dec_stride:(i+1)*model.dec_stride,:] = model.core_decoder_statefull(z_hat[:,i:i+1,:])
+            # add unused features and send to stdout
+            features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
+            features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
+            if args.use_stdout:
+               sys.stdout.buffer.write(features_hat)
+            #sys.stdout.flush()
+            if len(args.write_latent):
+               z_hat_log = torch.cat([z_hat_log,z_hat])
+
+      if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
+         print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ",end='', file=sys.stderr)
+         print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
+
+      # iterate state machine  
+      next_state = state
+      prev_state = state
+      if state == "search":
+         if candidate:
+            next_state = "candidate"
+            tmax_candidate = tmax
+            valid_count = 1
+      elif state == "candidate":
+         # look for 3 consecutive matches with about the same timing offset  
+         if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
+            valid_count = valid_count + 1
+            if valid_count > 3:
+               next_state = "sync"
+               acquired = True
+               valid_count = Nmf_unsync
+               ffine_range = np.arange(fmax-10,fmax+10,0.25)
+               tfine_range = np.arange(tmax-1,tmax+2)
+               tmax,fmax = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
+         else:
             next_state = "search"
-      if endofover:
-         next_state = "search"
-   state = next_state
-   mf += 1
-
-
-if not acquired:
-   print("Acquisition failed....", file=sys.stderr)
-   quit()
+      elif state == "sync":
+         if candidate:
+            valid_count = Nmf_unsync
+         else:
+            valid_count -= 1
+            if valid_count == 0:
+               next_state = "search"
+         if endofover:
+            next_state = "search"
+      state = next_state
+      mf += 1
 
 if len(args.write_latent) or len(args.ber_test):
    z_hat = z_hat_log.cpu().detach().numpy().flatten().astype('float32')

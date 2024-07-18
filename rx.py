@@ -148,7 +148,7 @@ if args.pilots:
          acq.Dt1.tofile(fD)
       
       # post process with a state machine that looks for 3 consecutive matches with about the same timing offset      
-      print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:5.2f} Dtmax12: {acq.Dtmax12:5.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
+      print(f"{mf:2d} state: {state:10s} Dthresh: {acq.Dthresh:8.2f} Dtmax12: {acq.Dtmax12:8.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}")
 
       next_state = state
       if state == "search":
