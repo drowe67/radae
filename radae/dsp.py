@@ -290,6 +290,20 @@ class receiver_one():
       self.pilot_gain = pilot_gain
       self.time_offset = time_offset
       self.coarse_mag = coarse_mag
+
+      # pre-compute some matrices
+      self.Pmat = torch.empty(Nc,2,3,dtype=torch.complex64)
+      for c in range(Nc):
+         c_mid = c
+         # handle edge carriers, alternative is extra "wingman" pilots
+         if c == 0:
+            c_mid = 1
+         if c == Nc-1:
+            c_mid = Nc-2
+         local_path_delay_s = 0.0025      # guess at actual path delay, means a little bit of noise on scatter
+         a = local_path_delay_s*self.Fs
+         A = torch.tensor([[1, torch.exp(-1j*self.w[c_mid-1]*a)], [1, torch.exp(-1j*self.w[c_mid]*a)], [1, torch.exp(-1j*self.w[c_mid+1]*a)]])
+         self.Pmat[c] = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
       
    # One frame version of do_pilot_eq() for streaming implementation
    def do_pilot_eq_one(self, num_modem_frames, rx_sym_pilots):
@@ -309,11 +323,8 @@ class receiver_one():
                   c_mid = Nc-2
                local_path_delay_s = 0.0025      # guess at actual path delay, means a little bit of noise on scatter
                a = local_path_delay_s*self.Fs
-               # TODO: I think A & P can be computed off line
-               A = torch.tensor([[1, torch.exp(-1j*self.w[c_mid-1]*a)], [1, torch.exp(-1j*self.w[c_mid]*a)], [1, torch.exp(-1j*self.w[c_mid+1]*a)]])
-               P = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
                h = torch.reshape(rx_sym_pilots[0,0,Ns*i,c_mid-1:c_mid+2]/self.P[c_mid-1:c_mid+2],(3,1))
-               g = torch.matmul(P,h)
+               g = torch.matmul(self.Pmat[c],h)
                rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
 
       # Linearly interpolate between two pilots to EQ data symbol phase
