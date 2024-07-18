@@ -139,7 +139,7 @@ function process_rx {
     # extract chirp at start and estimate C/No
     rx_chirp=$(mktemp)
     sox $rx -t .s16 ${rx_chirp}.raw trim 0 4
-    python3 int16tof32.py ${rx_chirp}.raw ${rx_chirp}.f32 --zeropad
+    cat  ${rx_chirp}.raw | python3 int16tof32.py --zeropad > ${rx_chirp}.f32
     python3 est_CNo.py ${rx_chirp}.f32
 
     # 4 sec chirp - 1 sec silence - x sec SSB - 1 sec silence - x sec RADAE
@@ -150,7 +150,7 @@ function process_rx {
     rx_radae=$(mktemp)
     sox $rx ${filename}_ssb.wav trim 5 $x
     sox $rx -t .s16 ${rx_radae}.raw trim $start_radae
-    python3 int16tof32.py ${rx_radae}.raw ${rx_radae}.f32 --zeropad
+    cat ${rx_radae}.raw | python3 int16tof32.py  --zeropad > ${rx_radae}.f32
     ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 ${filename}_radae.wav --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16
 }
 

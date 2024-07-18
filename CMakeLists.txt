@@ -114,7 +114,7 @@ add_test(NAME ota_test_mpp
 add_test(NAME acq_noise
         COMMAND sh -c "dd if=/dev/zero of=/dev/stdout bs=16000 count=10 | \
                        ${CODEC2_DEV_BUILD_DIR}/src/ch - rx.int16 --No -20; \  # real int16 output
-                       python3 int16tof32.py rx.int16 rx.f32 --zeropad; \     # ..IQIQI.. .f32 with Q == 0
+                       cat rx.int16 | python3 int16tof32.py --zeropad > rx.f32; \     # ..IQIQI.. .f32 with Q == 0
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
                        --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16")
                        set_tests_properties(acq_noise PROPERTIES PASS_REGULAR_EXPRESSION "Acquisition failed")
