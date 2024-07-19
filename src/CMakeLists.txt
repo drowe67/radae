@@ -1,7 +1,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${OPUS_DIR}/dnn ${OPUS_DIR}/celt ${OPUS_DIR}/include)
 
 # build static library from previously built opus object files
-# TODO (a) pull git repo & build opus rather than separate step (b) build libopus.a from sources opus/*.mk files
+# TODO (a) pull git repo & build opus rather than separate step (b) use list of sources opus/*.mk files (or maybe *.o)
 if(NOT EXISTS ${OPUS_DIR}/libopus.a)
     message(STATUS "Building libopus.a")
     execute_process(COMMAND ${CMAKE_SOURCE_DIR}/build_libopus.sh ${OPUS_DIR}
