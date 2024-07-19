@@ -6,7 +6,10 @@ if(NOT EXISTS ${OPUS_DIR}/libopus.a)
     message(STATUS "Building libopus.a")
     execute_process(COMMAND ${CMAKE_SOURCE_DIR}/build_libopus.sh ${OPUS_DIR}
                     COMMAND_ECHO STDOUT
-                    COMMAND_ERROR_IS_FATAL ANY)
+                    RESULT_VARIABLE ret)
+    if(ret EQUAL "1")
+        message(FATAL_ERROR "Error building libopus.a")
+    endif()
 else()
     message(STATUS "libopus.a already exists")
 endif()
