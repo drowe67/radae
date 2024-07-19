@@ -93,15 +93,21 @@ make ch mksine tlininterp
 
 # Automated Tests
 
-The `cmake/ctest` framework is being used as a test framework.  Note at this stage there is no actual code that gets built (so no `make` step). The command lines in `CmakeLists.txt` are a good source of examples, if you are interested in running the code in this repo.
+The `cmake/ctest` framework is being used as a test framework. The command lines in `CmakeLists.txt` are a good source of examples, if you are interested in running the code in this repo.
 
 To configure and run the cests:
 ```
 cd radae
-cmake .
+mkdir build
+cd build
+cmake ..
+make
 ctest
 ```
-To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to run in verbose mode `ctest -V -R inference_model5`.
+To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to run in verbose mode `ctest -V -R inference_model5`.  You can change the paths to `codec2-dev` and `opus` on the `cmake` command line:
+```
+cmake -DOPUS_DIR=~/tmp/opus -DCODEC2_DEV=~/tmp/codec2-dev ..
+```
 
 # Inference
 
