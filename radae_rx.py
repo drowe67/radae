@@ -78,8 +78,7 @@ checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
 model.core_decoder_statefull_load_state_dict()
-
-model.to(device) # TODO do we need this?
+model.eval()
 
 # check a bunch of model options we rely on for receiver to work
 assert model.pilots and model.pilot_eq
@@ -164,9 +163,7 @@ with torch.inference_mode():
             z_hat = receiver.receiver_one(rx)
             # decode z_hat to features
             assert(z_hat.shape[1] == model.Nzmf)
-            features_hat = torch.zeros(1,model.dec_stride*z_hat.shape[1],model.feature_dim)
-            for i in range(model.Nzmf):
-               features_hat[0,i*model.dec_stride:(i+1)*model.dec_stride,:] = model.core_decoder_statefull(z_hat[:,i:i+1,:])
+            features_hat = model.core_decoder_statefull(z_hat)
             # add unused features and send to stdout
             features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
             features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')

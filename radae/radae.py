@@ -108,7 +108,7 @@ class MyConv(nn.Module):
         conv_in = torch.cat([torch.zeros_like(x[:,0:self.dilation,:], device=device), x], -2).permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
-# Wrapper for GRU layer that maintains state internally, processes (1,1,input_dim) at a time
+# Wrapper for GRU layer that maintains state internally
 class GRUStatefull(nn.Module):
     def __init__(self, input_dim, hidden_dim, batch_first):
         super(GRUStatefull, self).__init__()
@@ -120,7 +120,7 @@ class GRUStatefull(nn.Module):
         gru_out,self.states = self.gru(x,self.states)
         return gru_out
 
-# Wrapper for conv1D layer that maintains state internally, processes (1,1,input_dim) at a time
+# Wrapper for conv1D layer that maintains state internally
 class Conv1DStatefull(nn.Module):
     def __init__(self, input_dim, output_dim, dilation=1):
         super(Conv1DStatefull, self).__init__()
@@ -128,13 +128,13 @@ class Conv1DStatefull(nn.Module):
         self.output_dim = output_dim
         self.dilation=dilation
         self.kernel_size = 2
-        self.states = torch.zeros(1,self.kernel_size,self.input_dim)
+        self.states = torch.zeros(1,self.kernel_size-1,self.input_dim)
         self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=self.kernel_size, padding='valid', dilation=dilation)
-    def forward(self, x):
 
-        self.states[0,0:self.kernel_size-1,:] = self.states[0,1:self.kernel_size,:]
-        self.states[0,1,:] = x
-        conv_in = self.states.permute(0, 2, 1)
+    def forward(self, x):
+        conv_in = torch.cat([self.states,x],dim=1)
+        self.states = x[:,-1:,:]
+        conv_in = conv_in.permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
 #Gated Linear Unit activation
@@ -298,8 +298,8 @@ class CoreDecoder(nn.Module):
 
         return features
 
-# Decode symbols to reconstruct the vocoder features, statefull version that processes one
-# z vector at a time, and maintains it's own internal state
+# Decode symbols to reconstruct the vocoder features. Statefull version that can processes sequences 
+# as short as one z vector, and maintains it's own internal state
 class CoreDecoderStatefull(nn.Module):
 
     FRAMES_PER_STEP = 4
@@ -344,9 +344,6 @@ class CoreDecoderStatefull(nn.Module):
 
     def forward(self, z):
 
-        # we can only process 40ms at a time
-        assert z.shape == (1,1,self.dense_1.in_features)
-
         x = n(torch.tanh(self.dense_1(z)))
         x = torch.cat([x, n(self.glu1(n(self.gru1(x))))], -1)
         x = torch.cat([x, n(self.conv1(x))], -1)
@@ -360,7 +357,7 @@ class CoreDecoderStatefull(nn.Module):
         x = torch.cat([x, n(self.conv5(x))], -1)
         x = self.output(x)
 
-        features = torch.reshape(x,(1,self.FRAMES_PER_STEP,self.output_dim))
+        features = torch.reshape(x,(1,z.shape[1]*self.FRAMES_PER_STEP,self.output_dim))
         return features
 
 class RADAE(nn.Module):

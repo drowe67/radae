@@ -110,9 +110,9 @@ add_test(NAME ota_test_mpp
 
 # Acquisition tests ------------------------------------------------------------------------------------
 
-# noise-only test, should not acquire for 120s (currently set at 10s as it's too slow)
+# noise-only test, should not acquire for 120s (currently set at 30s as it's too slow)
 add_test(NAME acq_noise
-        COMMAND sh -c "dd if=/dev/zero of=/dev/stdout bs=16000 count=10 | \
+        COMMAND sh -c "dd if=/dev/zero of=/dev/stdout bs=16000 count=30 | \
                        ${CODEC2_DEV_BUILD_DIR}/src/ch - rx.int16 --No -20; \  # real int16 output
                        cat rx.int16 | python3 int16tof32.py --zeropad > rx.f32; \     # ..IQIQI.. .f32 with Q == 0
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
@@ -217,6 +217,15 @@ add_test(NAME radae_rx_dfs
                        cat rx_.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rxs_out.f32; \
                        python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_rx_dfs PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# profiles a run with a 50 second file (no pass/fail, run with -V to get a rough idea of execution time)
+add_test(NAME radae_rx_profile
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --EbNodB 1 --freq_offset 13 --df_dt 0.1 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
+                       --prepend_noise 1 --append_noise 3 --end_of_over; \
+                       cat rx.f32 | python3 -m cProfile -s time radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 0 --no_stdout | head -n20")
+
 
 # evaluate.sh -----------------------------------------------------------------------------------------------
 
