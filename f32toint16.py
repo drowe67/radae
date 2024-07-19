@@ -1,4 +1,6 @@
 """
+   Converts complex f32s on stdin to int16 on stdout
+
 /* Copyright (c) 2024 David Rowe */
    
 /*
@@ -27,21 +29,24 @@
 */
 """
 
-import os
+import sys,struct
 import argparse
 import numpy as np
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('f32', type=str, help='path to output .f32 file')
-parser.add_argument('int16', type=str, help='path to input .int16 file')
 parser.add_argument('--scale', type=float, default=32767.0, help='int16 representation of float 1.0')
 parser.add_argument('--real', action='store_true', help='just output real (I) channel')
 args = parser.parse_args()
 
-x = np.fromfile(args.f32, dtype=np.float32)
-x = x*args.scale
-x = x.astype(np.int16)
-if args.real:
-    x = x[::2]
-x.tofile(args.int16)
+while True:
+    buffer = sys.stdin.buffer.read(struct.calcsize("ff"))
+    if len(buffer) != struct.calcsize("ff"):
+      break
+    x = np.frombuffer(buffer,np.float32)
+
+    x = x*args.scale
+    x = x.astype(np.int16)
+    if args.real:
+        x = x[::2]
+    sys.stdout.buffer.write(x) 

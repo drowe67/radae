@@ -5,21 +5,24 @@
 pkg load statistics signal;
 
 function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
-    z=load_f32(z_fn,1);
-    s=z(1:2:end)+j*z(2:2:end);
-    figure(1); clf; plot(s,'.'); title('Scatter');
-    mx = max(abs(z))*1.5; axis([-mx mx -mx mx])
-    if length(png_fn)
+    if length(z_fn)
+      z=load_f32(z_fn,1);
+      s=z(1:2:end)+j*z(2:2:end);
+      figure(1); clf; plot(s,'.'); title('Scatter');
+      mx = max(abs(z))*1.5; axis([-mx mx -mx mx])
+      if length(png_fn)
         print("-dpng",sprintf("%s_scatter.png",png_fn));
-    end
-    figure(2); clf;
-    [nn cc] = hist3([real(s) imag(s)],[25 25]);
-    mesh(cc{1},cc{2},nn); title('Scatter 3D');
-    if length(png_fn)
+      end
+      figure(2); clf;
+      [nn cc] = hist3([real(s) imag(s)],[25 25]);
+      mesh(cc{1},cc{2},nn); title('Scatter 3D');
+    
+      if length(png_fn)
         print("-dpng",sprintf("%s_scatter_3d.png",png_fn));
+      end
+      figure(3); clf; hist(abs(s));
     end
-    figure(3); clf; hist(abs(s));
- 
+    
     if length(rx_fn)
         rx=load_f32(rx_fn,1); 
         rx=rx(1:2:end)+j*rx(2:2:end); 
@@ -33,7 +36,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
         av = mean(abs(rx(1:160)).^2);
         PilotPAPRdB = 10*log10(peak/av);
         printf("Pav: %f PAPRdB: %5.2f PilotPAPRdB: %5.2f\n", av, PAPRdB, PilotPAPRdB);
-     end
+    end
 endfunction
 
 function multipath_example()

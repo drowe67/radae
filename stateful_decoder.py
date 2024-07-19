@@ -1,9 +1,8 @@
 """
-/* Copyright (c) 2024 modifications for radio autoencoder project
-   by David Rowe */
-   
-/* Copyright (c) 2022 Amazon
-   Written by Jan Buethe */
+
+   Compares stateful decoder (that operates one frame at a time) to 
+   vanilla decoder.
+
 /*
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions
@@ -32,7 +31,6 @@
 
 import os
 import argparse
-from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -59,37 +57,17 @@ num_used_features = 20
 model = RADAE(num_features, latent_dim, 100.0)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
-
 # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+model.core_decoder_statefull_load_state_dict()
 
-# some of the layer names have been changed due to use of custom GRUStatefull layer
-def key_transformation(old_key):
-   for gru in range(1,6):
-      if old_key == f"module.gru{gru:d}.weight_ih_l0":
-         return f"module.gru{gru:d}.gru.weight_ih_l0"
-      if old_key == f"module.gru{gru:d}.weight_hh_l0":
-         return f"module.gru{gru:d}.gru.weight_hh_l0"
-      if old_key == f"module.gru{gru:d}.bias_ih_l0":
-         return f"module.gru{gru:d}.gru.bias_ih_l0"
-      if old_key == f"module.gru{gru:d}.bias_hh_l0":
-         return f"module.gru{gru:d}.gru.bias_hh_l0"
-   return old_key
-
-state_dict = model.core_decoder.state_dict()
-new_state_dict = OrderedDict()
-for key, value in state_dict.items():
-   new_key = key_transformation(key)
-   new_state_dict[new_key] = value
-   
-model.core_decoder_statefull.load_state_dict(new_state_dict)
+model2 = RADAE(num_features, latent_dim, 100.0)
+model2.load_state_dict(checkpoint['state_dict'], strict=False)
+model2.core_decoder_statefull_load_state_dict()
 
 # dataloader
-feature_file = args.features
-features_in = np.reshape(np.fromfile(feature_file, dtype=np.float32), (1, -1, nb_total_features))
+features_in = np.reshape(np.fromfile(args.features, dtype=np.float32), (1, -1, nb_total_features))
 nb_features_rounded = model.num_10ms_times_steps_rounded_to_modem_frames(features_in.shape[1])
-features = features_in[:,:nb_features_rounded,:]
-features = features[:, :, :num_used_features]
-features = torch.tensor(features)
+features = torch.tensor(features_in[:,:nb_features_rounded,:num_used_features])
 print(f"Processing: {nb_features_rounded} feature vectors")
 
 if __name__ == '__main__':
@@ -98,22 +76,30 @@ if __name__ == '__main__':
    features = features.to(device)
    z = model.core_encoder(features)
    
-   # vanilla decoder that works on long sequences
+   # vanilla decoder that works on long sequences of z vectors
    features_hat = model.core_decoder(z)
    
-   # stateful decoder that works on one vector of features at a time, and preserves internal state
+   # Try stateful decoder on one z vector at a time
    features_hat_statefull = torch.zeros_like(features)
-   print(z.shape,features_hat_statefull.shape)
-
    for i in range(z.shape[1]):
-      features_hat_statefull[0,4*i:4*(i+1),:] = model.core_decoder_statefull(z[:,i:i+1,:])
-
+      features_hat_statefull[0,model.dec_stride*i:model.dec_stride*(i+1),:] = model2.core_decoder_statefull(z[:,i:i+1,:])
+   
+   # Try stateful decoder 'step' z vectors at a time   
+   features_hat_statefull3 = torch.empty(1,0,model.feature_dim)
+   step = 3
+   assert z.shape[1]//step == int(z.shape[1]/step)
+   for i in range(z.shape[1]//step):
+      f_hat = model.core_decoder_statefull(z[:,step*i:step*(i+1),:])
+      features_hat_statefull3 = torch.cat([features_hat_statefull3, f_hat],dim=1)   
+   
    loss = distortion_loss(features,features_hat).cpu().detach().numpy()[0]
    loss_statefull = distortion_loss(features,features_hat_statefull).cpu().detach().numpy()[0]
    loss_delta =  distortion_loss(features_hat,features_hat_statefull).cpu().detach().numpy()[0]
-   print(f"loss: {loss:5.3f} {loss_statefull:5.3f} {loss_delta:5.3f}")
+   loss_statefull3 = distortion_loss(features[:,:features_hat_statefull3.shape[1],:],features_hat_statefull3).cpu().detach().numpy()[0]
+   loss_delta3 =  distortion_loss(features_hat[:,:features_hat_statefull3.shape[1],:],features_hat_statefull3).cpu().detach().numpy()[0]
+   print(f"loss: {loss:5.3f} {loss_statefull:5.3f} {loss_delta:5.3f} {loss_statefull3:5.3f} {loss_delta3:5.3f} ")
    if args.loss_test > 0.0:
-      if loss_statefull < args.loss_test and loss_delta < 0.01:
+      if loss_statefull < args.loss_test and loss_delta < 0.01 and loss_delta3 < 0.01:
          print("PASS")
       else:
          print("FAIL")

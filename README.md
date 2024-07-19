@@ -4,7 +4,7 @@ A hybrid Machine Learning/DSP system for sending speech over HF radio channels. 
 
 ## Scope 
 
-The document is a log of the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  It is not intended to be a polished distribution for general use.  Unless otherwise stated, the code is this repo is intended to run only on Ubuntu Linux.
+This repo is intended to support the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  It is not intended to be a polished distribution for general use.  Unless otherwise stated, the code is this repo is intended to run only on Ubuntu Linux.
 
 # Quickstart
 
@@ -47,6 +47,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | test folder | Helper scripts for ctests |
 | loss.py | Tool to calculate mean loss between two feature files, a useful objective measure |
 | ml_pilot.py | Training low PAPR pilot sequence |
+| stateful_decoder.py/.sh | Inference test that compares stateful to vanilla decoder |
 
 # Installation
 
@@ -92,16 +93,15 @@ make ch mksine tlininterp
 
 # Automated Tests
 
-The cmake/ctest framework is being used as a test framework.  Note at this stage there is no actual code that gets built (so no `make` step). To configure and run the cests:
+The `cmake/ctest` framework is being used as a test framework.  Note at this stage there is no actual code that gets built (so no `make` step). The command lines in `CmakeLists.txt` are a good source of examples, if you are interested in running the code in this repo.
+
+To configure and run the cests:
 ```
 cd radae
 cmake .
 ctest
 ```
 To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to run in verbose mode `ctest -V -R inference_model5`.
-
-1. BER test to check simulation modem calibration `--ber_test`
-2. Fixed multipath channel test `--mp_test`.
 
 # Inference
 
@@ -158,7 +158,7 @@ Automates joint simulation of SSB and RADAE, generates wave files and spectrogra
    ./evaluate.sh model18/checkpoints/checkpoint_epoch_100.pth wav/peter.wav 240524 9 --bottleneck 3 -d --peak --latent_dim 40 --g_file g_mpp.f32
    ```
 
-# Seperate Tx and Rx
+# Simulation of Seperate Tx and Rx
 
 We separate the system into a transmitter `inference.py` and stand alone receiver `rx.py`.  These examples test the OFDM waveform, including pilot symbol insertion, cyclic prefix, least squares phase EQ, and coarse magnitude EQ.
 
@@ -246,6 +246,31 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
    ./ota_test.sh -d -r ~/Downloads/kiwisdr_usb.wav
    ```
    The output will be a `~/Downloads/kiwisdr_usb_radae.wav` and `~/Downloads/kiwisdr_usb_ssb.wav`, which you can listen to and compare, `~/Downloads/kiwisdr_usb_spec.png` is the spectrogram.  The C/No will be estimated and displayed but this is unreliable at present for non-AWGN channels.  The `ota_test.sh` script is capable of automatically recording from KiwiSDRs, however this code hasn't been debugged yet.
+
+# Streaming
+
+`radae_rx.py` is s streaming receiver that accepts IQ samples on stdin, and outputs z vectors on stdout.  To listen to an example decode:
+```
+./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32
+./radae_rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 -
+```
+To run just the core streaming decoder:
+```
+cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth > features_rx_out.f32
+```
+
+## Profiling example
+
+Total run time for 50 second `all/wav`:
+```
+ctest -R radae_rx_dfdt
+time cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 0 --no_stdout
+```
+Profiling each function, using shorter wave file:
+```
+ctest -V -R radae_rx_basic
+cat rx.f32 | python3 -m cProfile -s time radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 0 --no_stdout | more
+```
 
 # Training
 
@@ -348,12 +373,12 @@ Note the samples are generated with `evaluate.sh`, which runs inference at rate 
 
 1. Decide on offset from carrier frequency of SSB radio.  1500Hz offset like FreeDV, or some other fixed offset from carrier?  FreeDV offset is arbitrary and related to legacy modes so no need to continue this convention unless there is good reason.  What do other digital modes do?
 
-1. The Tx sigbal has poor sidelobe attenuation. Need a way to apply a Tx BPF without upsetting PAPR performance.  This must be done as part RADAE rather than letting end users guess as it's easy to mess up PAPR with ad-hoc filtering.  Could be (a) classical DSP at output (b) BPF in the training loop (how to handle delay?) (c) we could train network for a given stop band attenuation using an additional loss function term.
+1. The Tx signal has poor sidelobe attenuation. Need a way to apply a Tx BPF without upsetting PAPR performance.  This must be done as part RADAE rather than letting end users guess as it's easy to mess up PAPR with ad-hoc filtering.  Could be (a) classical DSP at output (b) BPF in the training loop (how to handle delay?) (c) we could train network for a given stop band attenuation using an additional loss function term.
 
-1. Working SNR measure, perhaps pilot based.  Maybe use ML for this, e.g. train against known SNR?
+1. Run time SNR measure.  Maybe use ML for this, e.g. train against known SNR?
 
 1. Roughness on david & peter samples.  Try combining quantized and unquantized features to figure out which features are causing most of the issues. Compare to passthrough, e.g. try increasing weight of voicing measure. It could be about the balance between low and high SNR. Either the range, or how the distortion gets weighted depending on the SNR. For example "flat" weighting would bias towards low SNR since the low SNR distortion tends to be a lot higher.
 
 1. Way to characterise channels, e.g. visualise impulse response, measure delay spread.
 
-1. Automated tests: (a) just run inference and make sure nothing is broken (b) run in didgital mode, measure BER at one point, multipath test mode, will check out a lot of code (like pilot stuff).
+1. Have a second pilot sequence that can be sent by Tx to signal "end of over" and provide a solid squelch, rather than using run on in state machine.

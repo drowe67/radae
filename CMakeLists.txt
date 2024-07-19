@@ -28,7 +28,7 @@ add_test(NAME inference_model18
          COMMAND sh -c "./inference.sh model18/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --latent-dim 40 \
                         --EbNodB 0 --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3")
 
-# Stateful decoder
+# Stateful decoder sanity test (no channel noise)
 add_test(NAME stateful_decoder
          COMMAND sh -c "./stateful_decoder.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav /dev/null --loss_test 0.2")
          set_tests_properties(stateful_decoder PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
@@ -80,7 +80,7 @@ add_test(NAME inference_loss_model18
 # Generate rx.f32 rate Fs IQ samples, run through stand alone rx/py receiver, measure loss and acquisition time
 add_test(NAME rx_loss_acq_time
         COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null --EbNodB 3  --freq_offset 10 \
-                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32; \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --correct_freq_offset --write_rx rx.f32; \
                        rm -f features_rx_out.f32; \
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
                        --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16; \
@@ -93,12 +93,14 @@ add_test(NAME chirp_mpp
                        set_tests_properties(chirp_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # Low SNR ota_test.sh, with chirp measurement, AWGN
+# FIXME: this will pass if either condition is true
 add_test(NAME ota_test_awgn
         COMMAND sh -c "./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -21")
                        set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
                        set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "CNodB PASS")
 
 
+# FIXME: this will pass if either condition is true
 # Low SNR ota_test.sh, with chirp measurement, MPP
 add_test(NAME ota_test_mpp
         COMMAND sh -c "./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -25 --mpp --freq -25")
@@ -108,11 +110,11 @@ add_test(NAME ota_test_mpp
 
 # Acquisition tests ------------------------------------------------------------------------------------
 
-# noise-only test, should not acquire for 120s (currently set at 10s as it's too slow)
+# noise-only test, should not acquire for 120s (currently set at 30s as it's too slow)
 add_test(NAME acq_noise
-        COMMAND sh -c "dd if=/dev/zero of=/dev/stdout bs=16000 count=10 | \
+        COMMAND sh -c "dd if=/dev/zero of=/dev/stdout bs=16000 count=30 | \
                        ${CODEC2_DEV_BUILD_DIR}/src/ch - rx.int16 --No -20; \  # real int16 output
-                       python3 int16tof32.py rx.int16 rx.f32 --zeropad; \     # ..IQIQI.. .f32 with Q == 0
+                       cat rx.int16 | python3 int16tof32.py --zeropad > rx.f32; \     # ..IQIQI.. .f32 with Q == 0
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
                        --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16")
                        set_tests_properties(acq_noise PROPERTIES PASS_REGULAR_EXPRESSION "Acquisition failed")
@@ -123,9 +125,108 @@ add_test(NAME acq_mpp
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 \
                        --EbNodB 3 --freq_offset 10 --g_file g_mpp.f32 --write_rx rx.f32; \
-                       ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null --pilots --pilot_eq --bottleneck 3 --cp 0.004 --acq_test --fmax_target 10")
+                       ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null --pilots --pilot_eq \
+                       --bottleneck 3 --cp 0.004 --acq_test --fmax_target 10")
                        set_tests_properties(acq_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # TODO: Add (a) interfering sine wave (b) stationary notch or perhaps slow fading
+
+# Streaming receiver --------------------------------------------------------------------------------------
+
+# complex bandpass filter
+add_test(NAME complex_bpf
+        COMMAND python3 -c "from radae import complex_bpf_test; complex_bpf_test(0)")
+                       set_tests_properties(complex_bpf PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# compare rx.py in with vanilla and stateful core decoder, tests just ML part of streaming receiver
+add_test(NAME rx_stateful
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --EbNodB 0 --freq_offset 11 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
+                       ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
+                       --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16 --stateful;
+                       cp features_rx_out.f32 features_rx_stateful_out.f32;
+                       ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
+                       --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16;
+                       python3 loss.py features_in.f32 features_rx_out.f32 --features_hat2 features_rx_stateful_out.f32 --compare;")
+                       set_tests_properties(rx_stateful PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# compare rx.py in vanilla and streaming mode, tests streaming receiver DSP and ML
+add_test(NAME rx_streaming
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                        --EbNodB 0 --freq_offset 11 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
+                       ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
+                       --pilots --pilot_eq --bottleneck 3 --cp 0.004 --time_offset -16  --coarse_mag --rx_one;
+                       cp features_rx_out.f32 features_rx_one_out.f32;
+                       ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
+                       --pilots --pilot_eq --bottleneck 3 --cp 0.004 --time_offset -16 --coarse_mag;
+                       python3 loss.py features_in.f32 features_rx_out.f32 --features_hat2 features_rx_one_out.f32 --compare;")
+                       set_tests_properties(rx_streaming PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# basic test of streaming rx code, run rx.py in vanilla and streaming mode, compare against non-streaming rx.sh
+add_test(NAME radae_rx_basic
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --EbNodB 10 --freq_offset 11 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
+                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 1 > features_rxs_out.f32; \
+                       python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
+                       set_tests_properties(radae_rx_basic PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# introduce noise-only segments at either end to give state machine/end of over a work out
+                       
+# low SNR AWGN
+add_test(NAME radae_rx_awgn
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --EbNodB 1 --freq_offset 13 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
+                       --prepend_noise 1 --append_noise 3 --end_of_over; \
+                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 1 > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 0.5")
+                       set_tests_properties(radae_rx_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# Low SNR MPP
+# End of over detection is not reliable on MPP, so run-on timer terminates over, --clip_end removes garbage at end
+# We don't don't bother checking acquisition time on this channel, as it's a severe case
+add_test(NAME radae_rx_mpp
+        COMMAND sh -c "test/make_g_mpp.sh; \
+                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 \
+                       --EbNodB 4 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \
+                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 1 > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_end 300")
+                       set_tests_properties(radae_rx_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# Low SNR AWGN ~5 Hz/min = 5/60 Hz/s freq drift
+add_test(NAME radae_rx_dfdt
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --EbNodB 1 --freq_offset 13 --df_dt 0.1 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
+                       --prepend_noise 1 --append_noise 3 --end_of_over; \
+                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 0.8")
+                       set_tests_properties(radae_rx_dfdt PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# ability to handle small differences in sample rate between tx and rx (delta Fs)
+add_test(NAME radae_rx_dfs
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --EbNodB 10 --freq_offset 11 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
+                       cat rx.f32 | python3 f32toint16.py --scale 8192 | sox -t .s16 -r 8000 -c 2 - -t .s16 -r 8001 -c 2 - | python3 int16tof32.py > rx_.f32; \
+                       cat rx_.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rxs_out.f32; \
+                       python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
+                       set_tests_properties(radae_rx_dfs PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# profiles a run with a 50 second file (no pass/fail, run with -V to get a rough idea of execution time)
+add_test(NAME radae_rx_profile
+        COMMAND sh -c "./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --EbNodB 1 --freq_offset 13 --df_dt 0.1 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
+                       --prepend_noise 1 --append_noise 3 --end_of_over; \
+                       cat rx.f32 | python3 -m cProfile -s time radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 0 --no_stdout | head -n20")
+
+
+# evaluate.sh -----------------------------------------------------------------------------------------------
 
 # TODO test evaluate.sh to prevent bit rot

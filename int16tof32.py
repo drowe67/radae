@@ -1,4 +1,6 @@
 """
+  Converts complex in16s on stdin to f32 floats on stdout
+
 /* Copyright (c) 2024 David Rowe */
    
 /*
@@ -27,20 +29,22 @@
 */
 """
 
-import os
+import sys,struct
 import argparse
 import numpy as np
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('int16', type=str, help='path to input .int16 file')
-parser.add_argument('f32', type=str, help='path to output .f32 file')
 parser.add_argument('--zeropad',  action='store_true', help='zero pad so output IQIQI with Q=0')
 args = parser.parse_args()
 
-x = np.fromfile(args.int16, dtype=np.int16).astype(np.float32)
-if args.zeropad:
-    y = np.zeros(2*len(x), dtype=np.float32)
-    y[::2] = x
-    x = y
-x.tofile(args.f32)
+while True:
+    buffer = sys.stdin.buffer.read(struct.calcsize("hh"))
+    if len(buffer) != struct.calcsize("hh"):
+      break
+    x = np.frombuffer(buffer,np.int16).astype(np.float32)
+    if args.zeropad:
+        y = np.zeros(2*len(x), dtype=np.float32)
+        y[::2] = x
+        x = y
+    sys.stdout.buffer.write(x) 

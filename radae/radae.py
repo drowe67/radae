@@ -41,6 +41,7 @@ import sys
 import os
 from torch.nn.utils.parametrizations import weight_norm
 from matplotlib import pyplot as plt
+from collections import OrderedDict
 
 # Quantization and loss utility functions
 
@@ -107,7 +108,7 @@ class MyConv(nn.Module):
         conv_in = torch.cat([torch.zeros_like(x[:,0:self.dilation,:], device=device), x], -2).permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
-# Wrapper for GRU layer that maintains state internally, processes (1,1,input_dim) at a time
+# Wrapper for GRU layer that maintains state internally
 class GRUStatefull(nn.Module):
     def __init__(self, input_dim, hidden_dim, batch_first):
         super(GRUStatefull, self).__init__()
@@ -119,7 +120,7 @@ class GRUStatefull(nn.Module):
         gru_out,self.states = self.gru(x,self.states)
         return gru_out
 
-# Wrapper for conv1D layer that maintains state internally, processes (1,1,input_dim) at a time
+# Wrapper for conv1D layer that maintains state internally
 class Conv1DStatefull(nn.Module):
     def __init__(self, input_dim, output_dim, dilation=1):
         super(Conv1DStatefull, self).__init__()
@@ -127,12 +128,13 @@ class Conv1DStatefull(nn.Module):
         self.output_dim = output_dim
         self.dilation=dilation
         self.kernel_size = 2
-        self.states = torch.zeros(1,self.kernel_size,self.input_dim)
+        self.states = torch.zeros(1,self.kernel_size-1,self.input_dim)
         self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=self.kernel_size, padding='valid', dilation=dilation)
+
     def forward(self, x):
-        self.states[0,0:self.kernel_size-1,:] = self.states[0,1:self.kernel_size,:]
-        self.states[0,1,:] = x
-        conv_in = self.states.permute(0, 2, 1)
+        conv_in = torch.cat([self.states,x],dim=1)
+        self.states = x[:,-1:,:]
+        conv_in = conv_in.permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
 #Gated Linear Unit activation
@@ -194,7 +196,7 @@ class CoreEncoder(nn.Module):
         self.z_dense = nn.Linear(864, self.output_dim)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"encoder: {nb_params} weights")
+        print(f"encoder: {nb_params} weights", file=sys.stderr)
 
         # initialize weights
         self.apply(init_weights)
@@ -269,7 +271,7 @@ class CoreDecoder(nn.Module):
         self.glu5 = GLU(96)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"decoder: {nb_params} weights")
+        print(f"decoder: {nb_params} weights", file=sys.stderr)
         # initialize weights
         self.apply(init_weights)
 
@@ -296,8 +298,8 @@ class CoreDecoder(nn.Module):
 
         return features
 
-# Decode symbols to reconstruct the vocoder features, statefull version that processes one
-# z vector at a time, and maintains it's own internal state
+# Decode symbols to reconstruct the vocoder features. Statefull version that can processes sequences 
+# as short as one z vector, and maintains it's own internal state
 class CoreDecoderStatefull(nn.Module):
 
     FRAMES_PER_STEP = 4
@@ -336,14 +338,11 @@ class CoreDecoderStatefull(nn.Module):
         self.glu5 = GLU(96)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"decoder: {nb_params} weights")
+        print(f"decoder: {nb_params} weights", file=sys.stderr)
         # initialize weights
         self.apply(init_weights)
 
     def forward(self, z):
-
-        # we can only process 40ms at a time
-        assert z.shape == (1,1,self.dense_1.in_features)
 
         x = n(torch.tanh(self.dense_1(z)))
         x = torch.cat([x, n(self.glu1(n(self.gru1(x))))], -1)
@@ -358,7 +357,7 @@ class CoreDecoderStatefull(nn.Module):
         x = torch.cat([x, n(self.conv5(x))], -1)
         x = self.output(x)
 
-        features = torch.reshape(x,(1,self.FRAMES_PER_STEP,self.output_dim))
+        features = torch.reshape(x,(1,z.shape[1]*self.FRAMES_PER_STEP,self.output_dim))
         return features
 
 class RADAE(nn.Module):
@@ -384,6 +383,8 @@ class RADAE(nn.Module):
                  cyclic_prefix = 0,
                  time_offset = 0,
                  coarse_mag = False,
+                 correct_freq_offset = False,
+                 stateful_decoder = False
                 ):
 
         super(RADAE, self).__init__()
@@ -411,6 +412,8 @@ class RADAE(nn.Module):
         self.eq_mean6 = eq_mean6
         self.time_offset = time_offset
         self.coarse_mag = coarse_mag
+        self.correct_freq_offset = correct_freq_offset
+        self.stateful_decoder = stateful_decoder
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
@@ -480,10 +483,17 @@ class RADAE(nn.Module):
         # set up pilots in freq and time domain
         self.P = (2**(0.5))*barker_pilots(Nc)
         self.p = torch.matmul(self.P,self.Winv)
+        self.Pend = torch.clone(self.P)
+        self.Pend[1::2] = -1*self.Pend[1::2]
+        self.pend = torch.matmul(self.Pend,self.Winv)
+        #print(self.P,self.Pend, file=sys.stderr)
         if self.Ncp:
             self.p_cp = torch.zeros(self.Ncp+self.M,dtype=torch.complex64)
             self.p_cp[self.Ncp:] = self.p
             self.p_cp[:self.Ncp] = self.p[-self.Ncp:]
+            self.pend_cp = torch.zeros(self.Ncp+self.M,dtype=torch.complex64)
+            self.pend_cp[self.Ncp:] = self.pend
+            self.pend_cp[:self.Ncp] = self.pend[-self.Ncp:]
         self.pilot_gain = 1.00
         if self.bottleneck == 3:
             pilot_backoff = 10**(-2/20)
@@ -493,7 +503,7 @@ class RADAE(nn.Module):
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)
     
-        print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}")
+        print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}", file=sys.stderr)
 
         self.Tmf = Tmf
         self.bps = bps
@@ -506,7 +516,30 @@ class RADAE(nn.Module):
         self.Nc = Nc
         self.Nzmf = Nzmf
 
-    
+    # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+    def core_decoder_statefull_load_state_dict(self):
+
+        # some of the layer names have been changed due to use of custom GRUStatefull layer
+        def key_transformation(old_key):
+            for gru in range(1,6):
+                if old_key == f"module.gru{gru:d}.weight_ih_l0":
+                    return f"module.gru{gru:d}.gru.weight_ih_l0"
+                if old_key == f"module.gru{gru:d}.weight_hh_l0":
+                    return f"module.gru{gru:d}.gru.weight_hh_l0"
+                if old_key == f"module.gru{gru:d}.bias_ih_l0":
+                    return f"module.gru{gru:d}.gru.bias_ih_l0"
+                if old_key == f"module.gru{gru:d}.bias_hh_l0":
+                    return f"module.gru{gru:d}.gru.bias_hh_l0"
+            return old_key
+
+        state_dict = self.core_decoder.state_dict()
+        new_state_dict = OrderedDict()
+        for key, value in state_dict.items():
+            new_key = key_transformation(key)
+            new_state_dict[new_key] = value
+
+        self.core_decoder_statefull.load_state_dict(new_state_dict)
+   
     def move_device(self, device):
         # TODO: work out why we need this step
         self.Winv = self.Winv.to(device)
@@ -530,6 +563,8 @@ class RADAE(nn.Module):
         return num_ten_ms_timesteps_rounded
     
     # Use classical DSP pilot based equalisation. Note just for inference atm
+    # TODO consider moving to dsp.py, or perhaps another file, to reduce the size o fthios file. 
+    # Down side is it has a lot of flags and options that would need passing
     def do_pilot_eq(self, num_modem_frames, rx_sym_pilots):
         Nc = self.Nc 
 
@@ -591,7 +626,7 @@ class RADAE(nn.Module):
                 rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
 
         # Optional "coarse" magnitude estimation and correction based on mean of all pilots across sequence. Unlike 
-        # regular PSK, ML network is sensitive to magnitude shifts.  We can't use the average mangnitude of the non-pilot symbols
+        # regular PSK, ML network is sensitive to magnitude shifts.  We can't use the average magnitude of the non-pilot symbols
         # as they have unknown amplitudes. TODO: For a practical, real world implementation, make this a frame by frame AGC type
         # algorithm, e.g. IIR smoothing of the RMS mag of each frames pilots 
         if self.coarse_mag:
@@ -636,11 +671,18 @@ class RADAE(nn.Module):
         
         z_hat[:,:,::2] = rx_sym.real
         z_hat[:,:,1::2] = rx_sym.imag
-            
-        features_hat = self.core_decoder(z_hat)
+        
+        if self.stateful_decoder:
+            print("stateful!")
+            features_hat = torch.empty(1,0,self.feature_dim)
+            for i in range(z_hat.shape[1]):
+                features_hat = torch.cat([features_hat, self.core_decoder_statefull(z_hat[:,i:i+1,:])],dim=1)
+        else:
+            features_hat = self.core_decoder(z_hat)
+        print(features_hat.shape,z_hat.shape)
         
         return features_hat,z_hat
-
+    
     # Estimate SNR given a vector r of M received pilot samples
     # rate_Fs/time domain, only works on 1D vectors (i.e. can broadcast or do multiple estimates)
     # unfortunately this doesn't work for multipath channels (good results for AWGN)
@@ -770,7 +812,7 @@ class RADAE(nn.Module):
             else:
                 # similar to rate Rs, but scale noise by M samples/symbol
                 sigma = (EbNo*(self.M))**(-0.5)
-            
+
             rx = tx + sigma*torch.randn_like(tx)
 
             # insert per sequence random gain variations, -20 ... +20 dB (training time)
@@ -783,10 +825,16 @@ class RADAE(nn.Module):
 
             # user supplied gain    
             rx = rx * self.gain
-
+            rx_dash = torch.clone(rx)
+            
+            # inference time correction of freq offset, allows us to produce a rx.f32 file
+            # with a freq offset while decoding correcting here
+            if self.freq_offset and self.correct_freq_offset:
+                rx_dash = rx_dash*torch.conj(lin_phase)
+                
             # remove cyclic prefix
-            rx = torch.reshape(rx,(num_batches,num_timesteps_at_rate_Rs,self.M+self.Ncp))
-            rx_dash = rx[:,:,Ncp+self.time_offset:Ncp+self.time_offset+self.M]
+            rx_dash = torch.reshape(rx_dash,(num_batches,num_timesteps_at_rate_Rs,self.M+self.Ncp))
+            rx_dash = rx_dash[:,:,Ncp+self.time_offset:Ncp+self.time_offset+self.M]
 
             # DFT to transform M time domain samples to Nc carriers
             rx_sym = torch.matmul(rx_dash, self.Wfwd)
