@@ -6,10 +6,33 @@ project(RADAE
   LANGUAGES C
   )
 
+option(AVX "Enable AVX CPU optimizations." ON)
+
 if(NOT CODEC2_DEV_BUILD_DIR)
     set(CODEC2_DEV_BUILD_DIR $HOME/codec2-dev/build_linux )
 endif()
 
+if(NOT OPUS_DIR)
+    set(OPUS_DIR $ENV{HOME}/opus)
+endif()
+
+#
+# Prevent in-source builds
+# If an in-source build is attempted, you will still need to clean up a few
+# files manually.
+#
+set(CMAKE_DISABLE_SOURCE_CHANGES ON)
+set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
+if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+  message(FATAL_ERROR "In-source builds in ${CMAKE_BINARY_DIR} are not "
+   "allowed, please remove ./CMakeCache.txt and ./CMakeFiles/, create a "
+   "separate build directory and run cmake from there.")
+endif("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+
+# Set default flags (from opus-ng build)
+set(CMAKE_C_FLAGS "-O2 -fvisibility=hidden -fstack-protector-strong -W -Wall -Wextra -Wcast-align -Wnested-externs -Wshadow -Wstrict-prototypes")
+
+add_subdirectory(src)
 
 # Ctests ----------------------------------------------------------------------
 
