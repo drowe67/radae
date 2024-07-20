@@ -269,6 +269,18 @@ add_test(NAME radae_rx_profile
                        --prepend_noise 1 --append_noise 3 --end_of_over; \
                        cat rx.f32 | python3 -m cProfile -s time radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 0 --no_stdout | head -n20")
 
+# performs a run using the streaming FARGAN decoder, ie the full simplex rx decode stack.  No pass/fail, just for characterisation of run time
+add_test(NAME radae_rx_fargan
+        COMMAND bash -c "WAV='wav/brian_g8sez.wav'; cd ${CMAKE_SOURCE_DIR}; \
+                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth $WAV /dev/null \
+                       --EbNodB 10 --freq_offset 13 --df_dt -0.1 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
+                       --prepend_noise 1 --append_noise 3 --end_of_over; \
+                       \\time -o log.txt -f '%e' cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 0 | \
+                       ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -fargan-synthesis - /dev/null; \
+                       RUN_TIME=$(cat log.txt); DUR=$(soxi -D $WAV); percent=$(python3 -c \"percent=100*$RUN_TIME/$DUR; print('%f' % percent)\"); \
+                       printf \"\nrun time: %5.2f duration: %5.2f percent CPU: %5.2f\n\n\" $RUN_TIME $DUR $percent ")
+
 
 # evaluate.sh -----------------------------------------------------------------------------------------------
 

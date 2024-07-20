@@ -90,7 +90,7 @@ void free_blob(unsigned char *blob, int len) {
 
 void usage(void) {
     fprintf(stderr, "usage: lpcnet_demo -features <input.pcm> <features.f32>\n");
-    fprintf(stderr, "       lpcnet_demo -fargan_synthesis <features.f32> <output.pcm>\n");
+    fprintf(stderr, "       lpcnet_demo -fargan-synthesis <features.f32> <output.pcm>\n");
     fprintf(stderr, "       lpcnet_demo -addlpc <features_without_lpc.f32> <features_with_lpc.lpc>\n\n");
     fprintf(stderr, "  plc_options:\n");
     fprintf(stderr, "       causal:       normal (causal) PLC\n");
@@ -116,14 +116,22 @@ int main(int argc, char **argv) {
     } else {
         usage();
     }
+
     if (argc != 4) usage();
-    fin = fopen(argv[2], "rb");
+
+    if (strcmp(argv[2], "-") == 0)
+        fin = stdin;
+    else
+        fin = fopen(argv[2], "rb");
     if (fin == NULL) {
         fprintf(stderr, "Can't open %s\n", argv[2]);
         exit(1);
     }
 
-    fout = fopen(argv[3], "wb");
+    if (strcmp(argv[3], "-") == 0)
+        fout = stdout;
+    else 
+        fout = fopen(argv[3], "wb");
     if (fout == NULL) {
         fprintf(stderr, "Can't open %s\n", argv[3]);
         exit(1);
