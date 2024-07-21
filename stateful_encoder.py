@@ -76,11 +76,16 @@ if __name__ == '__main__':
    z = model.core_encoder(features)
    
    # TODO run this one or 3 frames at a time
-   z_stateful = model.core_encoder_statefull(features)
+   #z_statefull = model.core_encoder_statefull(features)
+   z_statefull = torch.empty(1,0,model.latent_dim)
+   step = 3
+   for i in range(0,features.shape[1],model.enc_stride*step):
+      z_one = model.core_encoder_statefull(features[:,i:i+model.enc_stride*step,:])
+      z_statefull = torch.cat([z_statefull, z_one],dim=1) 
    
    # vanilla decoder that works on long sequences of z vectors
    features_hat = model.core_decoder(z)
-   features_hat_statefull = model2.core_decoder(z_stateful)
+   features_hat_statefull = model2.core_decoder(z_statefull)
       
    loss = distortion_loss(features,features_hat).cpu().detach().numpy()[0]
    loss_statefull = distortion_loss(features,features_hat_statefull).cpu().detach().numpy()[0]

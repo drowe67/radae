@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 #
 # Some automation around stateful_encoder.sh to help with testing
 

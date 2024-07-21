@@ -128,12 +128,13 @@ class Conv1DStatefull(nn.Module):
         self.output_dim = output_dim
         self.dilation=dilation
         self.kernel_size = 2
-        self.states = torch.zeros(1,self.kernel_size-1+self.dilation-1,self.input_dim)
+        self.states_len = self.kernel_size-1+self.dilation-1
+        self.states = torch.zeros(1,self.states_len,self.input_dim)
         self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=self.kernel_size, padding='valid', dilation=dilation)
 
     def forward(self, x):
         conv_in = torch.cat([self.states,x],dim=1)
-        self.states = x[:,-1:,:]
+        self.states = conv_in[:,-self.states_len:,:]
         conv_in = conv_in.permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
