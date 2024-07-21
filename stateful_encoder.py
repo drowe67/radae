@@ -57,7 +57,7 @@ num_used_features = 20
 model = RADAE(num_features, latent_dim, 100.0)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
-# Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+# Stateful encoder wasn't present during training, so we need to load weights from existing encoder
 model.core_encoder_statefull_load_state_dict()
 
 model2 = RADAE(num_features, latent_dim, 100.0)
@@ -73,17 +73,18 @@ if __name__ == '__main__':
 
    model.to(device)
    features = features.to(device)
+
+   # vanilla encoder that doesn't preserve state
    z = model.core_encoder(features)
    
-   # TODO run this one or 3 frames at a time
-   #z_statefull = model.core_encoder_statefull(features)
+   # encoder that preserves state, test by processing 12 feature vecs on each call 
    z_statefull = torch.empty(1,0,model.latent_dim)
    step = 3
    for i in range(0,features.shape[1],model.enc_stride*step):
       z_one = model.core_encoder_statefull(features[:,i:i+model.enc_stride*step,:])
       z_statefull = torch.cat([z_statefull, z_one],dim=1) 
    
-   # vanilla decoder that works on long sequences of z vectors
+   # test with vanilla decoder
    features_hat = model.core_decoder(z)
    features_hat_statefull = model2.core_decoder(z_statefull)
       

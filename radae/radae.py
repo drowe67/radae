@@ -126,7 +126,7 @@ class Conv1DStatefull(nn.Module):
         super(Conv1DStatefull, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.dilation=dilation
+        self.dilation = dilation
         self.kernel_size = 2
         self.states_len = self.kernel_size-1+self.dilation-1
         self.states = torch.zeros(1,self.states_len,self.input_dim)

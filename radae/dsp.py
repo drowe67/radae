@@ -274,6 +274,66 @@ class acquisition():
 
       return valid,endofover
 
+# Single modem frame streaming transmitter.
+class transmitter_one():
+   def __init__(self,latent_dim,enc_stride,Nzmf,Fs,M,Ncp,Winv,Nc,Ns,w,P,bottleneck,pilot_gain):
+      self.latent_dim = latent_dim
+      self.enc_stride = enc_stride
+      self.Nzmf = Nzmf
+      self.Fs = Fs
+      self.M = M
+      self.Ncp = Ncp
+      self.Winv = Winv
+      self.Nc = Nc
+      self.Ns = Ns
+      self.w = w
+      self.P = P
+      self.bottleneck = bottleneck
+      self.pilot_gain = pilot_gain
+      
+   # One frame version of rate Fs transmitter for streaming implementation
+   def transmitter_one(self, z, num_timesteps_at_rate_Rs):
+      tx_sym = z[:,:,::2] + 1j*z[:,:,1::2]
+
+      # constrain magnitude of 2D complex symbols 
+      if self.bottleneck == 2:
+         tx_sym = torch.tanh(torch.abs(tx_sym))*torch.exp(1j*torch.angle(tx_sym))
+         
+      # reshape into sequence of OFDM modem frames
+      tx_sym = torch.reshape(tx_sym,(1,num_timesteps_at_rate_Rs,self.Nc))
+
+      # insert pilot symbols at the start of each modem frame
+      num_modem_frames = num_timesteps_at_rate_Rs // self.Ns
+      tx_sym = torch.reshape(tx_sym,(1, num_modem_frames, self.Ns, self.Nc))
+      tx_sym_pilots = torch.zeros(1, num_modem_frames, self.Ns+1, self.Nc, dtype=torch.complex64,device=tx_sym.device)
+      tx_sym_pilots[:,:,1:self.Ns+1,:] = tx_sym
+      tx_sym_pilots[:,:,0,:] = self.pilot_gain*self.P
+      num_timesteps_at_rate_Rs = num_timesteps_at_rate_Rs + num_modem_frames
+      tx_sym = torch.reshape(tx_sym_pilots,(1, num_timesteps_at_rate_Rs, self.Nc))
+
+      num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*self.M
+
+      # IDFT to transform Nc carriers to M time domain samples
+      tx = torch.matmul(tx_sym, self.Winv)
+
+      # Optionally insert a cyclic prefix
+      Ncp = self.Ncp
+      if self.Ncp:
+            tx_cp = torch.zeros((1,num_timesteps_at_rate_Rs,self.M+Ncp),dtype=torch.complex64,device=tx.device)
+            tx_cp[:,:,Ncp:] = tx
+            tx_cp[:,:,:Ncp] = tx_cp[:,:,-Ncp:]
+            tx = tx_cp
+            num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*(self.M+Ncp)
+      tx = torch.reshape(tx,(1,num_timesteps_at_rate_Fs))                         
+      
+      # Constrain magnitude of complex rate Fs time domain signal, simulates Power
+      # Amplifier (PA) that saturates at abs(tx) ~ 1
+      if self.bottleneck == 3:
+         tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
+      return tx
+
+
+
 # Single modem frame streaming receiver. TODO: is there a better way to pass a bunch of constants around?
 class receiver_one():
    def __init__(self,latent_dim,Fs,M,Ncp,Wfwd,Nc,Ns,w,P,bottleneck,pilot_gain,time_offset,coarse_mag):

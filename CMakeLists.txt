@@ -171,7 +171,17 @@ add_test(NAME acq_mpp
 
 # TODO: Add (a) interfering sine wave (b) stationary notch or perhaps slow fading
 
-# Streaming receiver --------------------------------------------------------------------------------------
+# Streaming Tx and Rx --------------------------------------------------------------------------------------
+
+# basic test of streaming Tx/Rx, compare to vanilla Tx in inference.py
+add_test(NAME radae_tx_basic
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
+                       cat features_in.f32 | python3 radae_tx.py model17/checkpoints/checkpoint_epoch_100.pth > rx.f32
+                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 1 > features_txs_out.f32; \
+                       python3 loss.py features_in.f32 features_txs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
+                       set_tests_properties(radae_tx_basic PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # complex bandpass filter
 add_test(NAME complex_bpf
