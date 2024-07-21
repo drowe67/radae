@@ -230,6 +230,74 @@ class CoreEncoder(nn.Module):
 
         return z
 
+# Stateful version of Encoder
+class CoreEncoderStatefull(nn.Module):
+    STATE_HIDDEN = 128
+    FRAMES_PER_STEP = 4
+    CONV_KERNEL_SIZE = 4
+
+    def __init__(self, feature_dim, output_dim, bottleneck = 1):
+
+        super(CoreEncoderStatefull, self).__init__()
+
+        # hyper parameters
+        self.feature_dim        = feature_dim
+        self.output_dim         = output_dim
+        self.bottleneck         = bottleneck
+        
+        # derived parameters
+        self.input_dim = self.FRAMES_PER_STEP * self.feature_dim
+
+        # Layers are organized like a DenseNet
+        self.dense_1 = nn.Linear(self.input_dim, 64)
+        self.gru1 = nn.GRU(64, 64, batch_first=True)
+        self.conv1 = MyConv(128, 96)
+        self.gru2 = nn.GRU(224, 64, batch_first=True)
+        self.conv2 = MyConv(288, 96, dilation=2)
+        self.gru3 = nn.GRU(384, 64, batch_first=True)
+        self.conv3 = MyConv(448, 96, dilation=2)
+        self.gru4 = nn.GRU(544, 64, batch_first=True)
+        self.conv4 = MyConv(608, 96, dilation=2)
+        self.gru5 = nn.GRU(704, 64, batch_first=True)
+        self.conv5 = MyConv(768, 96, dilation=2)
+
+        self.z_dense = nn.Linear(864, self.output_dim)
+
+        nb_params = sum(p.numel() for p in self.parameters())
+        print(f"encoder: {nb_params} weights", file=sys.stderr)
+
+        # initialize weights
+        self.apply(init_weights)
+
+
+    def forward(self, features):
+
+        # Groups FRAMES_PER_STEP frames together in one bunch -- equivalent
+        # to a learned transform of size FRAMES_PER_STEP across time. Outputs
+        # fewer vectors than the input has because of that
+        x = torch.reshape(features, (features.size(0), features.size(1) // self.FRAMES_PER_STEP, self.FRAMES_PER_STEP * features.size(2)))
+
+        # run encoding layer stack
+        x = n(torch.tanh(self.dense_1(x)))
+        x = torch.cat([x, n(self.gru1(x)[0])], -1)
+        x = torch.cat([x, n(self.conv1(x))], -1)
+        x = torch.cat([x, n(self.gru2(x)[0])], -1)
+        x = torch.cat([x, n(self.conv2(x))], -1)
+        x = torch.cat([x, n(self.gru3(x)[0])], -1)
+        x = torch.cat([x, n(self.conv3(x))], -1)
+        x = torch.cat([x, n(self.gru4(x)[0])], -1)
+        x = torch.cat([x, n(self.conv4(x))], -1)
+        x = torch.cat([x, n(self.gru5(x)[0])], -1)
+        x = torch.cat([x, n(self.conv5(x))], -1)
+
+        # bottleneck constrains 1D real symbol magnitude
+        if self.bottleneck == 1:
+            z = torch.tanh(self.z_dense(x))
+        else:
+            z = self.z_dense(x)
+
+        return z
+
 
 
 #Decode symbols to reconstruct the vocoder features
@@ -418,6 +486,7 @@ class RADAE(nn.Module):
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
         self.core_decoder =  nn.DataParallel(CoreDecoder(latent_dim, feature_dim))
+        self.core_encoder_statefull =  nn.DataParallel(CoreEncoderStatefull(feature_dim, latent_dim, bottleneck=bottleneck))
         self.core_decoder_statefull =  nn.DataParallel(CoreDecoderStatefull(latent_dim, feature_dim))
         #self.core_encoder = CoreEncoder(feature_dim, latent_dim)
         #self.core_decoder = CoreDecoder(latent_dim, feature_dim)
@@ -539,6 +608,32 @@ class RADAE(nn.Module):
             new_state_dict[new_key] = value
 
         self.core_decoder_statefull.load_state_dict(new_state_dict)
+   
+    # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+    def core_encoder_statefull_load_state_dict(self):
+
+        # some of the layer names have been changed due to use of custom GRUStatefull layer
+        def key_transformation(old_key):
+            for gru in range(1,6):
+                """
+                if old_key == f"module.gru{gru:d}.weight_ih_l0":
+                    return f"module.gru{gru:d}.gru.weight_ih_l0"
+                if old_key == f"module.gru{gru:d}.weight_hh_l0":
+                    return f"module.gru{gru:d}.gru.weight_hh_l0"
+                if old_key == f"module.gru{gru:d}.bias_ih_l0":
+                    return f"module.gru{gru:d}.gru.bias_ih_l0"
+                if old_key == f"module.gru{gru:d}.bias_hh_l0":
+                    return f"module.gru{gru:d}.gru.bias_hh_l0"
+                """    
+            return old_key
+
+        state_dict = self.core_encoder.state_dict()
+        new_state_dict = OrderedDict()
+        for key, value in state_dict.items():
+            new_key = key_transformation(key)
+            new_state_dict[new_key] = value
+
+        self.core_encoder_statefull.load_state_dict(new_state_dict)
    
     def move_device(self, device):
         # TODO: work out why we need this step
