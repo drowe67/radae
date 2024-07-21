@@ -128,7 +128,7 @@ class Conv1DStatefull(nn.Module):
         self.output_dim = output_dim
         self.dilation=dilation
         self.kernel_size = 2
-        self.states = torch.zeros(1,self.kernel_size-1,self.input_dim)
+        self.states = torch.zeros(1,self.kernel_size-1+self.dilation-1,self.input_dim)
         self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=self.kernel_size, padding='valid', dilation=dilation)
 
     def forward(self, x):
@@ -250,16 +250,16 @@ class CoreEncoderStatefull(nn.Module):
 
         # Layers are organized like a DenseNet
         self.dense_1 = nn.Linear(self.input_dim, 64)
-        self.gru1 = nn.GRU(64, 64, batch_first=True)
-        self.conv1 = MyConv(128, 96)
-        self.gru2 = nn.GRU(224, 64, batch_first=True)
-        self.conv2 = MyConv(288, 96, dilation=2)
-        self.gru3 = nn.GRU(384, 64, batch_first=True)
-        self.conv3 = MyConv(448, 96, dilation=2)
-        self.gru4 = nn.GRU(544, 64, batch_first=True)
-        self.conv4 = MyConv(608, 96, dilation=2)
-        self.gru5 = nn.GRU(704, 64, batch_first=True)
-        self.conv5 = MyConv(768, 96, dilation=2)
+        self.gru1 = GRUStatefull(64, 64, batch_first=True)
+        self.conv1 = Conv1DStatefull(128, 96)
+        self.gru2 = GRUStatefull(224, 64, batch_first=True)
+        self.conv2 = Conv1DStatefull(288, 96, dilation=2)
+        self.gru3 = GRUStatefull(384, 64, batch_first=True)
+        self.conv3 = Conv1DStatefull(448, 96, dilation=2)
+        self.gru4 = GRUStatefull(544, 64, batch_first=True)
+        self.conv4 = Conv1DStatefull(608, 96, dilation=2)
+        self.gru5 = GRUStatefull(704, 64, batch_first=True)
+        self.conv5 = Conv1DStatefull(768, 96, dilation=2)
 
         self.z_dense = nn.Linear(864, self.output_dim)
 
@@ -279,15 +279,15 @@ class CoreEncoderStatefull(nn.Module):
 
         # run encoding layer stack
         x = n(torch.tanh(self.dense_1(x)))
-        x = torch.cat([x, n(self.gru1(x)[0])], -1)
+        x = torch.cat([x, n(self.gru1(x))], -1)
         x = torch.cat([x, n(self.conv1(x))], -1)
-        x = torch.cat([x, n(self.gru2(x)[0])], -1)
+        x = torch.cat([x, n(self.gru2(x))], -1)
         x = torch.cat([x, n(self.conv2(x))], -1)
-        x = torch.cat([x, n(self.gru3(x)[0])], -1)
+        x = torch.cat([x, n(self.gru3(x))], -1)
         x = torch.cat([x, n(self.conv3(x))], -1)
-        x = torch.cat([x, n(self.gru4(x)[0])], -1)
+        x = torch.cat([x, n(self.gru4(x))], -1)
         x = torch.cat([x, n(self.conv4(x))], -1)
-        x = torch.cat([x, n(self.gru5(x)[0])], -1)
+        x = torch.cat([x, n(self.gru5(x))], -1)
         x = torch.cat([x, n(self.conv5(x))], -1)
 
         # bottleneck constrains 1D real symbol magnitude
@@ -615,7 +615,7 @@ class RADAE(nn.Module):
         # some of the layer names have been changed due to use of custom GRUStatefull layer
         def key_transformation(old_key):
             for gru in range(1,6):
-                """
+                
                 if old_key == f"module.gru{gru:d}.weight_ih_l0":
                     return f"module.gru{gru:d}.gru.weight_ih_l0"
                 if old_key == f"module.gru{gru:d}.weight_hh_l0":
@@ -624,7 +624,7 @@ class RADAE(nn.Module):
                     return f"module.gru{gru:d}.gru.bias_ih_l0"
                 if old_key == f"module.gru{gru:d}.bias_hh_l0":
                     return f"module.gru{gru:d}.gru.bias_hh_l0"
-                """    
+                   
             return old_key
 
         state_dict = self.core_encoder.state_dict()
