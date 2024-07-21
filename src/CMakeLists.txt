@@ -10,7 +10,7 @@ if(NOT EXISTS ${OPUS_DIR}/libopus.a)
     if(ret EQUAL "1")
         message(FATAL_ERROR "Error building libopus.a")
     endif()
-else()
+
     message(STATUS "libopus.a already exists")
 endif()
 

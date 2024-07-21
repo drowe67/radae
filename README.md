@@ -91,9 +91,9 @@ make ch mksine tlininterp
 ```
 (optional if using HackRF) manually compile codec2-dev/misc/tsrc.c
 
-# Automated Tests
+# Building and Automated Tests
 
-The `cmake/ctest` framework is being used as a test framework. The command lines in `CmakeLists.txt` are a good source of examples, if you are interested in running the code in this repo.
+The `cmake/ctest` framework is being used as a build and test framework. The command lines in `CmakeLists.txt` are a good source of examples, if you are interested in running the code in this repo.
 
 To configure and run the cests:
 ```
@@ -264,6 +264,18 @@ To run just the core streaming decoder:
 ```
 cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth > features_rx_out.f32
 ```
+Full RADAE Streaming Rx in real time (fom off air audio samples to speaker):
+```
+cd ~/radae
+cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 1 | ./build/src/lpcnet_demo -fargan-synthesis - - | aplay -f S16_LE -r 16000
+```
+Ctest that measures % CPU used:
+```
+cd ~/radae/build
+ctest -V -R radae_rx_fargan
+<snip>
+run time:  6.41 duration:  9.82 percent CPU: 65.26
+```
 
 ## Profiling example
 
@@ -354,37 +366,3 @@ A log of models trained by the author.
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
-# Notes/Issues/Futher work
-
-1. Issue: vk5dgr_test.wav sounds poorer than LPCNet/wav/all.wav - same speaker, but former much louder.
-
-1. Issue: One DJ2LS off air sample had a stronger, non overlapping signal in the passband, which was modulating the AGC of the SSB receiver, upsetting the RADAE decoder.  Might be useful to ensure the SSB receiver AGC bandwidth is narrow (if this is possible). Or maybe switch off AGC.
-
-1. Test: co-channel interference, interfering sinusoids.
-
-1. Test: Try vocoder with background noise.
-
-1. How can we apply interleaving, e.g./ just spread symbols over a longer modem frame, or let network spread them.
-
-1. Diversity in frequency - classical DSP or with ML in the loop?
-
-1. Sweep different latent dimensions (just 80 and 40 tried so far) and choose best perf for given SNR.
-
-1. Naming thoughts (what is it):
-   * Neural modem - as network selects constellation, or "neural speech modem"
-   * Neural channel coding - as network takes features and encoders them for transmisison of the channel
-   * Radio VAE or Radio AE - don't feel this has much to do with variational autoencoders
-   * Joint source and channel coding
-   * RADAE is the current working name, but is a mouthful and prone to different pronounciation. RAE might be better moving fwd.
-
-1. Decide on offset from carrier frequency of SSB radio.  1500Hz offset like FreeDV, or some other fixed offset from carrier?  FreeDV offset is arbitrary and related to legacy modes so no need to continue this convention unless there is good reason.  What do other digital modes do?
-
-1. The Tx signal has poor sidelobe attenuation. Need a way to apply a Tx BPF without upsetting PAPR performance.  This must be done as part RADAE rather than letting end users guess as it's easy to mess up PAPR with ad-hoc filtering.  Could be (a) classical DSP at output (b) BPF in the training loop (how to handle delay?) (c) we could train network for a given stop band attenuation using an additional loss function term.
-
-1. Run time SNR measure.  Maybe use ML for this, e.g. train against known SNR?
-
-1. Roughness on david & peter samples.  Try combining quantized and unquantized features to figure out which features are causing most of the issues. Compare to passthrough, e.g. try increasing weight of voicing measure. It could be about the balance between low and high SNR. Either the range, or how the distortion gets weighted depending on the SNR. For example "flat" weighting would bias towards low SNR since the low SNR distortion tends to be a lot higher.
-
-1. Way to characterise channels, e.g. visualise impulse response, measure delay spread.
-
-1. Have a second pilot sequence that can be sent by Tx to signal "end of over" and provide a solid squelch, rather than using run on in state machine.

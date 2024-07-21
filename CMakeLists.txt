@@ -271,7 +271,7 @@ add_test(NAME radae_rx_profile
 
 # performs a run using the streaming FARGAN decoder, ie the full simplex rx decode stack.  No pass/fail, just for characterisation of run time
 add_test(NAME radae_rx_fargan
-        COMMAND bash -c "WAV='wav/brian_g8sez.wav'; cd ${CMAKE_SOURCE_DIR}; \
+        COMMAND bash -c "WAV='wav/all.wav'; cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth $WAV /dev/null \
                        --EbNodB 10 --freq_offset 13 --df_dt -0.1 \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
