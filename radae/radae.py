@@ -572,7 +572,21 @@ class RADAE(nn.Module):
 
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)
-    
+        
+        # set up End Of Over pilot seequence
+        if self.Ncp:
+            M = self.M
+            Ncp = self.Ncp
+            Nmf = int((Ns+1)*(M+Ncp))
+            eoo = torch.zeros(1,Nmf+M+Ncp,dtype=torch.complex64)
+            eoo[0,:M+Ncp] = self.p_cp
+            eoo[0,M+Ncp:2*(M+Ncp)] = self.pend_cp
+            eoo[0,Nmf:Nmf+(M+Ncp)] = self.pend_cp
+            eoo *= self.pilot_gain
+            if self.bottleneck == 3:
+                eoo = torch.tanh(torch.abs(eoo)) * torch.exp(1j*torch.angle(eoo))
+            self.eoo = eoo
+        
         print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}", file=sys.stderr)
 
         self.Tmf = Tmf

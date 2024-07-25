@@ -91,3 +91,8 @@ with torch.inference_mode():
       tx = tx.cpu().detach().numpy().flatten().astype('csingle')
       if args.use_stdout:
          sys.stdout.buffer.write(tx)
+
+if args.use_stdout:
+   eoo = model.eoo
+   eoo = eoo.cpu().detach().numpy().flatten().astype('csingle')
+   sys.stdout.buffer.write(eoo)

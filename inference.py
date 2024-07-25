@@ -240,19 +240,10 @@ if __name__ == '__main__':
          
          if args.end_of_over:
             # appends a frame containing a final pilot so the last RADAE frame
-            # has a good phase referemce, and two "end of over" symbols
-            M = model.M
-            Ncp = model.Ncp
-            Nmf = int((model.Ns+1)*(M+Ncp))
-            eoe = torch.zeros(1,Nmf+M+Ncp,dtype=torch.complex64)
-            eoe[0,:M+Ncp] = model.p_cp
-            eoe[0,M+Ncp:2*(M+Ncp)] = model.pend_cp
-            eoe[0,Nmf:Nmf+(M+Ncp)] = model.pend_cp
-            eoe *= model.pilot_gain
-            if args.bottleneck == 3:
-               eoe = torch.tanh(torch.abs(eoe)) * torch.exp(1j*torch.angle(eoe))
-            eoe = eoe + sigma*torch.randn_like(eoe)
-            rx = torch.concatenate([rx,eoe],dim=1)
+            # has a good phase reference, and two "end of over" symbols
+            eoo = model.eoo
+            eoo = eoo + sigma*torch.randn_like(eoo)
+            rx = torch.concatenate([rx,eoo],dim=1)
          if args.prepend_noise > 0.0:
             num_noise = int(model.Fs*args.prepend_noise)
             n = sigma*torch.randn(1,num_noise)
