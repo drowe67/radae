@@ -48,6 +48,9 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | loss.py | Tool to calculate mean loss between two feature files, a useful objective measure |
 | ml_pilot.py | Training low PAPR pilot sequence |
 | stateful_decoder.py/.sh | Inference test that compares stateful to vanilla decoder |
+| stateful_encoder.py/.sh | Inference test that compares stateful to vanilla encoder |
+| radae_tx.py | streaming RADAE encoder |
+| radae_tx.py | streaming RADAE decoder |
 
 # Installation
 
