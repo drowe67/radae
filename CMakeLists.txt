@@ -152,11 +152,21 @@ add_test(NAME ota_test_mpp
 add_test(NAME acq_noise
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        dd if=/dev/zero of=/dev/stdout bs=16000 count=30 | \
-                       ${CODEC2_DEV_BUILD_DIR}/src/ch - rx.int16 --No -20; \  # real int16 output
+                       ${CODEC2_DEV_BUILD_DIR}/src/ch - rx.int16 --No -20; \          # real int16 output
                        cat rx.int16 | python3 int16tof32.py --zeropad > rx.f32; \     # ..IQIQI.. .f32 with Q == 0
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
                        --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16")
                        set_tests_properties(acq_noise PROPERTIES PASS_REGULAR_EXPRESSION "Acquisition failed")
+
+# sine wave + noise-only test, should not acquire 
+add_test(NAME acq_sine
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ${CODEC2_DEV_BUILD_DIR}/misc/mksine - 1000 30 | \
+                       ${CODEC2_DEV_BUILD_DIR}/src/ch - rx.int16 --No -20; \          # real int16 output
+                       cat rx.int16 | python3 int16tof32.py --zeropad > rx.f32; \     # ..IQIQI.. .f32 with Q == 0
+                       ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
+                       --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16")
+                       set_tests_properties(acq_sine PROPERTIES PASS_REGULAR_EXPRESSION "Acquisition failed")
 
 # Worst case: 0dB SNR MPP, make sure mean acq time < 1s
 add_test(NAME acq_mpp
@@ -168,6 +178,17 @@ add_test(NAME acq_mpp
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null --pilots --pilot_eq \
                        --bottleneck 3 --cp 0.004 --acq_test --fmax_target 10")
                        set_tests_properties(acq_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# Harsh acquisition test as above with an interfering sine wave at -3dBc on our signal, we realex acq time target to 2s
+add_test(NAME acq_sine_mpp
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       test/make_g_mpp.sh; \
+                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 \
+                       --EbNodB 3 --freq_offset -40 --g_file g_mpp.f32 --sine_amp 0.5 --sine_freq 1250 --write_rx rx.f32; \
+                       ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null --pilots --pilot_eq \
+                       --bottleneck 3 --cp 0.004 --acq_test --fmax_target -40 --acq_time_target 2.0")
+                       set_tests_properties(acq_sine_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # TODO: Add (a) interfering sine wave (b) stationary notch or perhaps slow fading
 

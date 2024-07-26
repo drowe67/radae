@@ -62,6 +62,7 @@ parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2
 parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matrix on last modem frame')
 parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
 parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
+parser.add_argument('--acq_time_target', type=float, default=0.0, help='Acquisition test mode mean acquisition time target (default 1.0)')
 parser.add_argument('--rx_one',  action='store_true', help='Use single frame receiver')
 parser.add_argument('--stateful',  action='store_true', help='use stateful core decoder')
 parser.set_defaults(bpf=True)
@@ -185,7 +186,7 @@ if args.pilots:
       if args.acq_test:
          acq_time = (Nmf*mf/Fs)/acq_pass
          print(f"Acq Test Passes: {acq_pass:d} Fails: {acq_fail:d} Mean Acq time: {acq_time:5.2f} s")
-         if acq_time < 1.0:
+         if acq_time < args.acq_time_target:
             print("PASS")
       else:
          print("Acquisition failed....")
