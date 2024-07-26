@@ -369,3 +369,25 @@ A log of models trained by the author.
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
+# Specifications
+
+Model 17 waveform
+
+| Parameter | Value | Comment |
+| --- | --- | --- |
+| Audio Bandwith | 100-8000 Hz | |
+| RF Bandwidth | 1500 Hz (-6dB) | |
+| Rx Peak Average Power Ratio | < 1dB | |
+| Threshold SNR | -3dB | AWGN channel, 3000 Hz noise bandwidth |
+| Threshold C/No | 32 dBHz | AWGN channel |
+| Threshold SNR | 0dB | MPP channel (1Hz Doppler, 2ms path delay), 3000 Hz noise bandwidth |
+| Threshold C/No | 35 dBHz | MPP channel |
+| Frame size | 120ms | algorithmic latency |
+| Modulation | OFDM | discrete time symbols, continously valued |
+| Total Payload Symbol rate | 2000 Hz | payload data symbols, all carriers combined |
+| Number of Carriers | 30 | |
+| Per Carrier Symbol rate | 50 Hz | |
+| Cyclic Prefix | 4ms | |
+| Acquisition time | < 1s | 0dB SNR MPP channel | 
+| Acquisition frequency range | +/- 50 Hz | |
+| Acquisition co-channel interference tolerence | -3dBC | Interfering sine wave level |
