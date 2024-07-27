@@ -14,7 +14,7 @@ fi
 CODEC2_DEV_BUILD_DIR=$1
 No=$2
 
-source test/make_g_mpp.sh
+source test/make_g.sh
 cp -f g_mpp.f32 fast_fading_samples.float
 chirp_f32=$(mktemp)
 chirp_int16=$(mktemp)

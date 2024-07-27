@@ -371,7 +371,7 @@ Note the samples are generated with `evaluate.sh`, which runs inference at rate 
 
 # Specifications
 
-Model 17 waveform
+Using model 17 waveform:
 
 | Parameter | Value | Comment |
 | --- | --- | --- |
@@ -383,11 +383,15 @@ Model 17 waveform
 | Threshold SNR | 0dB | MPP channel (1Hz Doppler, 2ms path delay), 3000 Hz noise bandwidth |
 | Threshold C/No | 35 dBHz | MPP channel |
 | Frame size | 120ms | algorithmic latency |
-| Modulation | OFDM | discrete time symbols, continously valued |
+| Modulation | OFDM | discrete time, continously valued symbols |
+| Vocoder | FARGAN | low complexity ML vocoder |
 | Total Payload Symbol rate | 2000 Hz | payload data symbols, all carriers combined |
 | Number of Carriers | 30 | |
 | Per Carrier Symbol rate | 50 Hz | |
 | Cyclic Prefix | 4ms | |
-| Acquisition time | < 1s | 0dB SNR MPP channel | 
+| Mean acquisition time | < 1.5s | 0dB SNR MPP channel | 
 | Acquisition frequency range | +/- 50 Hz | |
-| Acquisition co-channel interference tolerence | -3dBC | Interfering sine wave level |
+| Acquisition co-channel interference tolerence | -3dBC | Interfering sine wave level, <2s mean acquisition time |
+| Auxilary text channel | No | |
+| SNR measurement | No | |
+

@@ -2,7 +2,7 @@
 #
 # test inference.sh BER at MPP operating point
 
-source test/make_g_mpp.sh
+source test/make_g.sh
 
 EbNodB=0
 ILdB=2

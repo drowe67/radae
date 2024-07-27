@@ -62,7 +62,7 @@ parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2
 parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matrix on last modem frame')
 parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
 parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
-parser.add_argument('--acq_time_target', type=float, default=0.0, help='Acquisition test mode mean acquisition time target (default 1.0)')
+parser.add_argument('--acq_time_target', type=float, default=1.0, help='Acquisition test mode mean acquisition time target (default 1.0)')
 parser.add_argument('--rx_one',  action='store_true', help='Use single frame receiver')
 parser.add_argument('--stateful',  action='store_true', help='use stateful core decoder')
 parser.set_defaults(bpf=True)
@@ -163,14 +163,19 @@ if args.pilots:
             if valid_count > 3:
                if args.acq_test:
                   next_state = "search"
+                  ffine_range = np.arange(fmax-10,fmax+10,0.25)
+                  tfine_range = np.arange(tmax-1,tmax+2)
+                  tmax,fmax = acq.refine(rx, tmax, fmax, tfine_range, ffine_range)
                   # allow 2ms spread in timing (MPP channel extremes) and +/- 5 Hz in freq, which fine freq can take care of
-                  coarse_timing_ok = np.abs(tmax_candidate - tmax_candidate_target) < 0.0025*Fs
+                  coarse_timing_ok = np.abs(tmax - tmax_candidate_target) < 0.0025*Fs
                   coarse_freq_ok = np.abs(fmax - args.fmax_target) <= 5.0
-                  print(f"Acquired! Timing: {coarse_timing_ok:d} Freq: {coarse_freq_ok:d}")
+                  print(f"Acquired! Timing: {coarse_timing_ok:d} Freq: {coarse_freq_ok:d} ",end='')
                   if coarse_timing_ok and coarse_freq_ok:
                      acq_pass = acq_pass + 1
+                     print("")
                   else:
                      acq_fail = acq_fail + 1
+                     print(f"fmax: {fmax:6.2f} targ: {args.fmax_target:6.2f}")
                else:
                   print("Acquired!")
                   acquired = True
@@ -182,14 +187,15 @@ if args.pilots:
       rx = rx[Nmf:-1]
       mf += 1
 
+   if args.acq_test:
+      mean_acq_time = (Nmf*mf/Fs)/acq_pass
+      pfail = acq_fail/(acq_pass+acq_fail)
+      print(f"Acq Test Passes: {acq_pass:d} Fails: {acq_fail:d} Pfail: {pfail:5.2f} Mean Acq time: {mean_acq_time:5.2f} s")
+      if (pfail < 0.2) and (mean_acq_time < args.acq_time_target):
+         print("PASS")
+
    if not acquired:
-      if args.acq_test:
-         acq_time = (Nmf*mf/Fs)/acq_pass
-         print(f"Acq Test Passes: {acq_pass:d} Fails: {acq_fail:d} Mean Acq time: {acq_time:5.2f} s")
-         if acq_time < args.acq_time_target:
-            print("PASS")
-      else:
-         print("Acquisition failed....")
+      print("Acquisition failed....")
       quit()
 
    # frequency refinement, use two sets of pilots

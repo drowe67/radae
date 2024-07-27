@@ -55,6 +55,7 @@ parser.add_argument('--bottleneck', type=int, default=3, help='1-1D rate Rs, 2-2
 parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matrix on last modem frame')
 parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
 parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
+parser.add_argument('--foff_err', type=float, default=0.0, help='Artifical freq offset error after sync to test tracking (default 0.0)')
 parser.add_argument('-v', type=int, default=2, help='Verbose level (default 2)')
 parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
 parser.set_defaults(bpf=True)
@@ -146,8 +147,8 @@ with torch.inference_mode():
          candidate, tmax, fmax = acq.detect_pilots(rx_buf)
       else:
          # we're in sync, so check we can still see pilots and run receiver
-         ffine_range = np.arange(fmax-0.5,fmax+0.5,0.1)
-         tfine_range = np.arange(tmax-1,tmax+2)
+         ffine_range = np.arange(fmax-1,fmax+1,0.1)
+         tfine_range = np.arange(tmax-8,tmax+8)
          tmax,fmax_hat = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
          fmax = 0.9*fmax + 0.1*fmax_hat
          candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
@@ -196,6 +197,7 @@ with torch.inference_mode():
                ffine_range = np.arange(fmax-10,fmax+10,0.25)
                tfine_range = np.arange(tmax-1,tmax+2)
                tmax,fmax = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
+               fmax += args.foff_err
          else:
             next_state = "search"
       elif state == "sync":

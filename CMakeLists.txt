@@ -168,21 +168,32 @@ add_test(NAME acq_sine
                        --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16")
                        set_tests_properties(acq_sine PROPERTIES PASS_REGULAR_EXPRESSION "Acquisition failed")
 
-# Worst case: 0dB SNR MPP, make sure mean acq time < 1s
+# Worst case: 0dB SNR MPP
 add_test(NAME acq_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       test/make_g_mpp.sh; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       test/make_g.sh; \
+                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 \
                        --EbNodB 3 --freq_offset 10 --g_file g_mpp.f32 --write_rx rx.f32; \
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null --pilots --pilot_eq \
-                       --bottleneck 3 --cp 0.004 --acq_test --fmax_target 10")
+                       --bottleneck 3 --cp 0.004 --acq_test --fmax_target 10 --acq_time_target 1.5")
                        set_tests_properties(acq_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# Harsh acquisition test as above with an interfering sine wave at -3dBc on our signal, we realex acq time target to 2s
+# 0dB SNR MPG (slow fading to simulate quasi-stationary notches)
+add_test(NAME acq_mpg
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       test/make_g.sh; \
+                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 \
+                       --EbNodB 3 --freq_offset 40 --g_file g_mpg.f32 --write_rx rx.f32; \
+                       ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null --pilots --pilot_eq \
+                       --bottleneck 3 --cp 0.004 --acq_test --fmax_target 40 --acq_time_target 1.5")
+                       set_tests_properties(acq_mpg PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# Acquisition test as above with an interfering sine wave at -3dBc on our signal, we relax acq time target to 2s
 add_test(NAME acq_sine_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       test/make_g_mpp.sh; \
+                       test/make_g.sh; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 \
                        --EbNodB 3 --freq_offset -40 --g_file g_mpp.f32 --sine_amp 0.5 --sine_freq 1250 --write_rx rx.f32; \
@@ -247,12 +258,13 @@ add_test(NAME radae_rx_basic
                        python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_rx_basic PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# introduce noise-only segments at either end to give state machine/end of over a work out
+# Introduce noise-only segments at either end to give state machine/end of over a work out.  Run for 50 seconds or so
+# to test we don't acidentally drop sync (loss.py will pick up any interruptions)
                        
 # low SNR AWGN
 add_test(NAME radae_rx_awgn
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --EbNodB 1 --freq_offset 13 \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
                        --prepend_noise 1 --append_noise 3 --end_of_over; \
@@ -262,11 +274,11 @@ add_test(NAME radae_rx_awgn
 
 # Low SNR MPP
 # End of over detection is not reliable on MPP, so run-on timer terminates over, --clip_end removes garbage at end
-# We don't don't bother checking acquisition time on this channel, as it's a severe case
+# We don't don't bother checking acquisition time on this channel, as it's a severe case.
 add_test(NAME radae_rx_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       test/make_g_mpp.sh; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       test/make_g.sh; \
+                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 \
                        --EbNodB 4 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
                        --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \

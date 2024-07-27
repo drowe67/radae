@@ -17,7 +17,7 @@ No=$2
 shift; shift;
 GAIN=0.25 # allow some headroom for noise and fading to prevent clipping
 
-source test/make_g_mpp.sh
+source test/make_g.sh
 cp -f g_mpp.f32 fast_fading_samples.float
 
 # Generate tx file and add noise
