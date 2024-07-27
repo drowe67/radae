@@ -259,9 +259,9 @@ add_test(NAME radae_rx_basic
                        set_tests_properties(radae_rx_basic PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # Introduce noise-only segments at either end to give state machine/end of over a work out.  Run for 50 seconds or so
-# to test we don't acidentally drop sync (loss.py will pick up any interruptions)
+# to test we don't drop sync in these poor channels (loss.py will pick up any interruptions)
                        
-# low SNR AWGN
+# SNR=-2dB AWGN
 add_test(NAME radae_rx_awgn
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
@@ -272,21 +272,33 @@ add_test(NAME radae_rx_awgn
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 0.5")
                        set_tests_properties(radae_rx_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# Low SNR MPP
-# End of over detection is not reliable on MPP, so run-on timer terminates over, --clip_end removes garbage at end
+# SNR=0dB MPP
+# End of over detection is not always reliable on MPP, so run-on timer terminates over, --clip_end removes garbage at end
 # We don't don't bother checking acquisition time on this channel, as it's a severe case.
 add_test(NAME radae_rx_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        test/make_g.sh; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 \
-                       --EbNodB 4 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
+                       --EbNodB 3 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
                        --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \
-                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 1 > features_rx_out.f32; \
+                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32; \
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_end 300")
                        set_tests_properties(radae_rx_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# Low SNR AWGN ~5 Hz/min = 5/60 Hz/s freq drift
+# SNR=0dB MPG
+add_test(NAME radae_rx_mpg
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       test/make_g.sh; \
+                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 \
+                       --EbNodB 3 --freq_offset -11 --g_file g_mpg.f32 --write_rx rx.f32 \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \
+                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_end 300")
+                       set_tests_properties(radae_rx_mpg PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# SNR=-2dB AWGN ~5 Hz/min = 5/60 Hz/s freq drift
 add_test(NAME radae_rx_dfdt
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
@@ -297,7 +309,7 @@ add_test(NAME radae_rx_dfdt
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 0.8")
                        set_tests_properties(radae_rx_dfdt PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# ability to handle small differences in sample rate between tx and rx (delta Fs)
+# SNR=10dB ability to handle small differences in sample rate between tx and rx (delta Fs)
 add_test(NAME radae_rx_dfs
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
