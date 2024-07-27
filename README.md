@@ -111,6 +111,11 @@ To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to r
 ```
 cmake -DOPUS_DIR=~/tmp/opus -DCODEC2_DEV=~/tmp/codec2-dev ..
 ```
+A lot of the tests generate a float IQ sample file.  You can listen to this file with: 
+```
+cat rx.f32 | python3 f32toint16.py --real --scale 8192 | play -t .s16 -r 8000 -c 1 - bandpass 300 2000
+```
+The scaling `--scale` is required as the low SNRs mean the noise peak amplitude can clip 16 bit samples if not carefully scaled.
 
 # Inference
 
@@ -377,7 +382,7 @@ Using model 17 waveform:
 | --- | --- | --- |
 | Audio Bandwith | 100-8000 Hz | |
 | RF Bandwidth | 1500 Hz (-6dB) | |
-| Rx Peak Average Power Ratio | < 1dB | |
+| Tx Peak Average Power Ratio | < 1dB | |
 | Threshold SNR | -3dB | AWGN channel, 3000 Hz noise bandwidth |
 | Threshold C/No | 32 dBHz | AWGN channel |
 | Threshold SNR | 0dB | MPP channel (1Hz Doppler, 2ms path delay), 3000 Hz noise bandwidth |
@@ -389,6 +394,7 @@ Using model 17 waveform:
 | Number of Carriers | 30 | |
 | Per Carrier Symbol rate | 50 Hz | |
 | Cyclic Prefix | 4ms | |
+| Worst case channel | MPD: 2Hz Doppler spread, 4ms path delay | Two path Watterson model |
 | Mean acquisition time | < 1.5s | 0dB SNR MPP channel | 
 | Acquisition frequency range | +/- 50 Hz | |
 | Acquisition co-channel interference tolerence | -3dBC | Interfering sine wave level, <2s mean acquisition time |
