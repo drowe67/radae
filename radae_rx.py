@@ -127,22 +127,25 @@ Tunsync = 3.0                        # allow some time before lossing sync to ri
 Nmf_unsync = int(Tunsync*Fs/Nmf)
 endofover = False
 
+# P DDD P DDD P Ncp
+# extra Ncp at end so we can handle timing slips
 rx_buf = np.zeros(2*Nmf+M+Ncp,np.csingle)
 rx = np.zeros(0,np.csingle)
 rx_phase = 1 + 1j*0
 rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
 z_hat_log = torch.zeros(0,model.Nzmf,model.latent_dim)
 
+nin = Nmf
 with torch.inference_mode():
    while True:
-      buffer = sys.stdin.buffer.read(Nmf*struct.calcsize("ff"))
-      if len(buffer) != Nmf*struct.calcsize("ff"):
+      buffer = sys.stdin.buffer.read(nin*struct.calcsize("ff"))
+      if len(buffer) != nin*struct.calcsize("ff"):
          break
       buffer_complex = np.frombuffer(buffer,np.csingle)
       if args.bpf:
          buffer_complex = bpf.bpf(buffer_complex)
-      rx_buf[:Nmf+M+Ncp] = rx_buf[Nmf:]                           # out with the old
-      rx_buf[Nmf+M+Ncp:] = buffer_complex                         # in with the new
+      rx_buf[:-nin] = rx_buf[nin:]                           # out with the old
+      rx_buf[-nin:] = buffer_complex                         # in with the new
       if state == "search" or state == "candidate":
          candidate, tmax, fmax = acq.detect_pilots(rx_buf)
       else:
@@ -173,6 +176,18 @@ with torch.inference_mode():
             #sys.stdout.flush()
             if len(args.write_latent):
                z_hat_log = torch.cat([z_hat_log,z_hat])
+
+         # handle timing slip when rx sample clock > tx sample clock
+         nin = Nmf
+         if tmax >= Nmf-M:
+            nin = Nmf + M
+            tmax -= M
+            #print("slip+", file=sys.stderr)
+         # handle timing slip when rx sample clock < tx sample clock
+         if tmax < M:
+            nin = Nmf - M
+            tmax += M
+            #print("slip-", file=sys.stderr)
 
       if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
          print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ",end='', file=sys.stderr)

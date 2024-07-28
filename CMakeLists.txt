@@ -259,8 +259,7 @@ add_test(NAME rx_streaming
                        python3 loss.py features_in.f32 features_rx_out.f32 --features_hat2 features_rx_one_out.f32 --compare;")
                        set_tests_properties(rx_streaming PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# basic test of streaming rx code, run rx.py in vanilla and streaming mode, compare against non-streaming rx.sh
-add_test(NAME radae_rx_basic
+# basic test of streaming rx, run rx in vanilla and streaming , compare
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --EbNodB 10 --freq_offset 11 \
@@ -332,7 +331,7 @@ add_test(NAME radae_rx_dfdt
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 0.8")
                        set_tests_properties(radae_rx_dfdt PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# SNR=10dB ability to handle small differences in sample rate between tx and rx (delta Fs)
+# SNR=7dB ability to handle small differences in sample rate between tx and rx (delta Fs)
 add_test(NAME radae_rx_dfs
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
@@ -342,6 +341,29 @@ add_test(NAME radae_rx_dfs
                        cat rx_.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rxs_out.f32; \
                        python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_rx_dfs PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# Test ability to handle buffer slips due to sample clock offsets, rx ADC clock > tx ADC clock.  We make sample clock error larger than 200ppm spec
+# in order to exercise code.  Nice thing about "nin" design is it allows us to get meaningful "loss.py" results, ie no frames are lost.
+add_test(NAME radae_rx_slip_plus
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --EbNodB 10 --freq_offset 11 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset --prepend_noise 0.08; \
+                       cat rx.f32 | python3 f32toint16.py --scale 8192 | sox -t .s16 -r 8000 -c 2 - -t .s16 -r 8005 -c 2 - | python3 int16tof32.py > rx_.f32; \
+                       cat rx_.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rxs_out.f32; \
+                       python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 1.0")
+                       set_tests_properties(radae_rx_slip_plus PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# Test ability to handle buffer slips due to sample clock offsets, rx ADC clock < tx ADC clock
+add_test(NAME radae_rx_slip_minus
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --EbNodB 10 --freq_offset 31 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset --prepend_noise 0.11; \
+                       cat rx.f32 | python3 f32toint16.py --scale 8192 | sox -t .s16 -r 8000 -c 2 - -t .s16 -r 7995 -c 2 - | python3 int16tof32.py > rx_.f32; \
+                       cat rx_.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rxs_out.f32; \
+                       python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 1.0")
+                       set_tests_properties(radae_rx_slip_minus PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # profiles a run with a 50 second file (no pass/fail, run with -V to get a rough idea of execution time)
 add_test(NAME radae_rx_profile
