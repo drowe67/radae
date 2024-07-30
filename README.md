@@ -148,13 +148,26 @@ The scaling `--scale` is required as the low SNRs mean the noise peak amplitude 
 
 # Multipath rate Fs
 
-1. Baseline no noise simulation:
+1. Baseline no noise simulation on Multipath Poor MPP channel:
    ```
    octave:85> Fs=8000; Rs=50; Nc=20; multipath_samples("mpp", Fs, Rs, Nc, 60, "h_mpp.f32","g_mpp.f32")
    ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav /dev/null --rate_Fs --write_latent z.f32 --write_rx rx.f32 --pilots --pilot_eq --eq_ls --ber_test --EbNo 100 --g_file g_mpp.f32 --cp 0.004
    octave:87> radae_plots; do_plots('z.f32','rx.f32')
    ```
-   
+
+1. Multipath Disturbed (MPD) demo:
+   ```
+   ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav brian_g8sez_mpd_snr3dB.wav --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --EbNodB 6 --g_file g_mpd.f32 --write_rx rx.f32
+   ```
+   Optional plots (e.g. spectrogram):
+   ```
+   octave:40> radae_plots; do_plots('z.f32','rx.f32')
+   ```
+   Listen to "off air" signal.
+   ```
+   cat rx.f32 | python3 f32toint16.py --real --scale 8192 | sox -t .s16 -r 8000 -c 1 - brian_g8sez_mpd_snr3dB_rx.wav sinc 0.3-2.7k
+   ```
+
 # Evaluate script
 
 Automates joint simulation of SSB and RADAE, generates wave files and spectrograms.  Can adjust noise for equal C/No or equal P/No.
