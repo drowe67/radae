@@ -60,6 +60,12 @@ def conv1d(n_inchan, n_outchan, kernel_size, multiplies, adds):
 
     return multiplies,adds
 
+def linear(n_infeat, n_outfeat, multiplies, adds):
+    multiplies += n_infeat*n_outfeat
+    adds += n_infeat*n_outfeat + n_outfeat
+
+    return multiplies,adds
+
 if __name__ == '__main__':
     Tz = 0.04 # one encoder timestep
 
@@ -77,6 +83,10 @@ if __name__ == '__main__':
     conv1d_multiplies,conv1d_adds = conv1d(768,96, 2, conv1d_multiplies,conv1d_adds)
     print(f"Conv1D per encoder call multiplies: {conv1d_multiplies:d} adds: {conv1d_adds}")
 
-    mmacs = (gru_multiplies+conv1d_multiplies)/Tz/1E6
-    print(f"MMACs per second: {mmacs}")
+    linear_multiplies,linear_adds = linear(4*22,64,0,0)
+    linear_multiplies,linear_adds = linear(864,80,linear_multiplies,linear_adds)
+    print(f"Linear per encoder call multiplies: {linear_multiplies:d} adds: {linear_adds}")
+
+    mmacs = (gru_multiplies+conv1d_multiplies+linear_multiplies)/Tz/1E6
+    print(f"CoreEncoder MMACs per second: {mmacs}")
 
