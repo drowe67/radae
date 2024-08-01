@@ -50,7 +50,6 @@ def gru(n_infeat, n_outfeat, multiplies, adds):
     adds += 2*n_outfeat
    
     # TODO sigmoid and tanh (treat as look ups?)
-
     return multiplies,adds
 
 def conv1d(n_inchan, n_outchan, kernel_size, multiplies, adds):
@@ -58,6 +57,7 @@ def conv1d(n_inchan, n_outchan, kernel_size, multiplies, adds):
     multiplies += kernel_size*n_inchan*n_outchan
     adds += kernel_size*n_inchan*n_outchan + n_outchan
 
+    # TODO tanh
     return multiplies,adds
 
 def linear(n_infeat, n_outfeat, multiplies, adds):

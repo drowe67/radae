@@ -264,7 +264,7 @@ else
     amp=$(python3 -c "import numpy as np; amp=0.25*${setpoint_rms}*sqrt(2.0)/8192.0; print(\"%f\" % amp)")
 fi
 python3 chirp.py ${chirp}.f32 4.5 --amp ${amp}
-python3 f32toint16.py ${chirp}.f32 ${chirp}.raw --real
+cat ${chirp}.f32 | python3 f32toint16.py --real > ${chirp}.raw
 
 # create compressed SSB signal
 speechfile_raw_8k=$(mktemp)
@@ -290,7 +290,7 @@ sox $speechfile $speechfile_pad pad 1@0
 # create modulated radae signal
 ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --EbNodB 100 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae}.f32
 # extract real (I) channel
-python3 f32toint16.py ${tx_radae}.f32 ${tx_radae}.raw --real --scale 16383
+cat ${tx_radae}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae}.raw 
 
 # Make power of both signals the same, by adjusting the levels to meet the setpoint
 if [ $peak -eq 1 ]; then

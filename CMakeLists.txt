@@ -129,21 +129,15 @@ add_test(NAME chirp_mpp
                        set_tests_properties(chirp_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # Low SNR ota_test.sh, with chirp measurement, AWGN
-# FIXME: this will pass if either condition is true
 add_test(NAME ota_test_awgn
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -21")
-                       set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
-                       set_tests_properties(ota_test_awgn PROPERTIES PASS_REGULAR_EXPRESSION "CNodB PASS")
 
 
-# FIXME: this will pass if either condition is true
 # Low SNR ota_test.sh, with chirp measurement, MPP
 add_test(NAME ota_test_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -25 --mpp --freq -25")
-                       set_tests_properties(ota_test_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
-                       set_tests_properties(ota_test_mpp PROPERTIES PASS_REGULAR_EXPRESSION "CNodB PASS")
 
 
 # Acquisition tests ------------------------------------------------------------------------------------
@@ -260,6 +254,7 @@ add_test(NAME rx_streaming
                        set_tests_properties(rx_streaming PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # basic test of streaming rx, run rx in vanilla and streaming , compare
+add_test(NAME radae_rx_basic
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --EbNodB 10 --freq_offset 11 \

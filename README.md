@@ -51,6 +51,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | stateful_encoder.[py|sh] | Inference test that compares stateful to vanilla encoder |
 | radae_tx.[py|sh] | streaming RADAE encoder and helper script |
 | radae_rx.[py|sh] | streaming RADAE decoder and helper script |
+| resource_est.py | WIP estimate CPU/memory resources |
 
 # Installation
 
