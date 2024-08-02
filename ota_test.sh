@@ -44,9 +44,9 @@
 #    Note tx.iq8 has at +1 MHz offset, so we tune the HackRF 1 MHz low
 #  
 
-CODEC2_PATH=${HOME}/codec2-dev
 # TODO: way to adjust /build_linux/src for OSX
-PATH=${PATH}:${CODEC2_PATH}/build_linux/src:${CODEC2_PATH}/build_linux/misc
+CODEC2_DEV=${HOME}/codec2-dev
+PATH=${PATH}:${CODEC2_DEV}/build_linux/src:${CODEC2_DEV}/build_linux/misc:${PWD}/build/src
 
 which ch || { printf "\n**** Can't find ch - check CODEC2_PATH **** \n\n"; exit 1; }
 
@@ -140,8 +140,11 @@ function process_rx {
     rx_radae=$(mktemp)
     sox $rx ${filename}_ssb.wav trim 5 $x
     sox $rx -t .s16 ${rx_radae}.raw trim $start_radae
-    cat ${rx_radae}.raw | python3 int16tof32.py  --zeropad > ${rx_radae}.f32
-    ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 ${filename}_radae.wav --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16
+
+    # Use streaming RADAE Rx
+    cat ${rx_radae}.raw | python3 int16tof32.py --zeropad > ${rx_radae}.f32
+    cat ${rx_radae}.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32
+    lpcnet_demo -fargan-synthesis features_rx_out.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_radae.wav
 }
 
 
@@ -292,11 +295,10 @@ cat ${chirp}.raw ${tx_ssb}_pad.raw ${tx_radae}_pad.raw > tx.raw
 sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
 
 # generate a 4MSP .iq8 file suitable for replaying by HackRF (can disable if not using HackRF)
-
 if [ $hackrf -eq 1 ]; then
   ch tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
 fi
-echo "hey"
+
 if [ $tx_file -eq 1 ]; then
   exit 0
 fi

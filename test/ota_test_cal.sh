@@ -34,7 +34,7 @@ printf "\nRun Rx and check ML "loss" is OK ... \n\n"
 # We don't check acq time as start time of RADAE is uncertain due to silence etc
 rm -f features_rx_out.f32
 rx_log=$(mktemp)
-./ota_test.sh -r rx.wav >${rx_log}
+./ota_test.sh -d -r rx.wav >${rx_log}
 python3 loss.py features_in.f32 features_rx_out.f32 --loss_test 0.3 | tee /dev/stderr | grep "PASS" 
 if [ $? -ne 0 ]; then
   exit 1
