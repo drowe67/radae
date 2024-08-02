@@ -12,9 +12,11 @@ if(NOT CODEC2_DEV_BUILD_DIR)
     set(CODEC2_DEV_BUILD_DIR $HOME/codec2-dev/build_linux )
 endif()
 
+# Find or build opus as needed
 if(NOT OPUS_DIR)
     set(OPUS_DIR $ENV{HOME}/opus)
 endif()
+include(cmake/FindOrBuildOpus.cmake)
 
 #
 # Prevent in-source builds

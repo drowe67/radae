@@ -1,18 +1,4 @@
-include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${OPUS_DIR}/dnn ${OPUS_DIR}/celt ${OPUS_DIR}/include)
-
-# build static library from previously built opus object files
-# TODO (a) pull git repo & build opus rather than separate step (b) use list of sources opus/*.mk files (or maybe *.o)
-if(NOT EXISTS ${OPUS_DIR}/libopus.a)
-    message(STATUS "Building libopus.a")
-    execute_process(COMMAND ${CMAKE_SOURCE_DIR}/build_libopus.sh ${OPUS_DIR}
-                    COMMAND_ECHO STDOUT
-                    RESULT_VARIABLE ret)
-    if(ret EQUAL "1")
-        message(FATAL_ERROR "Error building libopus.a")
-    endif()
-
-    message(STATUS "libopus.a already exists")
-endif()
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(lpcnet_demo lpcnet_demo.c)
-target_link_libraries(lpcnet_demo ${OPUS_DIR}/libopus.a m)
+target_link_libraries(lpcnet_demo opus m)
