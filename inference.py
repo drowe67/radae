@@ -74,6 +74,7 @@ parser.add_argument('--end_of_over', action='store_true', help='insert end of ov
 parser.add_argument('--correct_freq_offset', action='store_true', help='correct --freq_offset before decoding here (default off)')
 parser.add_argument('--sine_amp', type=float, default=0.0, help='single freq interferer level (default zero)')
 parser.add_argument('--sine_freq', type=float, default=1000.0, help='single freq interferer freq (default 1000Hz)')
+parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -92,6 +93,8 @@ latent_dim = args.latent_dim
 nb_total_features = 36
 num_features = 20
 num_used_features = 20
+if args.auxdata:
+    num_features += 1
 
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rate_Fs=args.rate_Fs, 
@@ -109,6 +112,12 @@ features_in = np.reshape(np.fromfile(feature_file, dtype=np.float32), (1, -1, nb
 nb_features_rounded = model.num_10ms_times_steps_rounded_to_modem_frames(features_in.shape[1])
 features = features_in[:,:nb_features_rounded,:]
 features = features[:, :, :num_used_features]
+if args.auxdata:
+   aux_symb =  1.0 - 2.0*(np.random.rand(1,features.shape[1],1) > 0.5)
+   print(features.shape, aux_symb.shape)
+   features = np.concatenate([features, aux_symb],axis=2,dtype=np.float32)
+   print(features.shape)
+   #quit()
 features = torch.tensor(features)
 print(f"Processing: {nb_features_rounded} feature vectors")
 
@@ -216,13 +225,21 @@ if __name__ == '__main__':
       else:
          print(f"Measured: {EqNodB_meas-3:6.2f}          {SNRdB_meas:6.2f}       {Eq_meas:7.2f}")
 
-   features_hat = output["features_hat"]
+   features_hat = output["features_hat"][:,:,:num_used_features]
    features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
    features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
    features_hat.tofile(args.features_hat)
 
    loss = distortion_loss(features,output['features_hat']).cpu().detach().numpy()[0]
-   print(f"loss: {loss:5.3f}")
+   if args.auxdata:
+      x = features[..., 20:21]*output["features_hat"][..., 20:21]
+      x = torch.flatten(x)
+      n_errors = int(torch.sum(x < 0))
+      n_bits = int(torch.numel(x))
+      BER = n_errors/n_bits
+      print(f"loss: {loss:5.3f} BER: {BER:5.3f}")
+   else:
+      print(f"loss: {loss:5.3f}")
    if args.loss_test > 0.0:
       if loss < args.loss_test:
          print("PASS")
