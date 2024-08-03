@@ -58,28 +58,6 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 
 sox, python3, python3-matplotlib and python3-tqdm, octave, octave-signal, cmake.  Pytorch should be installed using the instructions from the [pytorch](https://pytorch.org/get-started/locally/) web site. 
 
-## FARGAN Vocoder
-
-```
-cd ~
-git clone git@github.com:xiph/opus.git
-cd opus
-git checkout opus-ng
-./autogen.sh
-./configure --enable-dred
-make
-cd dnn
-```
-Initial test:
-```
-./lpcnet_demo -features input.pcm features.f32
-./lpcnet_demo -fargan-synthesis features.f32 output.pcm
-```
-Playing on a remote machine:
-```
-scp deep.lan:opus/output.s16 /dev/stdout | aplay -f S16_LE -r 1600
-```
-
 ## codec2-dev
 
 Supplies some utilities used for `ota_test.sh` and `evaluate.sh`
@@ -109,7 +87,7 @@ ctest
 ```
 To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to run in verbose mode `ctest -V -R inference_model5`.  You can change the paths to `codec2-dev` and `opus` on the `cmake` command line:
 ```
-cmake -DOPUS_DIR=~/tmp/opus -DCODEC2_DEV=~/tmp/codec2-dev ..
+cmake -DCODEC2_DEV=~/tmp/codec2-dev ..
 ```
 
 # Inference

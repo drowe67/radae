@@ -12,9 +12,8 @@ if(NOT CODEC2_DEV_BUILD_DIR)
     set(CODEC2_DEV_BUILD_DIR $HOME/codec2-dev/build_linux )
 endif()
 
-if(NOT OPUS_DIR)
-    set(OPUS_DIR $ENV{HOME}/opus)
-endif()
+# Build opus with FARGAN support.
+include(cmake/BuildOpus.cmake)
 
 #
 # Prevent in-source builds
