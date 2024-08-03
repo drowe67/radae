@@ -16,7 +16,7 @@ endif()
 if(NOT OPUS_DIR)
     set(OPUS_DIR $ENV{HOME}/opus)
 endif()
-include(cmake/FindOrBuildOpus.cmake)
+include(cmake/BuildOpus.cmake)
 
 #
 # Prevent in-source builds
