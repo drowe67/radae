@@ -1,6 +1,5 @@
 message(STATUS "Will build opus with FARGAN")
 
-# The user doesn't have a valid opus, build from source
 include(ExternalProject)
 ExternalProject_Add(build_opus
     GIT_REPOSITORY https://gitlab.xiph.org/xiph/opus.git
