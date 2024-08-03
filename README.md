@@ -64,7 +64,7 @@ sox, python3, python3-matplotlib and python3-tqdm, octave, octave-signal, cmake.
 cd ~
 git clone git@github.com:xiph/opus.git
 cd opus
-git checkout opus-ng
+git checkout main
 ./autogen.sh
 ./configure --enable-dred
 make
@@ -109,7 +109,7 @@ ctest
 ```
 To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to run in verbose mode `ctest -V -R inference_model5`.  You can change the paths to `codec2-dev` and `opus` on the `cmake` command line:
 ```
-cmake -DOPUS_DIR=~/tmp/opus -DCODEC2_DEV=~/tmp/codec2-dev ..
+cmake -DCODEC2_DEV=~/tmp/codec2-dev ..
 ```
 
 # Inference
