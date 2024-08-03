@@ -53,15 +53,17 @@ def noise_quantize(x):
 # loss functions for vocoder features
 def distortion_loss(y_true, y_pred):
 
-    if y_true.size(-1) != 20:
-        raise ValueError('distortion loss is designed to work with 20 features')
+    if y_true.size(-1) != 20 and y_true.size(-1) != 21:
+        raise ValueError('distortion loss is designed to work with 20 or 21 features')
 
     ceps_error   = y_pred[..., :18] - y_true[..., :18]
     pitch_error  = 2*(y_pred[..., 18:19] - y_true[..., 18:19])
-    corr_error   = y_pred[..., 19:] - y_true[..., 19:]
-    pitch_weight = torch.relu(y_true[..., 19:] + 0.5) ** 2
-
-    loss = torch.mean(ceps_error ** 2 + 3. * (10/18) * torch.abs(pitch_error) * pitch_weight + (1/18) * corr_error ** 2, dim=-1)
+    corr_error   = y_pred[..., 19:20] - y_true[..., 19:20]
+    pitch_weight = torch.relu(y_true[..., 19:20] + 0.5) ** 2
+    data_error = 0
+    if y_true.size(-1) == 21:
+        data_error = y_pred[..., 20:21] - y_true[..., 20:21]
+    loss = torch.mean(ceps_error ** 2 + 3. * (10/18) * torch.abs(pitch_error) * pitch_weight + (1/18) * corr_error ** 2 + (1/18)*data_error ** 2, dim=-1)
     loss = torch.mean(loss, dim=-1)
 
     # reduce bias towards lower Eb/No when training over a range of Eb/No
@@ -620,7 +622,7 @@ class RADAE(nn.Module):
 
         self.core_decoder_statefull.load_state_dict(new_state_dict)
    
-    # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+    # Stateful encoder wasn't present during training, so we need to load weights from existing encoder
     def core_encoder_statefull_load_state_dict(self):
 
         # some of the layer names have been changed due to use of custom GRUStatefull layer
@@ -669,7 +671,7 @@ class RADAE(nn.Module):
         return num_ten_ms_timesteps_rounded
     
     # Use classical DSP pilot based equalisation. Note just for inference atm
-    # TODO consider moving to dsp.py, or perhaps another file, to reduce the size o fthios file. 
+    # TODO consider moving to dsp.py, or perhaps another file, to reduce the size of this file. 
     # Down side is it has a lot of flags and options that would need passing
     def do_pilot_eq(self, num_modem_frames, rx_sym_pilots):
         Nc = self.Nc 

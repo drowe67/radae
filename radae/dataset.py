@@ -44,16 +44,21 @@ class RADAEDataset(torch.utils.data.Dataset):
                 num_features=36,
                 h_file="",            # rate Rs multipath channel samples
                 g_file="",            # rate Fs multipath channel samples
-                rate_Fs = False
+                rate_Fs = False,
+                auxdata = False       # one auxillary data symbol in every feature vector
                 ):
 
         self.sequence_length = sequence_length
 
         self.features = np.reshape(np.fromfile(feature_file, dtype=np.float32), (-1, num_features))
-        self.features = self.features[:, :num_used_features]
+        self.features = self.features[:,:num_used_features]
         self.num_sequences = self.features.shape[0] // sequence_length
         self.rate_Fs = rate_Fs
-
+        self.auxdata = auxdata
+        if self.auxdata:
+            aux_symb =  1.0 - 2.0*(np.random.rand(self.features.shape[0],1) > 0.5)
+            self.features = np.concatenate([self.features, aux_symb],axis=1,dtype=np.float32)
+ 
         # optionally set up rate Rs multipath model
         self.H_sequence_length = H_sequence_length
         if len(h_file):
