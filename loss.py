@@ -44,6 +44,7 @@ parser.add_argument('features_hat', type=str, help='path to output feature file 
 parser.add_argument('--features_hat2', type=str, help='path to optional 2nd features file to compare two runs')
 parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss to arg, print PASS/FAIL')
 parser.add_argument('--acq_time_test', type=float, default=0, help='compare acquisition time to threshold arg, print PASS/FAIL')
+parser.add_argument('--clip_start', type=int, default=0, help='remove this many frames from end, useful to remove start of over resync (default 0)')
 parser.add_argument('--clip_end', type=int, default=0, help='remove this many frames from end, useful to remove end of over noise (default 0)')
 parser.add_argument('--plot', action='store_true', help='plot loss versus time')
 parser.add_argument('--compare', action='store_true', help='plot loss versus time')
@@ -63,7 +64,7 @@ def load_features(filename):
 def find_loss(features_fn, features_hat_fn):
    features = load_features(features_fn)
    features_hat = load_features(features_hat_fn)
-   features_hat = features_hat[:,:features_hat.shape[1]-args.clip_end,:]
+   features_hat = features_hat[:,args.clip_start:features_hat.shape[1]-args.clip_end,:]
    features_seq_length = features.shape[1]
    features_hat_seq_length = features_hat.shape[1]
    print(features.shape, features_hat.shape)

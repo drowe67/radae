@@ -55,7 +55,7 @@ parser.add_argument('--bottleneck', type=int, default=3, help='1-1D rate Rs, 2-2
 parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matrix on last modem frame')
 parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
 parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
-parser.add_argument('--foff_err', type=float, default=0.0, help='Artifical freq offset error after sync to test tracking (default 0.0)')
+parser.add_argument('--foff_err', type=float, default=0.0, help='Artifical freq offset error after first sync to test false sync (default 0.0)')
 parser.add_argument('-v', type=int, default=2, help='Verbose level (default 2)')
 parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
 parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
@@ -129,6 +129,10 @@ valid_count = 0
 Tunsync = 3.0                        # allow some time before lossing sync to ride over fades
 Nmf_unsync = int(Tunsync*Fs/Nmf)
 endofover = False
+uw_errors = 0
+uw_error_thresh = 12
+synced_count = 0
+synced_count_one_sec = Fs//Nmf
 
 # P DDD P DDD P Ncp
 # extra Ncp at end so we can handle timing slips
@@ -158,6 +162,11 @@ with torch.inference_mode():
          tmax,fmax_hat = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
          fmax = 0.9*fmax + 0.1*fmax_hat
          candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
+
+         synced_count += 1
+         if synced_count == synced_count_one_sec:
+            synced_count = 0
+
          if not endofover:
             # correct frequency offset, note we preserve state of phase
             # TODO do we need preserve state of phase?  We're passing entire vector and there isn't any memory (I think)
@@ -176,6 +185,9 @@ with torch.inference_mode():
                aux_symb = features_hat[:,:,20].detach().numpy()
                aux_bits = 1*(aux_symb[0,::symb_repeat] > 0)
                features_hat = features_hat[:,:,0:20]
+               uw_errors += np.sum(aux_bits)
+               if synced_count == 0:
+                  uw_errors = 0
             # add unused features and send to stdout
             features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
             features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
@@ -201,7 +213,7 @@ with torch.inference_mode():
          print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ", end='', file=sys.stderr)
          print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", end='', file=sys.stderr)
          if args.auxdata and state == "sync":
-            print(f" auxbits: {aux_bits:}", file=sys.stderr)
+            print(f" auxbits: {aux_bits:} uw_errors: {uw_errors:d}", file=sys.stderr)
          else:
             print("",file=sys.stderr)
 
@@ -220,11 +232,16 @@ with torch.inference_mode():
             if valid_count > 3:
                next_state = "sync"
                acquired = True
+               synced_count = 0
+               if args.auxdata:
+                  uw_errors = 0
                valid_count = Nmf_unsync
                ffine_range = np.arange(fmax-10,fmax+10,0.25)
                tfine_range = np.arange(tmax-1,tmax+2)
                tmax,fmax = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
+               # only insert freq offset error on first sync
                fmax += args.foff_err
+               args.foff_err = 0
          else:
             next_state = "search"
       elif state == "sync":
@@ -234,7 +251,7 @@ with torch.inference_mode():
             valid_count -= 1
             if valid_count == 0:
                next_state = "search"
-         if endofover:
+         if endofover or uw_errors > uw_error_thresh:
             next_state = "search"
       state = next_state
       mf += 1
