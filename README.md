@@ -387,7 +387,7 @@ A log of models trained by the author.
 | model18 | `--latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3` like model17 but dim 40, ep 100 loss 0.123 | Rs | 240601_m18 |
 | model05_auxdata | model05 (rate Rs h_nc20_train_mpp.f32) with --auxdata 100 bits/s see PR#13 | Rs | - |
 | model05_auxdata25 | model05 (rate Rs h_nc20_train_mpp.f32) with --auxdata 25 bits/s see PR#13 | Rs | - |
-
+| model19  | like model17 but with 25 bits/s auxdata, ep 100 loss 0.124 | Fs | - |
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
 # Specifications

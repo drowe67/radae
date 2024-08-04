@@ -113,11 +113,13 @@ nb_features_rounded = model.num_10ms_times_steps_rounded_to_modem_frames(feature
 features = features_in[:,:nb_features_rounded,:]
 features = features[:, :, :num_used_features]
 if args.auxdata:
-   aux_symb =  1.0 - 2.0*(np.random.rand(1,features.shape[1],1) > 0.5)
+   #aux_symb =  1.0 - 2.0*(np.random.rand(1,features.shape[1],1) > 0.5)
+   aux_symb =  np.ones((1,features.shape[1],1))
    symb_repeat = 4
    for i in range(1,symb_repeat):
       aux_symb[0,i::symb_repeat,:] = aux_symb[0,::symb_repeat,:]
-   print(features.shape, aux_symb.shape)
+   #print(features.shape, aux_symb.shape)
+   #quit()
    features = np.concatenate([features, aux_symb],axis=2,dtype=np.float32)
 features = torch.tensor(features)
 print(f"Processing: {nb_features_rounded} feature vectors")

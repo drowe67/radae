@@ -58,6 +58,7 @@ parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition 
 parser.add_argument('--foff_err', type=float, default=0.0, help='Artifical freq offset error after sync to test tracking (default 0.0)')
 parser.add_argument('-v', type=int, default=2, help='Verbose level (default 2)')
 parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
+parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
 parser.set_defaults(bpf=True)
 parser.set_defaults(use_stdout=True)
 args = parser.parse_args()
@@ -70,6 +71,8 @@ latent_dim = args.latent_dim
 nb_total_features = 36
 num_features = 20
 num_used_features = 20
+if args.auxdata:
+    num_features += 1
 
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, 
@@ -168,6 +171,11 @@ with torch.inference_mode():
             # decode z_hat to features
             assert(z_hat.shape[1] == model.Nzmf)
             features_hat = model.core_decoder_statefull(z_hat)
+            if args.auxdata:
+               symb_repeat = 4
+               aux_symb = features_hat[:,:,20].detach().numpy()
+               aux_bits = 1*(aux_symb[0,::symb_repeat] > 0)
+               features_hat = features_hat[:,:,0:20]
             # add unused features and send to stdout
             features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
             features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
@@ -190,8 +198,12 @@ with torch.inference_mode():
             #print("slip-", file=sys.stderr)
 
       if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
-         print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ",end='', file=sys.stderr)
-         print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
+         print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ", end='', file=sys.stderr)
+         print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", end='', file=sys.stderr)
+         if args.auxdata and state == "sync":
+            print(f" auxbits: {aux_bits:}", file=sys.stderr)
+         else:
+            print("",file=sys.stderr)
 
       # iterate state machine  
       next_state = state
