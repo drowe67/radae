@@ -143,7 +143,7 @@ function process_rx {
 
     # Use streaming RADAE Rx
     cat ${rx_radae}.raw | python3 int16tof32.py --zeropad > ${rx_radae}.f32
-    cat ${rx_radae}.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32
+    cat ${rx_radae}.f32 | python3 radae_rx.py model19/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rx_out.f32
     lpcnet_demo -fargan-synthesis features_rx_out.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_radae.wav
 }
 
@@ -273,7 +273,7 @@ speechfile_pad=$(mktemp).wav
 sox $speechfile $speechfile_pad pad 1@0
 
 # create modulated radae signal
-./inference.sh model17/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --EbNodB 100 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae}.f32
+./inference.sh model19/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --auxdata --EbNodB 100 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae}.f32
 # extract real (I) channel
 cat ${tx_radae}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae}.raw 
 
