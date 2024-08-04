@@ -385,6 +385,8 @@ A log of models trained by the author.
 | model16 | repeat of model05/09 with 10 hour --h_file h_nc20_test.f32, testing short h file, ep 100 loss 0.149 | Rs | |
 | model17 | `--bottleneck 3 --h_file h_nc20_train_mpp.f32` mixed rate Rs with time domain bottelneck 3, ep 100 loss 0.112 | Rs | 240601_m17 |
 | model18 | `--latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3` like model17 but dim 40, ep 100 loss 0.123 | Rs | 240601_m18 |
+| model05_auxdata | model05 (rate Rs h_nc20_train_mpp.f32) with --auxdata 100 bits/s see PR#13 | Rs | - |
+| model05_auxdata25 | model05 (rate Rs h_nc20_train_mpp.f32) with --auxdata 25 bits/s see PR#13 | Rs | - |
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 

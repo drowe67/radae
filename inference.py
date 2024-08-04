@@ -114,10 +114,11 @@ features = features_in[:,:nb_features_rounded,:]
 features = features[:, :, :num_used_features]
 if args.auxdata:
    aux_symb =  1.0 - 2.0*(np.random.rand(1,features.shape[1],1) > 0.5)
+   symb_repeat = 4
+   for i in range(1,symb_repeat):
+      aux_symb[0,i::symb_repeat,:] = aux_symb[0,::symb_repeat,:]
    print(features.shape, aux_symb.shape)
    features = np.concatenate([features, aux_symb],axis=2,dtype=np.float32)
-   print(features.shape)
-   #quit()
 features = torch.tensor(features)
 print(f"Processing: {nb_features_rounded} feature vectors")
 

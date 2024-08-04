@@ -56,7 +56,11 @@ class RADAEDataset(torch.utils.data.Dataset):
         self.rate_Fs = rate_Fs
         self.auxdata = auxdata
         if self.auxdata:
-            aux_symb =  1.0 - 2.0*(np.random.rand(self.features.shape[0],1) > 0.5)
+            symb_repeat = 4
+            aux_symb = np.zeros((self.features.shape[0],1))
+            aux_symb[::symb_repeat,0] = 1.0 - 2.0*(np.random.rand(self.features.shape[0]//symb_repeat) > 0.5)
+            for i in range(1,symb_repeat):
+                aux_symb[i::symb_repeat,0] = aux_symb[::symb_repeat,0]
             self.features = np.concatenate([self.features, aux_symb],axis=1,dtype=np.float32)
  
         # optionally set up rate Rs multipath model
