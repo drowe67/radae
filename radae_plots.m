@@ -51,7 +51,10 @@ function multipath_example()
 endfunction
 
 % Plots loss v Eb/No curves from text files dumped by train.py, pass in pairs of EqNo_file.txt,legend
-function loss_EqNo_plot(png_fn, varargin)
+function loss_EqNo_plot(png_fn, epslatex, varargin)
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts();
+    end
     figure(1); clf; hold on;
     i = 1;
     while i <= length(varargin)
@@ -61,9 +64,12 @@ function loss_EqNo_plot(png_fn, varargin)
         plot(data(:,1),data(:,2),sprintf("+-;%s;",leg))
         i++;
     end
-    hold off; grid; xlabel('Eq/No (dB)'); ylabel('loss');
+    hold off; grid; xlabel('Eq/No (dB)'); ylabel('loss'); legend('boxoff');
     if length(png_fn)
         print("-dpng",png_fn);
+    end
+    if length(epslatex)
+        print_eps_restore(epslatex,"-S350,300",textfontsize,linewidth);
     end
 endfunction
 

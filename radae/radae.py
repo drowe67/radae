@@ -63,7 +63,7 @@ def distortion_loss(y_true, y_pred):
     data_error = 0
     if y_true.size(-1) == 21:
         data_error = y_pred[..., 20:21] - y_true[..., 20:21]
-    loss = torch.mean(ceps_error ** 2 + 3. * (10/18) * torch.abs(pitch_error) * pitch_weight + (1/18) * corr_error ** 2 + (1/18)*data_error ** 2, dim=-1)
+    loss = torch.mean(ceps_error ** 2 + 3. * (10/18) * torch.abs(pitch_error) * pitch_weight + (1/18) * corr_error ** 2 + (0.5/18)*data_error ** 2, dim=-1)
     loss = torch.mean(loss, dim=-1)
 
     # reduce bias towards lower Eb/No when training over a range of Eb/No
@@ -955,6 +955,7 @@ class RADAE(nn.Module):
                 tx = torch.matmul(tx_sym, self.Winv)
                 # Apply time domain magnitude bottleneck
                 tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
+                tx_before_channel = tx
                 # DFT to transform M time domain samples to Nc carriers
                 tx_sym = torch.matmul(tx, self.Wfwd)
                 

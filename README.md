@@ -353,10 +353,20 @@ This section is optional - pre-trained models that run on a standard laptop CPU 
    octave:120> radae_plots; loss_EqNo_plot("loss_models",'model05_loss_EbNodB.txt','m5_Rs_mp','model07_loss_EbNodB.txt','m7_Fs_offets','model08_loss_EbNodB.txt','m8_Fs')
    ```
 
-1. (May 2024) Training dim=40 mixed rate model.  Note we need the Nc=10 version of the multipath H matrices `h_nc10_train_mpp.f32`.  Bottleneck 3 is a tanh() on the magnitude of the complex rate Fs time domain samples.  We bump the range of Eb/Nos trained over by 3dB `--range_EbNo_start -3` as a 10 carrier waveform will have 3dB more energy per symbol.
+1. (May 2024) Training dim=80 mixed rate PAPR optimised model.  Note we need the Nc=20 version of the multipath H matrix `h_nc20_train_mpp.f32` as fading is aplies at rate Rs.  Bottleneck 3 is a tanh() on the magnitude of the complex rate Fs time domain samples.  The SNR ends up about 3dB higher, as discussed in the mixed rate/noise calibration section of the Latext doc: 
+   ```
+   python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model19 --bottleneck 3 --h_file h_nc20_train_mpp.f32 --range_EbNo --plot_loss
+   ```
+
+1. (May 2024) Training dim=40 mixed rate PAPR optimised model.  Note we need the Nc=10 version of the multipath H matrix `h_nc10_train_mpp.f32`.  Bottleneck 3 is a tanh() on the magnitude of the complex rate Fs time domain samples.  We bump the range of Eb/Nos trained over by 3dB `--range_EbNo_start -3` as a 10 carrier waveform will have 3dB more energy per symbol.
    ```
    python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model18 --latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3 --range_EbNo --plot_loss
    ```
+
+1, (Aug 2024) Training model with auxillary/embedded data at 25 bits/:
+    ```
+    python3 train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model19_check3 --bottleneck 3 --h_file h_nc20_train_mpp.f32 --range_EbNo --plot_loss --auxdata
+    ```
 
 # Models & samples
 
@@ -387,7 +397,9 @@ A log of models trained by the author.
 | model18 | `--latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3` like model17 but dim 40, ep 100 loss 0.123 | Rs | 240601_m18 |
 | model05_auxdata | model05 (rate Rs h_nc20_train_mpp.f32) with --auxdata 100 bits/s see PR#13 | Rs | - |
 | model05_auxdata25 | model05 (rate Rs h_nc20_train_mpp.f32) with --auxdata 25 bits/s see PR#13 | Rs | - |
-| model19  | like model17 but with 25 bits/s auxdata, ep 100 loss 0.124 | Fs | - |
+| model19 | like model17 but with 25 bits/s auxdata, ep 100 loss 0.124 | Fs | - |
+| model19_check3 | model19 but loss function weighting for data symbols redcued fom 1/18 to 0.5/18, which reduced vocoder feature loss with just a small impact on BER.  Loss at various op points and channels very close to model17 | Fs | - |
+
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
 # Specifications

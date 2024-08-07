@@ -174,7 +174,7 @@ if __name__ == '__main__':
                     H = H.to(device)
                     G = G.to(device)
                     output = model(features,H,G)
-                    loss_by_batch = distortion_loss(features, output["features_hat"])
+                    loss_by_batch = distortion_loss(features[..., :20], output["features_hat"][..., :20])
                     total_loss = torch.mean(loss_by_batch)
                     
                     # collect running Eq/No stats, measured Eq/No and loss for each sequence in batch

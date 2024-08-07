@@ -2,7 +2,7 @@
 #
 # Compare models by plotting loss v Eq/No curves
 
-# Run trough training dataset on each trained model to build loss versus Eq/No curve
+# Run through training dataset on each trained model to build loss versus Eq/No curve
 function run_model() {
     model=$1
     dim=$2
@@ -24,15 +24,17 @@ function run_model() {
 #run_model model14 80  --bottleneck 3  --rate_Fs            # tanh applied to |tx|
 #run_model model17 80  --bottleneck 3  --range_EbNo_start -9                      # mixed rate Rs with tanh applied to |tx|
 #run_model model18 40  --bottleneck 3                     # mixed rate Rs with tanh applied to |tx|
+#run_model model17_check7 80 --range_EbNo_start -9 --bottleneck 3                # should be repeat of 17
+#run_model ~/tmp/240607_radio_ae/model17_check3 80  --bottleneck 3 --range_EbNo_start -9  # 17 with aux emebdded 25 bits/s data
 
-model_list='05 14 17 18'
-model_dim=(80 80 80 40)
-declare -a model_legend=("m05 dim 80 mpp 1D #1" \
-                         "m14 dim 80 mpp 2D Fs |tx|" \
-                         "m17 dim 80 mpp 2D |tx| mixed" \
-                         "m18 dim 40 mpp 2D |tx| mixed")
+model_list='05 17_check7 19 19_check3'
+model_dim=(80 80 80 80 80 80)
+declare -a model_legend=("m5 1D" \
+                        "m17_check7 2D PAPR opt" \
+                        "m19 m17 + aux data 1" \
+                        "m19_check3 m17 + aux data 2" )
 
-loss_EqNo="'loss_EqNo_models'"
+loss_EqNo=""
 loss_CNo="'loss_CNo_models',50,1"
 loss_SNR3k="'loss_SNR3k_models',50,3000"
 i=0;
@@ -44,6 +46,7 @@ for model in $model_list
     loss_SNR3k="${loss_SNR3k}${CNo}"
     ((i++))
   done
-echo "radae_plots; loss_EqNo_plot(${loss_EqNo}); quit" | octave-cli -qf
+echo "radae_plots; loss_EqNo_plot('loss_EqNo_models',''${loss_EqNo}); quit" | octave-cli -qf # PNG
+echo "radae_plots; loss_EqNo_plot('','loss_EqNo_models'${loss_EqNo}); quit" | octave-cli -qf # EPS
 echo "radae_plots; loss_CNo_plot(${loss_CNo}); quit" | octave-cli -qf
 echo "radae_plots; loss_CNo_plot(${loss_SNR3k}); quit" | octave-cli -qf
