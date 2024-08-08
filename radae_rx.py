@@ -55,6 +55,7 @@ parser.add_argument('--bottleneck', type=int, default=3, help='1-1D rate Rs, 2-2
 parser.add_argument('--write_Dt', type=str, default="", help='Write D(t,f) matrix on last modem frame')
 parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
 parser.add_argument('--fmax_target', type=float, default=0.0, help='Acquisition test mode freq offset target (default 0.0)')
+parser.add_argument('--foff_err', type=float, default=0.0, help='Artifical freq offset error after sync to test tracking (default 0.0)')
 parser.add_argument('-v', type=int, default=2, help='Verbose level (default 2)')
 parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
 parser.set_defaults(bpf=True)
@@ -126,28 +127,31 @@ Tunsync = 3.0                        # allow some time before lossing sync to ri
 Nmf_unsync = int(Tunsync*Fs/Nmf)
 endofover = False
 
+# P DDD P DDD P Ncp
+# extra Ncp at end so we can handle timing slips
 rx_buf = np.zeros(2*Nmf+M+Ncp,np.csingle)
 rx = np.zeros(0,np.csingle)
 rx_phase = 1 + 1j*0
 rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
 z_hat_log = torch.zeros(0,model.Nzmf,model.latent_dim)
 
+nin = Nmf
 with torch.inference_mode():
    while True:
-      buffer = sys.stdin.buffer.read(Nmf*struct.calcsize("ff"))
-      if len(buffer) != Nmf*struct.calcsize("ff"):
+      buffer = sys.stdin.buffer.read(nin*struct.calcsize("ff"))
+      if len(buffer) != nin*struct.calcsize("ff"):
          break
       buffer_complex = np.frombuffer(buffer,np.csingle)
       if args.bpf:
          buffer_complex = bpf.bpf(buffer_complex)
-      rx_buf[:Nmf+M+Ncp] = rx_buf[Nmf:]                           # out with the old
-      rx_buf[Nmf+M+Ncp:] = buffer_complex                         # in with the new
+      rx_buf[:-nin] = rx_buf[nin:]                           # out with the old
+      rx_buf[-nin:] = buffer_complex                         # in with the new
       if state == "search" or state == "candidate":
          candidate, tmax, fmax = acq.detect_pilots(rx_buf)
       else:
          # we're in sync, so check we can still see pilots and run receiver
-         ffine_range = np.arange(fmax-0.5,fmax+0.5,0.1)
-         tfine_range = np.arange(tmax-1,tmax+2)
+         ffine_range = np.arange(fmax-1,fmax+1,0.1)
+         tfine_range = np.arange(tmax-8,tmax+8)
          tmax,fmax_hat = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
          fmax = 0.9*fmax + 0.1*fmax_hat
          candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
@@ -173,6 +177,18 @@ with torch.inference_mode():
             if len(args.write_latent):
                z_hat_log = torch.cat([z_hat_log,z_hat])
 
+         # handle timing slip when rx sample clock > tx sample clock
+         nin = Nmf
+         if tmax >= Nmf-M:
+            nin = Nmf + M
+            tmax -= M
+            #print("slip+", file=sys.stderr)
+         # handle timing slip when rx sample clock < tx sample clock
+         if tmax < M:
+            nin = Nmf - M
+            tmax += M
+            #print("slip-", file=sys.stderr)
+
       if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
          print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ",end='', file=sys.stderr)
          print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", file=sys.stderr)
@@ -196,6 +212,7 @@ with torch.inference_mode():
                ffine_range = np.arange(fmax-10,fmax+10,0.25)
                tfine_range = np.arange(tmax-1,tmax+2)
                tmax,fmax = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
+               fmax += args.foff_err
          else:
             next_state = "search"
       elif state == "sync":

@@ -39,7 +39,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | multipath_samples.m | Octave script to generate multipath magnitude sample over a time/freq grid |
 | plot_specgram.m | Plots sepctrogram of radae modem signals |
 | radae_plots.m | Helper Octave script to generate various plots |
-| radio_ae.tex/pdf | Latex documenation |
+| radio_ae.[tex|pdf] | Latex documenation |
 | ota_test.sh | Script to automate Over The Air (OTA) testing |
 | Radio Autoencoder Waveform Design.ods | Working for OFDM waveform, including pilot and cyclic prefix overheads |
 | compare_models.sh | Builds loss versus Eq/No curves for models to objectively compare |
@@ -47,10 +47,11 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | test folder | Helper scripts for ctests |
 | loss.py | Tool to calculate mean loss between two feature files, a useful objective measure |
 | ml_pilot.py | Training low PAPR pilot sequence |
-| stateful_decoder.py/.sh | Inference test that compares stateful to vanilla decoder |
-| stateful_encoder.py/.sh | Inference test that compares stateful to vanilla encoder |
-| radae_tx.py | streaming RADAE encoder |
-| radae_tx.py | streaming RADAE decoder |
+| stateful_decoder.[py|sh] | Inference test that compares stateful to vanilla decoder |
+| stateful_encoder.[py|sh] | Inference test that compares stateful to vanilla encoder |
+| radae_tx.[py|sh] | streaming RADAE encoder and helper script |
+| radae_rx.[py|sh] | streaming RADAE decoder and helper script |
+| resource_est.py | WIP estimate CPU/memory resources |
 
 # Installation
 
@@ -89,6 +90,11 @@ To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to r
 ```
 cmake -DCODEC2_DEV=~/tmp/codec2-dev ..
 ```
+A lot of the tests generate a float IQ sample file.  You can listen to this file with: 
+```
+cat rx.f32 | python3 f32toint16.py --real --scale 8192 | play -t .s16 -r 8000 -c 1 - bandpass 300 2000
+```
+The scaling `--scale` is required as the low SNRs mean the noise peak amplitude can clip 16 bit samples if not carefully scaled.
 
 # Inference
 
@@ -121,13 +127,26 @@ cmake -DCODEC2_DEV=~/tmp/codec2-dev ..
 
 # Multipath rate Fs
 
-1. Baseline no noise simulation:
+1. Baseline no noise simulation on Multipath Poor MPP channel:
    ```
    octave:85> Fs=8000; Rs=50; Nc=20; multipath_samples("mpp", Fs, Rs, Nc, 60, "h_mpp.f32","g_mpp.f32")
    ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/peter.wav /dev/null --rate_Fs --write_latent z.f32 --write_rx rx.f32 --pilots --pilot_eq --eq_ls --ber_test --EbNo 100 --g_file g_mpp.f32 --cp 0.004
    octave:87> radae_plots; do_plots('z.f32','rx.f32')
    ```
-   
+
+1. Multipath Disturbed (MPD) demo:
+   ```
+   ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav brian_g8sez_mpd_snr3dB.wav --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --EbNodB 6 --g_file g_mpd.f32 --write_rx rx.f32
+   ```
+   Optional plots (e.g. spectrogram):
+   ```
+   octave:40> radae_plots; do_plots('z.f32','rx.f32')
+   ```
+   Listen to "off air" signal.
+   ```
+   cat rx.f32 | python3 f32toint16.py --real --scale 8192 | sox -t .s16 -r 8000 -c 1 - brian_g8sez_mpd_snr3dB_rx.wav sinc 0.3-2.7k
+   ```
+
 # Evaluate script
 
 Automates joint simulation of SSB and RADAE, generates wave files and spectrograms.  Can adjust noise for equal C/No or equal P/No.
@@ -347,3 +366,30 @@ A log of models trained by the author.
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
+# Specifications
+
+Using model 17 waveform:
+
+| Parameter | Value | Comment |
+| --- | --- | --- |
+| Audio Bandwith | 100-8000 Hz | |
+| RF Bandwidth | 1500 Hz (-6dB) | |
+| Tx Peak Average Power Ratio | < 1dB | |
+| Threshold SNR | -3dB | AWGN channel, 3000 Hz noise bandwidth |
+| Threshold C/No | 32 dBHz | AWGN channel |
+| Threshold SNR | 0dB | MPP channel (1Hz Doppler, 2ms path delay), 3000 Hz noise bandwidth |
+| Threshold C/No | 35 dBHz | MPP channel |
+| Frame size | 120ms | algorithmic latency |
+| Modulation | OFDM | discrete time, continously valued symbols |
+| Vocoder | FARGAN | low complexity ML vocoder |
+| Total Payload Symbol rate | 2000 Hz | payload data symbols, all carriers combined |
+| Number of Carriers | 30 | |
+| Per Carrier Symbol rate | 50 Hz | |
+| Cyclic Prefix | 4ms | |
+| Worst case channel | MPD: 2Hz Doppler spread, 4ms path delay | Two path Watterson model |
+| Mean acquisition time | < 1.5s | 0dB SNR MPP channel | 
+| Acquisition frequency range | +/- 50 Hz | |
+| Acquisition co-channel interference tolerence | -3dBC | Interfering sine wave level, <2s mean acquisition time |
+| Auxilary text channel | No | |
+| SNR measurement | No | |
+| Tx and Rx sample clock offset | 200ppm | e.g. Tx sample clock 8000 Hz, Rx sample clock 8001 Hz |

@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
 # ota_test.sh
 #
-# Automated Over The Air (OTA) voice test for Radio Autoencoder:
-#   + Given an input speech wave file, constructs a compressed SSB and radae signal with 
-#     the same average power
-#   + Transmits the signal over a radio
-#   + Decodes the radae audio and extract SSB for comparison
-#
-# The Tx radio can be a wave file, or COTS HF radio connected to a sound card with PTT via 
-# rigctl. The Rx radio can be a wave file, KiwiSDR, or RTLSDR.
+# Stored file Over The Air (OTA) test for Radio Autoencoder:
+#   + Given an input speech wave file, constructs a chirp-compressed SSB-radae signal tx.wav
+#   + Transmit the tx.wav over a COTS radio, receive to a rx.wav
+#   + Prcoess rx.wav to measure the SNR, decodes the radae audio and extract SSB for comparison
 #
 # Setup (you may not need all of these):
 # --------------------------------------
@@ -20,12 +16,6 @@
 #    cd build_linux
 #    cmake -DUNITTEST=1 ..
 #    make ch mksine tlininterp
-#    (optional if using HackRF) manually compile misc/tsrc 
-# 1. (optional) Install HackRF tools:
-#      TODO
-# 2. (optional) Install kiwclient:
-#      TODO - this option not working yet
-#      cd ~ && git clone git@github.com:jks-prv/kiwiclient.git
 # 3. Hamlib cli tools (rigctl), and add user to dialout group, e.g. for "david" user:
 #      sudo apt install libhamlib-utils
 #      sudo adduser david dialout
@@ -45,37 +35,38 @@
 #    ./ota_test.sh -r rx.wav
 #    aplay rx_ssb.wav rx_radae.wav
 #
-# 2. Use HackRF to Tx SSB + radae at 144.5 MHz
-#    ./ota_test.sh wav/peter.wav -x
+# 2. Use IC-7200 SSB radio to Tx
+#    ./ota_test.sh wav/david.wav -g 9 -d -f 14236
+#
+# 3. Use HackRF to Tx SSB + radae at 144.5 MHz
+#    ./ota_test.sh wav/peter.wav -x -h
 #    hackrf_transfer -t tx.iq8 -s 4E6 -f 143.5E6 -R
 #    Note tx.iq8 has at +1 MHz offset, so we tune the HackRF 1 MHz low
 #  
-# 3. HF Radio Tx, KiwiSDR Rx, vk5dgr_testing_8k.wav as station ID file:
-#    ./ota_test.sh wav/peter.wav -i ~/Downloads/vk5dgr_testing_8k.wav sdr.ironstonerange.com -p 8074
 
-CODEC2_PATH=${HOME}/codec2-dev
 # TODO: way to adjust /build_linux/src for OSX
-PATH=${PATH}:${CODEC2_PATH}/build_linux/src:${CODEC2_PATH}/build_linux/misc:${HOME}/kiwiclient
+CODEC2_DEV=${HOME}/codec2-dev
+PATH=${PATH}:${CODEC2_DEV}/build_linux/src:${CODEC2_DEV}/build_linux/misc:${PWD}/build/src
 
 which ch || { printf "\n**** Can't find ch - check CODEC2_PATH **** \n\n"; exit 1; }
 
 kiwi_url=""
 port=8074
 freq_kHz="7177"
-tx_only=0
 Nbursts=5
 model=3061
 gain=6
 serialPort="/dev/ttyUSB0"
 rxwavefile=0
 soundDevice="plughw:CARD=CODEC,DEV=0"
-tx_file_only=0
+tx_file=0
 stationid=""
 speechFs=16000
 setpoint_rms=6000
 setpoint_peak=16384
 freq_offset=0
 peak=1
+hackrf=0
 
 source utils.sh
 
@@ -84,22 +75,21 @@ function print_help {
     echo "Automated Over The Air (OTA) voice test for Radio Autoencoder"
     echo
     echo "  usage ./ota_test.sh -x InputSpeechWaveFile"
-    echo "  usage ./ota_test.sh -r rxWaveFile"
+    echo "  usage ./ota_test.sh -r RxWaveFile"
     echo "  or:"
-    echo "  usage ./ota_voice_test.sh [options] SpeechWaveFile [kiwi_url]"
+    echo "  usage ./ota_voice_test.sh [options]"
     echo
     echo "    -c dev                    The sound device (in ALSA format on Linux, CoreAudio for macOS)"
-    echo "    -d                        debug mode; trace script execution"
+    echo "    -d                        Debug mode; trace script execution"
     echo "    -g                        SSB (analog) compressor gain"
     echo "    -i StationIDWaveFile      Prepend this file to identify transmission (should be 8kHz mono)"
-    echo "    -o model                  select radio model number ('rigctl -l' to list)"
-    echo "    -p port                   kiwi_url port to use (default 8073)"
-    echo "    -r                        Rx wave file mode: Rx process supplied rx wave file"
+    ech  "    -k                        Generate HAckRF output file tx.iq8"
+    echo "    -o model                  Select radio model number ('rigctl -l' to list)"
+    echo "    -r RxWaveFile             Process supplied rx wave file"
     echo "    -s SerialPort             The serial port (or hostname:port) to control SSB radio,"
     echo "                              default /dev/ttyUSB0"
-    echo "    -t                        Tx only, useful for manually observing SDRs"
-    echo "    -x                        Generate tx.raw, tx.wav, tx.iq8 files and exit"
-    echo "    --rms                     Equalise RMS power of RADAE and SSB (default is equalpeak power)"
+    echo "    -x InputSpeechWaveFile    Generate tx.wav and exit (no SSB radio Tx)"
+    echo "    --rms                     Equalise RMS power of RADAE and SSB (default is equal peak power)"
     echo
     exit
 }
@@ -150,8 +140,11 @@ function process_rx {
     rx_radae=$(mktemp)
     sox $rx ${filename}_ssb.wav trim 5 $x
     sox $rx -t .s16 ${rx_radae}.raw trim $start_radae
-    cat ${rx_radae}.raw | python3 int16tof32.py  --zeropad > ${rx_radae}.f32
-    ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth ${rx_radae}.f32 ${filename}_radae.wav --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16
+
+    # Use streaming RADAE Rx
+    cat ${rx_radae}.raw | python3 int16tof32.py --zeropad > ${rx_radae}.f32
+    cat ${rx_radae}.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32
+    lpcnet_demo -fargan-synthesis features_rx_out.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_radae.wav
 }
 
 
@@ -184,6 +177,10 @@ case $key in
         shift
         shift
     ;;
+    -k)
+        hackrf=1
+        shift
+    ;;
     -o)
         model="$2"	
         shift
@@ -198,16 +195,12 @@ case $key in
         peak=0
         shift
     ;;
-    -t)
-        tx_only=1	
-        shift
-    ;;
     -r)
         rxwavefile=1	
         shift
     ;;
     -x)
-        tx_file_only=1	
+        tx_file=1	
         shift
     ;;
     -c)
@@ -244,14 +237,6 @@ if [ ! -f $speechfile ]; then
     exit 1
 fi
 
-if [ $tx_only -eq 0 ]; then
-    if [ $# -lt 1 ]; then
-        print_help
-    fi
-    kiwi_url="$2"
-    echo $kiwi_url
-fi
-
 # create Tx file ------------------------
 
 # create 400-2000 Hz chirp header used for C/No est.  We generate 4.5s of chirp, to allow for trimming of
@@ -264,7 +249,7 @@ else
     amp=$(python3 -c "import numpy as np; amp=0.25*${setpoint_rms}*sqrt(2.0)/8192.0; print(\"%f\" % amp)")
 fi
 python3 chirp.py ${chirp}.f32 4.5 --amp ${amp}
-python3 f32toint16.py ${chirp}.f32 ${chirp}.raw --real
+cat ${chirp}.f32 | python3 f32toint16.py --real > ${chirp}.raw
 
 # create compressed SSB signal
 speechfile_raw_8k=$(mktemp)
@@ -290,7 +275,7 @@ sox $speechfile $speechfile_pad pad 1@0
 # create modulated radae signal
 ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --EbNodB 100 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae}.f32
 # extract real (I) channel
-python3 f32toint16.py ${tx_radae}.f32 ${tx_radae}.raw --real --scale 16383
+cat ${tx_radae}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae}.raw 
 
 # Make power of both signals the same, by adjusting the levels to meet the setpoint
 if [ $peak -eq 1 ]; then
@@ -310,49 +295,16 @@ cat ${chirp}.raw ${tx_ssb}_pad.raw ${tx_radae}_pad.raw > tx.raw
 sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
 
 # generate a 4MSP .iq8 file suitable for replaying by HackRF (can disable if not using HackRF)
-#ch tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
+if [ $hackrf -eq 1 ]; then
+  ch tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
+fi
 
-# time domain plot of tx signal
-#echo "pkg load signal; warning('off', 'all'); \
-#       s=load_raw('tx.raw'); plot(s); \
-#        print('tx.jpg', '-djpg'); \
-#       quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
-
-if [ $tx_file_only -eq 1 ]; then
+if [ $tx_file -eq 1 ]; then
   exit 0
 fi
 
-# kick off KiwiSDR ----------------------------
-
-usb_lsb=$(python3 -c "print('usb') if ${freq_kHz} >= 10000 else print('lsb')")
-if [ $tx_only -eq 0 ]; then
-    # clean up any kiwiSDR processes if we get a ctrl-C
-    trap clean_up SIGHUP SIGINT SIGTERM
-
-    echo -n "waiting for KiwiSDR "
-    # start recording from remote kiwisdr
-    kiwi_stdout=$(mktemp)
-    kiwirecorder.py -s $kiwi_url -p ${port} -f $freq_kHz -m ${usb_lsb} -r 8000 --filename=rx --time-limit=300 >$kiwi_stdout &
-    kiwi_pid=$!
-
-    # wait for kiwi to start recording
-    timeout_counter=0
-    until grep -q -i 'Block: ' $kiwi_stdout
-    do
-        timeout_counter=$((timeout_counter+1))
-        if [ $timeout_counter -eq 10 ]; then
-            echo "can't connect to ${kiwi_url}"
-            kill ${kiwi_pid}
-            wait ${kiwi_pid} 2>/dev/null
-            exit 1
-        fi
-        echo -n "."
-        sleep 1
-    done
-    echo
-fi
-
 # transmit using local SSB radio
+
 echo "Tx data signal"
 freq_Hz=$((freq_kHz*1000))
 usb_lsb_upper=$(echo ${usb_lsb} | awk '{print toupper($0)}')
@@ -371,13 +323,4 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 run_rigctl "\\set_ptt 0" $model
-
-if [ $tx_only -eq 0 ]; then
-    sleep 2
-    echo "Stopping KiwiSDR"
-    kill ${kiwi_pid}
-    wait ${kiwi_pid} 2>/dev/null
-
-    process_rx rx.wav
-fi
 

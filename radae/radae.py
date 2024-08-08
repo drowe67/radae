@@ -165,9 +165,7 @@ class GLU(nn.Module):
 
 #Encoder takes input features and computes symbols to be transmitted
 class CoreEncoder(nn.Module):
-    STATE_HIDDEN = 128
     FRAMES_PER_STEP = 4
-    CONV_KERNEL_SIZE = 4
 
     def __init__(self, feature_dim, output_dim, bottleneck = 1):
 
@@ -233,9 +231,7 @@ class CoreEncoder(nn.Module):
 
 # Stateful version of Encoder
 class CoreEncoderStatefull(nn.Module):
-    STATE_HIDDEN = 128
     FRAMES_PER_STEP = 4
-    CONV_KERNEL_SIZE = 4
 
     def __init__(self, feature_dim, output_dim, bottleneck = 1):
 

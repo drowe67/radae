@@ -72,6 +72,8 @@ parser.add_argument('--prepend_noise', type=float, default=0.0, help='insert tim
 parser.add_argument('--append_noise', type=float, default=0.0, help='insert time (sec) of just rate Fs channel noise (no RADAE signal) at end (default 0)')
 parser.add_argument('--end_of_over', action='store_true', help='insert end of over pilot sequence on last two modem frames (default off)')
 parser.add_argument('--correct_freq_offset', action='store_true', help='correct --freq_offset before decoding here (default off)')
+parser.add_argument('--sine_amp', type=float, default=0.0, help='single freq interferer level (default zero)')
+parser.add_argument('--sine_freq', type=float, default=1000.0, help='single freq interferer freq (default 1000Hz)')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -252,6 +254,10 @@ if __name__ == '__main__':
             num_noise = int(model.Fs*args.append_noise)
             n = sigma*torch.randn(1,num_noise)
             rx = torch.concatenate([rx,n],dim=1)
+         if args.sine_amp > 0.0:
+            s = args.sine_amp*torch.exp(1j*torch.arange(rx.shape[1])*2*torch.pi*args.sine_freq/model.Fs)
+            print(rx.shape, s.shape,)
+            rx[0,:] += s
          rx = args.rx_gain*rx.cpu().detach().numpy().flatten().astype('csingle')
          rx.tofile(args.write_rx)
       else:

@@ -109,7 +109,7 @@ def complex_bpf_test(plot_en=0):
 
 
 class acquisition():
-   def __init__(self,Fs,Rs,M,Ncp,Nmf,p,pend,frange=100,fstep=2.5,Pacq_error = 0.0001):
+   def __init__(self,Fs,Rs,M,Ncp,Nmf,p,pend,frange=100,fstep=2.5,Pacq_error1 = 0.00001,Pacq_error2 = 0.0001):
       self.Fs = Fs
       self.Rs = Rs
       self.M = M
@@ -117,7 +117,8 @@ class acquisition():
       self.Nmf = Nmf
       self.p = p
       self.pend = pend
-      self.Pacq_error = Pacq_error
+      self.Pacq_error1 = Pacq_error1
+      self.Pacq_error2 = Pacq_error2
       self.fcoarse_range = np.arange(-frange/2,frange/2,fstep)
 
       # pre-calculate to speeds things up a bit
@@ -175,7 +176,7 @@ class acquisition():
       sigma_r1 = np.mean(np.abs(Dt1))/((np.pi/2)**0.5)
       sigma_r2 = np.mean(np.abs(Dt2))/((np.pi/2)**0.5)
       sigma_r = (sigma_r1 + sigma_r2)/2.0
-      Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error/5.0))
+      Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error1/5.0))
 
       candidate = Dtmax12 > Dthresh
      
@@ -254,7 +255,7 @@ class acquisition():
       sigma_r1 = np.mean(np.abs(self.Dt1))/((np.pi/2)**0.5)
       sigma_r2 = np.mean(np.abs(self.Dt2))/((np.pi/2)**0.5)
       sigma_r = (sigma_r1 + sigma_r2)/2.0
-      Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error/5.0))
+      Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error2/5.0))
 
       # compare to maxima at current timing and freq offset
       w = 2*np.pi*fmax/Fs
