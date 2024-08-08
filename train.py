@@ -70,6 +70,7 @@ training_group.add_argument('--lr-decay-factor', type=float, help='learning rate
 training_group.add_argument('--initial-checkpoint', type=str, help='initial checkpoint to start training from, default: None', default=None)
 training_group.add_argument('--plot_loss', action='store_true', help='plot loss versus epoch as we train')
 training_group.add_argument('--plot_EqNo', type=str, default="", help='plot loss versus Eq/No for final epoch')
+training_group.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
 
 args = parser.parse_args()
 
@@ -109,8 +110,9 @@ print(f"Using {device} device")
 # model parameters
 latent_dim = args.latent_dim
 
-# not exposed
 num_features = 20
+if args.auxdata:
+    num_features += 1
 
 # training data
 feature_file = args.features
@@ -118,8 +120,8 @@ feature_file = args.features
 # model
 checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_EbNo, args.rate_Fs)
 model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, 
+              rate_Fs = args.rate_Fs,
               range_EbNo_start=args.range_EbNo_start, 
-              rate_Fs=args.rate_Fs,
               freq_rand=args.freq_rand,gain_rand=args.gain_rand, bottleneck=args.bottleneck,
               pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp)
 
@@ -137,7 +139,7 @@ G_sequence_length = model.num_timesteps_at_rate_Fs(H_sequence_length)
 
 checkpoint['dataset_args'] = (feature_file, sequence_length, H_sequence_length, Nc, G_sequence_length)
 checkpoint['dataset_kwargs'] = {'enc_stride': model.enc_stride}
-dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file, g_file = args.g_file, rate_Fs = args.rate_Fs)
+dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file, g_file = args.g_file, auxdata=args.auxdata)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
 # optimizer
@@ -172,7 +174,7 @@ if __name__ == '__main__':
                     H = H.to(device)
                     G = G.to(device)
                     output = model(features,H,G)
-                    loss_by_batch = distortion_loss(features, output["features_hat"])
+                    loss_by_batch = distortion_loss(features[..., :20], output["features_hat"][..., :20])
                     total_loss = torch.mean(loss_by_batch)
                     
                     # collect running Eq/No stats, measured Eq/No and loss for each sequence in batch
@@ -265,10 +267,23 @@ if __name__ == '__main__':
                 
                 if (i + 1) % log_interval == 0:
                     current_loss = (running_total_loss - previous_total_loss) / log_interval
-                    tepoch.set_postfix(
-                        current_loss=current_loss,
-                        total_loss=running_total_loss / (i + 1),
-                    )
+                    if args.auxdata:
+                        # sample latest BER
+                        x = features[..., 20:21]*output["features_hat"][..., 20:21]
+                        x = torch.flatten(x)
+                        n_errors = int(torch.sum(x < 0))
+                        n_bits = int(torch.numel(x))
+                        BER = n_errors/n_bits
+                        tepoch.set_postfix(
+                            current_loss=current_loss,
+                            total_loss=running_total_loss / (i + 1),
+                            BER=BER
+                        )
+                    else:
+                        tepoch.set_postfix(
+                            current_loss=current_loss,
+                            total_loss=running_total_loss / (i + 1),
+                        )
                     previous_total_loss = running_total_loss
                     if args.plot_loss:
                         loss_epoch[epoch] = current_loss

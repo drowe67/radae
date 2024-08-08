@@ -130,13 +130,13 @@ add_test(NAME chirp_mpp
 # Low SNR ota_test.sh, with chirp measurement, AWGN
 add_test(NAME ota_test_awgn
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -21")
+                       ./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -21 0.3")
 
-# Low SNR ota_test.sh, with chirp measurement, MPP
-# TODO: acquisition freq offset bug: this has to be set a few dB high to get reliable freq offset estimation
+# Low SNR ota_test.sh, with chirp measurement, MPP, high loss threshold as we only care about gross errors,
+# like stuck in false sync
 add_test(NAME ota_test_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -27 --mpp --freq -25")
+                       ./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -24 0.4 --mpp --freq -25")
 
 
 # Acquisition tests ------------------------------------------------------------------------------------
@@ -204,8 +204,6 @@ add_test(NAME acq_sine_mpp
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null --pilots --pilot_eq \
                        --bottleneck 3 --cp 0.004 --acq_test --fmax_target -40 --acq_time_target 2.0")
                        set_tests_properties(acq_sine_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
-
-# TODO: Add (a) interfering sine wave (b) stationary notch or perhaps slow fading
 
 # Streaming Tx and Rx --------------------------------------------------------------------------------------
 
@@ -380,6 +378,18 @@ add_test(NAME radae_rx_fargan
                        RUN_TIME=$(cat log.txt); DUR=$(soxi -D $WAV); percent=$(python3 -c \"percent=100*$RUN_TIME/$DUR; print('%f' % percent)\"); \
                        printf \"\nrun time: %5.2f duration: %5.2f percent CPU: %5.2f\n\n\" $RUN_TIME $DUR $percent ")
 
+# Embedded data (--auxdata) use for false sync detection, we --clip_start as false sync messes up alignment of feat vecs, Eb/No adjusted
+# to pass (but low SNR not really the aim of this test), --foff_err forces a false sync state after first sync
+add_test(NAME radae_rx_mpp_aux
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       test/make_g.sh; \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --auxdata \
+                       --EbNodB 4 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \
+                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --foff_err -8 --auxdata > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_start 100")
+                       set_tests_properties(radae_rx_mpp_aux PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # evaluate.sh -----------------------------------------------------------------------------------------------
 

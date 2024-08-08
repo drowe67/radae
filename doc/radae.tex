@@ -1165,6 +1165,40 @@ Practical experience has taught us that reliable HF acquisition systems are chal
 \label{tab:acq_req}
 \end{table}
 
+\section{Auxiliary Data}
+
+In existing FreeDV modes, a few bits/frame are allocated for supplementary information such as a unique word (UW) to support reliable sync, and low bit rate (e.g. 25 bits/s) data.  In existing FreeDV modes we use digital modulation, so it is easy to allocate some of these bits to low bit rate data.  For ML based waveforms, the network controls the PSK symbols being sent across the channel. One approach is to add additional OFDM carriers dedicated to data, however this may upset the PAPR optimisation, and increases the bandwidth of the signal.  A single carrier would have poor resilience to multipath.
+
+The approach taken here is to augment the vocoder feature set with a BPSK symbol (e.g expanding the feature vector from 20 to 21 elements).  The network is then re-trained to minimise the MSE in the received data symbols.  Direct measurement of BER in the loss function was attempted but did not converge, probably because the BER function is not differentiable. The data symbol error is weighted to reduce the impact on the loss and hence speech quality of the vocoder features.  For training random bits are used.  The BER converges quite quickly during training, probably as the data is random so the network cannot find and exploit any dependencies.  At low operating point SNRs bit error rates (BER) of less than a few percent were observed, adequate for our use case.
+
+At first 100 bit/s was attempted (on data symbol per 10ms feature vector), this was reduced to 25 bit/s but setting the data symbol the same for 4 consecutive feature vectors.  The weighting of the data symbol loss was adjusted to minimise distortion of the vocoder features.
+
+\begin{table} [H]
+\centering
+\begin{tabular}{ l | l | l | l | l | l | l}
+ \hline
+ Model & weight & Channel & $E_b/N_0$ & SNR & loss & BER \\
+ \hline
+ 17 & - & AWGN & 0 & -2.55 & 0.303 & - \\
+ 19 & $1/18$ & AWGN & 0 & -2.55 & 0.332 & 0.70 \\
+ 19\_check3 & $0.5/18$ & AWGN & 0 & -2.55 & 0.315 & 0.072 \\
+ 17 & - & MPP & 3 & 0.45 & 0.315 & - \\
+ 19 & $1/18$ & MPP & 3 & 0.45 & 0.342 & 0.063 \\
+ 19\_check3 & $0.5/18$ & MPP & 3 & 0.45 & 0.324 & 0.067 \\
+ \hline
+\end{tabular}
+\caption{Auxillary data operating point results at 25 bits/s, $d=80$. The loss measurements are for the vocoder features only (excluding data symbol loss). Weight is the data symbol MSE weighting in the loss function. \emph{mode17\_check3} achieves a reasonable BER with a small penalty in vocoder feature loss.}
+\label{tab:acq_data}
+\end{table}
+
+\begin{figure}[H]
+\caption{Loss versus $E_q/N_0$ for various models. \emph{mode17\_check3} is coincident with  \emph{mode17}, indicating very little penalty for the injection of the auxiliary data over a range of SNRs.}
+\label{fig:loss_eqno_models}
+\begin{center}
+\input loss_EqNo_models.tex
+\end{center}
+\end{figure}
+
 \section{Glossary}
 
 \begin{table} [H]

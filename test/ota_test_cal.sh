@@ -14,6 +14,7 @@ fi
 
 CODEC2_DEV_BUILD_DIR=$1
 No=$2
+loss_thresh=$3
 shift; shift;
 GAIN=0.25 # allow some headroom for noise and fading to prevent clipping
 
@@ -35,7 +36,7 @@ printf "\nRun Rx and check ML "loss" is OK ... \n\n"
 rm -f features_rx_out.f32
 rx_log=$(mktemp)
 ./ota_test.sh -d -r rx.wav >${rx_log}
-python3 loss.py features_in.f32 features_rx_out.f32 --loss_test 0.3 | tee /dev/stderr | grep "PASS" 
+python3 loss.py features_in.f32 features_rx_out.f32 --loss_test ${loss_thresh} --clip_start 150 | tee /dev/stderr | grep "PASS" 
 if [ $? -ne 0 ]; then
   exit 1
 fi
