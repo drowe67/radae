@@ -125,7 +125,6 @@ add_test(NAME rx_loss_acq_time
 add_test(NAME chirp_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./test/chirp_mpp.sh ${CODEC2_DEV_BUILD_DIR} -16")
-                       set_tests_properties(chirp_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # Low SNR ota_test.sh, with chirp measurement, AWGN
 add_test(NAME ota_test_awgn
