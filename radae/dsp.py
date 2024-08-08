@@ -148,6 +148,7 @@ class acquisition():
       Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
       Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
       Dtmax12 = 0
+      f_ind_max = 0
       tmax = 0
       fmax = 0
 
