@@ -4,7 +4,7 @@
 # Stored file Over The Air (OTA) test for Radio Autoencoder:
 #   + Given an input speech wave file, constructs a chirp-compressed SSB-radae signal tx.wav
 #   + Transmit the tx.wav over a COTS radio, receive to a rx.wav
-#   + Prcoess rx.wav to measure the SNR, decodes the radae audio and extract SSB for comparison
+#   + Process rx.wav to measure the SNR, decodes the radae audio and extract SSB for comparison
 #
 # Setup (you may not need all of these):
 # --------------------------------------
@@ -22,7 +22,8 @@
 #      logout/log back in and check "groups" includes dialout
 # 4. Test rigctl (change model number for your radio):
 #      echo "m" | rigctl -m 3061 -r /dev/ttyUSB0
-# 5. Adjust HF radio Tx drive so ALC is just being tickled, set desired RF power:
+# 5. Using Settings to make sure default sound device is not the radio
+# 6. Adjust HF radio Tx drive so ALC is just being tickled, set desired RF power:
 #      ./ota_test.sh wav/david.wav -x
 #      aplay -f S16_LE --device="plughw:CARD=CODEC,DEV=0" tx.wav
 #
@@ -37,8 +38,12 @@
 #
 # 2. Use IC-7200 SSB radio to Tx
 #    ./ota_test.sh wav/david.wav -g 9 -d -f 14236
+# 
+# 3. Process file rx.wav received off. First use a wav file editor to trim any silence from start, then: 
+#    ./ota_test.sh -r rx.wav
+#    Then listen to rx_ssb.wav and rx_radae.wav
 #
-# 3. Use HackRF to Tx SSB + radae at 144.5 MHz
+# 4. Use HackRF to Tx SSB + radae at 144.5 MHz
 #    ./ota_test.sh wav/peter.wav -x -h
 #    hackrf_transfer -t tx.iq8 -s 4E6 -f 143.5E6 -R
 #    Note tx.iq8 has at +1 MHz offset, so we tune the HackRF 1 MHz low
@@ -74,16 +79,15 @@ function print_help {
     echo
     echo "Automated Over The Air (OTA) voice test for Radio Autoencoder"
     echo
-    echo "  usage ./ota_test.sh -x InputSpeechWaveFile"
-    echo "  usage ./ota_test.sh -r RxWaveFile"
-    echo "  or:"
-    echo "  usage ./ota_voice_test.sh [options]"
+    echo "  usage ./ota_test.sh InputSpeechWaveFile (prepare tx.wav and Tx using radio)"
+    echo "  usage ./ota_test.sh -x InputSpeechWaveFile (prepare tx.wav)"
+    echo "  usage ./ota_test.sh -r RxWaveFile (process RxWaveFile)"
     echo
     echo "    -c dev                    The sound device (in ALSA format on Linux, CoreAudio for macOS)"
     echo "    -d                        Debug mode; trace script execution"
     echo "    -g                        SSB (analog) compressor gain"
     echo "    -i StationIDWaveFile      Prepend this file to identify transmission (should be 8kHz mono)"
-    ech  "    -k                        Generate HAckRF output file tx.iq8"
+    echo "    -k                        Generate HackRF output file tx.iq8"
     echo "    -o model                  Select radio model number ('rigctl -l' to list)"
     echo "    -r RxWaveFile             Process supplied rx wave file"
     echo "    -s SerialPort             The serial port (or hostname:port) to control SSB radio,"
@@ -224,7 +228,9 @@ esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
-speechFs=16000
+if [ $# -eq 0 ]; then
+    print_help
+fi
 
 if [ $rxwavefile -eq 1 ]; then
     process_rx $1 $freq_offset
@@ -273,7 +279,7 @@ speechfile_pad=$(mktemp).wav
 sox $speechfile $speechfile_pad pad 1@0
 
 # create modulated radae signal
-./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --auxdata --EbNodB 100 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae}.f32
+./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --end_of_over --auxdata --EbNodB 100 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae}.f32
 # extract real (I) channel
 cat ${tx_radae}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae}.raw 
 
