@@ -119,7 +119,7 @@ function clean_up {
 
 function process_rx {
     echo "Process receiver sample"
-    # Place results in same path, same file name as inpout file
+    # Place results in same path, same file name as input file
     filename="${1%.*}"
      
     rx=$(mktemp).wav
@@ -130,11 +130,18 @@ function process_rx {
           plot_specgram(s, 8000, 200, 3000); print('${filename}_spec.jpg', '-djpg'); \
           quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
 
-    # extract chirp at start and estimate C/No
+    # extract chirp at start and estimate C/No, and chirp start time.  We allow a 10 second window
     rx_chirp=$(mktemp)
-    sox $rx -t .s16 ${rx_chirp}.raw trim 0 4
+    sox $rx -t .s16 ${rx_chirp}.raw trim 0 10
     cat  ${rx_chirp}.raw | python3 int16tof32.py --zeropad > ${rx_chirp}.f32
-    python3 est_CNo.py ${rx_chirp}.f32
+    est_log=$(mktemp)
+    python3 est_CNo.py ${rx_chirp}.f32 | tee $est_log
+    chirp_start=$(cat ${est_log} | grep "Measured:" | tr -s ' ' | cut -d' ' -f2)
+
+    # remove silence before chirp
+    rx_trim=$(mktemp).wav
+    sox $rx $rx_trim trim $chirp_start
+    cp $rx_trim $rx
 
     # 4 sec chirp - 1 sec silence - x sec SSB - 1 sec silence - x sec RADAE
     # start_radae = 4+1+x
@@ -233,6 +240,10 @@ if [ $# -eq 0 ]; then
 fi
 
 if [ $rxwavefile -eq 1 ]; then
+    if [ ! -f $1 ]; then
+        echo "Can't find input speech wave file: ${1}!"
+        exit 1
+    fi   
     process_rx $1 $freq_offset
     exit 0
 fi

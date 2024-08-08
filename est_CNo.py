@@ -45,15 +45,16 @@ for st in np.arange(0,len(rx)-N,Fs//4):
     No = np.sum(Rx[noise_st:noise_en])/Nbw
 
     C = C_plus_N - No*(args.fhigh-args.flow)
-    CdB = 10*np.log10(C)
-    NodB = 10*np.log10(No)
+    if C > 0:
+        CdB = 10*np.log10(C)
+        NodB = 10*np.log10(No)
 
-    CNodB = CdB-NodB
-    if CNodB > max_CNodB:
-        max_CNodB = CNodB
-        max_time = st/Fs
+        CNodB = CdB-NodB
+        if CNodB > max_CNodB:
+            max_CNodB = CNodB
+            max_time = st/Fs
 
-    print(f"time: {st:8d} {st/Fs:5.2f} CNodB: {CNodB:5.2f}")
+        print(f"time: {st:8d} {st/Fs:5.2f} CNodB: {CNodB:5.2f}")
 
     if args.plots:
         fig, ax = plt.subplots(1, 1)
