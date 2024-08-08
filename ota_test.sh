@@ -53,7 +53,7 @@
 CODEC2_DEV=${HOME}/codec2-dev
 PATH=${PATH}:${CODEC2_DEV}/build_linux/src:${CODEC2_DEV}/build_linux/misc:${PWD}/build/src
 
-which ch || { printf "\n**** Can't find ch - check CODEC2_PATH **** \n\n"; exit 1; }
+which ch >/dev/null || { printf "\n**** Can't find ch - check CODEC2_PATH **** \n\n"; exit 1; }
 
 kiwi_url=""
 port=8074
@@ -252,6 +252,16 @@ speechfile="$1"
 if [ ! -f $speechfile ]; then
     echo "Can't find input speech wave file: ${speechfile}!"
     exit 1
+fi
+
+# check format of input speech file
+soxi_log=$(mktemp)
+soxi $speechfile > $soxi_log
+channels=$(cat ${soxi_log} | grep "Channels" | tr -s ' ' | cut -d' ' -f3)
+sample_rate=$(cat ${soxi_log} | grep "Sample Rate" | tr -s ' ' | cut -d' ' -f4)
+if [ $channels -ne 1 ] || [ $sample_rate -ne 16000 ]; then
+    echo "Input speech wave file must be single channel 16000 Hz sample rate"
+    exit 1 
 fi
 
 # create Tx file ------------------------
