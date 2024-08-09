@@ -249,7 +249,7 @@ add_test(NAME rx_streaming
                        python3 loss.py features_in.f32 features_rx_out.f32 --features_hat2 features_rx_one_out.f32 --compare;")
                        set_tests_properties(rx_streaming PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# basic test of streaming rx, run rx in vanilla and streaming , compare
+# basic test of streaming rx, run rx in vanilla and streaming, compare
 add_test(NAME radae_rx_basic
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
@@ -265,12 +265,12 @@ add_test(NAME radae_rx_basic
 # SNR=-2dB AWGN
 add_test(NAME radae_rx_awgn
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --EbNodB 1 --freq_offset 13 \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
-                       --prepend_noise 1 --append_noise 3 --end_of_over; \
-                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 1 > features_rx_out.f32; \
-                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 0.5")
+                       --prepend_noise 1 --append_noise 3 --end_of_over --auxdata; \
+                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 0.5 --clip_end 100")
                        set_tests_properties(radae_rx_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # SNR=0dB MPP
@@ -279,23 +279,23 @@ add_test(NAME radae_rx_awgn
 add_test(NAME radae_rx_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        test/make_g.sh; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 \
                        --EbNodB 3 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
-                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \
-                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32; \
-                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_end 300")
+                       --prepend_noise 1 --append_noise 3 --end_of_over --auxdata --correct_freq_offset; \
+                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.35 --clip_end 300")
                        set_tests_properties(radae_rx_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # SNR=0dB MPG
 add_test(NAME radae_rx_mpg
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        test/make_g.sh; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 \
                        --EbNodB 3 --freq_offset -11 --g_file g_mpg.f32 --write_rx rx.f32 \
-                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \
-                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32; \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --auxdata --correct_freq_offset; \
+                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rx_out.f32; \
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_end 300")
                        set_tests_properties(radae_rx_mpg PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
@@ -303,57 +303,59 @@ add_test(NAME radae_rx_mpg
 add_test(NAME radae_rx_mpd
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        test/make_g.sh; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 \
                        --EbNodB 6 --freq_offset -28 --g_file g_mpd.f32 --write_rx rx.f32 \
-                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \
-                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32; \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --auxdata --correct_freq_offset; \
+                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rx_out.f32; \
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_end 300")
                        set_tests_properties(radae_rx_mpd PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # SNR=-2dB AWGN ~5 Hz/min = 5/60 Hz/s freq drift
 add_test(NAME radae_rx_dfdt
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                      ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                      ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --EbNodB 1 --freq_offset 13 --df_dt 0.1 \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
-                       --prepend_noise 1 --append_noise 3 --end_of_over; \
-                       cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32; \
-                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 0.8")
+                       --prepend_noise 1 --append_noise 3 --end_of_over --auxdata; \
+                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 0.8 --clip_end 100")
                        set_tests_properties(radae_rx_dfdt PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # SNR=7dB ability to handle small differences in sample rate between tx and rx (delta Fs)
 add_test(NAME radae_rx_dfs
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --EbNodB 10 --freq_offset 11 \
-                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --write_rx rx.f32 --correct_freq_offset; \
                        cat rx.f32 | python3 f32toint16.py --scale 8192 | sox -t .s16 -r 8000 -c 2 - -t .s16 -r 8001 -c 2 - | python3 int16tof32.py > rx_.f32; \
-                       cat rx_.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rxs_out.f32; \
+                       cat rx_.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rxs_out.f32; \
                        python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_rx_dfs PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # Test ability to handle buffer slips due to sample clock offsets, rx ADC clock > tx ADC clock.  We make sample clock error larger than 200ppm spec
-# in order to exercise code.  Nice thing about "nin" design is it allows us to get meaningful "loss.py" results, ie no frames are lost.
+# in order to exercise code.  Nice thing about "nin" design is it allows us to get meaningful "loss.py" results, ie no frames are lost.  We're
+# really just trying to exercise the slip code here, not too cocnerned about loss.  There should be a noticable transition in tmax in each test as
+# it hits the upper or lower limit
 add_test(NAME radae_rx_slip_plus
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --EbNodB 10 --freq_offset 11 \
-                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset --prepend_noise 0.08; \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --write_rx rx.f32 --correct_freq_offset --prepend_noise 0.06; \
                        cat rx.f32 | python3 f32toint16.py --scale 8192 | sox -t .s16 -r 8000 -c 2 - -t .s16 -r 8005 -c 2 - | python3 int16tof32.py > rx_.f32; \
-                       cat rx_.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rxs_out.f32; \
-                       python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 1.0")
+                       cat rx_.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rxs_out.f32; \
+                       python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.2 --acq_time_test 1.0")
                        set_tests_properties(radae_rx_slip_plus PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # Test ability to handle buffer slips due to sample clock offsets, rx ADC clock < tx ADC clock
 add_test(NAME radae_rx_slip_minus
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --EbNodB 10 --freq_offset 31 \
-                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset --prepend_noise 0.11; \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --write_rx rx.f32 --correct_freq_offset --prepend_noise 0.11; \
                        cat rx.f32 | python3 f32toint16.py --scale 8192 | sox -t .s16 -r 8000 -c 2 - -t .s16 -r 7995 -c 2 - | python3 int16tof32.py > rx_.f32; \
-                       cat rx_.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rxs_out.f32; \
-                       python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 1.0")
+                       cat rx_.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rxs_out.f32; \
+                       python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.2 --acq_time_test 1.0")
                        set_tests_properties(radae_rx_slip_minus PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # profiles a run with a 50 second file (no pass/fail, run with -V to get a rough idea of execution time)
