@@ -118,7 +118,9 @@ function clean_up {
 }
 
 function process_rx {
+    echo "-----------------------------------------------"
     echo "Process receiver sample"
+    echo "-----------------------------------------------"
     # Place results in same path, same file name as input file
     filename="${1%.*}"
      
@@ -151,6 +153,7 @@ function process_rx {
     rx_radae=$(mktemp)
     sox $rx ${filename}_ssb.wav trim 5 $x
     sox $rx -t .s16 ${rx_radae}.raw trim $start_radae
+    sox -t .s16 -r 8000 -c 1 ${rx_radae}.raw radae_in.wav # wave version for debugging
 
     # Use streaming RADAE Rx
     cat ${rx_radae}.raw | python3 int16tof32.py --zeropad > ${rx_radae}.f32
@@ -248,6 +251,10 @@ if [ $rxwavefile -eq 1 ]; then
     exit 0
 fi
 
+echo "--------------------------------------------------------"
+echo "Creating chirp - compressed SSB - RADAE wave file tx.wav"
+echo "--------------------------------------------------------"
+
 speechfile="$1"
 if [ ! -f $speechfile ]; then
     echo "Can't find input speech wave file: ${speechfile}!"
@@ -327,8 +334,13 @@ if [ $hackrf -eq 1 ]; then
 fi
 
 if [ $tx_file -eq 1 ]; then
+  echo "Finished OK!"
   exit 0
 fi
+
+echo "--------------------------------------------------------"
+echo "Transmitting tx.wav using SSB radio ......"
+echo "--------------------------------------------------------"
 
 # transmit using local SSB radio
 
@@ -351,3 +363,4 @@ if [ $? -ne 0 ]; then
 fi
 run_rigctl "\\set_ptt 0" $model
 
+echo "Finished OK!"

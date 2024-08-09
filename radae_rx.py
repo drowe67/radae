@@ -130,7 +130,8 @@ Tunsync = 3.0                        # allow some time before lossing sync to ri
 Nmf_unsync = int(Tunsync*Fs/Nmf)
 endofover = False
 uw_errors = 0
-uw_error_thresh = 12
+uw_error_thresh = 7 # P(reject|correct) = 1 -  binocdf(8,24,0.1) = 4.5E-4
+                    # P(accept|false)   = binocdf(8,24,0.5)      = 3.2E-3
 synced_count = 0
 synced_count_one_sec = Fs//Nmf
 

@@ -69,5 +69,5 @@ for st in np.arange(0,len(rx)-N,Fs//4):
         input("hit[enter] to end.")
 
 max_SNRdB = max_CNodB - 10*np.log10(B3k)
-print(f"           Time    C/No     SNR3k")
+print(f"           Time   C/No    SNR3k")
 print(f"Measured: {max_time:5.2f}  {max_CNodB:6.2f}  {max_SNRdB:6.2f}")
