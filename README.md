@@ -245,9 +245,9 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
 
 1. Testing OTA over HF channels. Using my IC7200 as the Tx station:
    ```
-   ./ota_test.sh wav/david.wav -g 9 -t -d -f 14236
+   ./ota_test.sh wav/david_vk5dgr.wav -g 6 -t -d -f 14236
    ```
-   The `-g 9` sample gives the `david.wav` sample a little more compression, this was ajusted by experiment, listening to the `tx.wav` file, and looking for signs of a compressed waveform on Audacity.  To receive the signal I tune into a convenient KiwiSDR, and manually start recording when my radio starts transmitting.  I stop recording when I hear the transmission end.  This will result in a wave file being downloaded.  It's a good idea to trim any excess off the start and end of the rx wave file. It can be decoded with:
+   The `-g 6` is the SSB compressor gain (default 6 so in this case optional); this can be adjusted by experiment, e.g. listening to the `tx.wav` file, and looking for signs of a compressed waveform on Audacity.  To receive the signal I tune into a convenient KiwiSDR, and manually start recording when my radio starts transmitting.  I stop recording when I hear the transmission end.  This will result in a wave file being downloaded.  It's a good idea to trim any excess off the start and end of the rx wave file. It can be decoded with:
    ```
    ./ota_test.sh -d -r ~/Downloads/kiwisdr_usb.wav
    ```

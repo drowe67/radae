@@ -24,7 +24,7 @@
 #      echo "m" | rigctl -m 3061 -r /dev/ttyUSB0
 # 5. Using Settings to make sure default sound device is not the radio
 # 6. Adjust HF radio Tx drive so ALC is just being tickled, set desired RF power:
-#      ./ota_test.sh wav/david.wav -x
+#      ./ota_test.sh wav/david_vk5dgr.wav -x
 #      aplay -f S16_LE --device="plughw:CARD=CODEC,DEV=0" tx.wav
 #
 # Usage
@@ -37,7 +37,7 @@
 #    aplay rx_ssb.wav rx_radae.wav
 #
 # 2. Use IC-7200 SSB radio to Tx
-#    ./ota_test.sh wav/david.wav -g 9 -d -f 14236
+#    ./ota_test.sh wav/david_vk5dgr.wav -d -f 14236
 # 
 # 3. Process file rx.wav received off. First use a wav file editor to trim any silence from start, then: 
 #    ./ota_test.sh -r rx.wav
@@ -111,9 +111,7 @@ function run_rigctl {
 }
 
 function clean_up {
-    echo "killing KiwiSDR process"
-    kill ${kiwi_pid}
-    wait ${kiwi_pid} 2>/dev/null
+    run_rigctl "\\set_ptt 0" $model
     exit 1
 }
 
@@ -346,7 +344,11 @@ echo "--------------------------------------------------------"
 
 echo "Tx data signal"
 freq_Hz=$((freq_kHz*1000))
-usb_lsb_upper=$(echo ${usb_lsb} | awk '{print toupper($0)}')
+# TODO - IC7200 switches from USB sound card to mic when I try to set PKTLSB/PKTUSB
+#      - How to select LSB/USB while keeping internal sound card?
+#usb_lsb=$(python3 -c "print('usb') if ${freq_kHz} >= 10000 else print('lsb')")
+#usb_lsb_upper=$(echo ${usb_lsb} | awk '{print toupper($0)}')
+#run_rigctl "\\set_mode PKT${usb_lsb_upper} 0" $model
 run_rigctl "\\set_freq ${freq_Hz}" $model
 run_rigctl "\\set_ptt 1" $model
 if [ `uname` == "Darwin" ]; then

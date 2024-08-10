@@ -5,6 +5,10 @@ Preparing for Tx:
 1. Try to make the peak level between about half way and the clipping level.
 1. Use `ota_test.sh` to create a `tx.wav file`, this consist of chirp-compressed SSB-radae.
 1. Take a look at it on your favourite waveform editor, you can see the signals are adjusted to have the same peak level.
+1. Use a headset microphone and try to avoid room echo and background noise
+
+Radio configured with vocie compressor off.
+
 
 Here is how I test using KiWSDRs:
 1. Tune KikWSDR
