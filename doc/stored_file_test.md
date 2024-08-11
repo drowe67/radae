@@ -15,6 +15,7 @@ Preparing a file for Tx:
    ota_test.sh -x vk5xyz.wav
    ```
 1. You can listen to and plot `tx.wav` with your favourite waveform editor, you can see the signals are adjusted to have the same peak level. The SSB compression gain can be adjusted using the `-g` option; `-g 6` is the default.  Trying going up or down 3dB.  A quieter sample may benefit from more compression.
+   ![Peak level example](stored_file_tx.png)
 
 Transmitting your sample:
 1. Configure your SSB radio with voice compressor off.  The Tx audio path must be "clean" with no additional processing.
@@ -22,15 +23,15 @@ Transmitting your sample:
 1. Tune the remote receiver (I use a KiwiSDR) to your SSB radio frequency.  You need to be within +/- 50 Hz for the RADAE receiver to acquire.
 1. Start transmitting. You can do this manually by playing tx.wav through your transmitter, or use `ota_test.sh`
    ```
-  ./ota_test.sh wav/david_vk5dgr.wav -d -f 14236
+   ./ota_test.sh wav/david_vk5dgr.wav -d -f 14236
    ```
    You can adjust the hamlib rig and serial port with command line options, to get help: `ota_test.sh -h`
 1. After you start transmitting quickly start the KiwiSDR recording.
 1. When you hear transmission stop on the KiwiSDR, stop recording.
 1. The KiwiSDR file will be downloaded.
-1. Place a serial nunmber in front of the downloaded file to easily identify it e.g. `14_`. Make your own notes of the conditions for that sample (e.g. rx station location, distance, power level, anything else you think is relevant)
+1. Place a serial number in front of the downloaded file to easily identify it e.g. `14_`. Make your own notes of the conditions for that sample (e.g. rx station location, distance, power level, anything else you think is relevant)
 1. It's useful to load the file into your waveform viewer.  I find spectrogram mode useful.
-   
+   ![Peak level example](stored_file_rx.png)
 1. The RADAE receiver will search for the location of the chirp in the first 10 seconds of the sample.  Make sure there is no more than 6 seconds of noise before the chirp starts.  If necessary, edit the file by removing any excess before the chirp starts.
 1. If there is more than a few seconds after the RADAE signal stops, clip that off the sample too.
 1. Process the receeved sample:
@@ -42,9 +43,6 @@ Transmitting your sample:
 1. Try to collect some interesting results, for example different channels and power levels, cases where RADAE fails to acquire, intercontinental DX, fast and slow fading, co-channel interference, interference from carriers.
 
 TODO:
-* Link to April 2024 tests.  Intro, why stored files, thanks for helping.
 * Link to installing Software
-* Screen shots of files, and listen to tx file
 * Ubuntu default sound card when radio plugged in
-* Command line examples from a real run
 * Description of fields when decoder runs
