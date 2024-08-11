@@ -540,8 +540,9 @@ class RADAE(nn.Module):
         
         # DFT matrices for Nc freq samples, M time samples (could be a FFT but matrix convenient for small, non power of 2 DFTs)
         self.M = round(self.Fs / Rs_dash)                            # oversampling rate
-        lower = round(400/Rs_dash)                                   # start carrier freqs at about 400Hz to be above analog filtering in radios
-        self.w = 2*m.pi*(lower+torch.arange(Nc))/self.M              # note: must be integer DFT freq indexes or DFT falls over
+        carrier_1_freq = 1500-Rs_dash*Nc/2                           # centre signal on 1500 Hz offset from carrier (centre of SSB radio passband)
+        carrier_1_index = round(carrier_1_freq/Rs_dash)              # DFT index of first carrier, must be an integer for OFDM to work
+        self.w = 2*m.pi*(carrier_1_index+torch.arange(Nc))/self.M    # note: must be integer DFT freq indexes or DFT falls over
         self.Winv = torch.zeros((Nc,self.M), dtype=torch.complex64)  # inverse DFT matrix, Nc freq domain to M time domain (OFDM Tx)
         self.Wfwd = torch.zeros((self.M,Nc), dtype=torch.complex64)  # forward DFT matrix, M time domain to Nc freq domain (OFDM Rx)
         for c in range(0,Nc):

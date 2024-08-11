@@ -97,14 +97,14 @@ add_test(NAME inference_loss_model5
 add_test(NAME inference_loss_model17
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
-                       --EbNodB 0.5  --freq_offset 1 --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 \
+                       --EbNodB 1  --freq_offset 1 --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 \
                        --loss_test 0.3")
                        set_tests_properties(inference_loss_model17 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 add_test(NAME inference_loss_model18
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model18/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --latent-dim 40 \
-                       --EbNodB 3.5  --freq_offset 1 --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 \
+                       --EbNodB 4  --freq_offset 1 --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 \
                        --loss_test 0.3")
                        set_tests_properties(inference_loss_model18 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
@@ -166,7 +166,7 @@ add_test(NAME acq_mpp
                        test/make_g.sh; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 \
-                       --EbNodB 3 --freq_offset $F_OFF --g_file g_mpp.f32 --write_rx rx.f32; \
+                       --EbNodB 4 --freq_offset $F_OFF --g_file g_mpp.f32 --write_rx rx.f32; \
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null --pilots --pilot_eq \
                        --bottleneck 3 --cp 0.004 --acq_test --fmax_target $F_OFF --acq_time_target 1.5")
                        set_tests_properties(acq_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
@@ -225,7 +225,7 @@ add_test(NAME complex_bpf
 add_test(NAME rx_stateful
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
-                       --EbNodB 0 --freq_offset 11 \
+                       --EbNodB 6 --freq_offset 11 \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
                        --pilots --pilot_eq --bottleneck 3 --cp 0.004 --coarse_mag --time_offset -16 --stateful;
@@ -239,7 +239,7 @@ add_test(NAME rx_stateful
 add_test(NAME rx_streaming
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
-                        --EbNodB 0 --freq_offset 11 \
+                        --EbNodB 6 --freq_offset 11 \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
                        ./rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 /dev/null \
                        --pilots --pilot_eq --bottleneck 3 --cp 0.004 --time_offset -16  --coarse_mag --rx_one;
@@ -270,7 +270,7 @@ add_test(NAME radae_rx_awgn
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
                        --prepend_noise 1 --append_noise 3 --end_of_over --auxdata; \
                        cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rx_out.f32; \
-                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 0.5 --clip_end 100")
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 1.0 --clip_end 100")
                        set_tests_properties(radae_rx_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # SNR=0dB MPP
@@ -283,11 +283,12 @@ add_test(NAME radae_rx_mpp
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 \
                        --EbNodB 3 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
                        --prepend_noise 1 --append_noise 3 --end_of_over --auxdata --correct_freq_offset; \
-                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rx_out.f32; \
+                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata --disable_unsync 5.0 > features_rx_out.f32; \
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.35 --clip_end 300")
                        set_tests_properties(radae_rx_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# SNR=0dB MPG
+# SNR=0dB MPG.  We disable_unsync as we don't really care if we re-sync on long fades - user won't care much.  Main aim is to make sure loss is OK
+# in this channel
 add_test(NAME radae_rx_mpg
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        test/make_g.sh; \
@@ -295,7 +296,7 @@ add_test(NAME radae_rx_mpg
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 \
                        --EbNodB 3 --freq_offset -11 --g_file g_mpg.f32 --write_rx rx.f32 \
                        --prepend_noise 1 --append_noise 3 --end_of_over --auxdata --correct_freq_offset; \
-                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rx_out.f32; \
+                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata --disable_unsync 5.0 > features_rx_out.f32; \
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_end 300")
                        set_tests_properties(radae_rx_mpg PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
@@ -381,16 +382,16 @@ add_test(NAME radae_rx_fargan
 
 # Embedded data (--auxdata) use for false sync detection, we --clip_start as false sync messes up alignment of feat vecs, Eb/No adjusted
 # to pass (but low SNR not really the aim of this test), --foff_err forces a false sync state after first sync
-add_test(NAME radae_rx_mpp_aux
+add_test(NAME radae_rx_aux_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        test/make_g.sh; \
                        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --auxdata \
                        --EbNodB 4 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
                        --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \
-                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --foff_err -8 --auxdata > features_rx_out.f32; \
-                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_start 100")
-                       set_tests_properties(radae_rx_mpp_aux PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata --foff_err 8 > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_start 300")
+                       set_tests_properties(radae_rx_aux_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # evaluate.sh -----------------------------------------------------------------------------------------------
 

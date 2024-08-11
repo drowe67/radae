@@ -59,6 +59,8 @@ parser.add_argument('--foff_err', type=float, default=0.0, help='Artifical freq 
 parser.add_argument('-v', type=int, default=2, help='Verbose level (default 2)')
 parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
 parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
+parser.add_argument('--disable_unsync', type=float, default=0.0, help='test mode: disable auxdata based unsyncs after this many seconds (default disabled)')
+
 parser.set_defaults(bpf=True)
 parser.set_defaults(use_stdout=True)
 args = parser.parse_args()
@@ -113,13 +115,6 @@ if args.bpf:
 
 acq = acquisition(Fs,Rs,M,Ncp,Nmf,p,model.pend)
 
-"""
-# optional acq_test variables 
-tmax_candidate_target = Ncp + Ntap/2
-acq_pass = 0
-acq_fail = 0
-"""
-
 tmax_candidate = 0 
 acquired = False
 state = "search"
@@ -165,8 +160,10 @@ with torch.inference_mode():
          candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
 
          synced_count += 1
-         if synced_count == synced_count_one_sec:
-            synced_count = 0
+         if synced_count % synced_count_one_sec == 0:
+            if uw_errors > uw_error_thresh:
+               uw_fail = True
+            uw_errors = 0
 
          if not endofover:
             # correct frequency offset, note we preserve state of phase
@@ -187,8 +184,6 @@ with torch.inference_mode():
                aux_bits = 1*(aux_symb[0,::symb_repeat] > 0)
                features_hat = features_hat[:,:,0:20]
                uw_errors += np.sum(aux_bits)
-               if synced_count == 0:
-                  uw_errors = 0
             # add unused features and send to stdout
             features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
             features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
@@ -234,6 +229,7 @@ with torch.inference_mode():
                next_state = "sync"
                acquired = True
                synced_count = 0
+               uw_fail = False
                if args.auxdata:
                   uw_errors = 0
                valid_count = Nmf_unsync
@@ -246,14 +242,22 @@ with torch.inference_mode():
          else:
             next_state = "search"
       elif state == "sync":
+         # during some tests it's useful to disable these unsync features
+         unsync_enable = True
+         if args.disable_unsync:
+            if synced_count > int(args.disable_unsync*Fs/Nmf):
+                  unsync_enable = False
+
          if candidate:
             valid_count = Nmf_unsync
          else:
             valid_count -= 1
-            if valid_count == 0:
+            if unsync_enable and valid_count == 0:
                next_state = "search"
-         if endofover or uw_errors > uw_error_thresh:
+
+         if unsync_enable and (endofover or uw_fail):
             next_state = "search"
+
       state = next_state
       mf += 1
 
