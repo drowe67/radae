@@ -4,7 +4,7 @@ This document is a test procedure for the August 2024 RADAE stored file test cam
 
 ## Preparing a file for Tx
 
-1. [Install](../README.md#Installation) the RADAE software.
+1. [Install](../README.md#installation) the RADAE software.
 1. Record a wave file of your own voice, for example, "Hello, this is VK5XYZ testing the radio Autoencoder 1 2 3 4".
 1. The wave file format required is 1 channel, 16 kHz, 16 bit signed integer.
 1. We suggest about 10 sec long but feel free to experiment.  The length is not critical.
