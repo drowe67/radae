@@ -59,7 +59,14 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 
 sox, python3, python3-matplotlib, python3-venv and python3-tqdm, octave, octave-signal, cmake.  Pytorch should be installed using the instructions from the [pytorch](https://pytorch.org/get-started/locally/) web site. 
 
-*Note: depending on your Linux distro, you may need to run `python3 -m venv radae-venv` followed by `export PATH=\`pwd\`/radae-venv/bin:$PATH` in order for PyTorch to install on your system. Additionally, matplotlib and tqdm may also need to be installed inside the venv instead of via packages (e.g. `pip3 install matplotlib` after setting `PATH`.); ctests may fail otherwise.*
+*Note: depending on your Linux distro, you may need to run something like the following in order for PyTorch to install on your system:*
+
+```
+python3 -m venv radae-venv
+export PATH=`pwd`/radae-venv/bin:$PATH`
+```
+
+*Additionally, matplotlib and tqdm may also need to be installed inside the venv instead of via packages (e.g. `pip3 install matplotlib` after setting `PATH`.); ctests may fail otherwise.*
 
 ## codec2-dev
 
