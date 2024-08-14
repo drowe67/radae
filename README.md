@@ -59,7 +59,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 
 sox, python3, python3-matplotlib, python3-venv and python3-tqdm, octave, octave-signal, cmake.  Pytorch should be installed using the instructions from the [pytorch](https://pytorch.org/get-started/locally/) web site. 
 
-*Note: depending on your Linux distro, you may need to run `python3 -m venv radae-venv` followed by `export PATH=`pwd`/radae-venv/bin:$PATH` in order for PyTorch to install on your system. Additionally, matplotlib and tqdm may also need to be installed inside the venv instead of via packages (e.g. `pip3 install matplotlib` after setting `PATH`.); ctests may fail otherwise.*
+*Note: depending on your Linux distro, you may need to run `python3 -m venv radae-venv` followed by `export PATH=\`pwd\`/radae-venv/bin:$PATH` in order for PyTorch to install on your system. Additionally, matplotlib and tqdm may also need to be installed inside the venv instead of via packages (e.g. `pip3 install matplotlib` after setting `PATH`.); ctests may fail otherwise.*
 
 ## codec2-dev
 
@@ -88,9 +88,9 @@ cmake ..
 make
 ctest
 ```
-To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to run in verbose mode `ctest -V -R inference_model5`.  You can change the paths to `codec2-dev` and `opus` on the `cmake` command line:
+To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to run in verbose mode `ctest -V -R inference_model5`.  You can change the path to `codec2-dev` on the `cmake` command line:
 ```
-cmake -DCODEC2_DEV=~/tmp/codec2-dev ..
+cmake -DCODEC2_DIR=~/tmp/codec2-dev/build_linux ..
 ```
 A lot of the tests generate a float IQ sample file.  You can listen to this file with: 
 ```
