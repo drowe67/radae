@@ -39,7 +39,7 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | multipath_samples.m | Octave script to generate multipath magnitude sample over a time/freq grid |
 | plot_specgram.m | Plots sepctrogram of radae modem signals |
 | radae_plots.m | Helper Octave script to generate various plots |
-| radio_ae.[tex|pdf] | Latex documenation |
+| radio_ae.[tex,pdf] | Latex documenation |
 | ota_test.sh | Script to automate Over The Air (OTA) testing |
 | Radio Autoencoder Waveform Design.ods | Working for OFDM waveform, including pilot and cyclic prefix overheads |
 | compare_models.sh | Builds loss versus Eq/No curves for models to objectively compare |
@@ -47,10 +47,10 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | test folder | Helper scripts for ctests |
 | loss.py | Tool to calculate mean loss between two feature files, a useful objective measure |
 | ml_pilot.py | Training low PAPR pilot sequence |
-| stateful_decoder.[py|sh] | Inference test that compares stateful to vanilla decoder |
-| stateful_encoder.[py|sh] | Inference test that compares stateful to vanilla encoder |
-| radae_tx.[py|sh] | streaming RADAE encoder and helper script |
-| radae_rx.[py|sh] | streaming RADAE decoder and helper script |
+| stateful_decoder.[py,sh] | Inference test that compares stateful to vanilla decoder |
+| stateful_encoder.[py,sh] | Inference test that compares stateful to vanilla encoder |
+| radae_tx.[py,sh] | streaming RADAE encoder and helper script |
+| radae_rx.[py,sh] | streaming RADAE decoder and helper script |
 | resource_est.py | WIP estimate CPU/memory resources |
 
 # Installation
