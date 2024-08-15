@@ -4,7 +4,7 @@ A hybrid Machine Learning/DSP system for sending speech over HF radio channels. 
 
 ## Scope 
 
-This repo is intended to support the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  It is not intended to be a polished distribution for general use.  Unless otherwise stated, the code is this repo is intended to run only on Ubuntu Linux.
+This repo is intended to support the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  It is not intended to be a polished distribution for general use.  Unless otherwise stated, the code is this repo is intended to run only on Ubuntu Linux 22.
 
 # Quickstart
 
@@ -65,7 +65,7 @@ Supplies some utilities used for `ota_test.sh` and `evaluate.sh`
 ```
 cd ~
 git clone git@github.com:drowe67/codec2-dev.git
-cd codec2
+cd codec2-dev
 mkdir build_linux
 cd build_linux
 cmake -DUNITTEST=1 ..
