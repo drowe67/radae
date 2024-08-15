@@ -66,9 +66,9 @@ For example:
 | state | Sync state machine state |
 | valid | Input to state machine: valid pilot seq, valid end of over sequence, run on counter |
 | Dthresh | current threshold for detection of pilot sequence |
-| Dtmax12 | current maxima of pilot sequence, end of ever sequence |
+| Dtmax12 | current maxima of pilot sequence, end of over sequence |
 | tmax | current timing estimate |
 | fmax | current frequency offset estimate |
-| auxbits | Auxillary bits receiver, will be all 0s if no bit errors |
-| uw_errors | current count of unique word (auxillary bit) errors |
+| auxbits | Auxillary bits received, will be all 0s if no bit errors |
+| uw_errors | current count of unique word (auxillary bit) errors, reset every second |
 
