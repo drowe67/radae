@@ -407,3 +407,59 @@ Using model 17 waveform:
 | Auxilary text channel | No | |
 | SNR measurement | No | |
 | Tx and Rx sample clock offset | 200ppm | e.g. Tx sample clock 8000 Hz, Rx sample clock 8001 Hz |
+
+# Web based Stored File Processing
+
+This section contains some notes on setting up a web server to run `ota_test.sh`.  The idea is to make it easier for non-Linux users to contribute to the stored file test program.  The general idea is a CGI script performs the prcoessing.  We configure the HTML forms and CGI scripts to run in `~/public_html``.
+
+1. The Python packages need to be available system wide , so `www-data` can use them: 
+   ```
+   sudo pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+   sudo -u www-data python3 -c "import torch"
+   ```
+
+   ```
+   sudo pip3 install matplotlib
+   sudo -u www-data python3 -c "import matplotlib"
+   ```
+   The presence of the packages can be checked by mimicing the www-data user.
+
+1. Apache needs to be set up such that we can access `.html` and `.cgi` in the `~/public_html`` dir.
+   ```
+   sudo a2enmod cgid
+   sudo a2enmod userdir
+   sudo systemctl restart apache2
+   ```
+   We want html and cgi to run out of ~/public_html:
+   ```
+   mkdir ~/public_html
+   chmod 755 public_html
+   ```
+   I also placed this in my /etc/apache2.conf
+   ```
+   <Directory "/home/david/public_html">
+      Options +ExecCGI
+      AddHandler cgi-script .cgi
+   </Directory>  
+   ```   
+   Then restart apache as above.
+
+
+1. Create sym links to HTML/CGI in :
+   ```
+   cd ~/public_html
+   ln -s ~/radae/public_html/form.html form.html
+   ln -s ~/radae/public_html/test_python.cgi test_python.cgi
+   ``` 
+
+1. Note that files created by CGI process get put in a sandbox rather than directly in `/tmp`:
+   ```
+   sudo find /tmp -name input.wav | xargs sudo ls -ld
+   -rw-r--r-- 1 www-data www-data 3918458 Aug 15 15:28 /tmp/systemd-private-2fcf85ad243b4da08d79d2e27e0375af-apache2.service-vDE2Dg/tmp/input.wav
+   ```
+
+1. Apache error log, good for viewing ota_test.sh progress:
+   ```
+   tail -f /var/log/apache2/error.log
+   ```
+

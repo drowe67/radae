@@ -50,7 +50,7 @@
 #  
 
 # TODO: way to adjust /build_linux/src for OSX
-CODEC2_DEV=${HOME}/codec2-dev
+CODEC2_DEV=${CODEC2_DEV:-${HOME}/codec2-dev}
 PATH=${PATH}:${CODEC2_DEV}/build_linux/src:${CODEC2_DEV}/build_linux/misc:${PWD}/build/src
 
 which ch >/dev/null || { printf "\n**** Can't find ch - check CODEC2_PATH **** \n\n"; exit 1; }
@@ -72,6 +72,7 @@ setpoint_peak=16384
 freq_offset=0
 peak=1
 hackrf=0
+tx_path="."
 
 source utils.sh
 
@@ -94,6 +95,7 @@ function print_help {
     echo "                              default /dev/ttyUSB0"
     echo "    -x InputSpeechWaveFile    Generate tx.wav and exit (no SSB radio Tx)"
     echo "    --rms                     Equalise RMS power of RADAE and SSB (default is equal peak power)"
+    echo "    --tx_path                  optional path to tx.raw/tx.wav"
     echo
     exit
 }
@@ -225,6 +227,11 @@ case $key in
         shift
         shift
     ;;
+    --tx_path)
+        tx_path="$2"
+        shift
+        shift
+    ;;
     -h)
         print_help	
     ;;
@@ -273,7 +280,7 @@ fi
 
 # create 400-2000 Hz chirp header used for C/No est.  We generate 4.5s of chirp, to allow for trimming of
 # rx wave file - we need >=4 seconds of received chirp for C/No est at Rx
-tx_chirp=$(mktemp)
+chirp=$(mktemp)
 if [ $peak -eq 1 ]; then
     amp=$(python3 -c "import numpy as np; amp=0.25*${setpoint_peak}/8192.0; print(\"%f\" % amp)")
 else
@@ -323,12 +330,12 @@ sox -t .s16 -r 8k -c 1 $tx_ssb -t .s16 -r 8k -c 1 ${tx_ssb}_pad.raw pad 1@0
 sox -t .s16 -r 8k -c 1 ${tx_radae}.raw -t .s16 -r 8k -c 1 ${tx_radae}_pad.raw pad 1@0
 
 # cat signals together so we can send them over a radio at the same time
-cat ${chirp}.raw ${tx_ssb}_pad.raw ${tx_radae}_pad.raw > tx.raw
-sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
+cat ${chirp}.raw ${tx_ssb}_pad.raw ${tx_radae}_pad.raw > ${tx_path}/tx.raw
+sox -t .s16 -r 8000 -c 1 ${tx_path}/tx.raw ${tx_path}/tx.wav
 
 # generate a 4MSP .iq8 file suitable for replaying by HackRF (can disable if not using HackRF)
 if [ $hackrf -eq 1 ]; then
-  ch tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
+  ch ${tx_path}/tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
 fi
 
 if [ $tx_file -eq 1 ]; then
@@ -352,9 +359,9 @@ freq_Hz=$((freq_kHz*1000))
 run_rigctl "\\set_freq ${freq_Hz}" $model
 run_rigctl "\\set_ptt 1" $model
 if [ `uname` == "Darwin" ]; then
-    AUDIODEV="${soundDevice}" play -t raw -b 16 -c 1 -r 8000 -e signed-integer --endian little tx.raw 
+    AUDIODEV="${soundDevice}" play -t raw -b 16 -c 1 -r 8000 -e signed-integer --endian little ${txpath}/tx.raw 
 else
-    aplay --device="${soundDevice}" -f S16_LE tx.raw 2>/dev/null
+    aplay --device="${soundDevice}" -f S16_LE ${tx_path}/tx.raw 2>/dev/null
 fi
 if [ $? -ne 0 ]; then
     run_rigctl "\\set_ptt 0" $model
