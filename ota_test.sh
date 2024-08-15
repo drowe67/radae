@@ -139,7 +139,8 @@ function process_rx {
     est_log=$(mktemp)
     python3 est_CNo.py ${rx_chirp}.f32 | tee $est_log
     chirp_start=$(cat ${est_log} | grep "Measured:" | tr -s ' ' | cut -d' ' -f2)
-
+    cat ${est_log} | tail -n 2 > ${filename}_report.txt
+    
     # remove silence before chirp
     rx_trim=$(mktemp).wav
     sox $rx $rx_trim trim $chirp_start
