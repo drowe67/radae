@@ -32,7 +32,7 @@ This document is a test procedure for the August 2024 RADAE stored file test cam
 1. After you start transmitting quickly start the KiwiSDR recording.
 1. When you hear transmission stop on the KiwiSDR, stop recording.
 1. The KiwiSDR file will be downloaded.
-1. Place a serial number in front of the downloaded file to easily identify it e.g. `14_`. Make your own notes of the conditions for that sample (e.g. rx station location, distance, power level, anything else you think is relevant)
+1. Place a serial number in front of the downloaded file to easily identify it e.g. `vk5xyz_14_`. Make your own notes of the conditions for that sample (e.g. rx station location, distance, power level, anything else you think is relevant)
 1. It's useful to load the file into your waveform viewer.  I find spectrogram mode useful.
    ![Peak level example](stored_file_rx.png)
 1. The RADAE receiver will search for the location of the chirp in the first 10 seconds of the sample.  Make sure there is no more than 6 seconds of noise before the chirp starts.  If necessary, edit the file by removing any excess before the chirp starts.
@@ -43,7 +43,17 @@ This document is a test procedure for the August 2024 RADAE stored file test cam
    ```
 1. This will locate the chirp, print the C/No and SNR in dB, and generate several other files in the same directory, `_ssb.wav`, `_radae.wav` and a spectrogram `_spec.jpg`.  The mesured C/No and SNR will be in `_report.txt`.
 1. Note the C/No, SNR, and listen to the results, comparing SSB to RADAE.
-1. Try to collect some interesting results, for example different channels and power levels, cases where RADAE fails to acquire, intercontinental DX, fast and slow fading, co-channel interference, interference from carriers.
+1. Try to collect some interesting results, for example:
+   * Different channels (ground wave, NVIS, DX) and power levels
+   * Any cases where RADAE fails to acquire (no decode)
+   * Intercontinental DX, fast and slow fading
+   * co-channel interference (SSB on top of or near RADAE)
+   * interference from carriers
+   * try listening through small laptop speaker, large external speakers, headphones
+   * try different microphones
+   * try different langauges
+   * different radios and rig interfaces
+   * Old VFO radio with some drift
 
 ## Receiver log fields
 
