@@ -2,9 +2,11 @@
 
 This document is a test procedure for the August 2024 RADAE stored file test campaign.  The general idea is to take a 10 second sample of input speech, then send it over a HF radio channel as compressed SSB and RADAE.  This allows a side by side comparison using the same speech, over approximately the same channel conditions.  Using a stored file makes it possible to repeat the experiment in a controlled fashion over several trials, for example with varying power levels of different receiver locations. As background a similar campaign was conducted in [April 2024](https://freedv.org/?p=595).
 
+If you are comfortable with Ubuntu Linux you can install the RADAE tools required on your machine and perform the processing yourself. If you are uncomfortable with Linux the RADAE processing can be performed using a web site.  See Web Based Processing section below as an alternative to using `ota_test.sh`.
+
 ## Preparing a file for Tx
 
-1. [Install](../README.md#installation) the RADAE software.
+1. If you wish to perform the RADAE processing on your Ubuntu Linux machine, [Install](../README.md#installation) the RADAE software.
 1. Record a wave file of your own voice, for example, "Hello, this is VK5XYZ testing the radio Autoencoder 1 2 3 4".
 1. The wave file format required is 1 channel, 16 kHz, 16 bit signed integer.
 1. We suggest about 10 sec long but feel free to experiment.  The length is not critical.
@@ -54,6 +56,14 @@ This document is a test procedure for the August 2024 RADAE stored file test cam
    * try different langauges
    * different radios and rig interfaces
    * Old VFO radio with some drift
+
+## Web Based Processing
+
+A web site has been developed to perform the `ota_test.sh` processing.  The URL will be made available to the test team.
+
+1. In the Tx Processing section Browse to the file you want to encode for Tx, then press Process.  In a few seconds hopefully `tx.wav`` will be downloaded.  Use your own sample (prepared as described above), or for testing choose a sample form the RADAE Git repo [wav](https://github.com/drowe67/radae/tree/main/wav) folder.
+2. To test the Rx Processing Browse to the `tx.wav`` you just generated. Press Process, in about 10 seconds a zip file will be returned to you with the SSB and RADAE, a spectogram, and a report file.
+3. If you get this far, Transmit `tx.wav`` over your SSB radio to a remote Rx (as described above), and try processing the received file.
 
 ## Receiver log fields
 
