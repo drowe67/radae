@@ -49,6 +49,7 @@ parser.add_argument('--latent-dim', type=int, help="number of symbols produces b
 parser.add_argument('--ber_test', type=str, default="", help='symbols are PSK bits, compare to z.f32 file to calculate BER')
 parser.add_argument('--bottleneck', type=int, default=3, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
 parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
+parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
 parser.set_defaults(use_stdout=True)
 args = parser.parse_args()
 
@@ -60,6 +61,8 @@ latent_dim = args.latent_dim
 nb_total_features = 36
 num_features = 20
 num_used_features = 20
+if args.auxdata:
+    num_features += 1
 
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, 
@@ -84,6 +87,12 @@ with torch.inference_mode():
       buffer_f32 = np.frombuffer(buffer,np.single)
       features = torch.reshape(torch.tensor(buffer_f32),(1,model.Nzmf*model.enc_stride, nb_total_features))
       features = features[:,:,:num_used_features]
+      if args.auxdata:
+         aux_symb =  -torch.ones((1,features.shape[1],1))
+         symb_repeat = 4
+         for i in range(1,symb_repeat):
+            aux_symb[0,i::symb_repeat,:] = aux_symb[0,::symb_repeat,:]
+         features = torch.concatenate([features, aux_symb],axis=2)
       #print(features.shape, file=sys.stderr)
       num_timesteps_at_rate_Rs = model.num_timesteps_at_rate_Rs(model.Nzmf*model.enc_stride)
       z = model.core_encoder_statefull(features)
