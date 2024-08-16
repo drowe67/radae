@@ -49,6 +49,7 @@ with open(f"/tmp/{form_filename}", 'wb') as f:
 
 my_env = os.environ.copy()
 my_env["CODEC2_DEV"] = "/home/david/codec2-dev"
+my_env["MPLCONFIGDIR"] = "/tmp" # stop matplotlib complaining abpout cache directory
 os.chdir('../radae')
 if form_processing == "tx":
     ota_test = subprocess.check_output(["./ota_test.sh","-x",f"/tmp/{form_filename}","--tx_path","/tmp/","-d",],env=my_env, encoding='utf-8').replace('\n','<br>')

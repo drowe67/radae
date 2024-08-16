@@ -80,7 +80,7 @@ if args.auxdata:
 model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, 
               pilots=True, pilot_eq=True, eq_mean6 = False, cyclic_prefix=0.004,
               coarse_mag=True,time_offset=-16, bottleneck=args.bottleneck)
-checkpoint = torch.load(args.model_name, map_location='cpu')
+checkpoint = torch.load(args.model_name, map_location='cpu',weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
 model.core_decoder_statefull_load_state_dict()
