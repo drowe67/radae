@@ -410,7 +410,7 @@ Using model 17 waveform:
 
 # Web based Stored File Processing
 
-This section contains some notes on setting up a web server to run `ota_test.sh`.  The idea is to make it easier for non-Linux users to contribute to the stored file test program.  The general idea is a CGI script performs the prcoessing.  We configure the HTML forms and CGI scripts to run in `~/public_html``.
+This section contains some notes on setting up a web server to run `ota_test.sh`.  The idea is to make it easier for non-Linux users to contribute to the stored file test program.  The general idea is a CGI script interfaces to `ota_test.sh` to perform the Tx and Rx processing.  We configure the web server so that the HTML forms and CGI scripts run in `~/public_html`.  The notes below are for Apache on Ubuntu 22. 
 
 1. The Python packages need to be available system wide , so `www-data` can use them: 
    ```
@@ -422,20 +422,21 @@ This section contains some notes on setting up a web server to run `ota_test.sh`
    sudo pip3 install matplotlib
    sudo -u www-data python3 -c "import matplotlib"
    ```
-   The presence of the packages can be checked by mimicing the www-data user.
+   The presence of the packages can be checked by mimicing the www-data user (the last line in each step above should return nothing if all is well).
 
-1. Apache needs to be set up such that we can access `.html` and `.cgi` in the `~/public_html`` dir.
+1. Configure Apache for CGI and serving pages from our `~/public_html` dir.
    ```
    sudo a2enmod cgid
    sudo a2enmod userdir
    sudo systemctl restart apache2
    ```
-   We want html and cgi to run out of ~/public_html:
+   We want html and cgi to run out of ~/public_html, so permissions have to be `755` and `www-data` has to be added to the users group.
    ```
    mkdir ~/public_html
    chmod 755 public_html
+   sudo usermod -a -G <username> www-data
    ```
-   I also placed this in my /etc/apache2.conf
+   To let CGI scripts run from ~/public_html I placed this in my `/etc/apache2.conf`:
    ```
    <Directory "/home/david/public_html">
       Options +ExecCGI
@@ -444,21 +445,20 @@ This section contains some notes on setting up a web server to run `ota_test.sh`
    ```   
    Then restart apache as above.
 
-
-1. Create sym links to HTML/CGI in :
+1. Create sym links to HTML/CGI scripts in `radae` repo, this allows the script to be part of the RADAE repo:
    ```
    cd ~/public_html
-   ln -s ~/radae/public_html/form.html form.html
-   ln -s ~/radae/public_html/test_python.cgi test_python.cgi
+   ln -s ~/radae/public_html/tx_form.html tx_form.html
+   ln -s ~/radae/public_html/tx_process.cgi tx_process.cgi
    ``` 
 
-1. Note that files created by CGI process get put in a sandbox rather than directly in `/tmp`:
+1. Note that files created when the CGI process run (e.g. `/tmp/input.wav`) get put in a sandbox rather than directly in `/tmp`.  This is a systemd security feature.  You can find the files with:
    ```
    sudo find /tmp -name input.wav | xargs sudo ls -ld
    -rw-r--r-- 1 www-data www-data 3918458 Aug 15 15:28 /tmp/systemd-private-2fcf85ad243b4da08d79d2e27e0375af-apache2.service-vDE2Dg/tmp/input.wav
    ```
 
-1. Apache error log, good for viewing ota_test.sh progress:
+1. Apache error log, good for viewing `ota_test.sh` progress and spotting any issues:
    ```
    tail -f /var/log/apache2/error.log
    ```

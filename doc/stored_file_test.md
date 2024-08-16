@@ -41,7 +41,7 @@ This document is a test procedure for the August 2024 RADAE stored file test cam
    ```
    ./ota_test.sh -r ~/Downloads/14_sdr.ironstonerange.com_2024-08-08T05_10_14Z_7175.00_lsb.wav
    ```
-1. This will locate the chirp, print the C/No and SNR in dB, and generate several other files in the same directory, `_ssb.wav`, `_radae.wav` and a spectrogram `_spec.jpg`.
+1. This will locate the chirp, print the C/No and SNR in dB, and generate several other files in the same directory, `_ssb.wav`, `_radae.wav` and a spectrogram `_spec.jpg`.  The mesured C/No and SNR will be in `_report.txt`.
 1. Note the C/No, SNR, and listen to the results, comparing SSB to RADAE.
 1. Try to collect some interesting results, for example different channels and power levels, cases where RADAE fails to acquire, intercontinental DX, fast and slow fading, co-channel interference, interference from carriers.
 
