@@ -743,7 +743,7 @@ class RADAE(nn.Module):
             mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
             if self.bottleneck == 3:
                 mag = mag*torch.abs(self.P[0])/self.pilot_gain
-            print(f"coarse mag: {mag:f}")
+            print(f"coarse mag: {mag:f}", file=sys.stderr)
             rx_sym_pilots = rx_sym_pilots/mag
 
         return rx_sym_pilots
@@ -782,13 +782,13 @@ class RADAE(nn.Module):
         z_hat[:,:,1::2] = rx_sym.imag
         
         if self.stateful_decoder:
-            print("stateful!")
+            print("stateful!", file=sys.stderr)
             features_hat = torch.empty(1,0,self.feature_dim)
             for i in range(z_hat.shape[1]):
                 features_hat = torch.cat([features_hat, self.core_decoder_statefull(z_hat[:,i:i+1,:])],dim=1)
         else:
             features_hat = self.core_decoder(z_hat)
-        print(features_hat.shape,z_hat.shape)
+        print(features_hat.shape,z_hat.shape, file=sys.stderr)
         
         return features_hat,z_hat
     
