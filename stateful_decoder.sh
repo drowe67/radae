@@ -2,7 +2,7 @@
 #
 # Some automation around stateful_decoder.sh to help with testing
 
-OPUS=${HOME}/opus
+OPUS=build/src
 PATH=${PATH}:${OPUS}
 
 if [ $# -lt 3 ]; then

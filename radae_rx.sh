@@ -2,7 +2,7 @@
 #
 # Some automation around radae_rx.py to help with testing
 
-OPUS=${HOME}/opus
+OPUS=build/src
 PATH=${PATH}:${OPUS}
 
 features_out=features_rx_out.f32

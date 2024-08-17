@@ -24,7 +24,7 @@
 #      echo "m" | rigctl -m 3061 -r /dev/ttyUSB0
 # 5. Using Settings to make sure default sound device is not the radio
 # 6. Adjust HF radio Tx drive so ALC is just being tickled, set desired RF power:
-#      ./ota_test.sh wav/david.wav -x
+#      ./ota_test.sh wav/david_vk5dgr.wav -x
 #      aplay -f S16_LE --device="plughw:CARD=CODEC,DEV=0" tx.wav
 #
 # Usage
@@ -37,7 +37,7 @@
 #    aplay rx_ssb.wav rx_radae.wav
 #
 # 2. Use IC-7200 SSB radio to Tx
-#    ./ota_test.sh wav/david.wav -g 9 -d -f 14236
+#    ./ota_test.sh wav/david_vk5dgr.wav -d -f 14236
 # 
 # 3. Process file rx.wav received off. First use a wav file editor to trim any silence from start, then: 
 #    ./ota_test.sh -r rx.wav
@@ -50,10 +50,10 @@
 #  
 
 # TODO: way to adjust /build_linux/src for OSX
-CODEC2_DEV=${HOME}/codec2-dev
+CODEC2_DEV=${CODEC2_DEV:-${HOME}/codec2-dev}
 PATH=${PATH}:${CODEC2_DEV}/build_linux/src:${CODEC2_DEV}/build_linux/misc:${PWD}/build/src
 
-which ch || { printf "\n**** Can't find ch - check CODEC2_PATH **** \n\n"; exit 1; }
+which ch >/dev/null || { printf "\n**** Can't find ch - check CODEC2_PATH **** \n\n"; exit 1; }
 
 kiwi_url=""
 port=8074
@@ -72,6 +72,8 @@ setpoint_peak=16384
 freq_offset=0
 peak=1
 hackrf=0
+tx_path="."
+just_tx=0
 
 source utils.sh
 
@@ -94,6 +96,8 @@ function print_help {
     echo "                              default /dev/ttyUSB0"
     echo "    -x InputSpeechWaveFile    Generate tx.wav and exit (no SSB radio Tx)"
     echo "    --rms                     Equalise RMS power of RADAE and SSB (default is equal peak power)"
+    echo "    --tx_path                 optional path to tx.raw/tx.wav"
+    echo "    -t SSBRadioFile.raw       Tx SSBRadioFile.raw over SSB radio (e.g. tx.wav or RADAE encoded file), no pre-processing"
     echo
     exit
 }
@@ -111,15 +115,14 @@ function run_rigctl {
 }
 
 function clean_up {
-    echo "killing KiwiSDR process"
-    kill ${kiwi_pid}
-    wait ${kiwi_pid} 2>/dev/null
-    exit 1
+    run_rigctl "\\set_ptt 0" $model
 }
 
 function process_rx {
+    echo "-----------------------------------------------"
     echo "Process receiver sample"
-    # Place results in same path, same file name as inpout file
+    echo "-----------------------------------------------"
+    # Place results in same path, same file name as input file
     filename="${1%.*}"
      
     rx=$(mktemp).wav
@@ -130,11 +133,20 @@ function process_rx {
           plot_specgram(s, 8000, 200, 3000); print('${filename}_spec.jpg', '-djpg'); \
           quit" | octave-cli -p ${CODEC2_PATH}/octave -qf > /dev/null
 
-    # extract chirp at start and estimate C/No
+    # extract chirp at start and estimate C/No, and chirp start time.  We allow a 10 second window
     rx_chirp=$(mktemp)
-    sox $rx -t .s16 ${rx_chirp}.raw trim 0 4
+    sox $rx -t .s16 ${rx_chirp}.raw trim 0 10
     cat  ${rx_chirp}.raw | python3 int16tof32.py --zeropad > ${rx_chirp}.f32
-    python3 est_CNo.py ${rx_chirp}.f32
+    est_log=$(mktemp)
+    python3 est_CNo.py ${rx_chirp}.f32 | tee $est_log
+    chirp_start=$(cat ${est_log} | grep "Measured:" | tr -s ' ' | cut -d' ' -f2)
+    cat ${est_log} | tail -n 2 > ${filename}_report.txt
+    echo >> ${filename}_report.txt
+
+    # remove silence before chirp
+    rx_trim=$(mktemp).wav
+    sox $rx $rx_trim trim $chirp_start
+    cp $rx_trim $rx
 
     # 4 sec chirp - 1 sec silence - x sec SSB - 1 sec silence - x sec RADAE
     # start_radae = 4+1+x
@@ -144,11 +156,45 @@ function process_rx {
     rx_radae=$(mktemp)
     sox $rx ${filename}_ssb.wav trim 5 $x
     sox $rx -t .s16 ${rx_radae}.raw trim $start_radae
+    sox -t .s16 -r 8000 -c 1 ${rx_radae}.raw radae_in.wav # wave version for debugging
 
     # Use streaming RADAE Rx
     cat ${rx_radae}.raw | python3 int16tof32.py --zeropad > ${rx_radae}.f32
-    cat ${rx_radae}.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata > features_rx_out.f32
+    cat ${rx_radae}.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata 2>>${filename}_report.txt > features_rx_out.f32
     lpcnet_demo -fargan-synthesis features_rx_out.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_radae.wav
+}
+
+function tx_ssb_radio {
+    echo "--------------------------------------------------------"
+    echo "Transmitting $1 using SSB radio"
+    echo "--------------------------------------------------------"
+
+    tx_file=$1
+
+    echo "Tx data signal"
+    freq_Hz=$((freq_kHz*1000))
+    # TODO - IC7200 switches from USB sound card to mic when I try to set PKTLSB/PKTUSB
+    #      - How to select LSB/USB while keeping internal sound card?
+    #usb_lsb=$(python3 -c "print('usb') if ${freq_kHz} >= 10000 else print('lsb')")
+    #usb_lsb_upper=$(echo ${usb_lsb} | awk '{print toupper($0)}')
+    #run_rigctl "\\set_mode PKT${usb_lsb_upper} 0" $model
+    run_rigctl "\\set_freq ${freq_Hz}" $model
+    run_rigctl "\\set_ptt 1" $model
+    if [ `uname` == "Darwin" ]; then
+        AUDIODEV="${soundDevice}" play -t raw -b 16 -c 1 -r 8000 -e signed-integer --endian little ${tx_file}
+    else
+        aplay --device="${soundDevice}" -f S16_LE ${tx_file} 2>/dev/null
+    fi
+    if [ $? -ne 0 ]; then
+        run_rigctl "\\set_ptt 0" $model
+        clean_up
+        echo "Problem running aplay!"
+        echo "  1. Is ${soundDevice} configured as the default sound device in Settings-Sound?"
+        echo "  2. Is pavucontrol running?"
+        
+        exit 1
+    fi
+    run_rigctl "\\set_ptt 0" $model
 }
 
 
@@ -217,6 +263,15 @@ case $key in
         shift
         shift
     ;;
+    --tx_path)
+        tx_path="$2"
+        shift
+        shift
+    ;;
+    -t)
+        just_tx=1
+        shift
+    ;;
     -h)
         print_help	
     ;;
@@ -233,21 +288,45 @@ if [ $# -eq 0 ]; then
 fi
 
 if [ $rxwavefile -eq 1 ]; then
+    if [ ! -f $1 ]; then
+        echo "Can't find input wave file: ${1}!"
+        exit 1
+    fi   
     process_rx $1 $freq_offset
     exit 0
 fi
 
 speechfile="$1"
 if [ ! -f $speechfile ]; then
-    echo "Can't find input speech wave file: ${speechfile}!"
+    echo "Can't find input file: ${speechfile}!"
     exit 1
+fi
+
+if [ $just_tx -eq 1 ]; then
+    tx_ssb_radio $1
+    exit 0
+fi
+
+# check format of input speech file
+soxi_log=$(mktemp)
+soxi $speechfile > $soxi_log
+channels=$(cat ${soxi_log} | grep "Channels" | tr -s ' ' | cut -d' ' -f3)
+sample_rate=$(cat ${soxi_log} | grep "Sample Rate" | tr -s ' ' | cut -d' ' -f4)
+if [ $channels -ne 1 ] || [ $sample_rate -ne 16000 ]; then
+    echo "Input speech wave file must be single channel 16000 Hz sample rate"
+    exit 1 
 fi
 
 # create Tx file ------------------------
 
 # create 400-2000 Hz chirp header used for C/No est.  We generate 4.5s of chirp, to allow for trimming of
 # rx wave file - we need >=4 seconds of received chirp for C/No est at Rx
-tx_chirp=$(mktemp)
+
+echo "--------------------------------------------------------"
+echo "Creating chirp - compressed SSB - RADAE wave file tx.wav"
+echo "--------------------------------------------------------"
+
+chirp=$(mktemp)
 if [ $peak -eq 1 ]; then
     amp=$(python3 -c "import numpy as np; amp=0.25*${setpoint_peak}/8192.0; print(\"%f\" % amp)")
 else
@@ -297,36 +376,19 @@ sox -t .s16 -r 8k -c 1 $tx_ssb -t .s16 -r 8k -c 1 ${tx_ssb}_pad.raw pad 1@0
 sox -t .s16 -r 8k -c 1 ${tx_radae}.raw -t .s16 -r 8k -c 1 ${tx_radae}_pad.raw pad 1@0
 
 # cat signals together so we can send them over a radio at the same time
-cat ${chirp}.raw ${tx_ssb}_pad.raw ${tx_radae}_pad.raw > tx.raw
-sox -t .s16 -r 8000 -c 1 tx.raw tx.wav
+cat ${chirp}.raw ${tx_ssb}_pad.raw ${tx_radae}_pad.raw > ${tx_path}/tx.raw
+sox -t .s16 -r 8000 -c 1 ${tx_path}/tx.raw ${tx_path}/tx.wav
 
 # generate a 4MSP .iq8 file suitable for replaying by HackRF (can disable if not using HackRF)
 if [ $hackrf -eq 1 ]; then
-  ch tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
+  ch ${tx_path}/tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
 fi
 
 if [ $tx_file -eq 1 ]; then
+  echo "Finished OK!"
   exit 0
 fi
 
-# transmit using local SSB radio
+tx_ssb_radio ${tx_path}/tx.raw
 
-echo "Tx data signal"
-freq_Hz=$((freq_kHz*1000))
-usb_lsb_upper=$(echo ${usb_lsb} | awk '{print toupper($0)}')
-run_rigctl "\\set_freq ${freq_Hz}" $model
-run_rigctl "\\set_ptt 1" $model
-if [ `uname` == "Darwin" ]; then
-    AUDIODEV="${soundDevice}" play -t raw -b 16 -c 1 -r 8000 -e signed-integer --endian little tx.raw 
-else
-    aplay --device="${soundDevice}" -f S16_LE tx.raw 2>/dev/null
-fi
-if [ $? -ne 0 ]; then
-    run_rigctl "\\set_ptt 0" $model
-    clean_up
-    echo "Problem running aplay!"
-    echo "Is ${soundDevice} configured as the default sound device in Settings-Sound?"
-    exit 1
-fi
-run_rigctl "\\set_ptt 0" $model
-
+echo "Finished OK!"

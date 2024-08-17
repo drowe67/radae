@@ -59,6 +59,8 @@ parser.add_argument('--foff_err', type=float, default=0.0, help='Artifical freq 
 parser.add_argument('-v', type=int, default=2, help='Verbose level (default 2)')
 parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
 parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
+parser.add_argument('--disable_unsync', type=float, default=0.0, help='test mode: disable auxdata based unsyncs after this many seconds (default disabled)')
+
 parser.set_defaults(bpf=True)
 parser.set_defaults(use_stdout=True)
 args = parser.parse_args()
@@ -78,7 +80,7 @@ if args.auxdata:
 model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate_Fs=True, 
               pilots=True, pilot_eq=True, eq_mean6 = False, cyclic_prefix=0.004,
               coarse_mag=True,time_offset=-16, bottleneck=args.bottleneck)
-checkpoint = torch.load(args.model_name, map_location='cpu')
+checkpoint = torch.load(args.model_name, map_location='cpu',weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
 model.core_decoder_statefull_load_state_dict()
@@ -113,13 +115,6 @@ if args.bpf:
 
 acq = acquisition(Fs,Rs,M,Ncp,Nmf,p,model.pend)
 
-"""
-# optional acq_test variables 
-tmax_candidate_target = Ncp + Ntap/2
-acq_pass = 0
-acq_fail = 0
-"""
-
 tmax_candidate = 0 
 acquired = False
 state = "search"
@@ -130,7 +125,8 @@ Tunsync = 3.0                        # allow some time before lossing sync to ri
 Nmf_unsync = int(Tunsync*Fs/Nmf)
 endofover = False
 uw_errors = 0
-uw_error_thresh = 12
+uw_error_thresh = 7 # P(reject|correct) = 1 -  binocdf(8,24,0.1) = 4.5E-4
+                    # P(accept|false)   = binocdf(8,24,0.5)      = 3.2E-3
 synced_count = 0
 synced_count_one_sec = Fs//Nmf
 
@@ -163,40 +159,6 @@ with torch.inference_mode():
          fmax = 0.9*fmax + 0.1*fmax_hat
          candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
 
-         synced_count += 1
-         if synced_count == synced_count_one_sec:
-            synced_count = 0
-
-         if not endofover:
-            # correct frequency offset, note we preserve state of phase
-            # TODO do we need preserve state of phase?  We're passing entire vector and there isn't any memory (I think)
-            w = 2*np.pi*fmax/Fs
-            for n in range(Nmf+M+Ncp):
-               rx_phase = rx_phase*np.exp(-1j*w)
-               rx_phase_vec[n] = rx_phase
-            rx = torch.tensor(rx_buf[tmax-Ncp:tmax-Ncp+Nmf+M+Ncp]*rx_phase_vec, dtype=torch.complex64)
-            # run through RADAE receiver DSP
-            z_hat = receiver.receiver_one(rx)
-            # decode z_hat to features
-            assert(z_hat.shape[1] == model.Nzmf)
-            features_hat = model.core_decoder_statefull(z_hat)
-            if args.auxdata:
-               symb_repeat = 4
-               aux_symb = features_hat[:,:,20].detach().numpy()
-               aux_bits = 1*(aux_symb[0,::symb_repeat] > 0)
-               features_hat = features_hat[:,:,0:20]
-               uw_errors += np.sum(aux_bits)
-               if synced_count == 0:
-                  uw_errors = 0
-            # add unused features and send to stdout
-            features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
-            features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
-            if args.use_stdout:
-               sys.stdout.buffer.write(features_hat)
-            #sys.stdout.flush()
-            if len(args.write_latent):
-               z_hat_log = torch.cat([z_hat_log,z_hat])
-
          # handle timing slip when rx sample clock > tx sample clock
          nin = Nmf
          if tmax >= Nmf-M:
@@ -209,11 +171,48 @@ with torch.inference_mode():
             tmax += M
             #print("slip-", file=sys.stderr)
 
+         synced_count += 1
+         if synced_count % synced_count_one_sec == 0:
+            if uw_errors > uw_error_thresh:
+               uw_fail = True
+            uw_errors = 0
+
+         if not endofover:
+            # correct frequency offset, note we preserve state of phase
+            # TODO do we need preserve state of phase?  We're passing entire vector and there isn't any memory (I think)
+            w = 2*np.pi*fmax/Fs
+            for n in range(Nmf+M+Ncp):
+               rx_phase = rx_phase*np.exp(-1j*w)
+               rx_phase_vec[n] = rx_phase
+            rx1 = rx_buf[tmax-Ncp:tmax-Ncp+Nmf+M+Ncp]
+            #print(tmax-Ncp, tmax-Ncp+Nmf+M+Ncp,rx_buf.shape, rx1.shape, rx_phase_vec.shape, file=sys.stderr)            
+            rx = torch.tensor(rx1*rx_phase_vec, dtype=torch.complex64)
+            # run through RADAE receiver DSP
+            z_hat = receiver.receiver_one(rx)
+            # decode z_hat to features
+            assert(z_hat.shape[1] == model.Nzmf)
+            features_hat = model.core_decoder_statefull(z_hat)
+            if args.auxdata:
+               symb_repeat = 4
+               aux_symb = features_hat[:,:,20].detach().numpy()
+               aux_bits = 1*(aux_symb[0,::symb_repeat] > 0)
+               features_hat = features_hat[:,:,0:20]
+               uw_errors += np.sum(aux_bits)
+            # add unused features and send to stdout
+            features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
+            features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
+            if args.use_stdout:
+               sys.stdout.buffer.write(features_hat)
+            #sys.stdout.flush()
+            if len(args.write_latent):
+               z_hat_log = torch.cat([z_hat_log,z_hat])
+
+
       if args.v == 2 or (args.v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
          print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ", end='', file=sys.stderr)
-         print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {tmax:4d} tmax_candidate: {tmax_candidate:4d} fmax: {fmax:6.2f}", end='', file=sys.stderr)
+         print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {tmax:4d} fmax: {fmax:6.2f}", end='', file=sys.stderr)
          if args.auxdata and state == "sync":
-            print(f" auxbits: {aux_bits:} uw_errors: {uw_errors:d}", file=sys.stderr)
+            print(f" aux: {aux_bits:} uw_err: {uw_errors:d}", file=sys.stderr)
          else:
             print("",file=sys.stderr)
 
@@ -233,6 +232,7 @@ with torch.inference_mode():
                next_state = "sync"
                acquired = True
                synced_count = 0
+               uw_fail = False
                if args.auxdata:
                   uw_errors = 0
                valid_count = Nmf_unsync
@@ -245,14 +245,22 @@ with torch.inference_mode():
          else:
             next_state = "search"
       elif state == "sync":
+         # during some tests it's useful to disable these unsync features
+         unsync_enable = True
+         if args.disable_unsync:
+            if synced_count > int(args.disable_unsync*Fs/Nmf):
+                  unsync_enable = False
+
          if candidate:
             valid_count = Nmf_unsync
          else:
             valid_count -= 1
-            if valid_count == 0:
+            if unsync_enable and valid_count == 0:
                next_state = "search"
-         if endofover or uw_errors > uw_error_thresh:
+
+         if unsync_enable and (endofover or uw_fail):
             next_state = "search"
+
       state = next_state
       mf += 1
 

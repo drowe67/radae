@@ -1165,6 +1165,14 @@ Practical experience has taught us that reliable HF acquisition systems are chal
 \label{tab:acq_req}
 \end{table}
 
+TODO:
+\begin{enumerate}
+\item discuss EOO system.
+\item EOO system, not always reliable, higher threshold to avoid false unsync at low SNRs.  Art low SNRs its acceptable to use UW errors to unsync. Add to table above?
+\item State diagram with EOO, run on counter, UW errors. 
+\item Is run on counter required with UW error system?
+\end{enumerate}
+
 \section{Auxiliary Data}
 
 In existing FreeDV modes, a few bits/frame are allocated for supplementary information such as a unique word (UW) to support reliable sync, and low bit rate (e.g. 25 bits/s) data.  In existing FreeDV modes we use digital modulation, so it is easy to allocate some of these bits to low bit rate data.  For ML based waveforms, the network controls the PSK symbols being sent across the channel. One approach is to add additional OFDM carriers dedicated to data, however this may upset the PAPR optimisation, and increases the bandwidth of the signal.  A single carrier would have poor resilience to multipath.
@@ -1192,7 +1200,7 @@ At first 100 bit/s was attempted (on data symbol per 10ms feature vector), this 
 \end{table}
 
 \begin{figure}[H]
-\caption{Loss versus $E_q/N_0$ for various models. \emph{mode17\_check3} is coincident with  \emph{mode17}, indicating very little penalty for the injection of the auxiliary data over a range of SNRs.}
+\caption{Loss versus $E_q/N_0$ for various models. \emph{mode17\_check3} is coincident with  \emph{model17}, indicating very little penalty for the injection of the auxiliary data over a range of SNRs.}
 \label{fig:loss_eqno_models}
 \begin{center}
 \input loss_EqNo_models.tex

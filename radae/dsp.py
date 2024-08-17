@@ -148,6 +148,7 @@ class acquisition():
       Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
       Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
       Dtmax12 = 0
+      f_ind_max = 0
       tmax = 0
       fmax = 0
 
@@ -256,6 +257,7 @@ class acquisition():
       sigma_r2 = np.mean(np.abs(self.Dt2))/((np.pi/2)**0.5)
       sigma_r = (sigma_r1 + sigma_r2)/2.0
       Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error2/5.0))
+      Dthresh_eoo = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error1/5.0)) # low thresh of false EOO
 
       # compare to maxima at current timing and freq offset
       w = 2*np.pi*fmax/Fs
@@ -267,7 +269,7 @@ class acquisition():
       # compare with end of over sequence
       Dtmax12_eoo = np.abs(np.dot(np.conj(w_vec*rx[tmax+M+Ncp:tmax+2*M+Ncp]),pend))
       Dtmax12_eoo += np.abs(np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),pend))
-      endofover = Dtmax12_eoo > Dthresh
+      endofover = Dtmax12_eoo > Dthresh_eoo
      
       self.Dthresh = Dthresh
       self.Dtmax12 = Dtmax12

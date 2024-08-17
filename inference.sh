@@ -2,7 +2,7 @@
 #
 # Some automation around inference.py to help with testing
 
-OPUS=${HOME}/opus
+OPUS=build/src
 PATH=${PATH}:${OPUS}
 
 if [ $# -lt 3 ]; then
@@ -33,6 +33,9 @@ shift; shift; shift
 
 lpcnet_demo -features ${input_speech} ${features_in}
 python3 ./inference.py ${model} ${features_in} ${features_out} "$@"
+if [ $? -ne 0 ]; then
+  exit 1
+fi
 if [ $output_speech == "-" ]; then
     tmp=$(mktemp)
     lpcnet_demo -fargan-synthesis ${features_out} ${tmp}
