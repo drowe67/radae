@@ -71,22 +71,28 @@ cd build_linux
 cmake -DUNITTEST=1 ..
 make ch mksine tlininterp
 ```
-(optional if using HackRF) manually compile codec2-dev/misc/tsrc.c
 
-# Building and Automated Tests
+## RADAE
 
-The `cmake/ctest` framework is being used as a build and test framework. The command lines in `CmakeLists.txt` are a good source of examples, if you are interested in running the code in this repo.
-
-To configure and run the cests:
+Builds the FARGAN vocoder and ctest framework, most of RADAE is in Python.
 ```
 cd radae
 mkdir build
 cd build
 cmake ..
 make
+```
+
+# Automated Tests
+
+The `cmake/ctest` framework is being used as a build and test framework. The command lines in `CmakeLists.txt` are a good source of examples, if you are interested in running the code in this repo. The ctests are a work in progress and may not pass on all systems (see Scope above).
+
+To run the cests:
+```
+cd radae/build
 ctest
 ```
-To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to run in verbose mode `ctest -V -R inference_model5`.  You can change the paths to `codec2-dev` and `opus` on the `cmake` command line:
+To list tests `ctest -N`, to run just one test `ctest -R inference_model5`, to run in verbose mode `ctest -V -R inference_model5`.  You can change the paths to `codec2-dev` on the `cmake` command line:
 ```
 cmake -DCODEC2_DEV=~/tmp/codec2-dev ..
 ```

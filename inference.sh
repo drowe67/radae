@@ -2,7 +2,7 @@
 #
 # Some automation around inference.py to help with testing
 
-OPUS=${HOME}/opus
+OPUS=build/src
 PATH=${PATH}:${OPUS}
 
 if [ $# -lt 3 ]; then
