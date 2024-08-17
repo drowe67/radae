@@ -73,6 +73,7 @@ freq_offset=0
 peak=1
 hackrf=0
 tx_path="."
+just_tx=0
 
 source utils.sh
 
@@ -95,7 +96,8 @@ function print_help {
     echo "                              default /dev/ttyUSB0"
     echo "    -x InputSpeechWaveFile    Generate tx.wav and exit (no SSB radio Tx)"
     echo "    --rms                     Equalise RMS power of RADAE and SSB (default is equal peak power)"
-    echo "    --tx_path                  optional path to tx.raw/tx.wav"
+    echo "    --tx_path                 optional path to tx.raw/tx.wav"
+    echo "    -t SSBRadioFile.raw       Tx SSBRadioFile.raw over SSB radio (e.g. tx.wav or RADAE encoded file), no pre-processing"
     echo
     exit
 }
@@ -114,7 +116,6 @@ function run_rigctl {
 
 function clean_up {
     run_rigctl "\\set_ptt 0" $model
-    exit 1
 }
 
 function process_rx {
@@ -161,6 +162,39 @@ function process_rx {
     cat ${rx_radae}.raw | python3 int16tof32.py --zeropad > ${rx_radae}.f32
     cat ${rx_radae}.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata 2>>${filename}_report.txt > features_rx_out.f32
     lpcnet_demo -fargan-synthesis features_rx_out.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_radae.wav
+}
+
+function tx_ssb_radio {
+    echo "--------------------------------------------------------"
+    echo "Transmitting $1 using SSB radio"
+    echo "--------------------------------------------------------"
+
+    tx_file=$1
+
+    echo "Tx data signal"
+    freq_Hz=$((freq_kHz*1000))
+    # TODO - IC7200 switches from USB sound card to mic when I try to set PKTLSB/PKTUSB
+    #      - How to select LSB/USB while keeping internal sound card?
+    #usb_lsb=$(python3 -c "print('usb') if ${freq_kHz} >= 10000 else print('lsb')")
+    #usb_lsb_upper=$(echo ${usb_lsb} | awk '{print toupper($0)}')
+    #run_rigctl "\\set_mode PKT${usb_lsb_upper} 0" $model
+    run_rigctl "\\set_freq ${freq_Hz}" $model
+    run_rigctl "\\set_ptt 1" $model
+    if [ `uname` == "Darwin" ]; then
+        AUDIODEV="${soundDevice}" play -t raw -b 16 -c 1 -r 8000 -e signed-integer --endian little ${tx_file}
+    else
+        aplay --device="${soundDevice}" -f S16_LE ${tx_file} 2>/dev/null
+    fi
+    if [ $? -ne 0 ]; then
+        run_rigctl "\\set_ptt 0" $model
+        clean_up
+        echo "Problem running aplay!"
+        echo "  1. Is ${soundDevice} configured as the default sound device in Settings-Sound?"
+        echo "  2. Is pavucontrol running?"
+        
+        exit 1
+    fi
+    run_rigctl "\\set_ptt 0" $model
 }
 
 
@@ -234,6 +268,10 @@ case $key in
         shift
         shift
     ;;
+    -t)
+        just_tx=1
+        shift
+    ;;
     -h)
         print_help	
     ;;
@@ -251,21 +289,22 @@ fi
 
 if [ $rxwavefile -eq 1 ]; then
     if [ ! -f $1 ]; then
-        echo "Can't find input speech wave file: ${1}!"
+        echo "Can't find input wave file: ${1}!"
         exit 1
     fi   
     process_rx $1 $freq_offset
     exit 0
 fi
 
-echo "--------------------------------------------------------"
-echo "Creating chirp - compressed SSB - RADAE wave file tx.wav"
-echo "--------------------------------------------------------"
-
 speechfile="$1"
 if [ ! -f $speechfile ]; then
-    echo "Can't find input speech wave file: ${speechfile}!"
+    echo "Can't find input file: ${speechfile}!"
     exit 1
+fi
+
+if [ $just_tx -eq 1 ]; then
+    tx_ssb_radio $1
+    exit 0
 fi
 
 # check format of input speech file
@@ -282,6 +321,11 @@ fi
 
 # create 400-2000 Hz chirp header used for C/No est.  We generate 4.5s of chirp, to allow for trimming of
 # rx wave file - we need >=4 seconds of received chirp for C/No est at Rx
+
+echo "--------------------------------------------------------"
+echo "Creating chirp - compressed SSB - RADAE wave file tx.wav"
+echo "--------------------------------------------------------"
+
 chirp=$(mktemp)
 if [ $peak -eq 1 ]; then
     amp=$(python3 -c "import numpy as np; amp=0.25*${setpoint_peak}/8192.0; print(\"%f\" % amp)")
@@ -345,33 +389,6 @@ if [ $tx_file -eq 1 ]; then
   exit 0
 fi
 
-echo "--------------------------------------------------------"
-echo "Transmitting tx.wav using SSB radio ......"
-echo "--------------------------------------------------------"
-
-# transmit using local SSB radio
-
-echo "Tx data signal"
-freq_Hz=$((freq_kHz*1000))
-# TODO - IC7200 switches from USB sound card to mic when I try to set PKTLSB/PKTUSB
-#      - How to select LSB/USB while keeping internal sound card?
-#usb_lsb=$(python3 -c "print('usb') if ${freq_kHz} >= 10000 else print('lsb')")
-#usb_lsb_upper=$(echo ${usb_lsb} | awk '{print toupper($0)}')
-#run_rigctl "\\set_mode PKT${usb_lsb_upper} 0" $model
-run_rigctl "\\set_freq ${freq_Hz}" $model
-run_rigctl "\\set_ptt 1" $model
-if [ `uname` == "Darwin" ]; then
-    AUDIODEV="${soundDevice}" play -t raw -b 16 -c 1 -r 8000 -e signed-integer --endian little ${txpath}/tx.raw 
-else
-    aplay --device="${soundDevice}" -f S16_LE ${tx_path}/tx.raw 2>/dev/null
-fi
-if [ $? -ne 0 ]; then
-    run_rigctl "\\set_ptt 0" $model
-    clean_up
-    echo "Problem running aplay!"
-    echo "Is ${soundDevice} configured as the default sound device in Settings-Sound?"
-    exit 1
-fi
-run_rigctl "\\set_ptt 0" $model
+tx_ssb_radio ${tx_path}/tx.raw
 
 echo "Finished OK!"
