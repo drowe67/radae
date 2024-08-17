@@ -4,7 +4,7 @@ A hybrid Machine Learning/DSP system for sending speech over HF radio channels. 
 
 ## Scope 
 
-This repo is intended to support the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  It is not intended to be a polished distribution for general use.  Unless otherwise stated, the code is this repo is intended to run only on Ubuntu Linux 22.
+This repo is intended to support the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  The focus is on waveform development.  It is not intended to be a polished distribution for general use or to work across multiple Linux distros and operating systems. Unless otherwise stated, the code is this repo is intended to run only on Ubuntu Linux 22.
 
 # Quickstart
 
@@ -64,7 +64,7 @@ sox, python3, python3-matplotlib and python3-tqdm, octave, octave-signal, cmake.
 Supplies some utilities used for `ota_test.sh` and `evaluate.sh`
 ```
 cd ~
-git clone git@github.com:drowe67/codec2-dev.git
+git clone https://github.com/drowe67/codec2-dev.git
 cd codec2-dev
 mkdir build_linux
 cd build_linux
@@ -76,6 +76,8 @@ make ch mksine tlininterp
 
 Builds the FARGAN vocoder and ctest framework, most of RADAE is in Python.
 ```
+cd ~
+git clone https://github.com/drowe67/radae.git
 cd radae
 mkdir build
 cd build
@@ -428,7 +430,7 @@ This section contains some notes on setting up a web server to run `ota_test.sh`
    sudo pip3 install matplotlib
    sudo -u www-data python3 -c "import matplotlib"
    ```
-   The presence of the packages can be checked by mimicing the www-data user (the last line in each step above should return nothing if all is well).
+   The presence of the packages can be checked by mimicing the www-data user (the last line in each step above should not fail if all is well).
 
 1. Configure Apache for CGI and serving pages from our `~/public_html` dir.
    ```
@@ -442,9 +444,9 @@ This section contains some notes on setting up a web server to run `ota_test.sh`
    chmod 755 public_html
    sudo usermod -a -G <username> www-data
    ```
-   To let CGI scripts run from ~/public_html I placed this in my `/etc/apache2.conf`:
+   To let CGI scripts run from ~/public_html I placed this in my `/etc/apache2/apache2.conf`:
    ```
-   <Directory "/home/david/public_html">
+   <Directory "/home/<username>/public_html">
       Options +ExecCGI
       AddHandler cgi-script .cgi
    </Directory>  
@@ -457,6 +459,11 @@ This section contains some notes on setting up a web server to run `ota_test.sh`
    ln -s ~/radae/public_html/tx_form.html tx_form.html
    ln -s ~/radae/public_html/tx_process.cgi tx_process.cgi
    ``` 
+
+1. Edit the path to `CODEC2_DEV` in `radae/public_html/tx_process.cgi`:
+   ```
+   my_env["CODEC2_DEV"] = "/home/<username>/codec2-dev"
+   ```
 
 1. Note that files created when the CGI process run (e.g. `/tmp/input.wav`) get put in a sandbox rather than directly in `/tmp`.  This is a systemd security feature.  You can find the files with:
    ```

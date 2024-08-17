@@ -16,6 +16,8 @@ No=$2
 chirp_duration=4
 silence_duration=3
 
+which ${CODEC2_DEV_BUILD_DIR}/src/ch >/dev/null || { printf "\n**** Can't find ch - check CODEC2_PATH **** \n\n"; exit 1; }
+
 source test/make_g.sh
 cp -f g_mpp.f32 fast_fading_samples.float
 chirp_f32=$(mktemp)
