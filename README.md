@@ -4,7 +4,7 @@ A hybrid Machine Learning/DSP system for sending speech over HF radio channels. 
 
 ## Scope 
 
-This repo is intended to support the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  The focus is on waveform development.  It is not intended to be a polished distribution for general use or to work across multiple Linux distros and operating systems. Unless otherwise stated, the code is this repo is intended to run only on Ubuntu Linux 22.
+This repo is intended to support the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  The focus is on waveform development, not software configuration.  It is not intended to be a polished distribution for general use or to work across multiple Linux distros and operating systems - that will come later.  Unless otherwise stated, the code is this repo is intended to run only on Ubuntu Linux 22 on a non-virtual machine.
 
 # Quickstart
 
@@ -502,4 +502,35 @@ WIP notes
    pactl list sinks short
    pactl list sources short
    pactl list modules
+   ```
+
+## Real Time Tx from mic to SSB radio
+
+Work in progress notes, needs a clean up once this settles down.
+
+1. Install null module as above.  Using Settings redirect system sounds to null so default analog sound output is free.
+
+1. Test headset mic to audio:
+   ```
+   parec --device=17 --rate=16000 --channels=1 --latency=1024 | pacat --device=9 --rate=16000 --channels=1 --latency=1024
+   ```
+   However this is unreliable, doesn't always start.
+
+1. Input from headset mic, save to file.
+   ```
+   arecord --device "plughw:CARD=LX3000,DEV=0" -f S16_LE -c 1 -r 16000 | ./build/src/lpcnet_demo -features - - | python3 radae_tx.py model19_check3/checkpointscheckpoint_epoch_100.pth --auxdata | python3 f32toint16.py --real --scale 8192 > t.raw
+   ```
+
+1. Test decode with:
+   ```
+   cat t.raw | python3 int16tof32.py --zeropad | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata | ./build/src/lpcnet_demo -fargan-synthesis - - | aplay -f S16_LE -r 16000
+   ```
+
+1. Real time transmit:
+   ```
+   arecord --device "plughw:CARD=LX3000,DEV=0" -f S16_LE -c 1 -r 16000 | ./build/src/lpcnet_demo -features - - | python3 radae_tx.py model19_check3/checkpoints/checkpoint_epoch_100.pth --auxdata | python3 f32toint16.py --real --scale 8192 | aplay -f S16_LE --device "plughw:CARD=CODEC,DEV=0
+   ```
+   I keyed radio manually.  I recorded the transmission on a local SDR, then decoded with:
+   ```
+   sox ~/Downloads/sdr.ironstonerange.com_2024-08-19T22_03_13Z_7185.00_lsb.wav -t .s16 -r 8000 -c 1 - | python3 int16tof32.py --zeropad | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata | ./build/src/lpcnet_demo -fargan-synthesis - - | aplay -f S16_LE -r 16000
    ```
