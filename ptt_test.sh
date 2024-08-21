@@ -1,9 +1,16 @@
 #!/bin/bash
 
+# Hamlib rigctl model, change by seeting an env variable
+model=${model:-3061}
+serial=${serial:-"/dev/ttyUSB0"}
+echo $model
+echo $serial
+
 function clean_up {
     echo "killing Tx process"
     kill `cat tx_pid`
     wait ${tx_pid} 2>/dev/null
+    run_rigctl "\\set_ptt 0" $model
     exit 1
 }
 
@@ -12,7 +19,7 @@ function kick_off_ssb_tx_process {
     aplay -f S16_LE --device "plughw:CARD=${rig_card},DEV=0" &
 
     echo
-    echo "SSB transmitter running!  Any key to exit"
+    echo "Starting SSB transmitter...."
     echo
     cat tx_pid
 }
@@ -25,9 +32,19 @@ function kick_off_radae_tx_process {
     python3 f32toint16.py --real --scale 8192 | aplay -f S16_LE --device "plughw:CARD=${rig_card},DEV=0" &
 
     echo
-    echo "RADAE transmitter running!  Any key to exit"
+    echo "Starting RADAE transmitter...."
     echo
     cat tx_pid
+}
+
+function run_rigctl {
+    command=$1
+    model=$2
+    echo $command | rigctl -m $model -r $serial > /dev/null
+    if [ $? -ne 0 ]; then
+        echo "Can't talk to Tx"
+        exit 1
+    fi
 }
 
 # Set sounds cards every time we start as they may change
@@ -65,6 +82,7 @@ do
     # space char doesn't compare well
     key=${key/ /t}
 
+    # toggle SSB/RADAE
     if [ $key == "s" ]; then
         if [ $ssb -eq 1 ]; then
             ssb=0
@@ -73,6 +91,7 @@ do
         fi
     fi
 
+    # toggle transmit 
     if [ "$key" == "t" ]; then
         if [ $tx -eq 1 ]; then
             tx=0
@@ -80,6 +99,7 @@ do
             echo
             echo 'Tx stopped!'
             echo
+            run_rigctl "\\set_ptt 0" $model
         else
             tx=1
             if [ $ssb -eq 0 ]; then
@@ -87,6 +107,7 @@ do
             else
                 kick_off_ssb_tx_process
             fi
+            run_rigctl "\\set_ptt 1" $model
         fi
     fi
 done
