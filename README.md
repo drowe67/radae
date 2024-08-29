@@ -83,6 +83,34 @@ cmake ..
 make
 ```
 
+### Building on Windows
+
+While most of RADAE is in Python, there is a `lpcnet_demo` application
+that is required to be compiled. To do this for Windows, you can run
+something like the following from a Linux machine:
+
+```
+wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240619/llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz
+tar xz llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz
+export PATH=`pwd`/llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64/bin:$PATH
+export RADAE_PATH=`pwd`/radae
+cd radae
+mkdir build_windows
+cd build_windows
+cmake -DCMAKE_TOOLCHAIN_FILE=$(RADAE_PATH)/cross-compile/mingw-llvm-x86_64.cmake ..
+make
+```
+
+(Replace `x86_64` in `mingw-llvm-x86_64.cmake` with either `i686` or `aarch64` for 32-bit x86 or 64-bit ARM, respectively.)
+
+Once done, `lpcnet_demo.exe` will be inside the `src` folder inside `build_windows`.
+
+#### Limitations
+
+* ctests are untested and likely do not work without additional changes.
+* Visual Studio is not supported, only MinGW.
+* Generating a Windows installer is currently not supported. `lpcnet_demo.exe` is intended to be included with other applications built with MinGW (such as freedv-gui).
+
 # Automated Tests
 
 The `cmake/ctest` framework is being used as a build and test framework. The command lines in `CmakeLists.txt` are a good source of examples, if you are interested in running the code in this repo. The ctests are a work in progress and may not pass on all systems (see Scope above).
