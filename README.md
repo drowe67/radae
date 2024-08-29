@@ -91,13 +91,13 @@ something like the following from a Linux machine:
 
 ```
 wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240619/llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz
-tar xz llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz
+tar xzf llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz
 export PATH=`pwd`/llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64/bin:$PATH
 export RADAE_PATH=`pwd`/radae
-cd radae
+cd $RADAE_PATH
 mkdir build_windows
 cd build_windows
-cmake -DCMAKE_TOOLCHAIN_FILE=$(RADAE_PATH)/cross-compile/mingw-llvm-x86_64.cmake ..
+cmake -DCMAKE_TOOLCHAIN_FILE=$RADAE_PATH/cross-compile/mingw-llvm-x86_64.cmake ..
 make
 ```
 
