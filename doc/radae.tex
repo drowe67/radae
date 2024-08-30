@@ -1207,6 +1207,28 @@ At first 100 bit/s was attempted (on data symbol per 10ms feature vector), this 
 \end{center}
 \end{figure}
 
+\section{Baseband FM}
+
+Land Mobile Radio (LMR) applications for PTT VHF/UHF are typically based on a baseband FM radio architecture. A real valued discretely valued (2 or 4 level) sequence of symbols drives an analog FM modulator.  The receiver will have a limiter and analog discriminator that will recover the pulse train, which will be demodulated to bits with a slicer.  The pulse train may be filtered to minimise ISI and constrain the spectrum of the transmitted signal.
+
+Win themes are speech quality and spectral mask - which defines spectral occupancy (bandwidth) and adjacent channel interference. This use case is not sensitive to low SNR performance.  Fading is present, but tends to be flat across the channel.
+
+Using the FM radio architecture has many advantages compared to SDRs:
+\begin{enumerate}
+\item It is inexpensive and ubiquitous (a complete handset may retail for \$40).
+\item It is insensitive to frequency and phase offsets.
+\item it is relatively insensitive to frequency accuracy, modulation index, and phase offsets. Low cost frequency references can be used.
+\item Only coarse (frame sync) and fine timing estimation is required - no phase, frequency estimation, making demodulation very straight forward.
+\item The waveform can still be generated and received by IQ SDR radios, so future proofing of the waveform is straight forward.
+\end{enumerate}
+
+This section discretes a ML based speech system that encode vocoder features to a sequence of baseband (BPSK) pulses that can be fed through the baseband FM radio channel.  It offers improved speech quality over classical FM and AMBE based digital voice systems, and an improved spectral mask (lower spectral occupancy and adjacent channel interference). 
+
+The SNR of the demodulated analog FM signal is given by:
+FM radios tend to fall over at a received level of around -120dBm.  Given a noise figure of 4dB, this is a C/No of TBC.  We can therefore estimate the demodulated SNR as TBC dB.  Our previous experiments show this is around 20dB more than RADAE needs to obtain good quality speech.  We therefore have plenty of link margin, and consider reducing our symbol rate, e.g. to obtain an improved spectral mask.
+
+TODO block diagram of proposed system, pulse shaping, FM radio.  Use of passband pulse sequence to avoid any DC offset issues and use a wider range of radios. GMSK pulse shaping with intentional ISI that ML receiver can train for.
+
 \section{Glossary}
 
 \begin{table} [H]
