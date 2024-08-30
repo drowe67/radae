@@ -198,4 +198,7 @@ done
 if [ $tx -eq 1 ]; then
   kill `cat tx_pid`
 fi
+if [ $rx -eq 1 ]; then
+  kill `cat rx_pid`
+fi
 
