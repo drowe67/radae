@@ -4,7 +4,7 @@ A hybrid Machine Learning/DSP system for sending speech over HF radio channels. 
 
 ## Scope 
 
-This repo is intended to support the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  It is not intended to be a polished distribution for general use.  Unless otherwise stated, the code is this repo is intended to run only on Ubuntu Linux 22.
+This repo is intended to support the authors experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work.  The focus is on waveform development, not software configuration.  It is not intended to be a polished distribution for general use or to work across multiple Linux distros and operating systems - that will come later.  Unless otherwise stated, the code is this repo is intended to run only on Ubuntu Linux 22 on a non-virtual machine.
 
 # Quickstart
 
@@ -64,7 +64,7 @@ sox, python3, python3-matplotlib and python3-tqdm, octave, octave-signal, cmake.
 Supplies some utilities used for `ota_test.sh` and `evaluate.sh`
 ```
 cd ~
-git clone git@github.com:drowe67/codec2-dev.git
+git clone https://github.com/drowe67/codec2-dev.git
 cd codec2-dev
 mkdir build_linux
 cd build_linux
@@ -76,6 +76,8 @@ make ch mksine tlininterp
 
 Builds the FARGAN vocoder and ctest framework, most of RADAE is in Python.
 ```
+cd ~
+git clone https://github.com/drowe67/radae.git
 cd radae
 mkdir build
 cd build
@@ -428,7 +430,7 @@ This section contains some notes on setting up a web server to run `ota_test.sh`
    sudo pip3 install matplotlib
    sudo -u www-data python3 -c "import matplotlib"
    ```
-   The presence of the packages can be checked by mimicing the www-data user (the last line in each step above should return nothing if all is well).
+   The presence of the packages can be checked by mimicing the www-data user (the last line in each step above should not fail if all is well).
 
 1. Configure Apache for CGI and serving pages from our `~/public_html` dir.
    ```
@@ -442,9 +444,9 @@ This section contains some notes on setting up a web server to run `ota_test.sh`
    chmod 755 public_html
    sudo usermod -a -G <username> www-data
    ```
-   To let CGI scripts run from ~/public_html I placed this in my `/etc/apache2.conf`:
+   To let CGI scripts run from ~/public_html I placed this in my `/etc/apache2/apache2.conf`:
    ```
-   <Directory "/home/david/public_html">
+   <Directory "/home/<username>/public_html">
       Options +ExecCGI
       AddHandler cgi-script .cgi
    </Directory>  
@@ -457,6 +459,11 @@ This section contains some notes on setting up a web server to run `ota_test.sh`
    ln -s ~/radae/public_html/tx_form.html tx_form.html
    ln -s ~/radae/public_html/tx_process.cgi tx_process.cgi
    ``` 
+
+1. Edit the path to `CODEC2_DEV` in `radae/public_html/tx_process.cgi`:
+   ```
+   my_env["CODEC2_DEV"] = "/home/<username>/codec2-dev"
+   ```
 
 1. Note that files created when the CGI process run (e.g. `/tmp/input.wav`) get put in a sandbox rather than directly in `/tmp`.  This is a systemd security feature.  You can find the files with:
    ```
@@ -495,4 +502,35 @@ WIP notes
    pactl list sinks short
    pactl list sources short
    pactl list modules
+   ```
+
+## Real Time Tx from mic to SSB radio
+
+Work in progress notes, needs a clean up once this settles down.
+
+1. Install null module as above.  Using Settings redirect system sounds to null so default analog sound output is free.
+
+1. Test headset mic to audio:
+   ```
+   parec --device=17 --rate=16000 --channels=1 --latency=1024 | pacat --device=9 --rate=16000 --channels=1 --latency=1024
+   ```
+   However this is unreliable, doesn't always start.
+
+1. Input from headset mic, save to file.
+   ```
+   arecord --device "plughw:CARD=LX3000,DEV=0" -f S16_LE -c 1 -r 16000 | ./build/src/lpcnet_demo -features - - | python3 radae_tx.py model19_check3/checkpointscheckpoint_epoch_100.pth --auxdata | python3 f32toint16.py --real --scale 8192 > t.raw
+   ```
+
+1. Test decode with:
+   ```
+   cat t.raw | python3 int16tof32.py --zeropad | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata | ./build/src/lpcnet_demo -fargan-synthesis - - | aplay -f S16_LE -r 16000
+   ```
+
+1. Real time transmit:
+   ```
+   arecord --device "plughw:CARD=LX3000,DEV=0" -f S16_LE -c 1 -r 16000 | ./build/src/lpcnet_demo -features - - | python3 radae_tx.py model19_check3/checkpoints/checkpoint_epoch_100.pth --auxdata | python3 f32toint16.py --real --scale 8192 | aplay -f S16_LE --device "plughw:CARD=CODEC,DEV=0
+   ```
+   I keyed radio manually.  I recorded the transmission on a local SDR, then decoded with:
+   ```
+   sox ~/Downloads/sdr.ironstonerange.com_2024-08-19T22_03_13Z_7185.00_lsb.wav -t .s16 -r 8000 -c 1 - | python3 int16tof32.py --zeropad | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata | ./build/src/lpcnet_demo -fargan-synthesis - - | aplay -f S16_LE -r 16000
    ```
