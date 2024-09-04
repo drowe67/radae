@@ -61,9 +61,9 @@ If you are comfortable with Ubuntu Linux you can install the RADAE tools require
 
 A web site has been developed to perform the `ota_test.sh` processing.  The URL will be made available to the test team.
 
-1. In the Tx Processing section Browse to the file you want to encode for Tx, then press Process.  In a few seconds hopefully `tx.wav`` will be downloaded.  Use your own sample (prepared as described above), or for testing choose a sample form the RADAE Git repo [wav](https://github.com/drowe67/radae/tree/main/wav) folder.
-2. To test the Rx Processing Browse to the `tx.wav`` you just generated. Press Process, in about 10 seconds a zip file will be returned to you with the SSB and RADAE, a spectogram, and a report file.
-3. If you get this far, Transmit `tx.wav`` over your SSB radio to a remote Rx (as described above), and try processing the received file.
+1. In the Tx Processing section Browse to the file you want to encode for Tx, then press Process.  In a few seconds hopefully `tx.wav` will be downloaded.  Use your own sample (prepared as described above), or for testing choose a sample form the RADAE Git repo [wav](https://github.com/drowe67/radae/tree/main/wav) folder.
+2. To test the Rx Processing Browse to the `tx.wav` you just generated. Press Process, in about 10 seconds a zip file will be returned to you with the SSB and RADAE, a spectogram, and a report file.
+3. If you get this far, Transmit `tx.wav` over your SSB radio to a remote Rx (as described above), and try processing the received file.
 
 ## Receiver log fields
 
