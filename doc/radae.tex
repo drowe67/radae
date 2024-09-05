@@ -1209,17 +1209,17 @@ At first 100 bit/s was attempted (on data symbol per 10ms feature vector), this 
 
 \section{Baseband FM}
 
-Land Mobile Radio (LMR) applications for PTT VHF/UHF are typically based on a baseband FM radio architecture. A real, discretely valued (2 or 4 level) sequence of symbols drives an analog FM modulator.  The receiver will employ a limiter and analog FM demodulator that will recover the pulse train, which will be demodulated with a slicer.  The pulse train may be filtered to minimise ISI and constrain the spectrum of the transmitted signal.
+Land Mobile Radio (LMR) applications for PTT VHF/UHF are typically based on a baseband FM radio architecture. Payload bits are mapped to a real, discretely valued (2 or 4 level) sequence of symbols driving an analog FM modulator.  The receiver employs a limiter and analog FM demodulator to recover the pulse train, which is converted to bits with a slicer.  The pulse train may be filtered to minimise ISI and constrain the spectrum of the transmitted signal.
 
-Win themes for this use acse are speech quality and spectral mask - which defines spectral occupancy (bandwidth) and adjacent channel interference. This use case is not sensitive to low SNR performance.  Fading due to vehicle movement is present, but tends to be flat across the channel.
+Win themes for this use case are speech quality and spectral mask - which defines spectral occupancy (bandwidth) and adjacent channel interference. This use case is not sensitive to low SNR performance.  Fading due to vehicle movement is present, but tends to be flat across the channel.
 
 Using the FM radio architecture has many advantages compared to SDRs:
 \begin{enumerate}
 \item It is inexpensive and ubiquitous (a complete handset may retail for \$40).
-\item It is insensitive to frequency and phase offsets.
-\item it is relatively insensitive to frequency accuracy, modulation index, and phase offsets. Low cost frequency references can be used.
+\item Insensitive to frequency and phase offsets.
+\item Relatively insensitive to frequency accuracy, modulation index, and phase offsets. Low cost frequency references can be used.
 \item Only coarse (frame sync) and fine timing estimation is required - no phase or frequency estimation, making demodulator implementation straight forward.
-\item The waveform can be generated and received by IQ SDR radios, enabling implementation of the waveform by modern SDR architectures.
+\item The waveform can be also generated and received by modern IQ SDR radios if desired.
 \end{enumerate}
 
 This section describes a ML based speech system that encodes vocoder features to a sequence of baseband pulses that can be fed through the baseband FM radio channel.  It offers improved speech quality over classical FM and AMBE based digital voice systems, and an improved spectral mask (lower spectral occupancy and adjacent channel interference). 
@@ -1236,7 +1236,7 @@ where $f_d$ is the deviation and $f_m$ is the maximum modulating frequency.  Con
 
 A rule of thumb for FM demodulators is a threshold CNR of 12 dB. Assuming $BW_{FM}=16$ kHz and a receiver noise figure of 5 dB this is equivalent to a threshold received signal level of $12 + 10log_{10}(15000) + 5  = -115$ dBm, and an output SNR of 23.5 dB. Our previous experiments show this is around 20dB more than RADAE needs to obtain good quality speech.  Using this first pass analysis we can conclude we have ample link margin.  This could be leveraged to reduce symbol rate or deviation, e.g. to obtain an improved spectral mask.
 
-Figure \ref{fig:bbfm_framework} illustrates signal processing steps for the prototype system. The RRC filters implicitly convert between the symbol rate $R_s$ and sample rate $F_s$ Hz. Not shown is the DAC/ADC and RF signal processing.  FSYNC is a 24 symbol sequence used for frame synchronisation and fine timing.  All of the blocks not marked \emph{radae} are implemented with classical signal processing, common to existing digital data over baseband FM radios, and requiring modest amounts of CPU.
+Figure \ref{fig:bbfm_framework} illustrates signal processing steps for the prototype system. The RRC filters implicitly convert between the symbol rate $R_s$ and sample rate $F_s$ using interpolation and decimation as required. Not shown is the DAC/ADC and RF signal processing which is assumed to have minimal impact on system performance.  FSYNC is a 24 symbol sequence used for frame synchronisation and fine timing.  All of the blocks not marked \emph{radae} are implemented with classical signal processing, common to existing digital data over baseband FM radios, and requiring modest amounts of CPU and memory compared to the ML.
  
 \begin{figure}[H]
 \caption{Baseband FM system.  Transmitter (Tx) is on the LHS, at RHS is the Receiver (Rx).}
