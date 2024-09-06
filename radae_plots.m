@@ -39,6 +39,14 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
     end
 endfunction
 
+function do_plots_bbfm(z_fn, png_fn='')
+    z=load_f32(z_fn,1);
+    figure(1); clf; stem(z(1:40),'.'); title('Rx Symbols');
+    if length(png_fn)
+      print("-dpng",sprintf("%s.png",png_fn));
+    end
+endfunction
+
 function multipath_example()
     Nc = 20; Rs = 50; d = 0.002;
     G1 = 1; G2 = 1;
