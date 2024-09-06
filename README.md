@@ -266,7 +266,7 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
 `radae_rx.py` is s streaming receiver that accepts IQ samples on stdin, and outputs z vectors on stdout.  To listen to an example decode:
 ```
 ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32
-./radae_rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 -
+cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth | build/src/lpcnet_demo -fargan-synthesis - - | aplay -f S16_LE -r 16000
 ```
 To run just the core streaming decoder:
 ```
