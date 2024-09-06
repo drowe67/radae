@@ -42,7 +42,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 import torch
 from radae import RADAE,complex_bpf,acquisition,receiver_one
-
 parser = argparse.ArgumentParser(description='RADAE streaming receiver, IQ.f32 on stdin to features.f32 on stdout')
 
 parser.add_argument('model_name', type=str, help='path to model in .pth format')

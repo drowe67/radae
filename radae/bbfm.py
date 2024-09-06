@@ -1,4 +1,6 @@
 """
+   Baseband FM version of Radio Autoencoder
+
 /* Copyright (c) 2024 modifications for radio autoencoder project
    by David Rowe */
 
@@ -42,28 +44,14 @@ import os
 from torch.nn.utils.parametrizations import weight_norm
 from matplotlib import pyplot as plt
 from collections import OrderedDict
-#sys.path.append('.')
-#import dsp
-from . import radae_base
 
-# Generate pilots using Barker codes which have good correlation properties
-def barker_pilots(Nc):
-    P_barker_8  = torch.tensor([1., 1., 1., -1., -1., 1., -1.])
-    P_barker_13 = torch.tensor([1., 1., 1., 1., 1., -1., -1., 1., 1., -1., 1., -1., 1])
+# TODO these classes and function are common with radae.py, so work out how to share them
 
-    # repeating length 8 Barker code 
-    P = torch.zeros(Nc,dtype=torch.complex64)
-    for i in range(Nc):
-        P[i] = P_barker_13[i % len(P_barker_13)]
-    return P
-
-"""
 # Quantization and loss utility functions
 
 def noise_quantize(x):
-    # simulates quantization with addition of random uniform noise 
+    """ simulates quantization with addition of random uniform noise """
     return x + (torch.rand_like(x) - 0.5)
-
 
 # loss functions for vocoder features
 def distortion_loss(y_true, y_pred):
@@ -87,7 +75,6 @@ def distortion_loss(y_true, y_pred):
     return loss
 
 
-
 # weight initialization and clipping
 def init_weights(module):
 
@@ -100,7 +87,6 @@ def init_weights(module):
 #Simulates 8-bit quantization noise
 def n(x):
     return torch.clamp(x + (1./127.)*(torch.rand_like(x)-.5), min=-1., max=1.)
-
 
 #Wrapper for 1D conv layer
 class MyConv(nn.Module):
@@ -310,11 +296,11 @@ class CoreDecoder(nn.Module):
     FRAMES_PER_STEP = 4
 
     def __init__(self, input_dim, output_dim):
-        # core decoder for RADAE
+        """ core decoder for RADAE
 
-        # Computes features from latents, initial state, and quantization index
+            Computes features from latents, initial state, and quantization index
 
-
+        """
 
         super(CoreDecoder, self).__init__()
 
@@ -377,9 +363,11 @@ class CoreDecoderStatefull(nn.Module):
     FRAMES_PER_STEP = 4
 
     def __init__(self, input_dim, output_dim):
-        # core decoder for RADAE
-        # Computes features from latent z
+        """ core decoder for RADAE
 
+            Computes features from latent z
+
+        """
 
         super(CoreDecoderStatefull, self).__init__()
 
@@ -429,7 +417,7 @@ class CoreDecoderStatefull(nn.Module):
 
         features = torch.reshape(x,(1,z.shape[1]*self.FRAMES_PER_STEP,self.output_dim))
         return features
-"""
+
 class RADAE(nn.Module):
     def __init__(self,
                  feature_dim,
@@ -486,15 +474,15 @@ class RADAE(nn.Module):
         self.stateful_decoder = stateful_decoder
 
         # TODO: nn.DataParallel() shouldn't be needed
-        self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
-        self.core_decoder =  nn.DataParallel(radae_base.CoreDecoder(latent_dim, feature_dim))
-        self.core_encoder_statefull =  nn.DataParallel(radae_base.CoreEncoderStatefull(feature_dim, latent_dim, bottleneck=bottleneck))
-        self.core_decoder_statefull =  nn.DataParallel(radae_base.CoreDecoderStatefull(latent_dim, feature_dim))
+        self.core_encoder =  nn.DataParallel(CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
+        self.core_decoder =  nn.DataParallel(CoreDecoder(latent_dim, feature_dim))
+        self.core_encoder_statefull =  nn.DataParallel(CoreEncoderStatefull(feature_dim, latent_dim, bottleneck=bottleneck))
+        self.core_decoder_statefull =  nn.DataParallel(CoreDecoderStatefull(latent_dim, feature_dim))
         #self.core_encoder = CoreEncoder(feature_dim, latent_dim)
         #self.core_decoder = CoreDecoder(latent_dim, feature_dim)
 
-        self.enc_stride = radae_base.CoreEncoder.FRAMES_PER_STEP
-        self.dec_stride = radae_base.CoreDecoder.FRAMES_PER_STEP
+        self.enc_stride = CoreEncoder.FRAMES_PER_STEP
+        self.dec_stride = CoreDecoder.FRAMES_PER_STEP
 
         if self.dec_stride % self.enc_stride != 0:
             raise ValueError(f"get_decoder_chunks_generic: encoder stride does not divide decoder stride")
