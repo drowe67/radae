@@ -141,9 +141,9 @@ class BBFM(nn.Module):
                 features_hat = torch.cat([features_hat, self.core_decoder_statefull(z_hat[:,i:i+1,:])],dim=1)
         else:
             features_hat = self.core_decoder(z_hat)
-        print(features_hat.shape,z_hat.shape, file=sys.stderr)
+        #print(features_hat.shape, z_hat.shape, file=sys.stderr)
         
-        return features_hat,z_hat
+        return features_hat
     
     def num_timesteps_at_rate_Rs(self, num_ten_ms_timesteps):
         num_seconds = num_ten_ms_timesteps * self.Tf
@@ -155,7 +155,7 @@ class BBFM(nn.Module):
         #(num_ten_ms_timesteps,  num_modem_frames, num_ten_ms_timesteps_rounded)
         return num_ten_ms_timesteps_rounded
 
-    def forward(self, features, H, G=None):
+    def forward(self, features, H):
         
         (num_batches, num_ten_ms_timesteps, num_features) = features.shape
         num_timesteps_at_rate_Rs = self.num_timesteps_at_rate_Rs(num_ten_ms_timesteps)
