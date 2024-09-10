@@ -385,6 +385,9 @@ A log of models trained by the author.
 | model05_auxdata25 | model05 (rate Rs h_nc20_train_mpp.f32) with --auxdata 25 bits/s see PR#13 | Rs | - |
 | model19 | like model17 but with 25 bits/s auxdata, ep 100 loss 0.124 | Fs | - |
 | model19_check3 | model19 but loss function weighting for data symbols reduced fom 1/18 to 0.5/18, which reduced vocoder feature loss with just a small impact on BER.  Loss at various op points and channels very close to model17 | Fs | - |
+| model20 | model19_check3 but loss function weighting for pitch and corr doubled, attempt to improve rick samples.  Didn't help. |  Fs | - |
+| model21 | very based fixed EbNodB model like model02 but at 20dB at epoch 30, produced good quality speech on rick, loss 0.02, but not a practical solution |  Rs | - |
+| model22 | very based fixed EbNodB model like model02 but at 10dB at epoch 30, rick sample starting to get tonal/pitch shift artefact, in between, loss 0.045 |  Rs | - |
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
