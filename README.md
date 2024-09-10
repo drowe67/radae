@@ -384,7 +384,7 @@ A log of models trained by the author.
 | model05_auxdata | model05 (rate Rs h_nc20_train_mpp.f32) with --auxdata 100 bits/s see PR#13 | Rs | - |
 | model05_auxdata25 | model05 (rate Rs h_nc20_train_mpp.f32) with --auxdata 25 bits/s see PR#13 | Rs | - |
 | model19 | like model17 but with 25 bits/s auxdata, ep 100 loss 0.124 | Fs | - |
-| model19_check3 | model19 but loss function weighting for data symbols redcued fom 1/18 to 0.5/18, which reduced vocoder feature loss with just a small impact on BER.  Loss at various op points and channels very close to model17 | Fs | - |
+| model19_check3 | model19 but loss function weighting for data symbols reduced fom 1/18 to 0.5/18, which reduced vocoder feature loss with just a small impact on BER.  Loss at various op points and channels very close to model17 | Fs | - |
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 

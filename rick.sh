@@ -30,7 +30,7 @@ function run_tests {
   mv features_out.f32 features_out_model05.f32
 
   # 3. FARGAN+RADAE model_bbfm_01 (generates features_out.f32)
-  ./inference.sh  model_bbfm_01/checkpoints/checkpoint_epoch_100.pth ${results}/${filename}_01.wav ${results}/${filename}_05_radae.wav
+  ./inference.sh  model_bbfm_01/checkpoints/checkpoint_epoch_100.pth ${results}/${filename}_01.wav ${results}/${filename}_04_radae.wav
   mv features_out.f32 features_out_model_bbfm_01.f32
   
   # Plot the pitch and voicing tracks from to see if RADAE has messed anything up 
