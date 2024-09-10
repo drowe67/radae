@@ -17,7 +17,7 @@ function run_tests {
 
   cp ${wav_in} ${results}/${filename}_01.wav
 
-  # 1. vanilla FARGAN voicoder (no RADAE)
+  # 1. vanilla FARGAN vocoder (no RADAE)
   sox $wav_in -t .s16 -r 16000 -c 1 - | \
   lpcnet_demo -features - - | \
   lpcnet_demo -fargan-synthesis - - | \
