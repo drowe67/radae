@@ -304,3 +304,31 @@ function test_rayleigh(epslatex="")
     print_eps_restore(epslatex,"-S300,250",textfontsize,linewidth);
   end
 end
+
+% Plot SNR v CNR for FM demod model
+function plot_SNR_CNR(epslatex="")
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts();
+    end
+    figure(1); clf; hold on;
+    fd=5000; fm=3000; 
+    beta= fd/fm;
+    Gfm=10*log10(3*(beta^2)*(beta+1))
+    BWfm = 2*(fd+fm);
+    CNRdB=0:20;
+    for i=1:length(CNRdB)
+      if CNRdB(i) >= 12
+        SNRdB(i) = CNRdB(i) + Gfm;
+      else
+        SNRdB(i) = (1+Gfm/3)*CNRdB(i) - 3*Gfm;
+      end
+    end
+    plot(CNRdB,SNRdB,'g;FM;'); 
+    SSBdB = CNRdB + 10*log10(BWfm) - 10*log10(fm);
+    plot(CNRdB,SSBdB,'b;SSB;'); 
+    axis([min(CNRdB) max(CNRdB) 10 30]);
+    hold off; grid('minor'); xlabel('CNR (dB)'); ylabel('SNR (dB)'); legend('boxoff'); legend('location','northwest');
+    if length(epslatex)
+        print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
+    end
+endfunction

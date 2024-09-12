@@ -1209,7 +1209,7 @@ At first 100 bit/s was attempted (on data symbol per 10ms feature vector), this 
 
 \section{Baseband FM}
 
-Land Mobile Radio (LMR) applications for PTT VHF/UHF are typically based on a baseband FM radio architecture. Payload bits are mapped to a real, discretely valued (2 or 4 level) sequence of symbols driving an analog FM modulator.  The receiver employs a limiter and analog FM demodulator to recover the pulse train, which is converted to bits with a slicer.  The pulse train may be filtered to minimise ISI and constrain the spectrum of the transmitted signal.
+Land Mobile Radio (LMR) systems for PTT VHF/UHF voice are typically based on a baseband FM radio architecture. Payload bits are mapped to a real, discretely valued (2 or 4 level) sequence of symbols driving an analog FM modulator.  The receiver employs a limiter and analog FM demodulator to recover the pulse train, which is converted to bits with a slicer.  The pulse train may be filtered to minimise ISI and constrain the spectrum of the transmitted signal.
 
 Win themes for this use case are speech quality and spectral mask - which defines spectral occupancy (bandwidth) and adjacent channel interference. This use case is not sensitive to low SNR performance.  Fading due to vehicle movement is present, but tends to be flat across the channel.
 
@@ -1222,22 +1222,21 @@ Using the FM radio architecture has many advantages compared to SDRs:
 \item The waveform can be also generated and received by modern IQ SDR radios if desired.
 \end{enumerate}
 
-This section describes a ML based speech system that encodes vocoder features to a sequence of baseband pulses that can be fed through the baseband FM radio channel.  It offers improved speech quality over classical FM and AMBE based digital voice systems, and an improved spectral mask (lower spectral occupancy and adjacent channel interference). 
+This section describes a ML based speech system that encodes vocoder features to a sequence of pulses that can be fed through the baseband FM radio channel.  It offers improved speech quality over classical analog FM and AMBE digital voice systems, and an improved spectral mask (lower spectral occupancy and adjacent channel interference). 
 
 Above a threshold CNR, the SNR of the demodulated analog FM signal is given by \cite{der_fmtutorial}:
 \begin{equation}
-\label{eq:fm_snr}
 SNR_{FM} = 3\beta^2(\beta+1) CNR
 \end{equation}
-where $\beta=f_d / f_m$ is the modulation index, CNR is the Carrier to Noise ratio of the received signal at the demodulator input, and $SNR_{FM}$ is the SNR at the demodulator output, with noise power measured in bandwidth $f_m$.  The RF bandwidth can be approximated by:
+where $\beta=f_d / f_m$ is the modulation index, $f_d$ is the deviation, $f_m$ is the maximum modulating frequency, CNR is the Carrier to Noise ratio of the received signal at the demodulator input, and $SNR_{FM}$ is the SNR at the demodulator output. CNR is measured in a noise bandwidth of $BW_{FM}$ and SNR is measured in a noise bandwidth of $f_m$.  The RF bandwidth can be approximated by:
 \begin{equation}
 BW_{FM} = 2(f_d+f_m)
 \end{equation}
-where $f_d$ is the deviation and $f_m$ is the maximum modulating frequency.  Consider a typical LMR FM system with $f_d=5$ kHz and $f_m=3$ kHz.  This gives $BW_{FM}=16$ kHz and $SNR_{FM}=13.5+CNR$.
+Consider a typical LMR FM system with $f_d=5$ kHz and $f_m=3$ kHz.  This gives $BW_{FM}=16$ kHz and $SNR_{FM}=13.5+CNR$.
 
 A rule of thumb for FM demodulators is a threshold CNR of 12 dB. Assuming $BW_{FM}=16$ kHz and a receiver noise figure of 5 dB this is equivalent to a threshold received signal level of $12 + 10log_{10}(15000) + 5  = -115$ dBm, and an output SNR of 25.5 dB. Our previous experiments show this is around 20dB more than RADAE needs to obtain good quality speech.  Using this first pass analysis we can conclude we have ample link margin.  This could be leveraged to reduce symbol rate or deviation, e.g. to obtain an improved spectral mask.
 
-Figure \ref{fig:bbfm_framework} illustrates the baseband FM model. The RRC filters implicitly convert between the symbol rate $R_s$ and sample rate $F_s$ using interpolation and decimation as required. Not shown is the DAC/ADC, pre and de-emphasis, RF frequency translation, and power amplifier which in total are assumed to have a unity transfer function and minimal impact on system performance.  FSYNC is a 24 symbol sequence used for frame synchronisation and fine timing.  All of the blocks not marked \emph{radae} are implemented with classical analog or digital signal processing, common to existing FM radios, and requiring modest amounts of CPU and memory compared to the ML.
+Figure \ref{fig:bbfm_framework} illustrates the baseband FM model. The RRC filters implicitly convert between the symbol rate $R_s$ and sample rate $F_s$ using interpolation and decimation as required. Not shown is the DAC/ADC, pre and de-emphasis, RF frequency translation, and power amplifier which in total are assumed to have a unity transfer function and minimal impact on system performance.  FSYNC is a 24 symbol sequence used for frame synchronisation and fine timing.  All of the blocks not marked \emph{radae} are implemented with classical analog or digital signal processing, common to existing analog or digital FM radios, and requiring modest amounts of CPU and memory compared to the ML.
  
 \begin{figure}[H]
 \caption{Baseband FM model.  Transmitter (Tx) is on the LHS, at RHS is the Receiver (Rx). The RF channel is subject to fading $|H|$ and AWGN with noise power $\sigma_c^2$.}
@@ -1283,12 +1282,12 @@ Figure \ref{fig:bbfm_framework} illustrates the baseband FM model. The RRC filte
 
 Consider a typical LMR channel from a base station transmitter to a receiver that is pedestrian or vehicle mobile.  The propagation path will typically not be line of site, but will reflect off several terrestrial objects (such as buildings) to reach the receiver. The relative phase shifts of the paths will result in multipath fading, which due to the receiver movement will be time varying.  The multipath channel typically evolves slowly (e.g. a bandwidth of a few 10's of Hz at 60 km/hr) compared to the symbol rate (kHz), so the rate of change in phase has only a trivial impact on the output of the FM demodulator compared to the data symbols and can be ignored.  We can therefore model the multipath channel as Rayleigh distributed magnitude fading $|H|$ and AWGN noise with variance (power) $\sigma_c^2$ added to the FM carrier. 
  
-We can model the received symbols at the output of the FM demodulator as the input symbols with additive Gaussian noise:
+We can model the received symbols at the output of the FM demodulator DSP as the input symbols with additive Gaussian noise:
 \begin{equation}
 \label{eq:fm_noise}
 \hat{\bf{f}} = \bf{f} + \mathcal{N}(0,\sigma_s^2) 
 \end{equation}
-where the symbol noise power $\sigma_s^2$ can be computed from the FM carrier noise power $\sigma_c^2$ using [\ref{eq:fm_snr}].  We note the mean magnitude of each symbols in $\hat{\bf{f}}$ at the output of a FM demodulator is a function of the deviation and not the channel CNR.  Thus as the CNR is modulated by fading, the mean value of each symbol in $\hat{\bf{f}}$ will be constant, however the FM demodulator output SNR will change, implying that output noise power $\sigma_s^2$ is modulated as a function of $|H|$.
+where the symbol noise power $\sigma_s^2$ can be computed from the FM carrier noise power $\sigma_c^2$ using the following procedure.  We note the mean magnitude of each symbols in $\hat{\bf{f}}$ at the output of a FM demodulator is a function of the deviation and not the channel CNR.  Thus as the CNR is modulated by fading, the mean value of each symbol in $\hat{\bf{f}}$ will be constant, however the FM demodulator output SNR will change, implying that output noise power $\sigma_s^2$ is modulated as a function of $|H|$.
 
 When fading is applied to the FM carrier, we model the FM demod output SNR as:
 \begin{equation}
@@ -1298,7 +1297,7 @@ SNR_{dB} &= 10log_{10}(3\beta^2(\beta+1)) + CNR_{dB} + H_{dB} \\
 SNR_{dB} &= G_{fm} + CNR_{dB} + H_{dB}
 \end{split}
 \end{equation}
-where $CNR$ is the mean (set point) channel carrier to noise ratio, and $|H|$ is the current magnitude of the fading channel.  We note that fading may push the input CNR beneath the demodulator threshold.  At this point the SNR drops rapidly, and the noise becomes impulsive rather than AWGN. Except for rare deep fades, our system is designed to operate above threshold.  For simplicity of training, we therefore approximate the demodulator SNR using a piecewise linear model that increases AWGN rapidly as CNR drops:
+where $CNR$ is the mean (set point) channel carrier to noise ratio, and $|H|$ is the current magnitude of the fading channel.  We note that fading may push the input CNR beneath the demodulator threshold.  At this point the SNR drops rapidly, and the noise becomes impulsive rather than AWGN. Except for rare deep fades, our system is designed to operate above threshold.  For simplicity of training, we approximate the demodulator SNR using a piecewise linear model that increases AWGN rapidly as CNR drops:
 
 \begin{equation}
 \label{eq:fm_snr}
@@ -1307,7 +1306,15 @@ SNR_{dB} = \begin{cases}
            (1 + \frac{G_{fm}}{3})CNR^{\prime}_{dB} - 3G_{fm}, & CNR^{\prime}_{dB} < 12
 	       \end{cases}
 \end{equation}
-where $CNR^{\prime}_{dB} = CNR_{dB} + H_{dB}$. In this model, $SNR_{dB}=CNR_{dB}=9 \si{dB}$, i.e. over a 3dB range the FM ``processing gain" is reduced to zero and the demodulator starts to perform worse than a SSB product detector.
+where $CNR^{\prime}_{dB} = CNR_{dB} + H_{dB}$. In this model, $SNR_{dB}=CNR_{dB}=9 \si{dB}$, i.e. over a 3dB range the FM ``processing gain" is reduced to zero.
+
+\begin{figure}[H]
+\caption{SNR versus CNR for FM demodulator model in (\ref{eq:fm_snr}) with $\beta=5/3$. SSB product detector plotted as a control.}
+\label{fig:fm_cnr_snr}
+\begin{center}
+\input fm_cnr_snr.tex
+\end{center}
+\end{figure}
 
 To calculate the noise power to apply in simulation we solve for $N=\sigma_s^2$:
 \begin{equation}
@@ -1322,9 +1329,9 @@ The channel simulation procedure for each training sequence is:
 \begin{enumerate}
 \item Select an average $CNR$ set point and vehicle speed.
 \item Generate a sequence of $|H|$ samples based on a vehicle speed for this sequence.
-\item Calculate $SNR$ for each point in the sequence using [\ref{eq:fm_snr}]. 
-\item Estimate $\sigma_s$ for each point in the sequence using [\ref{eq:fm_sigma}].
-\item Apply noise to each point in the sequence using [\ref{eq:fm_noise}].
+\item Calculate $SNR$ for each point in the sequence using (\ref{eq:fm_snr}). 
+\item Estimate $\sigma_s$ for each point in the sequence using (\ref{eq:fm_sigma}).
+\item Apply noise to each point in the sequence using (\ref{eq:fm_noise}).
 \end{enumerate}
 
 TODO:
