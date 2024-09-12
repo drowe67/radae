@@ -39,9 +39,17 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
     end
 endfunction
 
-function do_plots_bbfm(z_fn, png_fn='')
-    z=load_f32(z_fn,1);
-    figure(1); clf; stem(z(1:40),'.'); title('Rx Symbols');
+function do_plots_bbfm(z1_fn, z2_fn="", png_fn='')
+    z1=load_f32(z1_fn,1);
+    figure(1); clf; 
+    stem(z1(1:40),'g');
+    if length(z2_fn) 
+      z2=load_f32(z2_fn,1);
+      hold on;
+      stem(z2(1:40),'r');
+      hold off;
+    end
+    title('Rx Symbols');
     if length(png_fn)
       print("-dpng",sprintf("%s.png",png_fn));
     end
@@ -305,6 +313,11 @@ function test_rayleigh(epslatex="")
   end
 end
 
+function y = relu(x)
+  y = x;
+  y(find(x<0)) = 0;
+end
+
 % Plot SNR v CNR for FM demod model
 function plot_SNR_CNR(epslatex="")
     if length(epslatex)
@@ -315,6 +328,8 @@ function plot_SNR_CNR(epslatex="")
     beta= fd/fm;
     Gfm=10*log10(3*(beta^2)*(beta+1))
     BWfm = 2*(fd+fm);
+
+    % vanilla implementation of curve
     CNRdB=0:20;
     for i=1:length(CNRdB)
       if CNRdB(i) >= 12
@@ -323,7 +338,13 @@ function plot_SNR_CNR(epslatex="")
         SNRdB(i) = (1+Gfm/3)*CNRdB(i) - 3*Gfm;
       end
     end
+
+    % implementation using relus (suitable for PyTorch)
+    SNRdB_relu = relu(CNRdB-12) + 12 + Gfm;
+    SNRdB_relu += -relu(-(CNRdB-12))*(1+Gfm/3);
+
     plot(CNRdB,SNRdB,'g;FM;'); 
+    plot(CNRdB,SNRdB_relu,'r+;FM relu;'); 
     SSBdB = CNRdB + 10*log10(BWfm) - 10*log10(fm);
     plot(CNRdB,SSBdB,'b;SSB;'); 
     axis([min(CNRdB) max(CNRdB) 10 30]);

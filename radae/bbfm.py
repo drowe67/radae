@@ -36,21 +36,16 @@ import torch
 from torch import nn
 from . import radae_base
 import sys
-#import math as m
-
-#import torch.nn.functional as F
-#import os
-#from torch.nn.utils.parametrizations import weight_norm
-#from matplotlib import pyplot as plt
 from collections import OrderedDict
+import math as m
 
 class BBFM(nn.Module):
     def __init__(self,
                  feature_dim,
                  latent_dim,
-                 EbNodB,
-                 range_EbNo = False,
-                 range_EbNo_start = -6.0,
+                 CNRdB,
+                 fd_Hz=5000,
+                 fm_Hz=3000,
                  stateful_decoder = False
                 ):
 
@@ -58,9 +53,9 @@ class BBFM(nn.Module):
 
         self.feature_dim = feature_dim
         self.latent_dim  = latent_dim
-        self.EbNodB = EbNodB
-        self.range_EbNo = range_EbNo
-        self.range_EbNo_start = range_EbNo_start
+        self.CNRdB = CNRdB
+        self.fd_Hz = fd_Hz
+        self.fm_Hz = fm_Hz
         self.stateful_decoder = stateful_decoder
 
         # TODO: nn.DataParallel() shouldn't be needed
@@ -80,7 +75,11 @@ class BBFM(nn.Module):
         self.Rz = 1/self.Tz
         self.Rb =  latent_dim/self.Tz                  # payload data BPSK symbol rate (symbols/s or Hz)
 
-        print(f"Rb: {self.Rb:5.2f}", file=sys.stderr)
+        self.beta = self.fd_Hz/self.fm_Hz              # deviation
+        self.BWfm = 2*(self.fd_Hz + self.fm_Hz)        # BW estimate using Carsons rule
+        self.Gfm = 10*m.log10(3*(self.beta**2)*(self.beta+1))
+
+        print(f"Rb: {self.Rb:5.2f} Deviation: {self.fd_Hz}Hz Max Modn freq: {self.fm_Hz}Hz Beta: {self.beta:3.2f}", file=sys.stderr)
 
     # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
     def core_decoder_statefull_load_state_dict(self):
@@ -167,33 +166,32 @@ class BBFM(nn.Module):
         assert (H.shape[1] == num_timesteps_at_rate_Rs)
         assert (H.shape[2] == 1)
 
-        # AWGN noise
-        if self.range_EbNo:
-            EbNodB = self.range_EbNo_start + 20*torch.rand(num_batches,1,1,device=features.device)
-        else:           
-            EbNodB = self.EbNodB*torch.ones(num_batches,1,1,device=features.device)
-
         # run encoder, outputs sequence of symbols that each describe 40ms of speech
         z = self.core_encoder(features)
         z_shape = z.shape
         z_hat = torch.reshape(z,(num_batches,num_timesteps_at_rate_Rs,1))
         
-        # multipath, multiply each symbol by multipath channel magnitudes for each time step
-        z_hat = z_hat * H
-        
-        # AWGN noise ------------------
-        sigma = 10**(-EbNodB/20)
+        # determine FM demod SNR using piecewise approximation
+        # note SNR is a vector, 1 sample for symbol as SNR evolves with H
+        CNRdB = 20*torch.log10(H) + self.CNRdB
+        print(H.shape,CNRdB.shape)
+        SNRdB_relu = torch.relu(CNRdB-12) + 12 + self.Gfm
+        SNRdB_relu += -torch.relu(-(CNRdB-12))*(1 + self.Gfm/3)
+        SNR = 10**(SNRdB_relu/10)
+
+        # note sigma is a vector, noise power evolves across each symbol with H
+        sigma = 1/(SNR**0.5)
         n = sigma*torch.randn_like(z_hat)
-        z_hat = z_hat + n
+        z_hat = torch.clamp(z_hat + n, min=-1.0,max=1.0)
                         
         z_hat = torch.reshape(z_hat,z_shape)
         #print(z.shape, z_hat.shape)
         
         features_hat = self.core_decoder(z_hat)
-        #quit()
+        
         return {
             "features_hat" : features_hat,
             "z_hat"  : z_hat,
-            "sigma"  : sigma.cpu().numpy(),
-            "EbNodB" : EbNodB.cpu().numpy()
-       }
+            "sigma"  : sigma,
+            "CNRdB"  : CNRdB
+        }

@@ -46,9 +46,10 @@ parser.add_argument('features_hat', type=str, help='path to output feature file 
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
 parser.add_argument('--cuda-visible-devices', type=str, help="set to 0 to run using GPU rather than CPU", default="")
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
-parser.add_argument('--EbNodB', type=float, default=100, help='BPSK Eb/No in dB')
+parser.add_argument('--CNRdB', type=float, default=100, help='FM demod input CNR in dB')
 parser.add_argument('--passthru', action='store_true', help='copy features in to feature out, bypassing ML network')
-parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath samples, rate Rs time steps by Nc carriers .f32 format')
+parser.add_argument('--h_file', type=str, default="", help='path to rate Rs fading channel magnitude samples, rate Rs time steps by Nc=1 carriers .f32 format')
+parser.add_argument('--write_CNRdB', type=str, default="", help='path to output file of CNRdB per sample after fading in .f32 format')
 parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss to arg, print PASS/FAIL')
 args = parser.parse_args()
 
@@ -66,12 +67,12 @@ num_features = 20
 num_used_features = 20
 
 # load model from a checkpoint file
-model = BBFM(num_features, latent_dim, args.EbNodB)
+model = BBFM(num_features, latent_dim, args.CNRdB)
 checkpoint = torch.load(args.model_name, map_location='cpu')
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
 
-# dataloader
+# load features from file
 feature_file = args.features
 features_in = np.reshape(np.fromfile(feature_file, dtype=np.float32), (1, -1, nb_total_features))
 nb_features_rounded = model.num_10ms_times_steps_rounded_to_modem_frames(features_in.shape[1])
@@ -86,10 +87,10 @@ Nc = 1
 num_timesteps_at_rate_Rs = model.num_timesteps_at_rate_Rs(nb_features_rounded)
 H = torch.ones((1,num_timesteps_at_rate_Rs,Nc))
 
-# user supplied rate Rs multipath model, sequence of H matrices
+# user supplied rate Rs multipath model, sequence of H magnitude samples
 if args.h_file:
    H = np.reshape(np.fromfile(args.h_file, dtype=np.float32), (1, -1, Nc))
-   #print(H.shape, num_timesteps_at_rate_Rs)
+   print(H.shape, num_timesteps_at_rate_Rs)
    if H.shape[1] < num_timesteps_at_rate_Rs:
       print("Multipath H file too short")
       quit()
@@ -109,25 +110,12 @@ if __name__ == '__main__':
    H = H.to(device)
    output = model(features,H)
 
-   # target SNR calcs for a fixed Eb/No run (e.g. inference)
-   EbNo = 10**(args.EbNodB/10)                # linear Eb/No
-   B = 3000                                   # (kinda arbitrary) bandwidth for measuring noise power (Hz)
-   SNR = EbNo*(model.Rb/B)
-   SNRdB = 10*np.log10(SNR)
-   CNodB = 10*np.log10(EbNo*model.Rb)
-   print(f"          Eb/No   C/No     SNR3k  Rb    Eq")
-   print(f"Target..: {args.EbNodB:6.2f}  {CNodB:6.2f}  {SNRdB:6.2f}  {int(model.Rb):d}")
-
-   # Lets check actual Eq/No, Eb/No and SNR, and monitor assumption |z| ~ 1, especially for multipath.
-   # If |z| ~ 1, Eb ~ 1, Eq ~ 2, and the measured SNR should match the set point SNR. 
+   # Lets check actual SNR at output of FM demod
    tx_sym = output["z_hat"].cpu().detach().numpy()
-   Eq_meas = np.mean(np.abs(tx_sym)**2)
-   No = output["sigma"]**2
-   No = No.item()
-   EqNodB_meas = 10*np.log10(Eq_meas/No)
-   Rq = Rb*Nc
-   SNRdB_meas = EqNodB_meas + 10*np.log10(Rq/B)
-   print(f"Measured: {EqNodB_meas-3:6.2f}          {SNRdB_meas:6.2f}       {Eq_meas:7.2f}")
+   S = np.mean(np.abs(tx_sym)**2)
+   N = np.mean(output["sigma"].cpu().detach().numpy()**2)
+   SNRdB_meas = 10*np.log10(S/N)
+   print(f"SNRdB Measured: {SNRdB_meas:6.2f}")
 
    features_hat = output["features_hat"][:,:,:num_used_features]
    features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
@@ -142,8 +130,13 @@ if __name__ == '__main__':
       else:
          print("FAIL")
 
-   # write real valued latent vectors
+   # write output symbols (latent vectors)
    if len(args.write_latent):
       z_hat = output["z_hat"].cpu().detach().numpy().flatten().astype('float32')
       z_hat.tofile(args.write_latent)
    
+   # write CNRdB after fading
+   if len(args.write_CNRdB):
+      CNRdB = output["CNRdB"].cpu().detach().numpy().flatten().astype('float32')
+      CNRdB.tofile(args.write_CNRdB)
+      

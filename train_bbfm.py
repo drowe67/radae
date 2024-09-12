@@ -49,9 +49,7 @@ parser.add_argument('features', type=str, help='path to feature file in .f32 for
 parser.add_argument('output', type=str, help='path to output folder')
 parser.add_argument('--cuda-visible-devices', type=str, help="comma separates list of cuda visible device indices, default: ''", default="")
 parser.add_argument('--latent-dim', type=int, help="number of symbols produced by encoder, default: 80", default=80)
-parser.add_argument('--EbNodB', type=float, default=0, help='BPSK Eb/No in dB')
-parser.add_argument('--range_EbNo', action='store_true', help='Use a range of Eb/No during training')
-parser.add_argument('--range_EbNo_start', type=float, default=-6.0, help='starting value for Eb/No during training')
+parser.add_argument('--CNRdB', type=float, default=0, help='FM demod input CNR in dB')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath file, rate Rs time steps by 1 carriers .f32 format')
 
 training_group = parser.add_argument_group(title="training parameters")
@@ -112,9 +110,8 @@ if args.auxdata:
 feature_file = args.features
 
 # model
-checkpoint['model_args'] = (num_features, latent_dim, args.EbNodB, args.range_EbNo)
-model = BBFM(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo, 
-              range_EbNo_start=args.range_EbNo_start)
+checkpoint['model_args'] = (num_features, latent_dim, args.CNRdB)
+model = BBFM(num_features, latent_dim, args.CNRdB)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
@@ -144,72 +141,6 @@ if __name__ == '__main__':
 
     # push model to device
     model.to(device)
-
-    # -----------------------------------------------------------------------------------------------
-    # run through dataset once with current model but training disabled, to gather loss v EqNo stats
-    # -----------------------------------------------------------------------------------------------
-    if len(args.plot_EqNo):
-        # TODO: move this to a function
-        print("Measuring loss ve Eq/No over training set with training disabled")
-        model.eval()
-        EqNodB_loss = np.zeros((dataloader.__len__()*batch_size,2))
-        running_total_loss      = 0
-        previous_total_loss     = 0
-        current_loss            = 0.
-
-        with torch.no_grad():
-            with tqdm.tqdm(dataloader, unit='batch') as tepoch:
-                for i, (features,H,G) in enumerate(tepoch):
-                    features = features.to(device)
-                    H = H.to(device)
-                    G = G.to(device)
-                    output = model(features,H,G)
-                    loss_by_batch = distortion_loss(features[..., :20], output["features_hat"][..., :20])
-                    total_loss = torch.mean(loss_by_batch)
-                    
-                    tx_sym = output["z"].cpu().detach().numpy()
-                    Eq_meas = np.mean(np.abs(tx_sym)**2,axis=(1,2))
-                    No = output["sigma"][:,0,0]**2
-                    EqNodB_meas = 10*np.log10(Eq_meas/No)
-                    EqNodB_loss[i*batch_size:(i+1)*batch_size,0] = EqNodB_meas
-                    EqNodB_loss[i*batch_size:(i+1)*batch_size,1] = loss_by_batch.cpu().detach().numpy()                       
-
-                    running_total_loss += float(total_loss.detach().cpu())
-                    
-                    if (i + 1) % log_interval == 0:
-                        current_loss = (running_total_loss - previous_total_loss) / log_interval
-                        tepoch.set_postfix(
-                            current_loss=current_loss,
-                            total_loss=running_total_loss / (i + 1),
-                        )
-                        previous_total_loss = running_total_loss
-
-        # Plot loss against EqNodB for final epoch, using log of loss and Eq/No for
-        # each sequence.  We group losses into 1dB Eq/No bins, kind of like a histogram.
-        EqNodB_min = int(np.ceil(np.min(EqNodB_loss[:,0])))
-        EqNodB_max = int(np.ceil(np.max(EqNodB_loss[:,0])))
-        EqNodB_mean_loss = np.zeros((EqNodB_max-EqNodB_min,2))
-        # group the losses from training into 1dB wide bins, and find mean for that bin
-        r = np.arange(EqNodB_min,EqNodB_max)
-        for i in np.arange(len(r)):
-            EqNodB = r[i]
-            x = np.where(np.abs(EqNodB_loss[:,0] - EqNodB) < 0.5)
-            EqNodB_mean_loss[i,0] = EqNodB
-            EqNodB_mean_loss[i,1] = np.mean(EqNodB_loss[x,1])
-        plt.figure(2)
-        plt.plot(EqNodB_mean_loss[:,0],EqNodB_mean_loss[:,1],'b+-')
-        plt.grid()
-        plt.xlabel('Eq/No (dB)')
-        plt.ylabel('Loss')
-        plt.show(block=False)
-        plt.savefig(args.plot_EqNo + '_loss_EqNodB.png')
-
-        np.savetxt(args.plot_EqNo + '_loss_EqNodB' + '.txt', EqNodB_mean_loss)
-        quit()
-
-    # ---------------------------------------------------------------------------------------------
-    # Regular training loop
-    # ---------------------------------------------------------------------------------------------
 
     if args.plot_loss:
         plt.figure(1)

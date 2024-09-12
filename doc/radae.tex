@@ -1285,9 +1285,9 @@ Consider a typical LMR channel from a base station transmitter to a receiver tha
 We can model the received symbols at the output of the FM demodulator DSP as the input symbols with additive Gaussian noise:
 \begin{equation}
 \label{eq:fm_noise}
-\hat{\bf{f}} = \bf{f} + \mathcal{N}(0,\sigma_s^2) 
+\hat{\bf{f}} = \bf{f} + \bf{\sigma_s}\mathcal{N}(0,1) 
 \end{equation}
-where the symbol noise power $\sigma_s^2$ can be computed from the FM carrier noise power $\sigma_c^2$ using the following procedure.  We note the mean magnitude of each symbols in $\hat{\bf{f}}$ at the output of a FM demodulator is a function of the deviation and not the channel CNR.  Thus as the CNR is modulated by fading, the mean value of each symbol in $\hat{\bf{f}}$ will be constant, however the FM demodulator output SNR will change, implying that output noise power $\sigma_s^2$ is modulated as a function of $|H|$.
+where the noise power applied to each symbol is defined by the vector $\bf{\sigma_s}$.  We note the mean magnitude of each symbols in $\hat{\bf{f}}$ at the output of a FM demodulator is a function of the deviation and not the channel CNR.  Thus as the CNR is modulated by fading, the mean value of each symbol in $\hat{\bf{f}}$ will be constant, however the FM demodulator output SNR will change, implying that output noise power $\sigma_s^2$ is modulated as a function of $|H|$.
 
 When fading is applied to the FM carrier, we model the FM demod output SNR as:
 \begin{equation}
@@ -1309,14 +1309,14 @@ SNR_{dB} = \begin{cases}
 where $CNR^{\prime}_{dB} = CNR_{dB} + H_{dB}$. In this model, $SNR_{dB}=CNR_{dB}=9 \si{dB}$, i.e. over a 3dB range the FM ``processing gain" is reduced to zero.
 
 \begin{figure}[H]
-\caption{SNR versus CNR for FM demodulator model in (\ref{eq:fm_snr}) with $\beta=5/3$. SSB product detector plotted as a control.}
+\caption{SNR versus CNR for FM demodulator model in (\ref{eq:fm_snr}) with $\beta=5/3$. Red crosses are an efficient implementation for ML using $relu()$ functions. SSB product detector plotted as a control.}
 \label{fig:fm_cnr_snr}
 \begin{center}
 \input fm_cnr_snr.tex
 \end{center}
 \end{figure}
 
-To calculate the noise power to apply in simulation we solve for $N=\sigma_s^2$:
+To calculate the noise power to apply in simulation we solve for $\sigma_s$:
 \begin{equation}
 \label{eq:fm_sigma}
 \begin{split}
@@ -1327,11 +1327,11 @@ To calculate the noise power to apply in simulation we solve for $N=\sigma_s^2$:
 where $A$ is the amplitude of the symbol corresponding to maximum deviation $f_d$.  As $|H|$ evolves over time, $\sigma_s$ should be re-calculated for every symbol using the latest sample of $|H|$.  In practice the statistics of $|H|$ vary based on the vehicle speed.  Our approach is to using sequences of $|H|$ derived for a variety of speeds.
 The channel simulation procedure for each training sequence is:
 \begin{enumerate}
-\item Select an average $CNR$ set point and vehicle speed.
-\item Generate a sequence of $|H|$ samples based on a vehicle speed for this sequence.
-\item Calculate $SNR$ for each point in the sequence using (\ref{eq:fm_snr}). 
-\item Estimate $\sigma_s$ for each point in the sequence using (\ref{eq:fm_sigma}).
-\item Apply noise to each point in the sequence using (\ref{eq:fm_noise}).
+\item Select a set point (mean) $CNR$ and vehicle speed.
+\item Generate a set of $|H|$ samples based on a vehicle speed.
+\item Calculate $SNR$ for each sample in the set using (\ref{eq:fm_snr}). 
+\item Estimate $\sigma_s$ for each sample in the set using (\ref{eq:fm_sigma}).
+\item Apply noise to each transmitted symbol using (\ref{eq:fm_noise}).
 \end{enumerate}
 
 TODO:
