@@ -200,6 +200,7 @@ class acquisition():
       Dt1 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
       Dt2 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
       t_ind = 0
+      tmax_ind = 0
       Dtmax = 0
 
       for t in tfine_range:
