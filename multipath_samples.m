@@ -7,13 +7,18 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="")
     nsam = Fs*Nseconds;
     randn('seed',1);
 
-    printf("Generating HF model spreading samples...\n")
+    printf("Generating Doppler spreading samples...\n")
     if strcmp(ch,"mpg")
         dopplerSpreadHz = 0.1; path_delay_s = 0.5E-3;
     elseif strcmp(ch,"mpp")
         dopplerSpreadHz = 1.0; path_delay_s = 2E-3;
     elseif strcmp(ch,"mpd")
         dopplerSpreadHz = 2.0; path_delay_s = 4E-3;
+    elseif strcmp(ch,"lmr60")
+        % 60 km/hr, 450 MHz
+        fd = 450E6*(60*1E3/3600/3E8)
+        dopplerSpreadHz = 2*fd;
+        path_delay_s = 200E-6
     else
         printf("Unknown channel type!")
         return
@@ -32,7 +37,29 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="")
     omega = 2*pi*(0:Nc-1);
     d = path_delay_s;
     H = hf_gain*abs(G1(1:M:end) + G2(1:M:end).*exp(-j*omega*d*Rs));
-    figure(1); mesh(H(1:10*Rs,:))
+    figure(1); clf;
+    if Nc > 1 
+      mesh(H(1:10*Rs,:))
+    else
+      Nsecplot=1
+      subplot(211); plot(H(1:Nsecplot*Rs,:)); xlabel('Symbols'); ylabel('|H|')
+      subplot(212); plot(20*log10(H(1:Nsecplot*Rs,:))); xlabel('Symbols'); ylabel('|H| (dB)')
+      Pav = mean(H.^2)
+      P = sqrt(1.0)
+      LCR_theory = ((2*pi*P/Pav)^0.5)*fd*exp(-P/Pav)
+      LC = 0;
+      LC_log = [];
+      for n=1:length(H)-1
+        p1 = H(n,1).^2;
+        p2 = H(n+1,1).^2;
+        if p1 < P && p2 > P
+          LC++;
+          LC_log = [LC_log n];
+        end
+      end
+      LCR_meas = LC/Nseconds
+    end
+    subplot(211); hold on; stem(LC_log,sqrt(P)*ones(length(LC_log))); hold off; axis([0 Nsecplot*Rs 0 3]);
     printf("H file size is Nseconds*Rs*Nc*(4 bytes/sample) = %d*%d*%d*4 = %d bytes\n", Nseconds,Rs,Nc,Nseconds*Rs*Nc*4)
     f=fopen(H_fn,"wb");
     [r c] = size(H);

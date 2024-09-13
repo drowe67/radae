@@ -52,6 +52,13 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | radae_tx.[py,sh] | streaming RADAE encoder and helper script |
 | radae_rx.[py,sh] | streaming RADAE decoder and helper script |
 | resource_est.py | WIP estimate CPU/memory resources |
+| radae_base.py | Shared ML code between models |
+| radae/bbfm.py | Baseband FM PyTorch model |
+| train_bbfm.py | Training for BBFM model |
+| inference_bbfm.py | Baseband FM inference |
+| inference_bbfm.sh | helper script for infereence_bbfm.sh |
+| fm.m | Octave analog FM mod/demod simulation |
+| analog_bbfm.sh | helper script for analog FM simulation |
 
 # Installation
 
