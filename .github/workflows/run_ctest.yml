@@ -11,16 +11,12 @@ jobs:
         os: [ubuntu-22.04]
         python-version: ["3.9", "3.10", "3.11", "3.12"]
 
-
     steps:
       - name: Checkout radae code
         uses: actions/checkout@v4
         with:
           repository: drowe67/radae
           path: ${{github.workspace}}/radae
-
-      - name: LIST ALL FILES
-        run: ls -R
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
