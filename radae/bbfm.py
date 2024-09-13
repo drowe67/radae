@@ -171,7 +171,7 @@ class BBFM(nn.Module):
         z_shape = z.shape
         z_hat = torch.reshape(z,(num_batches,num_timesteps_at_rate_Rs,1))
         
-        # determine FM demod SNR using piecewise approximation
+        # determine FM demod SNR using piecewise approximation implemented with relus to be torch-friendly
         # note SNR is a vector, 1 sample for symbol as SNR evolves with H
         CNRdB = 20*torch.log10(H) + self.CNRdB
         print(H.shape,CNRdB.shape)
