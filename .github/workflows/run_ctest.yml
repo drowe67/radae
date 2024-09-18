@@ -1,0 +1,64 @@
+name: ctests
+on: [push]
+
+jobs:
+  run_ctests:
+    name: Running ctests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout radae code
+        uses: actions/checkout@v4
+        with:
+          repository: drowe67/radae
+          path: ${{github.workspace}}/radae
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system packages
+        shell: bash
+        run: |
+          sudo apt update
+          sudo apt install octave octave-common octave-signal sox cmake git
+
+      - name: Install python packages
+        shell: bash
+        run: |
+          pip3 install torch numpy matplotlib tqdm
+
+      - name: Install codec2-dev
+        shell: bash
+        # we have to use a hard coded path as it seems "~" isn't support by Github Actions
+        # using "/home/runner" we seem to link to "~"
+        working-directory: /home/runner/
+        run: |
+          git clone https://github.com/drowe67/codec2-dev.git
+          cd codec2-dev
+          mkdir build_linux
+          cd build_linux
+          cmake -DUNITTEST=1 ..
+          make ch mksine tlininterp
+
+
+      - name: build radae
+        shell: bash
+        working-directory: ${{github.workspace}}/radae
+        run: |
+          mkdir build
+          cd build
+          cmake ..
+          make
+
+      - name: run ctests
+        shell: bash
+        working-directory: ${{github.workspace}}/radae/build
+        run: |
+          ctest -V --output-on-failure
