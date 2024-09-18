@@ -296,3 +296,47 @@ function test_rayleigh(epslatex="")
     print_eps_restore(epslatex,"-S300,250",textfontsize,linewidth);
   end
 end
+
+function compare_pitch_corr(wav_fn,feat1_fn,feat2_fn,png_feat_fn="")
+  Fs=16000;
+  s=load_raw(wav_fn);
+  feat1=load_f32(feat1_fn,36);
+  feat2=load_f32(feat2_fn,36);
+
+  % plot a few features over first 5 seconds
+
+  x_wav=(1:Fs*5);
+  x=1:min(500,length(feat2));
+  figure(1); clf;
+  subplot(311);
+  plot(s(x_wav),'g'); 
+  axis([0 max(x_wav) -3E4 3E4]);
+  subplot(312);
+  plot(x,feat1(x,19),'g;fargan;');
+  hold on;  plot(x,feat2(x,19),'r;radae;'); hold off;
+  ylabel('Pitch'); axis([0 max(x) -1 1]);
+  subplot(313);
+  plot(x,feat1(x,20),'g;fargan;');
+  hold on; plot(x,feat2(x,20),'r;radae;'); hold off;
+  ylabel('Corr'); xlabel('10ms frames');
+  axis([0 max(x) -0.6 0.6])
+  if length(png_feat_fn)
+    print("-dpng",png_feat_fn,"-S1200,800");
+  end
+end
+
+function plot_sample_spec(wav_fn,png_spec_fn="")
+  % plot spectrum of entire sample, to get a feel for input mic filtering
+
+  Fs=16000;
+  s=load_raw(wav_fn);
+  figure(1); clf;
+  S = 20*log10(abs(fft(s)(1:length(s)/2)));
+  x_scale = (Fs/2)/length(S);
+  semilogx((1:length(S))*x_scale,S)
+  axis([1 8000 60 160]);
+  xlabel('Frequency (Hz)'); ylabel('Amplitude (dB)');
+  if length(png_spec_fn)
+    print("-dpng",png_spec_fn,"-S800,600");
+  end
+end

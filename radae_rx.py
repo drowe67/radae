@@ -154,7 +154,7 @@ with torch.inference_mode():
       else:
          # we're in sync, so check we can still see pilots and run receiver
          ffine_range = np.arange(fmax-1,fmax+1,0.1)
-         tfine_range = np.arange(tmax-8,tmax+8)
+         tfine_range = np.arange(max(0,tmax-8),tmax+8)
          tmax,fmax_hat = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
          fmax = 0.9*fmax + 0.1*fmax_hat
          candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
