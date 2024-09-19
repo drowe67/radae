@@ -14,12 +14,40 @@ Need pythonx.y-dev so C program can fine `Python.h`, adjust for your Python vers
 
 `sudo apt install python3.10-dev`
 
-# Build and Run demo
+# Test1 - move numpy arrays C<->Python, basic numpy and PyTorch
 
-Adapted from [2] above, basic test of numpy, torch
+Adapted from [2] above, basic test of numpy, torch, and moving numpy vectors between C and Python.
 
+Building on Machine 1 (Ubuntu 20):
 ```
 gcc embed1.c -o embed1 $(python3-config --cflags) $(python3-config --ldflags --embed) -fPIE
+```
+Building on Machine 2 (Ubuntu 22):
+```
+gcc embed1.c -o embed1 $(python3.10-config --cflags) $(python3.10-config --ldflags --embed)
+```
+Different build cmd lines suggests we need to focus on one distro/Python version, or have some Cmake magic to work out the gcc options.
+
+To run:
+```
 PYTHONPATH="." ./embed1 mult multiply 2 2
 ```
 
+# Test 2 - run RADAE in Python, C top level
+
+This is a more serious test of running the RADAE decoder in a Python function, kicked off by a top level C program.  Requires `features_in.f32` as input (to create see many examples in Ctests, inference.sh etc).
+Ubuntu 22 Build & Run:
+```
+gcc embed_dec.c -o embed_dec $(python3.10-config --cflags) $(python3.10-config --ldflags --embed)
+PYTHONPATH="." ./embed_dec embed_dec my_decode
+<snip>
+Rs: 50.00 Rs': 50.00 Ts': 0.020 Nsmf: 120 Ns:   6 Nc:  20 M: 160 Ncp: 0
+Processing: 972 feature vectors
+loss: 0.145
+```
+Compare with vanilla run just from Python:
+```
+python3 embed_dec.py
+<snip>
+loss: 0.145
+```
