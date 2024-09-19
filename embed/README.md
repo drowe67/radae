@@ -10,12 +10,16 @@ Approaches:
 
 # Packages
 
+Need pythonx.y-dev so C program can fine `Python.h`, adjust for your Python version.
+
 `sudo apt install python3.10-dev`
 
-# Build and Run docs.python.org demo
+# Build and Run demo
+
+Adapted from [2] above, basic test of  numpy, torch
 
 ```
-gcc embed1.c -o embed1 $(python3.10-config --clags) $(python3.10-config --ldflags --embed)
+gcc embed1.c -o embed1 $(python3-config --cflags) $(python3-config --ldflags --embed) -fPIE
 PYTHONPATH="." ./embed1 mult multiply 2 2
 ```
 
