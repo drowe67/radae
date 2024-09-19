@@ -393,6 +393,15 @@ add_test(NAME radae_rx_aux_mpp
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_start 300")
                        set_tests_properties(radae_rx_aux_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# evaluate.sh -----------------------------------------------------------------------------------------------
+# Embedding Python in C callable library ------------------------------------------------------------------------------------------------------
 
-# TODO test evaluate.sh to prevent bit rot
+# basic test of Embedded version of streaming Tx, compare to vanilla Tx in inference.py
+add_test(NAME radae_tx_embed
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --write_rx rx.f32 --correct_freq_offset; \
+                       cd embed; cat ../features_in.f32 | python3 radae_tx.py > ../rx.f32; cd ..;
+                       cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 1 --auxdata > features_txs_out.f32; \
+                       python3 loss.py features_in.f32 features_txs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
+                       set_tests_properties(radae_tx_embed PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+

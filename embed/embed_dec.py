@@ -34,7 +34,7 @@ import torch
 sys.path.append("../")
 from radae import RADAE, distortion_loss
 
-# Hard code all this for now to avodiu arg poassing complexities
+# Hard code all this for now to avoid arg passing complexities
 model_name = "../model05/checkpoints/checkpoint_epoch_100.pth"
 features_in_fn = "features_in.f32"
 features_out_fn = "features_out.f32"
