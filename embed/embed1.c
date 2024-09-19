@@ -3,7 +3,7 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include "numpy/arrayobject.h"
 
-#define NARGS 3
+#define NARGS 4
 
 int main(int argc, char *argv[])
 {
@@ -43,13 +43,22 @@ int main(int argc, char *argv[])
 
             // 3rd Python function arg - set up numpy array
             long dims = 3;
-            float array[] = {1.0,2.0,3.0};
-            pValue = PyArray_SimpleNewFromData(1, &dims, NPY_FLOAT, array);
+            float arr_in[] = {1.0,2.0,3.0};
+            pValue = PyArray_SimpleNewFromData(1, &dims, NPY_FLOAT, arr_in);
             if (pValue == NULL) {
                 PyErr_Print();
                 fprintf(stderr,"Error setting up numpy array\n");
             }
             PyTuple_SetItem(pArgs, 2, pValue);
+
+            // 4th Python arg is a numpy array used for output to C
+            float arr_out[] = {0.0,0.0,0.0};
+            pValue = PyArray_SimpleNewFromData(1, &dims, NPY_FLOAT, arr_out);
+            if (pValue == NULL) {
+                PyErr_Print();
+                fprintf(stderr,"Error setting up numpy array\n");
+            }
+            PyTuple_SetItem(pArgs, 3, pValue);
 
             // do the function call
             pValue = PyObject_CallObject(pFunc, pArgs);
@@ -57,6 +66,9 @@ int main(int argc, char *argv[])
             if (pValue != NULL) {
                 printf("Result of call: %ld\n", PyLong_AsLong(pValue));
                 Py_DECREF(pValue);
+
+                // not sure how to return arrays but can modify input arrays in place as a hack
+                printf("returned array: %f %f %f\n", arr_out[0], arr_out[1], arr_out[2]);
             }
             else {
                 Py_DECREF(pFunc);

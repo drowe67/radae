@@ -16,7 +16,7 @@ Need pythonx.y-dev so C program can fine `Python.h`, adjust for your Python vers
 
 # Build and Run demo
 
-Adapted from [2] above, basic test of  numpy, torch
+Adapted from [2] above, basic test of numpy, torch
 
 ```
 gcc embed1.c -o embed1 $(python3-config --cflags) $(python3-config --ldflags --embed) -fPIE
