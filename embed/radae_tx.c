@@ -4,15 +4,47 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include "numpy/arrayobject.h"
 
-#define NARGS 2
+/* help function to call a Python "getter" function with no arguments that returns a long */
+long call_getter(PyObject *pModule, char func_name[]) {
+    PyObject *pFunc, *pValue;
+    pFunc = PyObject_GetAttrString(pModule, func_name);
+    long ret;
+
+    if (pFunc && PyCallable_Check(pFunc)) {
+        pValue = PyObject_CallObject(pFunc, NULL);
+        if (pValue != NULL) {
+            ret = PyLong_AsLong(pValue);
+            Py_DECREF(pValue);
+        }
+        else {
+            Py_DECREF(pFunc);
+            PyErr_Print();
+            fprintf(stderr,"Call to %s failed\n", func_name);
+            // TODO when porting to library modify function to return error code, caller shuts down gracefully
+            exit(1);
+        }
+    }
+    else {
+        if (PyErr_Occurred())
+            PyErr_Print();
+        fprintf(stderr, "Cannot find function \"%s\"\n", func_name);
+        // TODO: fix when ported to library
+        exit(1);
+    }
+    Py_XDECREF(pFunc);
+
+    return ret;
+}
 
 int main(void)
 {
     PyObject *pName, *pModule, *pFunc;
     PyObject *pValue;
-    //PyObject *pArgs;
+    PyObject *pArgs;
     char *python_name = "radae_tx";
-    char *func_name = "get_nb_floats";
+    char *do_radae_tx_func_name = "do_radae_tx";
+    char *do_eoo_func_name = "do_eoo";
+    long nb_floats, Nmf, Neoo;
 
     Py_Initialize();
 
@@ -27,63 +59,78 @@ int main(void)
     Py_DECREF(pName);
 
     if (pModule != NULL) {
-        pFunc = PyObject_GetAttrString(pModule, func_name);
-        /* pFunc is a new reference */
-
+        nb_floats = call_getter(pModule, "get_nb_floats");
+        Nmf = call_getter(pModule, "get_Nmf");
+        Neoo = call_getter(pModule, "get_Neoo");
+        fprintf(stderr, "nb_floats: %ld Nmf: %ld Neoo: %ld\n", nb_floats, Nmf, Neoo);
+        
+        pFunc = PyObject_GetAttrString(pModule, do_radae_tx_func_name);
         if (pFunc && PyCallable_Check(pFunc)) {
-#ifdef T
-            pArgs = PyTuple_New(NARGS);
 
-            // first two args from command line
-            pValue = PyLong_FromLong(atol(argv[3]));
+            pArgs = PyTuple_New(2);
+
+            // 1st Python function arg - numpy array of float features
+            float buffer_f32[nb_floats];
+            pValue = PyArray_SimpleNewFromData(1, &nb_floats, NPY_FLOAT, buffer_f32);
+            if (pValue == NULL) {
+                PyErr_Print();
+                fprintf(stderr,"Error setting up numpy array for buffer_f32\n");
+            }
             PyTuple_SetItem(pArgs, 0, pValue);
-            pValue = PyLong_FromLong(atol(argv[4]));
+
+            // 2nd Python arg is a numpy array used for output to C
+            float tx_out[2*Nmf];
+            pValue = PyArray_SimpleNewFromData(1, &Nmf, NPY_CFLOAT, tx_out);
+            if (pValue == NULL) {
+                PyErr_Print();
+                fprintf(stderr,"Error setting up numpy array for tx_out\n");
+            }
             PyTuple_SetItem(pArgs, 1, pValue);
 
-            // 3rd Python function arg - set up numpy array
-            long dims = 3;
-            float arr_in[] = {1.0,2.0,3.0};
-            pValue = PyArray_SimpleNewFromData(1, &dims, NPY_FLOAT, arr_in);
-            if (pValue == NULL) {
-                PyErr_Print();
-                fprintf(stderr,"Error setting up numpy array\n");
+            // We are assuming once args are set up we can make repeat call with the same args, even though
+            // data in arrays changes
+            while((unsigned)nb_floats == fread(buffer_f32, sizeof(float), nb_floats, stdin)) {
+                // do the function call
+                PyObject_CallObject(pFunc, pArgs);
+                fwrite(tx_out, 2*sizeof(float), Nmf, stdout);
+                fflush(stdout);
             }
-            PyTuple_SetItem(pArgs, 2, pValue);
 
-            // 4th Python arg is a numpy array used for output to C
-            float arr_out[] = {0.0,0.0,0.0};
-            pValue = PyArray_SimpleNewFromData(1, &dims, NPY_FLOAT, arr_out);
-            if (pValue == NULL) {
-                PyErr_Print();
-                fprintf(stderr,"Error setting up numpy array\n");
-            }
-            PyTuple_SetItem(pArgs, 3, pValue);
-#endif
-
-            // do the function call
-            pValue = PyObject_CallObject(pFunc, NULL);
-            //Py_DECREF(pArgs);
-            if (pValue != NULL) {
-                printf("Result of call: %ld\n", PyLong_AsLong(pValue));
-                Py_DECREF(pValue);
-
-                // not sure how to return arrays but can modify input arrays in place as a hack
-                //printf("returned array: %f %f %f\n", arr_out[0], arr_out[1], arr_out[2]);
-            }
-            else {
-                Py_DECREF(pFunc);
-                Py_DECREF(pModule);
-                PyErr_Print();
-                fprintf(stderr,"Call failed\n");
-                return 1;
-            }
+            Py_DECREF(pArgs);
         }
         else {
             if (PyErr_Occurred())
                 PyErr_Print();
-            fprintf(stderr, "Cannot find function \"%s\"\n", func_name);
+            fprintf(stderr, "Cannot find function \"%s\"\n", do_radae_tx_func_name);
         }
         Py_XDECREF(pFunc);
+
+        // End of Over 
+        pFunc = PyObject_GetAttrString(pModule, do_eoo_func_name);
+        if (pFunc && PyCallable_Check(pFunc)) {
+
+            pArgs = PyTuple_New(1);
+
+            // Python arg is a numpy array used for output to C
+            float eoo_out[2*Neoo];
+            pValue = PyArray_SimpleNewFromData(1, &Neoo, NPY_CFLOAT, eoo_out);
+            if (pValue == NULL) {
+                PyErr_Print();
+                fprintf(stderr,"Error setting up numpy array for eoo_out\n");
+            }
+            PyTuple_SetItem(pArgs, 0, pValue);
+            PyObject_CallObject(pFunc, pArgs);
+            fwrite(eoo_out, 2*sizeof(float), Neoo, stdout);
+            fflush(stdout);
+            Py_DECREF(pArgs);
+        }
+        else {
+            if (PyErr_Occurred())
+                PyErr_Print();
+            fprintf(stderr, "Cannot find function \"%s\"\n", do_eoo_func_name);
+        }
+        Py_XDECREF(pFunc);
+        
         Py_DECREF(pModule);
     }
     else {

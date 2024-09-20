@@ -51,3 +51,22 @@ python3 embed_dec.py
 <snip>
 loss: 0.145
 ```
+# Test 3 - radae_tx as C program
+
+First pass at the a C callable version of `radae_tx`.  Have hard coded a few arguments for convenience, and it's a C application (rather than a library).  If this was in library form we would be ready for linking with other C applications.
+
+1. Generate some test data, and run `embed/radae_tx.py` with Python top level to test Python code.
+   ```
+   cd radae/build
+   cmake ..
+   ctest -V -R radae_tx_embed
+   ```
+
+2. Build and C top level/embedded Python version:
+   ```
+   gcc radae_tx.c -o radae_tx $(python3.10-config --cflags) $(python3.10-config --ldflags --embed)
+   cat ../features_in.f32 | PYTHONPATH="." ./radae_tx radae_tx > tx.f32
+   diff tx.f32 ../rx.f32
+   ```
+   `diff` shows Python ctest and C/Embedded version have same output.  Haven't made this a ctest yet as not sure how to do `gcc` step in cmake such that's it's reasonably portable.
+

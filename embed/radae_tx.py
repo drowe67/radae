@@ -71,11 +71,15 @@ transmitter = transmitter_one(model.latent_dim,model.enc_stride,model.Nzmf,model
 nb_floats = model.Nzmf*model.enc_stride*nb_total_features
 # number of output csingles per processing frame
 Nmf = int((model.Ns+1)*(model.M+model.Ncp))
+# number of output csingles for EOO frame
+Neoo = int((model.Ns+2)*(model.M+model.Ncp))
 
 def get_nb_floats():
    return nb_floats
 def get_Nmf():
    return Nmf
+def get_Neoo():
+   return Neoo
 
 def do_radae_tx(buffer_f32,tx_out):
       
@@ -96,6 +100,12 @@ def do_radae_tx(buffer_f32,tx_out):
       # not very Pythonic but works (TODO work out how to return numpy vecs to C)
       np.copyto(tx_out,tx)
 
+# send end of over frame
+def do_eoo(tx_out):
+   eoo = model.eoo
+   eoo = eoo.cpu().detach().numpy().flatten().astype('csingle')
+   np.copyto(tx_out,eoo)
+
 if __name__ == '__main__':
    tx_out = np.zeros(Nmf,dtype=np.csingle)
    while True:
@@ -104,10 +114,8 @@ if __name__ == '__main__':
          break
       buffer_f32 = np.frombuffer(buffer,np.single)
       do_radae_tx(buffer_f32,tx_out)
-      if use_stdout:
-         sys.stdout.buffer.write(tx_out)
+      sys.stdout.buffer.write(tx_out)
 
-   if use_stdout:
-      eoo = model.eoo
-      eoo = eoo.cpu().detach().numpy().flatten().astype('csingle')
-      sys.stdout.buffer.write(eoo)
+   eoo_out = np.zeros(Neoo,dtype=np.csingle)
+   do_eoo(eoo_out)
+   sys.stdout.buffer.write(eoo_out)
