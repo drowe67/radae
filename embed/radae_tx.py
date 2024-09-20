@@ -67,10 +67,15 @@ model.eval()
 transmitter = transmitter_one(model.latent_dim,model.enc_stride,model.Nzmf,model.Fs,model.M,model.Ncp,
                               model.Winv,model.Nc,model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain)
 
-# number of input floats per processing frame
+# number of input floats per processing frame (TOOD refactor to more sensible variable names)
 nb_floats = model.Nzmf*model.enc_stride*nb_total_features
 # number of output csingles per processing frame
 Nmf = int((model.Ns+1)*(model.M+model.Ncp))
+
+def get_nb_floats():
+   return nb_floats
+def get_Nmf():
+   return Nmf
 
 def do_radae_tx(buffer_f32,tx_out):
       
@@ -95,7 +100,6 @@ if __name__ == '__main__':
    tx_out = np.zeros(Nmf,dtype=np.csingle)
    while True:
       buffer = sys.stdin.buffer.read(nb_floats*struct.calcsize("f"))
-      #print(len(buffer), file=sys.stderr)
       if len(buffer) != nb_floats*struct.calcsize("f"):
          break
       buffer_f32 = np.frombuffer(buffer,np.single)
