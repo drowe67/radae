@@ -67,15 +67,14 @@ model.eval()
 transmitter = transmitter_one(model.latent_dim,model.enc_stride,model.Nzmf,model.Fs,model.M,model.Ncp,
                               model.Winv,model.Nc,model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain)
 
+# number of input floats per processing frame
 nb_floats = model.Nzmf*model.enc_stride*nb_total_features
+# number of output csingles per processing frame
+Nmf = int((model.Ns+1)*(model.M+model.Ncp))
 
-with torch.inference_mode():
-   while True:
-      buffer = sys.stdin.buffer.read(nb_floats*struct.calcsize("f"))
-      #print(len(buffer), file=sys.stderr)
-      if len(buffer) != nb_floats*struct.calcsize("f"):
-         break
-      buffer_f32 = np.frombuffer(buffer,np.single)
+def do_radae_tx(buffer_f32,tx_out):
+      
+   with torch.inference_mode():
       features = torch.reshape(torch.tensor(buffer_f32),(1,model.Nzmf*model.enc_stride, nb_total_features))
       features = features[:,:,:num_used_features]
       if auxdata:
@@ -89,10 +88,22 @@ with torch.inference_mode():
       z = model.core_encoder_statefull(features)
       tx = transmitter.transmitter_one(z,num_timesteps_at_rate_Rs)
       tx = tx.cpu().detach().numpy().flatten().astype('csingle')
-      if use_stdout:
-         sys.stdout.buffer.write(tx)
+      # not very Pythonic but works (TODO work out how to return numpy vecs to C)
+      np.copyto(tx_out,tx)
 
-if use_stdout:
-   eoo = model.eoo
-   eoo = eoo.cpu().detach().numpy().flatten().astype('csingle')
-   sys.stdout.buffer.write(eoo)
+if __name__ == '__main__':
+   tx_out = np.zeros(Nmf,dtype=np.csingle)
+   while True:
+      buffer = sys.stdin.buffer.read(nb_floats*struct.calcsize("f"))
+      #print(len(buffer), file=sys.stderr)
+      if len(buffer) != nb_floats*struct.calcsize("f"):
+         break
+      buffer_f32 = np.frombuffer(buffer,np.single)
+      do_radae_tx(buffer_f32,tx_out)
+      if use_stdout:
+         sys.stdout.buffer.write(tx_out)
+
+   if use_stdout:
+      eoo = model.eoo
+      eoo = eoo.cpu().detach().numpy().flatten().astype('csingle')
+      sys.stdout.buffer.write(eoo)
