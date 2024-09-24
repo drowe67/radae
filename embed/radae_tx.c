@@ -4,6 +4,12 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include "numpy/arrayobject.h"
 
+#ifdef _WIN32
+// For _setmode().
+#include <io.h>
+#include <fcntl.h>
+#endif // _WIN32
+
 /* help function to call a Python "getter" function with no arguments that returns a long */
 long call_getter(PyObject *pModule, char func_name[]) {
     PyObject *pFunc, *pValue;
@@ -44,7 +50,7 @@ int main(void)
     char *python_name = "radae_tx";
     char *do_radae_tx_func_name = "do_radae_tx";
     char *do_eoo_func_name = "do_eoo";
-    long nb_floats, Nmf, Neoo;
+    npy_intp nb_floats, Nmf, Neoo;
 
     Py_Initialize();
 
@@ -59,10 +65,10 @@ int main(void)
     Py_DECREF(pName);
 
     if (pModule != NULL) {
-        nb_floats = call_getter(pModule, "get_nb_floats");
-        Nmf = call_getter(pModule, "get_Nmf");
-        Neoo = call_getter(pModule, "get_Neoo");
-        fprintf(stderr, "nb_floats: %ld Nmf: %ld Neoo: %ld\n", nb_floats, Nmf, Neoo);
+        nb_floats = (int)call_getter(pModule, "get_nb_floats");
+        Nmf = (int)call_getter(pModule, "get_Nmf");
+        Neoo = (int)call_getter(pModule, "get_Neoo");
+        fprintf(stderr, "nb_floats: %d Nmf: %d Neoo: %d\n", (int)nb_floats, (int)Nmf, (int)Neoo);
         
         pFunc = PyObject_GetAttrString(pModule, do_radae_tx_func_name);
         if (pFunc && PyCallable_Check(pFunc)) {
@@ -86,6 +92,13 @@ int main(void)
                 fprintf(stderr,"Error setting up numpy array for tx_out\n");
             }
             PyTuple_SetItem(pArgs, 1, pValue);
+
+#ifdef _WIN32
+            // Note: freopen() returns NULL if filename is NULL, so
+            // we have to use setmode() to make it a binary stream instead.
+            _setmode(_fileno(stdin), O_BINARY);
+            _setmode(_fileno(stdout), O_BINARY);
+#endif // _WIN32
 
             // We are assuming once args are set up we can make repeat call with the same args, even though
             // data in arrays changes
