@@ -1,0 +1,244 @@
+"""
+
+  Radio Autoencoder streaming receiver, "embeddded" version.
+  
+  rate Fs complex float samples in, features out.
+  rate Fs real int16 samples in, features out.
+
+  Designed to connected to a SDR to perform real time RADAE decoding on 
+  received sample streams.  Full function state machine and continous 
+  updates of timing, freq offsets and amplituide estimates.
+  
+  Copyright (c) 2024 by David Rowe
+
+/*
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions
+   are met:
+
+   - Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+
+   - Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+   ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+   OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+   EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+   PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+   PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+"""
+
+import os, sys, struct
+import numpy as np
+from matplotlib import pyplot as plt
+import torch
+sys.path.append("../")
+from radae import RADAE,complex_bpf,acquisition,receiver_one
+
+# Hard code all this for now to avoid arg passing complexities TODO: consider a way to pass in at init-time
+model_name = "../model19_check3/checkpoints/checkpoint_epoch_100.pth"
+latent_dim = 80
+auxdata = True
+bottleneck = 3
+use_stdout=True
+bpf=True
+v=2
+
+# make sure we don't use a GPU
+os.environ['CUDA_VISIBLE_DEVICES'] = ""
+device = torch.device("cpu")
+
+nb_total_features = 36
+num_features = 20
+num_used_features = 20
+if auxdata:
+    num_features += 1
+
+# load model from a checkpoint file
+model = RADAE(num_features, latent_dim, EbNodB=100, rate_Fs=True, 
+              pilots=True, pilot_eq=True, eq_mean6 = False, cyclic_prefix=0.004,
+              coarse_mag=True,time_offset=-16, bottleneck=bottleneck)
+checkpoint = torch.load(model_name, map_location='cpu',weights_only=True)
+model.load_state_dict(checkpoint['state_dict'], strict=False)
+# Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+model.core_decoder_statefull_load_state_dict()
+model.eval()
+
+# check a bunch of model options we rely on for receiver to work
+assert model.pilots and model.pilot_eq
+assert model.per_carrier_eq
+assert model.eq_mean6 == False   # we are using least squares algorithm
+assert model.phase_mag_eq == False
+assert model.coarse_mag
+receiver = receiver_one(model.latent_dim,model.Fs,model.M,model.Ncp,model.Wfwd,model.Nc,
+                        model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain,
+                        model.time_offset,model.coarse_mag)
+
+M = model.M
+Ncp = model.Ncp
+Ns = model.Ns               # number of data symbols between pilots
+Nmf = int((Ns+1)*(M+Ncp))   # number of samples in one modem frame
+Nc = model.Nc
+p = np.array(model.p) 
+Fs = model.Fs
+Rs = model.Rs
+w = np.array(model.w)
+
+if bpf:
+   Ntap=101
+   bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
+   centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
+   print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
+   bpf = complex_bpf(Ntap, model.Fs, bandwidth,centre)
+
+acq = acquisition(Fs,Rs,M,Ncp,Nmf,p,model.pend)
+
+tmax_candidate = 0 
+acquired = False
+state = "search"
+prev_state = state
+mf = 1
+valid_count = 0
+Tunsync = 3.0                        # allow some time before lossing sync to ride over fades
+Nmf_unsync = int(Tunsync*Fs/Nmf)
+endofover = False
+uw_errors = 0
+uw_error_thresh = 7 # P(reject|correct) = 1 -  binocdf(8,24,0.1) = 4.5E-4
+                    # P(accept|false)   = binocdf(8,24,0.5)      = 3.2E-3
+synced_count = 0
+synced_count_one_sec = Fs//Nmf
+
+# P DDD P DDD P Ncp
+# extra Ncp at end so we can handle timing slips
+rx_buf = np.zeros(2*Nmf+M+Ncp,np.csingle)
+rx = np.zeros(0,np.csingle)
+rx_phase = 1 + 1j*0
+rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
+z_hat_log = torch.zeros(0,model.Nzmf,model.latent_dim)
+
+nin = Nmf
+with torch.inference_mode():
+   while True:
+      buffer = sys.stdin.buffer.read(nin*struct.calcsize("ff"))
+      if len(buffer) != nin*struct.calcsize("ff"):
+         break
+      buffer_complex = np.frombuffer(buffer,np.csingle)
+      if bpf:
+         buffer_complex = bpf.bpf(buffer_complex)
+      rx_buf[:-nin] = rx_buf[nin:]                           # out with the old
+      rx_buf[-nin:] = buffer_complex                         # in with the new
+      if state == "search" or state == "candidate":
+         candidate, tmax, fmax = acq.detect_pilots(rx_buf)
+      else:
+         # we're in sync, so check we can still see pilots and run receiver
+         ffine_range = np.arange(fmax-1,fmax+1,0.1)
+         tfine_range = np.arange(max(0,tmax-8),tmax+8)
+         tmax,fmax_hat = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
+         fmax = 0.9*fmax + 0.1*fmax_hat
+         candidate,endofover = acq.check_pilots(rx_buf,tmax,fmax)
+
+         # handle timing slip when rx sample clock > tx sample clock
+         nin = Nmf
+         if tmax >= Nmf-M:
+            nin = Nmf + M
+            tmax -= M
+            #print("slip+", file=sys.stderr)
+         # handle timing slip when rx sample clock < tx sample clock
+         if tmax < M:
+            nin = Nmf - M
+            tmax += M
+            #print("slip-", file=sys.stderr)
+
+         synced_count += 1
+         if synced_count % synced_count_one_sec == 0:
+            if uw_errors > uw_error_thresh:
+               uw_fail = True
+            uw_errors = 0
+
+         if not endofover:
+            # correct frequency offset, note we preserve state of phase
+            # TODO do we need preserve state of phase?  We're passing entire vector and there isn't any memory (I think)
+            w = 2*np.pi*fmax/Fs
+            for n in range(Nmf+M+Ncp):
+               rx_phase = rx_phase*np.exp(-1j*w)
+               rx_phase_vec[n] = rx_phase
+            rx1 = rx_buf[tmax-Ncp:tmax-Ncp+Nmf+M+Ncp]
+            #print(tmax-Ncp, tmax-Ncp+Nmf+M+Ncp,rx_buf.shape, rx1.shape, rx_phase_vec.shape, file=sys.stderr)            
+            rx = torch.tensor(rx1*rx_phase_vec, dtype=torch.complex64)
+            # run through RADAE receiver DSP
+            z_hat = receiver.receiver_one(rx)
+            # decode z_hat to features
+            assert(z_hat.shape[1] == model.Nzmf)
+            features_hat = model.core_decoder_statefull(z_hat)
+            if auxdata:
+               symb_repeat = 4
+               aux_symb = features_hat[:,:,20].detach().numpy()
+               aux_bits = 1*(aux_symb[0,::symb_repeat] > 0)
+               features_hat = features_hat[:,:,0:20]
+               uw_errors += np.sum(aux_bits)
+            # add unused features and send to stdout
+            features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
+            features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
+            if use_stdout:
+               sys.stdout.buffer.write(features_hat)
+            #sys.stdout.flush()
+
+
+      if v == 2 or (v == 1 and (state == "search" or state == "candidate" or prev_state == "candidate")):
+         print(f"{mf:3d} state: {state:10s} valid: {candidate:d} {endofover:d} {valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ", end='', file=sys.stderr)
+         print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {tmax:4d} fmax: {fmax:6.2f}", end='', file=sys.stderr)
+         if auxdata and state == "sync":
+            print(f" aux: {aux_bits:} uw_err: {uw_errors:d}", file=sys.stderr)
+         else:
+            print("",file=sys.stderr)
+
+      # iterate state machine  
+      next_state = state
+      prev_state = state
+      if state == "search":
+         if candidate:
+            next_state = "candidate"
+            tmax_candidate = tmax
+            valid_count = 1
+      elif state == "candidate":
+         # look for 3 consecutive matches with about the same timing offset  
+         if candidate and np.abs(tmax-tmax_candidate) < 0.02*M:
+            valid_count = valid_count + 1
+            if valid_count > 3:
+               next_state = "sync"
+               acquired = True
+               synced_count = 0
+               uw_fail = False
+               if auxdata:
+                  uw_errors = 0
+               valid_count = Nmf_unsync
+               ffine_range = np.arange(fmax-10,fmax+10,0.25)
+               tfine_range = np.arange(tmax-1,tmax+2)
+               tmax,fmax = acq.refine(rx_buf, tmax, fmax, tfine_range, ffine_range)
+         else:
+            next_state = "search"
+      elif state == "sync":
+         # during some tests it's useful to disable these unsync features
+         unsync_enable = True
+
+         if candidate:
+            valid_count = Nmf_unsync
+         else:
+            valid_count -= 1
+            if unsync_enable and valid_count == 0:
+               next_state = "search"
+
+         if unsync_enable and (endofover or uw_fail):
+            next_state = "search"
+
+      state = next_state
+      mf += 1

@@ -1,6 +1,6 @@
 """
 
-  Radio Autoencoder streaming transmitter: 
+  Radio Autoencoder streaming transmitter, "embedded" version.
   
   features in, rate Fs IQ.f32 out.
   
