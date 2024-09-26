@@ -125,12 +125,22 @@ class radae_rx:
       # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
       model.core_decoder_statefull_load_state_dict()
 
+   def get_n_floats_out(self):
+         return model.Nzmf*model.dec_stride*nb_total_features
+                 
+   def get_nin_max(self):
+         return Nmf+M
+   
+   def get_nin(self):
+         return self.nin
+                 
    def do_radae_rx(self, buffer_complex, features_out):
       with torch.inference_mode():
          prev_state = self.state
          valid_output = False
          endofover = False
          uw_fail = False
+         buffer_complex = buffer_complex[:self.nin]
          if bpf:
             buffer_complex = bpf.bpf(buffer_complex)
          rx_buf[:-self.nin] = rx_buf[self.nin:]                           # out with the old
@@ -246,11 +256,11 @@ class radae_rx:
 if __name__ == '__main__':
    rx = radae_rx(model_name = "../model19_check3/checkpoints/checkpoint_epoch_100.pth")
 
-   # TODO put this size in a getter func
-   features_out = np.zeros(model.Nzmf*model.dec_stride*nb_total_features,dtype=np.float32)
+   # allocate storage for output features
+   features_out = np.zeros(rx.get_n_floats_out(),dtype=np.float32)
    while True:
-      buffer = sys.stdin.buffer.read(rx.nin*struct.calcsize("ff"))
-      if len(buffer) != rx.nin*struct.calcsize("ff"):
+      buffer = sys.stdin.buffer.read(rx.get_nin()*struct.calcsize("ff"))
+      if len(buffer) != rx.get_nin()*struct.calcsize("ff"):
          break
       buffer_complex = np.frombuffer(buffer,np.csingle)
       valid_output = rx.do_radae_rx(buffer_complex, features_out)
