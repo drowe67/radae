@@ -5,7 +5,7 @@ Goal: to make the existing RADAE Python implementation a C library
 Approaches:
 
 1. Cython: docs suggest the top level must be a Python program
-2. [Embedding](https://docs.python.org/3/extending/embedding.html): C main() call Python functions. Currently testing this approach 
+2. [Embedding](https://docs.python.org/3/extending/embedding.html): C main() call Python functions. Currently testing this approach. See also [Learning Python](https://learning-python.com/class/Workbook/unit16.htm) which is out of date but has examples of a cleaner API that still exists.
 3. libtorch: worth exploring
 
 # Packages

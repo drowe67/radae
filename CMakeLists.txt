@@ -31,6 +31,15 @@ endif("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 # Set default flags (from opus-ng build)
 set(CMAKE_C_FLAGS "-O2 -fvisibility=hidden -fstack-protector-strong -W -Wall -Wextra -Wcast-align -Wnested-externs -Wshadow -Wstrict-prototypes")
 
+# Python tells us the CFLAGS we need for Embedding Python in a C lib
+# The default PYTHON_CONFIG works on Ubuntu 22 but will likely need to be changed for other distros
+if(NOT PYTHON_CONFIG)
+    set(PYTHON_CONFIG python3.10-config)
+endif()
+execute_process(COMMAND ${PYTHON_CONFIG} --cflags OUTPUT_VARIABLE PYTHON_C_FLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${PYTHON_CONFIG} --ldflags --embed OUTPUT_VARIABLE PYTHON_LD_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+message(PYTHON_C_FLAGS="${PYTHON_C_FLAGS}")
+message(PYTHON_LD_LIBS="${PYTHON_LD_LIBS}")
 add_subdirectory(src)
 
 # Ctests ----------------------------------------------------------------------
