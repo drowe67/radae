@@ -35,7 +35,6 @@
 import os, sys, struct
 import numpy as np
 import torch
-sys.path.append("../")
 from radae import RADAE,transmitter_one
 
 # Hard code all this for now to avoid arg passing complexities

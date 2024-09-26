@@ -409,7 +409,7 @@ add_test(NAME radae_tx_embed_py
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --write_rx rx.f32 --correct_freq_offset; \
-                       cd embed; cat ../features_in.f32 | python3 radae_tx.py > ../rx.f32; cd ..;
+                       cd embed; cat ../features_in.f32 | PYTHONPATH='../' python3 radae_tx.py > ../rx.f32; cd ..;
                        cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 1 --auxdata > features_txs_out.f32; \
                        python3 loss.py features_in.f32 features_txs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_tx_embed_py PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
@@ -428,7 +428,7 @@ add_test(NAME radae_tx_embed_c
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --write_rx rx.f32 --correct_freq_offset; \
-                       cd embed; cat ../features_in.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_tx > ../rx.f32; cd ..;
+                       cd embed; cat ../features_in.f32 | PYTHONPATH='.:../' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_tx > ../rx.f32; cd ..;
                        cat rx.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 1 --auxdata > features_txs_out.f32; \
                        python3 loss.py features_in.f32 features_txs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_tx_embed_c PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
