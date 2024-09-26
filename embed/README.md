@@ -55,34 +55,19 @@ loss: 0.145
 
 First pass at the a C callable version of `radae_tx`.  Have hard coded a few arguments for convenience, and it's a C application (rather than a library).  If this was in library form we would be ready for linking with other C applications.
 
-1. Generate some test data, and run `embed/radae_tx.py` to test Python side.
-   ```
-   cd radae/build
-   cmake ..
-   ctest -V -R radae_tx_embed
-   ```
+Build `radae_tx` and run ctests:
+```
+cd radae/build
+cmake ..
+ctest -V -R radae_tx_embed
+```
 
-2. Build and C top level/embedded Python version:
-   ```
-   gcc radae_tx.c -o radae_tx $(python3.10-config --cflags) $(python3.10-config --ldflags --embed)
-   cat ../features_in.f32 | PYTHONPATH="." ./radae_tx radae_tx > tx.f32
-   diff tx.f32 ../rx.f32
-   ```
-   `diff` shows Python ctest and C/Embedded version have same output.  Haven't made this a ctest yet as not sure how to do `gcc` step in cmake such that's it's reasonably portable.
+# Test 4 - radae_rx as C program
 
-# Test 3 - radae_rx as C program
+Build `radae_rx` and run ctests:
+```
+cd radae/build
+cmake ..
+ctest -V -R radae_rx_embed
+```
 
-1. Generate some test data, and run `embed/radae_rx.py` to test Python side.
-   ```
-   cd radae/build
-   cmake ..
-   ctest -V -R radae_rx_embed
-   ```
-
-2. Build and C top level/embedded Python version:
-
-   ```
-   gcc radae_rx.c -o radae_rx $(python3.10-config --cflags) $(python3.10-config --ldflags --embed)
-   cat ../rx.f32 | PYTHONPATH=".:../" ./radae_rx > ../features_out.f32
-   diff features_out.f32 ../features_out.f32
-   ```
