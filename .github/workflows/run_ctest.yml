@@ -27,7 +27,7 @@ jobs:
         shell: bash
         run: |
           sudo apt update
-          sudo apt install octave octave-common octave-signal sox cmake git
+          sudo apt install octave octave-common octave-signal sox cmake git python3.10-dev
 
       - name: Install python packages
         shell: bash
