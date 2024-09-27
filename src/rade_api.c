@@ -112,7 +112,7 @@ int radae_tx_open(struct rade *r) {
     r->n_features_in = (int)call_getter(r->pModule_radae_tx, "get_nb_floats");
     r->Nmf = (int)call_getter(r->pModule_radae_tx, "get_Nmf");
     r->Neoo = (int)call_getter(r->pModule_radae_tx, "get_Neoo");
-    fprintf(stderr, "nb_features_in: %d Nmf: %d Neoo: %d\n", (int)r->n_features_in, (int)r->Nmf, (int)r->Neoo);
+    fprintf(stderr, "n_features_in: %d Nmf: %d Neoo: %d\n", (int)r->n_features_in, (int)r->Nmf, (int)r->Neoo);
         
     // RADAE Tx ---------------------------------------------------------
 
