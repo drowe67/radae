@@ -243,15 +243,15 @@ struct rade *rade_open(char model_file[]) {
   fprintf(stderr, "import_array returned: %d\n", ret);
   
   rade_tx_open(r);
-  //rade_rx_open(r);
-  //assert(r->n_features_in == r->n_features_out);
+  rade_rx_open(r);
+  assert(r->n_features_in == r->n_features_out);
 
   return r;
 }
 
 void rade_close(struct rade *r) {
   rade_tx_close(r);
-  //rade_rx_close(r);
+  rade_rx_close(r);
 
   int ret = Py_FinalizeEx();
   if (ret < 0) {
@@ -297,8 +297,8 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
   pValue = PyObject_CallObject(r->pMeth_radae_rx, r->pArgs_radae_rx);
   check_error(pValue, "return value", "from do_rx_radae");
   long valid_out = PyLong_AsLong(pValue);
-  memcpy(features_out, r->tx_out, sizeof(float)*(r->n_features_out));
-
+  memcpy(features_out, r->features_out, sizeof(float)*(r->n_features_out));
+  r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");
   return (int)valid_out;
 }
 
