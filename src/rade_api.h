@@ -58,31 +58,31 @@ extern "C" {
 #define RADE_FS_16000 16000         // speech sample rate
 
 // note single context only in this version, one context has one Tx, and one Rx
-void rade_open(char model_file[]);
-void rade_close(void);
+struct rade *rade_open(char model_file[]);
+void rade_close(struct *rade);
 
 // Allows API users to determine if the API has changed
 int rade_version(void);
 
 // helpers to set up arrays
-int rade_n_tx_out(void);
-int rade_max_nin(void);
-int rade_n_features_in_out(void);
+int rade_n_tx_out(struct *rade);
+int rade_max_nin(struct *rade);
+int rade_n_features_in_out(struct *rade);
 
 // Note vocoder is not encapsulated in API in this version
-void rade_tx(RADE_COMP tx_out[], float features_in[]);
+void rade_tx(struct *rade, RADE_COMP tx_out[], float features_in[]);
 
 // call me before each call to rade_rx(), provide nin samples to rx_in[]
-int rade_nin(void);
+int rade_nin(struct *rade, void);
 
 // returns non-zero if features[] contains valid output
-int rade_rx(float features_out[], RADE_COMP rx_in[]);
+int rade_rx(struct *rade, float features_out[], RADE_COMP rx_in[]);
 
 // returns non-zero if Rx is currently in sync
-int rade_sync(void);
+int rade_sync(struct *rade);
 
 // returns the current frequency offset of the Rx signal ( when rade_sync()!=0 )
-float rade_freq_offset(void);
+float rade_freq_offset(struct *rade);
 
 #ifdef __cplusplus
 }
