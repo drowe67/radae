@@ -67,7 +67,7 @@ int rade_version(void);
 // helpers to set up arrays
 int rade_n_tx_out(struct rade *r);
 int rade_n_tx_eoo_out(struct rade *r);
-int rade_max_nin(struct rade *r);
+int rade_nin_max(struct rade *r);
 int rade_n_features_in_out(struct rade *r);
 
 // Note vocoder is not encapsulated in API in this version
@@ -79,7 +79,7 @@ void rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]);
 // call me before each call to rade_rx(), provide nin samples to rx_in[]
 int rade_nin(struct rade *r);
 
-// returns non-zero if features[] contains valid output
+// returns non-zero if features_out[] contains valid output
 int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]);
 
 // returns non-zero if Rx is currently in sync

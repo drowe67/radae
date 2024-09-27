@@ -50,12 +50,16 @@ struct rade {
   npy_intp n_features_in, n_features_out;
 
   PyObject *pModule_radae_tx;
-
   PyObject *pFunc_radae_tx, *pArgs_radae_tx;
   float *features_in;
   RADE_COMP *tx_out;
   PyObject *pFunc_radae_tx_eoo, *pArgs_radae_tx_eoo;
   RADE_COMP *tx_eoo_out;
+
+  PyObject *pModule_radae_rx, *pInst_radae_rx;
+  PyObject *pMeth_radae_rx, *pArgs_radae_rx;
+  float *features_out;
+  RADE_COMP *rx_in;
 };
 
 
@@ -96,8 +100,8 @@ long call_getter(PyObject *pInst, char meth_name[]) {
     return ret;
 }
 
-
-int radae_tx_open(struct rade *r) {
+// returns 0 for success
+int rade_tx_open(struct rade *r) {
     PyObject *pName;
     PyObject *pValue;
     char *python_module_name = "radae_tx";
@@ -128,6 +132,7 @@ int radae_tx_open(struct rade *r) {
     pValue = PyArray_SimpleNewFromData(1, &r->n_features_in, NPY_FLOAT, r->features_in);
     check_error(pValue, "setting up numpy array", "features_in");
     PyTuple_SetItem(r->pArgs_radae_tx, 0, pValue);
+    Py_DECREF(pValue);
 
     // 2nd Python arg is a numpy array used for output to C
     r->tx_out = (RADE_COMP*)malloc(sizeof(RADE_COMP)*r->Nmf);
@@ -135,6 +140,7 @@ int radae_tx_open(struct rade *r) {
     pValue = PyArray_SimpleNewFromData(1, &r->Nmf, NPY_CFLOAT, r->tx_out);
     check_error(pValue, "setting up numpy array", "tx_out");
     PyTuple_SetItem(r->pArgs_radae_tx, 1, pValue);
+    Py_DECREF(pValue);
 
     // End of Over --------------------------------------------------------
 
@@ -149,6 +155,7 @@ int radae_tx_open(struct rade *r) {
     pValue = PyArray_SimpleNewFromData(1, &r->Neoo, NPY_CFLOAT, r->tx_eoo_out);
     check_error(pValue, "setting up numpy array", "tx_eoo_out");
     PyTuple_SetItem(r->pArgs_radae_tx_eoo, 0, pValue);
+    Py_DECREF(pValue);
 
     return 0;
 }
@@ -164,11 +171,69 @@ void rade_tx_close(struct rade *r) {
   free(r->features_in);
   free(r->tx_out);
   free(r->tx_eoo_out);
+}
 
-  int ret = Py_FinalizeEx();
-  if (ret < 0) {
-    fprintf(stderr, "Error with Py_FinalizeEx()\n");
-  }
+// returns 0 for success
+int rade_rx_open(struct rade *r) {
+    PyObject *pName, *pClass;
+    PyObject *pValue;
+    PyObject *pArgs;
+    char *python_module_name = "radae_rx";
+    char *do_radae_rx_meth_name = "do_radae_rx";
+
+    // Load module of Python code
+    pName = PyUnicode_DecodeFSDefault(python_module_name);
+    r->pModule_radae_rx = PyImport_Import(pName);
+    check_error(r->pModule_radae_rx, "importing", python_module_name);
+    Py_DECREF(pName);
+
+    // Find class and create an instance
+    pClass = PyObject_GetAttrString(r->pModule_radae_rx, "radae_rx");
+    check_error(pClass, "finding class", "radae_rx");
+    pArgs = Py_BuildValue("(s)", "../model19_check3/checkpoints/checkpoint_epoch_100.pth");
+    r->pInst_radae_rx = PyObject_CallObject(pClass, pArgs);
+    check_error(r->pInst_radae_rx, "Creating instance of class", "radae_rx");
+    Py_DECREF(pClass);
+    Py_DECREF(pArgs);
+
+    r->n_features_out = (int)call_getter(r->pInst_radae_rx, "get_n_features_out");
+    r->nin_max = (int)call_getter(r->pInst_radae_rx, "get_nin_max");
+    r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");
+    fprintf(stderr, "n_features_out: %d nin_max: %d nin: %d\n", (int)r->n_features_out, (int)r->nin_max, (int)r->nin);
+        
+    r->pMeth_radae_rx = PyObject_GetAttrString(r->pInst_radae_rx, do_radae_rx_meth_name);
+    check_error(r->pMeth_radae_rx, "finding",  do_radae_rx_meth_name);
+    check_callable(r->pMeth_radae_rx, do_radae_rx_meth_name, "not callable");
+
+    r->pArgs_radae_rx = PyTuple_New(2);
+
+    // 1st Python function arg - input numpy array of csingle rx samples
+    r->rx_in = (RADE_COMP*)malloc(sizeof(RADE_COMP)*r->nin_max);
+    assert(r->rx_in != NULL);
+    pValue = PyArray_SimpleNewFromData(1, &r->nin_max, NPY_CFLOAT, r->rx_in);
+    check_error(pValue, "setting up numpy array", "buffer_complex");
+    PyTuple_SetItem(r->pArgs_radae_rx, 0, pValue);
+    Py_DECREF(pValue);
+
+    // 2nd Python arg - output numpy array of float features
+    r->features_out = (float*)malloc(sizeof(float)*r->n_features_out);
+    assert(r->features_out != NULL);
+    pValue = PyArray_SimpleNewFromData(1, &r->n_features_out, NPY_FLOAT, r->features_out);
+    check_error(pValue, "setting up numpy array", "features_out");
+    PyTuple_SetItem(r->pArgs_radae_rx, 1, pValue);
+    Py_DECREF(pValue);
+ 
+    return 0;
+}
+
+void rade_rx_close(struct rade *r) {
+  Py_DECREF(r->pArgs_radae_rx);
+  Py_DECREF(r->pMeth_radae_rx);
+  Py_DECREF(r->pInst_radae_rx);
+  Py_DECREF(r->pModule_radae_rx);
+
+  free(r->features_out);
+  free(r->rx_in);
 }
 
 struct rade *rade_open(char model_file[]) {
@@ -182,21 +247,28 @@ struct rade *rade_open(char model_file[]) {
   ret = _import_array();
   fprintf(stderr, "import_array returned: %d\n", ret);
   
-  if (radae_tx_open(r) == 0)
-    return r;
-  else
-    return NULL;
+  rade_tx_open(r);
+  //rade_rx_open(r);
+  //assert(r->n_features_in == r->n_features_out);
+
+  return r;
 }
 
 void rade_close(struct rade *r) {
-   rade_tx_close(r);
+  rade_tx_close(r);
+  rade_rx_close(r);
+
+  int ret = Py_FinalizeEx();
+  if (ret < 0) {
+    fprintf(stderr, "Error with Py_FinalizeEx()\n");
+  }
 }
 
 int rade_version(void) { return VERSION; }
-
 int rade_n_tx_out(struct rade *r) { assert(r != NULL); return (int)r->Nmf; }
-
-int rade_max_nin(struct rade *r) { return 0; }
+int rade_n_tx_eoo_out(struct rade *r) { assert(r != NULL); return (int)r->Neoo; }
+int rade_nin_max(struct rade *r) { assert(r != NULL); return r->nin_max; }
+int rade_nin(struct rade *r) { assert(r != NULL); return r->nin; }
 
 int rade_n_features_in_out(struct rade *r) {
   assert(r != NULL); 
@@ -220,19 +292,29 @@ void rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]) {
   memcpy(tx_eoo_out, r->tx_eoo_out, sizeof(RADE_COMP)*(r->Neoo));
 }
 
-int rade_nin(struct rade *r) {
-  return 0;
-}
-
 int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
-  return 0;
+  PyObject *pValue;
+  assert(r != NULL);
+  assert(features_out != NULL);
+  assert(rx_in != NULL);
+
+  memcpy(r->rx_in, rx_in, sizeof(RADE_COMP)*(r->nin));
+  pValue = PyObject_CallObject(r->pMeth_radae_rx, r->pArgs_radae_rx);
+  check_error(pValue, "return value", "from do_rx_radae");
+  long valid_out = PyLong_AsLong(pValue);
+  memcpy(features_out, r->tx_out, sizeof(float)*(r->n_features_out));
+
+  return (int)valid_out;
 }
 
 int rade_sync(struct rade *r) {
-  return 0;
+  assert(r != NULL);
+  return (int)call_getter(r->pInst_radae_rx, "get_sync");
 }
 
+// TODO: we need a float getter
 float rade_freq_offset(struct rade *r) {
+  assert(r != NULL);
   return 0;
 }
 

@@ -16,6 +16,8 @@ int main(void)
     float features_in[n_features_in];
     int n_tx_out = rade_n_tx_out(r);
     RADE_COMP tx_out[n_tx_out];
+    int n_tx_eoo_out = rade_n_tx_eoo_out(r);
+    RADE_COMP tx_eoo_out[n_tx_eoo_out];
 
 #ifdef _WIN32
     // Note: freopen() returns NULL if filename is NULL, so
@@ -29,6 +31,8 @@ int main(void)
         fwrite(tx_out, sizeof(RADE_COMP), n_tx_out, stdout);
         fflush(stdout);
     }
+    //rade_tx_eoo(r,tx_eoo_out);
+    //fwrite(tx_eoo_out, sizeof(RADE_COMP), n_tx_eoo_out, stdout);
 
     rade_close(r);
     return 0;

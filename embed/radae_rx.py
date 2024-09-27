@@ -125,14 +125,17 @@ class radae_rx:
       # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
       model.core_decoder_statefull_load_state_dict()
 
-   def get_n_floats_out(self):
-         return model.Nzmf*model.dec_stride*nb_total_features
+   def get_n_features_out(self):
+      return model.Nzmf*model.dec_stride*nb_total_features
                  
    def get_nin_max(self):
-         return Nmf+M
+      return Nmf+M
    
    def get_nin(self):
-         return self.nin
+      return self.nin
+                 
+   def get_sync(self):
+      return self.state == "sync"
                  
    def do_radae_rx(self, buffer_complex, features_out):
       with torch.inference_mode():
@@ -257,7 +260,7 @@ if __name__ == '__main__':
    rx = radae_rx(model_name = "../model19_check3/checkpoints/checkpoint_epoch_100.pth")
 
    # allocate storage for output features
-   features_out = np.zeros(rx.get_n_floats_out(),dtype=np.float32)
+   features_out = np.zeros(rx.get_n_features_out(),dtype=np.float32)
    while True:
       buffer = sys.stdin.buffer.read(rx.get_nin()*struct.calcsize("ff"))
       if len(buffer) != rx.get_nin()*struct.calcsize("ff"):
