@@ -132,7 +132,6 @@ int rade_tx_open(struct rade *r) {
     pValue = PyArray_SimpleNewFromData(1, &r->n_features_in, NPY_FLOAT, r->features_in);
     check_error(pValue, "setting up numpy array", "features_in");
     PyTuple_SetItem(r->pArgs_radae_tx, 0, pValue);
-    Py_DECREF(pValue);
 
     // 2nd Python arg is a numpy array used for output to C
     r->tx_out = (RADE_COMP*)malloc(sizeof(RADE_COMP)*r->Nmf);
@@ -140,7 +139,6 @@ int rade_tx_open(struct rade *r) {
     pValue = PyArray_SimpleNewFromData(1, &r->Nmf, NPY_CFLOAT, r->tx_out);
     check_error(pValue, "setting up numpy array", "tx_out");
     PyTuple_SetItem(r->pArgs_radae_tx, 1, pValue);
-    Py_DECREF(pValue);
 
     // End of Over --------------------------------------------------------
 
@@ -155,7 +153,6 @@ int rade_tx_open(struct rade *r) {
     pValue = PyArray_SimpleNewFromData(1, &r->Neoo, NPY_CFLOAT, r->tx_eoo_out);
     check_error(pValue, "setting up numpy array", "tx_eoo_out");
     PyTuple_SetItem(r->pArgs_radae_tx_eoo, 0, pValue);
-    Py_DECREF(pValue);
 
     return 0;
 }
@@ -213,7 +210,6 @@ int rade_rx_open(struct rade *r) {
     pValue = PyArray_SimpleNewFromData(1, &r->nin_max, NPY_CFLOAT, r->rx_in);
     check_error(pValue, "setting up numpy array", "buffer_complex");
     PyTuple_SetItem(r->pArgs_radae_rx, 0, pValue);
-    Py_DECREF(pValue);
 
     // 2nd Python arg - output numpy array of float features
     r->features_out = (float*)malloc(sizeof(float)*r->n_features_out);
@@ -221,7 +217,6 @@ int rade_rx_open(struct rade *r) {
     pValue = PyArray_SimpleNewFromData(1, &r->n_features_out, NPY_FLOAT, r->features_out);
     check_error(pValue, "setting up numpy array", "features_out");
     PyTuple_SetItem(r->pArgs_radae_rx, 1, pValue);
-    Py_DECREF(pValue);
  
     return 0;
 }
@@ -256,7 +251,7 @@ struct rade *rade_open(char model_file[]) {
 
 void rade_close(struct rade *r) {
   rade_tx_close(r);
-  rade_rx_close(r);
+  //rade_rx_close(r);
 
   int ret = Py_FinalizeEx();
   if (ret < 0) {
