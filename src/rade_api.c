@@ -282,7 +282,7 @@ void rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]) {
 
 void rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]) {
   assert(r != NULL);
-  assert(tx_out_eoo != NULL);
+  assert(tx_eoo_out != NULL);
   PyObject_CallObject(r->pFunc_radae_tx_eoo, r->pArgs_radae_tx_eoo);
   memcpy(tx_eoo_out, r->tx_eoo_out, sizeof(RADE_COMP)*(r->Neoo));
 }
