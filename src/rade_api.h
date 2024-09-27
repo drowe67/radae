@@ -54,8 +54,8 @@ extern "C" {
 #endif
 
 // Sample rates used
-#define RADE_FS_8000 8000           // modem waveform sample rate
-#define RADE_FS_16000 16000         // speech sample rate
+#define RADE_MODEM_SAMPLE_RATE 8000           // modem waveform sample rate
+#define RADE_SPEECH_SAMPLE_RATE 16000         // speech sample rate
 
 // note single context only in this version, one context has one Tx, and one Rx
 struct rade *rade_open(char model_file[]);
