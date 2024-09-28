@@ -70,7 +70,7 @@ int rade_n_tx_eoo_out(struct rade *r);
 int rade_nin_max(struct rade *r);
 int rade_n_features_in_out(struct rade *r);
 
-// Note vocoder is not encapsulated in API in this version
+// note vocoder is not encapsulated in API in this version
 // returns number of RADE_COMP samples written to tx_out[]
 int rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]);
 
