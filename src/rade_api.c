@@ -236,6 +236,8 @@ struct rade *rade_open(char model_file[]) {
   struct rade *r = (struct rade*)malloc(sizeof(struct rade));
   assert(r != NULL);
 
+  // TODO: implement me
+  fprintf(stderr, "model file: %s", model_file);
   Py_Initialize();
 
   // need import array for numpy
@@ -270,7 +272,7 @@ int rade_n_features_in_out(struct rade *r) {
   return (int)r->n_features_in; 
 }
 
-void rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]) {
+int rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]) {
   assert(r != NULL);
   assert(features_in != NULL);
   assert(tx_out != NULL);
@@ -278,13 +280,15 @@ void rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]) {
   memcpy(r->features_in, features_in, sizeof(float)*(r->n_features_in));
   PyObject_CallObject(r->pFunc_radae_tx, r->pArgs_radae_tx);
   memcpy(tx_out, r->tx_out, sizeof(RADE_COMP)*(r->Nmf));
+  return r->Nmf;
 }
 
-void rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]) {
+int rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]) {
   assert(r != NULL);
   assert(tx_eoo_out != NULL);
   PyObject_CallObject(r->pFunc_radae_tx_eoo, r->pArgs_radae_tx_eoo);
   memcpy(tx_eoo_out, r->tx_eoo_out, sizeof(RADE_COMP)*(r->Neoo));
+  return r->Neoo;
 }
 
 int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
@@ -298,8 +302,12 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
   check_error(pValue, "return value", "from do_rx_radae");
   long valid_out = PyLong_AsLong(pValue);
   memcpy(features_out, r->features_out, sizeof(float)*(r->n_features_out));
+  // sample nin so we have an updated copy
   r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");
-  return (int)valid_out;
+  if (valid_out)
+    return r->n_features_out;
+  else
+    return 0;
 }
 
 int rade_sync(struct rade *r) {

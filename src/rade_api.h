@@ -71,15 +71,18 @@ int rade_nin_max(struct rade *r);
 int rade_n_features_in_out(struct rade *r);
 
 // Note vocoder is not encapsulated in API in this version
-void rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]);
+// returns number of RADE_COMP samples written to tx_out[]
+int rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]);
 
 // call this for the final frame at the end of over
-void rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]);
+// returns the number of RADE_COMP samples written to tx_eoo_out[] 
+int rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]);
 
 // call me before each call to rade_rx(), provide nin samples to rx_in[]
 int rade_nin(struct rade *r);
 
-// returns non-zero if features_out[] contains valid output
+// returns non-zero if features_out[] contains valid output. The number
+// returned is the number of samples written to features_out[]
 int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]);
 
 // returns non-zero if Rx is currently in sync

@@ -31,8 +31,8 @@ int main(void)
         fwrite(tx_out, sizeof(RADE_COMP), n_tx_out, stdout);
         fflush(stdout);
     }
-    //rade_tx_eoo(r,tx_eoo_out);
-    //fwrite(tx_eoo_out, sizeof(RADE_COMP), n_tx_eoo_out, stdout);
+    rade_tx_eoo(r,tx_eoo_out);
+    fwrite(tx_eoo_out, sizeof(RADE_COMP), n_tx_eoo_out, stdout);
 
     rade_close(r);
     return 0;
