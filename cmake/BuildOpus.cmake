@@ -2,8 +2,8 @@ message(STATUS "Will build opus with FARGAN")
 
 include(ExternalProject)
 ExternalProject_Add(build_opus
-    GIT_REPOSITORY https://gitlab.xiph.org/xiph/opus.git
-    GIT_TAG main
+    URL https://gitlab.xiph.org/xiph/opus/-/archive/main/opus-main.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP NO
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ./autogen.sh && ./configure --enable-dred --disable-shared
     BUILD_COMMAND $(MAKE)
