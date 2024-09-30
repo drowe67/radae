@@ -9,3 +9,6 @@ target_link_libraries(radae_tx Python3::Python Python3::NumPy)
 
 add_executable(radae_rx radae_rx.c rade_api.c)
 target_link_libraries(radae_rx Python3::Python Python3::NumPy)
+
+add_library(rade SHARED rade_api.c)
+target_link_libraries(rade Python3::Python Python3::NumPy)
