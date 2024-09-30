@@ -26,8 +26,8 @@ int main(void)
 #endif // _WIN32
 
     while((size_t)nin == fread(rx_in, sizeof(RADE_COMP), nin, stdin)) {
-        int valid_out = rade_rx(r,features_out,rx_in);
-        if (valid_out) {
+        int n_out = rade_rx(r,features_out,rx_in);
+        if (n_out) {
             fwrite(features_out, sizeof(float), n_features_out, stdout);
             fflush(stdout);
         }

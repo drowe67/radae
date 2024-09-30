@@ -37,7 +37,7 @@
 */
 """
 
-import os, sys, struct
+import os, sys, struct,argparse
 import numpy as np
 from matplotlib import pyplot as plt
 import torch
@@ -257,6 +257,10 @@ class radae_rx:
          return valid_output
 
 if __name__ == '__main__':
+   parser = argparse.ArgumentParser(description='RADAE streaming receiver, IQ.f32 on stdin to features.f32 on stdout')
+   parser.add_argument('model_name', type=str, help='path to model in .pth format', 
+                       default="../model19_check3/checkpoints/checkpoint_epoch_100.pth")
+
    rx = radae_rx(model_name = "../model19_check3/checkpoints/checkpoint_epoch_100.pth")
 
    # allocate storage for output features
