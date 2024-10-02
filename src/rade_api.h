@@ -39,6 +39,12 @@
 
 #include <sys/types.h>
 
+#if _WIN32
+#define RADE_EXPORT __declspec(dllexport) __stdcall
+#else
+#define RADE_EXPORT
+
+#endif // _WIN32
 // This declares a single-precision (float) complex number
 
 #ifndef __RADE_COMP__
@@ -58,38 +64,38 @@ extern "C" {
 #define RADE_SPEECH_SAMPLE_RATE 16000         // speech sample rate
 
 // note single context only in this version, one context has one Tx, and one Rx
-struct rade *rade_open(char model_file[]);
-void rade_close(struct rade *r);
+RADE_EXPORT struct rade *rade_open(char model_file[]);
+RADE_EXPORT void rade_close(struct rade *r);
 
 // Allows API users to determine if the API has changed
-int rade_version(void);
+RADE_EXPORT int rade_version(void);
 
 // helpers to set up arrays
-int rade_n_tx_out(struct rade *r);
-int rade_n_tx_eoo_out(struct rade *r);
-int rade_nin_max(struct rade *r);
-int rade_n_features_in_out(struct rade *r);
+RADE_EXPORT int rade_n_tx_out(struct rade *r);
+RADE_EXPORT int rade_n_tx_eoo_out(struct rade *r);
+RADE_EXPORT int rade_nin_max(struct rade *r);
+RADE_EXPORT int rade_n_features_in_out(struct rade *r);
 
 // note vocoder is not encapsulated in API in this version
 // returns number of RADE_COMP samples written to tx_out[]
-int rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]);
+RADE_EXPORT int rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]);
 
 // call this for the final frame at the end of over
 // returns the number of RADE_COMP samples written to tx_eoo_out[] 
-int rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]);
+RADE_EXPORT int rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]);
 
 // call me before each call to rade_rx(), provide nin samples to rx_in[]
-int rade_nin(struct rade *r);
+RADE_EXPORT int rade_nin(struct rade *r);
 
 // returns non-zero if features_out[] contains valid output. The number
 // returned is the number of samples written to features_out[]
-int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]);
+RADE_EXPORT int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]);
 
 // returns non-zero if Rx is currently in sync
-int rade_sync(struct rade *r);
+RADE_EXPORT int rade_sync(struct rade *r);
 
 // returns the current frequency offset of the Rx signal ( when rade_sync()!=0 )
-float rade_freq_offset(struct rade *r);
+RADE_EXPORT float rade_freq_offset(struct rade *r);
 
 #ifdef __cplusplus
 }
