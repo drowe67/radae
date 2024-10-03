@@ -13,13 +13,13 @@ set_target_properties(rade PROPERTIES
     PUBLIC_HEADER "rade_api.h"
 )
 
-add_executable(radae_tx radae_tx.c rade_api.c)
-target_link_libraries(radae_tx Python3::Python)
+add_executable(radae_tx radae_tx.c)
+target_link_libraries(radae_tx rade Python3::Python)
 target_include_directories(radae_tx PRIVATE
     "$<TARGET_PROPERTY:Python3::NumPy,INTERFACE_INCLUDE_DIRECTORIES>")
 
-add_executable(radae_rx radae_rx.c rade_api.c)
-target_link_libraries(radae_rx Python3::Python)
+add_executable(radae_rx radae_rx.c)
+target_link_libraries(radae_rx rade Python3::Python)
 target_include_directories(radae_rx PRIVATE
     "$<TARGET_PROPERTY:Python3::NumPy,INTERFACE_INCLUDE_DIRECTORIES>")
 

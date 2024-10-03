@@ -42,9 +42,9 @@
 #if _WIN32
 #define RADE_EXPORT __declspec(dllexport) __stdcall
 #else
-#define RADE_EXPORT
-
+#define RADE_EXPORT __attribute__((visibility("default")))
 #endif // _WIN32
+
 // This declares a single-precision (float) complex number
 
 #ifndef __RADE_COMP__
