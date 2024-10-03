@@ -1,0 +1,106 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{calc,arrows,shapes,positioning,automata}
+\usepackage{tkz-euclide}
+\usepackage[numbib]{tocbibind}
+\usepackage{float}
+\usepackage{array}
+\usepackage{bm}
+\usepackage{siunitx}  
+
+\begin{document}
+
+% Tikz code used to support block diagrams
+% credit: https://tex.stackexchange.com/questions/175969/block-diagrams-using-tikz
+
+\tikzset{
+block/.style = {draw, fill=white, rectangle, minimum height=3em, minimum width=3em},
+tmp/.style  = {coordinate}, 
+circ/.style= {draw, fill=white, circle, node distance=1cm, minimum size=0.6cm},
+input/.style = {coordinate},
+output/.style= {coordinate},
+pinstyle/.style = {pin edge={to-,thin,black}}
+}
+
+\title{Radio Autoencoder (RADE) V1 Introduction and Waveform Description}
+\author{David Rowe VK5DGR}
+\date{}
+\maketitle
+
+\section{Introduction}
+
+This document is an introduction to Version 1 of the Radio Autoencoder (RADE), and a description of the waveform (mode). The target audience of this document is the Radio Amateur and regulatory organisations that govern Amateur Radio.
+
+\subsection{Acknowledgements}
+
+The RADE concept and initial prototype was developed by Jean-Marc Valin. David Rowe built on this work to develop a practical over the air waveform for speech over HF radio channels.  Mooneer Salem is handling integration of RADE into the FreeDV GUI application. The FreeDV Project Leadership Team and many others have helped with support and testing over the course of 2024. The contributions from David, Mooneer and the FreeDV PLT was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
+
+\section{Radio Autoencoder}
+
+The purpose of the Radio Autoencoder is to send speech of over a radio channel. Figure \ref{fig:radae_block} compares a traditional digital speech over radio system to RADE.
+In conventional digital speech systems, the speech encoder extracts speech features like pitch, voicing, and short term spectrum, and quantises them to a fixed number of bits, e.g. 700 bits/s.  Forward Error Correction adds extra bits to protect the encoder speech from bit errors.  The FEC encoded bit stream is then passed to a modulator that generates an analog signal we can send through a radio transmitter over the channel.  The demodulator takes the received signal, and converts it to a stream of bits.  Some of these bits will have errors, which the FEC decoder will attempt to clean up.  Finally, the bits are converted back to vocoder features (De-quantised), and speech is synthesised.
+
+RADE takes a novel twist – the Encoder converts vocoder features directly to Phase Shift Keyed (PSK) symbols. It effectively combines quantisation, FEC coding, and modulation.  The RADE Decoder converts received PSK symbols back to features that are synthesised using the high quality FARGAN synthesis engine. The RADE encoder, decoder, and FARGAN synthesiser are built using modern machine learning techniques.  RADE has been trained to deal with the imperfections of the HF radio channel. Not shown on Figure \ref{fig:radae_block} is some traditional DSP that converts the PSK symbols to and from a parallel tone OFDM signal, and house keeping tasks like synchonisation.
+
+The PSK symbols from RADE are not discrete constellation points like traditional digital modems, instead they use the whole space of the constellation diagram.  The PSK symbols are sent over the channel at 2000 symbols/second.  Interestingly, there are no ``bits" anywhere in the system.  The values from the features extractor, PSK symbols, through to synthesis are floating point numbers. You could therefore see the RADE symbols as a form of sampled analog PSK, implemented with a combination of machine learning and classical DSP techniques.
+
+The speech signal has an audio bandwidth of 8kHz, but the RADE V1 signal uses just 1500Hz of RF bandwidth.
+
+Our testing indicates RADE works well on low and high SNR HF radio channels, and has impressive speech quality compared to SSB and traditional digital voice over radio systems. It requires more memory and CPU than a traditional digital voice system, but will run just fine with the resources of a typical laptop.
+
+\begin{figure}
+\caption{Traditional Digital Voice at left, RADE at right.}
+\label{fig:radae_block}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
+
+% Classical DSP System
+
+\node [input] (rinput1) {};
+\node [block, below of=rinput1, node distance=1cm,text width=2cm] (feature_ext) {Feature Extraction};
+\node [block, below of=feature_ext,node distance=1.5cm] (quant) {Quantisation};
+\node [block, below of=quant,node distance=1.5cm] (fec_enc) {FEC Encode};
+\node [block, below of=fec_enc,node distance=1.5cm] (mod1) {Modulator};
+\node [block, below of=mod1,node distance=1.5cm] (channel1) {Radio Channel};
+\node [block, below of=channel1,node distance=1.5cm] (demod1) {Demodulator};
+\node [block, below of=demod1,node distance=1.5cm] (fec_dec) {FEC Decode};
+\node [block, below of=fec_dec,node distance=1.5cm] (dequant) {De-Quant};
+\node [block, below of=dequant,node distance=1.5cm] (synth) {Speech Synth};
+\node [output, below of=synth,node distance=1cm] (routput1) {};
+
+\draw [->] node[above,text width=2cm] {Input Speech} (rinput1) -- (feature_ext);
+\draw [->] (feature_ext) -- (quant);
+\draw [->] (quant) -- (fec_enc);
+\draw [->] (fec_enc) -- (mod1);
+\draw [->] (mod1) -- (channel1);
+\draw [->] (channel1) -- (demod1);
+\draw [->] (demod1) -- (fec_dec);
+\draw [->] (fec_dec) -- (dequant);
+\draw [->] (dequant) -- (synth);
+\draw [->] (synth) -- (routput1) node[below,text width=1.5cm] {Output Speech};
+
+% RADE System
+
+\node [input] [right of=rinput1, node distance=3cm] (rinput2) {};
+\node [block, below of=rinput2, node distance=1cm] (feature_ext2) {Feature Extraction};
+\node [block, right of=fec_enc,node distance=3cm] (radae_enc) {\emph{RADE} Encoder};
+\node [block, right of=channel1,node distance=3cm] (channel2) {Radio Channel};
+\node [block, right of=fec_dec,node distance=3cm] (radae_dec) {\emph{RADE} Decoder};
+\node [block, right of=synth,node distance=3cm] (fargan) {\scalebox{0.8}[0.8]{FARGAN}};
+\node [output, below of=fargan,node distance=1cm] (routput2) {};
+
+\draw [->] (rinput2) node[above,text width=2cm] {Input Speech} -- (feature_ext2);
+\draw [->] (feature_ext2) -- (radae_enc);
+\draw [->] (radae_enc) -- (channel2);
+\draw [->] (channel2) -- (radae_dec);
+\draw [->] (radae_dec) -- (fargan);
+\draw [->] (fargan) -- (routput2) node[below,text width=1.5cm] {Output Speech};
+
+
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
+\end{document}
