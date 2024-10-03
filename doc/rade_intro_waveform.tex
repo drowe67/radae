@@ -39,16 +39,17 @@ The RADE concept and initial prototype was developed by Jean-Marc Valin. David R
 
 \section{Radio Autoencoder}
 
-The purpose of the Radio Autoencoder is to send speech of over a radio channel. Figure \ref{fig:radae_block} compares a traditional digital speech over radio system to RADE.
+The purpose of the Radio Autoencoder is to send speech of over a radio channel. 
+Figure \ref{fig:radae_block} compares a traditional digital speech over radio system to RADE.
 In conventional digital speech systems, the speech encoder extracts speech features like pitch, voicing, and short term spectrum, and quantises them to a fixed number of bits, e.g. 700 bits/s.  Forward Error Correction adds extra bits to protect the encoder speech from bit errors.  The FEC encoded bit stream is then passed to a modulator that generates an analog signal we can send through a radio transmitter over the channel.  The demodulator takes the received signal, and converts it to a stream of bits.  Some of these bits will have errors, which the FEC decoder will attempt to clean up.  Finally, the bits are converted back to vocoder features (De-quantised), and speech is synthesised.
 
-RADE takes a novel twist – the Encoder converts vocoder features directly to Phase Shift Keyed (PSK) symbols. It effectively combines quantisation, FEC coding, and modulation.  The RADE Decoder converts received PSK symbols back to features that are synthesised using the high quality FARGAN synthesis engine. The RADE encoder, decoder, and FARGAN synthesiser are built using modern machine learning techniques.  RADE has been trained to deal with the imperfections of the HF radio channel. Not shown on Figure \ref{fig:radae_block} is some traditional DSP that converts the PSK symbols to and from a parallel tone OFDM signal, and house keeping tasks like synchonisation.
+RADE takes a novel twist – the Encoder converts vocoder features directly to Phase Shift Keyed (PSK) symbols. It effectively combines quantisation, FEC coding, and modulation.  The RADE Decoder converts received PSK symbols back to features that are synthesised using the high quality FARGAN synthesis engine. The RADE encoder, decoder, and FARGAN synthesiser are built using modern machine learning techniques.  RADE has been trained to deal with the imperfections of the HF radio channel. Not shown on Figure \ref{fig:radae_block} is some traditional DSP that converts the PSK symbols to and from an OFDM signal, and house keeping tasks like synchonisation.
 
-The PSK symbols from RADE are not discrete constellation points like traditional digital modems, instead they use the whole space of the constellation diagram.  The PSK symbols are sent over the channel at 2000 symbols/second.  Interestingly, there are no ``bits" anywhere in the system.  The values from the features extractor, PSK symbols, through to synthesis are floating point numbers. You could therefore see the RADE symbols as a form of sampled analog PSK, implemented with a combination of machine learning and classical DSP techniques.
+The PSK symbols from RADE are not discrete constellation points like traditional digital modems, instead they use the whole space of the constellation diagram.  The PSK symbols are sent over the channel at 2000 symbols/second.  Interestingly, there are no ``bits" anywhere in the system.  The values from the features extractor, PSK symbols, through to synthesis are floating point numbers. The RADE signal can be seen as a form of analog PSK, built with a combination of machine learning and classical DSP techniques.
 
-The speech signal has an audio bandwidth of 8kHz, but the RADE V1 signal uses just 1500Hz of RF bandwidth.
+The speech signal has an audio bandwidth of 8kHz, but the RADE V1 signal uses just 1500Hz of RF bandwidth. The Peak to Average Power Ratio (PAPR) is less than 1dB, allowing efficient use of transmitter power amplifiers.
 
-Our testing indicates RADE works well on low and high SNR HF radio channels, and has impressive speech quality compared to SSB and traditional digital voice over radio systems. It requires more memory and CPU than a traditional digital voice system, but will run just fine with the resources of a typical laptop.
+Our testing indicates RADE works well on low and high SNR HF radio channels, and has impressive speech quality compared to SSB and traditional digital voice over radio systems. RADE V1 requires more memory and CPU than a traditional digital voice system, but will run just fine with the resources of a typical laptop.
 
 \begin{figure}
 \caption{Traditional Digital Voice at left, RADE at right.}
@@ -102,5 +103,40 @@ Our testing indicates RADE works well on low and high SNR HF radio channels, and
 \end{tikzpicture}
 \end{center}
 \end{figure}
+
+\section{Waveform Description}
+
+\begin{table} [H]
+\centering
+\begin{tabular}{m{5cm} | m{3cm} | m{5cm} }
+ \hline
+ Parameter & Value & Comment \\
+ \hline
+ Audio Bandwidth & 100-7900 Hz \\
+ RF Bandwidth & 1500 Hz & -6dB down  \\
+ Tx Peak Average Power Ratio & $<$ 1dB \\
+ Threshold SNR & -3dB & AWGN channel, 3000 Hz noise bandwidth \\
+ Threshold C/No & 32 dBHz & AWGN channel \\
+ Threshold SNR & 0 dB & MPP channel (1Hz Doppler, 2ms path delay), 3000 Hz noise bandwidth \\
+ Threshold C/No & 35 dBHz & MPP channel \\
+ Frame size & 120ms & algorithmic latency \\
+ Modulation & OFDM & discrete time, continuously valued PSK symbols \\
+ Vocoder & FARGAN & low CPU complexity ML vocoder \\
+ Payload symbol rate & 2000 Hz & payload data symbols, all carriers combined \\
+ Number of Carriers & 30 \\
+ Per Carrier Symbol rate & 50 Hz \\
+ Cyclic Prefix & 4ms \\
+ Worst case channel & MPD & 2Hz Doppler spread, 4ms path delay, two path Watterson model \\
+ Mean acquisition time & $<$ 1.5s & 0dB SNR MPP channel \\
+ Acquisition frequency range & +/- 50 Hz \\
+ Acquisition co-channel interference tolerance & -3dBC & Interfering sine wave level for $<$ 2s mean acquisition time \\
+ Auxilary text channel & 25 bits/s & All aux bits used for sync on RADE V1 \\
+ SNR measurement & No \\
+\hline
+\end{tabular}
+\caption{Parameters of the RADE V1 waveform}
+\label{tab:constant_eb}
+\end{table}
+
 
 \end{document}
