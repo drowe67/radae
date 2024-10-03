@@ -4,21 +4,29 @@
 1;
 pkg load statistics signal;
 
-function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
+function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts();
+    end
     if length(z_fn)
       z=load_f32(z_fn,1);
       s=z(1:2:end)+j*z(2:2:end);
       figure(1); clf; plot(s,'.'); title('Scatter');
-      mx = max(abs(z))*1.5; axis([-mx mx -mx mx])
+      mx = max(abs(z))*1.2; axis([-mx mx -mx mx])
       if length(png_fn)
         print("-dpng",sprintf("%s_scatter.png",png_fn));
       end
+      if length(epslatex)
+        print_eps_restore(sprintf("%s_scatter.eps",epslatex),"-S300,300",textfontsize,linewidth);
+      end
       figure(2); clf;
       [nn cc] = hist3([real(s) imag(s)],[25 25]);
-      mesh(cc{1},cc{2},nn); title('Scatter 3D');
-    
+      mesh(cc{1},cc{2},nn); title('Scatter 3D');   
       if length(png_fn)
         print("-dpng",sprintf("%s_scatter_3d.png",png_fn));
+      end
+      if length(epslatex)
+        print_eps_restore(sprintf("%s_scatter_3d.eps",epslatex),"-S300,300",textfontsize,linewidth);
       end
       figure(3); clf; hist(abs(s));
     end
@@ -29,6 +37,16 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
         figure(4); clf; plot(rx); title('rate Fs Scatter (IQ)'); mx = max(abs(rx))*1.5; axis([-mx mx -mx mx]);
         figure(5); clf; plot(real(rx)); xlabel('Time (samples)'); ylabel('rx');
         figure(6); clf; plot_specgram(rx, Fs=8000, 0, 3000);
+        
+        figure(7); clf; 
+        Fs = 8000; y = pwelch(rx,[],[],1024,Fs); y_dB = 20*log10(y);
+        mx = max(y_dB); mx = ceil(mx/10)*10
+        plot((0:length(y)-1)*Fs/length(y),y_dB-mx);
+        axis([0 3000 -40 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
+        if length(epslatex)
+          print_eps_restore(sprintf("%s_psd.eps",epslatex),"-S300,300",textfontsize,linewidth);
+        end
+      
         peak = max(abs(rx).^2);
         av = mean(abs(rx).^2);
         PAPRdB = 10*log10(peak/av);
