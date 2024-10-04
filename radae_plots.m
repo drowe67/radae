@@ -6,7 +6,7 @@ pkg load statistics signal;
 
 function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
     if length(epslatex)
-        [textfontsize linewidth] = set_fonts();
+        [textfontsize linewidth] = set_fonts(20);
     end
     if length(z_fn)
       z=load_f32(z_fn,1);
@@ -17,7 +17,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         print("-dpng",sprintf("%s_scatter.png",png_fn));
       end
       if length(epslatex)
-        print_eps_restore(sprintf("%s_scatter.eps",epslatex),"-S300,300",textfontsize,linewidth);
+        print_eps(sprintf("%s_scatter.eps",epslatex),"-S250,250");
       end
       figure(2); clf;
       [nn cc] = hist3([real(s) imag(s)],[25 25]);
@@ -26,7 +26,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         print("-dpng",sprintf("%s_scatter_3d.png",png_fn));
       end
       if length(epslatex)
-        print_eps_restore(sprintf("%s_scatter_3d.eps",epslatex),"-S300,300",textfontsize,linewidth);
+        print_eps(sprintf("%s_scatter_3d.eps",epslatex),"-S300,300");
       end
       figure(3); clf; hist(abs(s));
     end
@@ -44,7 +44,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         plot((0:length(y)-1)*Fs/length(y),y_dB-mx);
         axis([0 3000 -40 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
         if length(epslatex)
-          print_eps_restore(sprintf("%s_psd.eps",epslatex),"-S300,300",textfontsize,linewidth);
+          print_eps_restore(sprintf("%s_psd.eps",epslatex),"-S300,200",textfontsize,linewidth);
         end
       
         peak = max(abs(rx).^2);
@@ -158,9 +158,13 @@ function restore_fonts(textfontsize,linewidth)
   set(0, "defaultlinelinewidth", linewidth);
 end
 
-function print_eps_restore(fn,sz,textfontsize,linewidth)
+function print_eps(fn,sz)
   print(fn,sz,"-depslatex");
   printf("printing... %s\n", fn);
+end
+
+function print_eps_restore(fn,sz,textfontsize,linewidth)
+  print_eps(fn,sz);
   restore_fonts(textfontsize,linewidth);
 end
 

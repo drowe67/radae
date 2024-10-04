@@ -9,6 +9,18 @@
 \usepackage{array}
 \usepackage{bm}
 \usepackage{siunitx}  
+\usepackage{xstring}
+\usepackage{catchfile}
+
+\CatchFileDef{\headfull}{../.git/HEAD}{}
+\StrGobbleRight{\headfull}{1}[\head]
+\StrBehind[2]{\head}{/}[\branch]
+\IfFileExists{../.git/refs/heads/\branch}{%
+    \CatchFileDef{\commit}{../.git/refs/heads/\branch}{}}{%
+    \newcommand{\commit}{\dots~(in \emph{packed-refs})}}
+\newcommand{\gitrevision}{%
+  \StrLeft{\commit}{7}%
+}
 
 \begin{document}
 
@@ -26,20 +38,20 @@ pinstyle/.style = {pin edge={to-,thin,black}}
 
 \title{FreeDV-036 Radio Autoencoder (RADE) V1 Introduction and Waveform Description}
 \author{David Rowe VK5DGR}
-\date{\today}
+\date{\today \quad Git: \texttt{\gitrevision} on branch \texttt{\branch}\\}
 \maketitle
 
 \section{Introduction}
 
-The purpose of the Radio Autoencoder (RADE) V1 is to send speech over a HF radio channel. The speech signal has an audio bandwidth of 8kHz, but the RADE V1 signal uses just 1500Hz of RF bandwidth. The Peak to Average Power Ratio (PAPR) is less than 1dB, allowing efficient use of transmitter power amplifiers. Our testing indicates RADE works well on low and high SNR HF radio channels, and has impressive speech quality compared to SSB and traditional digital voice over radio systems. RADE V1 requires more memory and CPU than a traditional digital voice system, but will run just fine with the resources of a typical laptop.
+The purpose of the Radio Autoencoder (RADE) V1 is to send speech over a HF radio channel. The speech signal has an audio bandwidth of 8kHz, but the RADE V1 signal requires just 1500Hz of RF bandwidth. The Peak to Average Power Ratio (PAPR) is less than 1dB, allowing efficient use of transmitter power amplifiers. Our testing indicates RADE works well on low and high SNR HF radio channels, and has impressive speech quality compared to SSB and traditional digital voice over radio systems. RADE V1 requires more memory and CPU than a traditional digital voice system, but will run just fine with the resources of a typical PC.
 
-You can run RADE on a Windows PC or laptop using FreeDV-GUI V2.0 and above.
+You can run RADE on a Windows PC or laptop using the FreeDV-GUI application V2.0 and above.
 
-This document is an introduction to Version 1 of RADE, and a description of the waveform (mode). The target audience is the Radio Amateur and regulatory organisations that govern Amateur Radio.
+This document is an introduction to Version 1 of RADE, and a description of the waveform. The target audience is the Radio Amateur and regulatory organisations that govern Amateur Radio.
 
 \subsection{Acknowledgements}
 
-The RADE concept and initial prototype was developed by Jean-Marc Valin. David Rowe built on this work to develop a practical over the air waveform for speech over HF radio channels.  Mooneer Salem is handling integration of RADE into the FreeDV GUI application. The FreeDV Project Leadership Team and many others have helped with support and testing over the course of 2024. The contributions from David, Mooneer and the FreeDV PLT was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
+The RADE concept evolved from a discussion between Jean-Marc Valin and David Rowe, after which Jean-Marc quickly put together an initial proof-of-concept. Over a period of several months David built on this work to develop a practical over the air waveform for speech over HF radio channels.  Mooneer Salem is handling integration of RADE into the FreeDV GUI application. The FreeDV Project Leadership Team and many others have helped with support and testing over the course of 2024. The contributions from David, Mooneer and the FreeDV PLT was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
 
 \section{Radio Autoencoder}
 
@@ -97,21 +109,22 @@ The RADE concept and initial prototype was developed by Jean-Marc Valin. David R
 \end{figure}
 
 Figure \ref{fig:radae_block} compares a traditional digital speech over radio system to RADE.
-In conventional digital speech systems, the speech encoder extracts speech features like pitch, voicing, and short term spectrum, and quantises them to a fixed number of bits, e.g. 700 bits/s.  Forward Error Correction adds extra bits to protect the encoder speech from bit errors.  The FEC encoded bit stream is then passed to a modulator that generates an analog signal we can send through a radio transmitter over the channel.  The demodulator takes the received signal, and converts it to a stream of bits.  Some of these bits will have errors, which the FEC decoder will attempt to clean up.  Finally, the bits are converted back to vocoder features (De-quantised), and speech is synthesised.
+In conventional digital speech systems, the speech encoder extracts features like pitch, voicing, and short term spectrum, and quantises them to a fixed number of bits, e.g. 700 bits/s.  Forward Error Correction adds extra bits to protect the encoded speech from bit errors.  The FEC encoded bit stream is then passed to a modulator that generates an analog signal we can send through a radio transmitter over the channel.  The demodulator takes the received signal, and converts it to a stream of bits.  Some of these bits will have errors, which the FEC decoder will attempt to correct
+.  Finally, the bits are converted back to vocoder features (De-quantised), and speech is synthesised.
 
-RADE takes a novel twist – the Encoder converts vocoder features directly to Phase Shift Keyed (PSK) symbols. It effectively combines quantisation, FEC coding, and modulation.  The RADE Decoder converts received PSK symbols back to features that are synthesised using the high quality FARGAN synthesis engine. The RADE encoder, decoder, and FARGAN synthesiser are built using modern machine learning techniques.  RADE has been trained to produce good quality speech even with the distortion of the HF radio channel. Not shown on Figure \ref{fig:radae_block} is some traditional DSP that converts the PSK symbols to and from an OFDM signal, and house keeping tasks like synchonisation.
+RADE takes a novel twist – the Encoder converts vocoder features directly to Phase Shift Keyed (PSK) symbols. It effectively combines quantisation, FEC coding, and modulation.  The RADE Decoder converts received PSK symbols back to features that are synthesised using the high quality FARGAN synthesis engine. The RADE encoder, decoder, and FARGAN synthesiser are built using modern machine learning techniques.  RADE has been trained to produce good quality speech even with the distortion of the HF radio channel. Not shown on Figure \ref{fig:radae_block} is some traditional DSP that converts the PSK symbols to and from an OFDM signal, and house keeping tasks like synchronisation. The PSK symbols are sent over the channel at 2000 symbols/second.
 
 \begin{figure}[h]
-\caption{Constellation plot of RADE Encoder PSK symbols.  Compared to traditional QPSK, the symbols look like noise.}
+\caption{Constellation plot of RADE Encoder PSK symbols.  Compared to traditional QPSK, the constellation looks like noise.}
 \label{fig:psk_scatter}
 \begin{center}
 \input model19_aux3_z_scatter.tex
 \end{center}
 \end{figure}
 
-As shown in Figure \ref{fig:psk_scatter} the PSK symbols from RADE are not discrete constellation points like traditional digital modems, instead they appear to be positioned at random.  This constellation was ``designed" by training the Autoencoder using many examples of speech and HF channels. The PSK symbols are sent over the channel at 2000 symbols/second.  Interestingly, there are no ``bits" anywhere in the RADE system.  The values from the features extractor, PSK symbols, through to synthesis are floating point numbers. The RADE signal can be seen as a form of sampled, analog PSK, built with a combination of machine learning and classical DSP techniques.
+As shown in Figure \ref{fig:psk_scatter} the PSK symbols from RADE are not discrete constellation points like traditional digital modems, instead they appear to be positioned at random.  This constellation was ``designed" by training the Autoencoder using many examples of speech and HF channels. Interestingly, there are no ``bits" anywhere in the RADE system.  The values from the features extractor, PSK symbols, through to synthesis are floating point numbers. The RADE signal can be seen as a form of sampled, analog PSK, built with a combination of machine learning and classical DSP techniques.
 
-Figure \ref{fig:rade_psd} is the spectrum of the RADE V1 signal. This is similar to other OFDM waveforms, with a RF bandwidth of 1500 Hz. The sidelobe ``grass" as the edges is relatively high at around -25dB from the peak, suppression of this has not been optimised in the V1 release.
+Figure \ref{fig:rade_psd} is the spectrum of the RADE V1 signal. This is similar to other OFDM waveforms, with a RF bandwidth of 1500 Hz. The spectral ``grass" at the low and high frequency edges is relatively high at around -25dB from the peak, suppression of this has not been optimised in the V1 release.
   
 \begin{figure}[h]
 \caption{Spectrum of RADE V1 Signal.}
@@ -123,9 +136,9 @@ Figure \ref{fig:rade_psd} is the spectrum of the RADE V1 signal. This is similar
 
 \section{Waveform Description}
 
-\begin{table} [H]
+\begin{table}[H]
 \centering
-\begin{tabular}{m{5cm} | m{3cm} | m{5cm} }
+\begin{tabular}{m{4cm} | m{2cm} | m{5cm} }
  \hline
  Parameter & Value & Comment \\
  \hline
@@ -134,10 +147,10 @@ Figure \ref{fig:rade_psd} is the spectrum of the RADE V1 signal. This is similar
  Modulation & OFDM & Discrete time, continuously valued PSK symbols \\
  Frame size & 120ms & Algorithmic latency \\
  Vocoder & FARGAN & Low CPU complexity ML vocoder \\
- Payload symbol rate & 2000 Hz & Payload data symbols, all carriers combined \\
- Number of Carriers & 30 \\
- Per Carrier Symbol rate & 50 Hz \\
- Carrier Spacing & 50 Hz \\
+ Payload symbol rate & 2000 Hz & Payload data symbols, all subcarriers combined \\
+ Number of Subcarriers & 30 \\
+ Subcarrier Symbol rate & 50 Hz \\
+ Subcarrier Spacing & 50 Hz \\
  Cyclic Prefix & 4ms \\
  Tx Peak Average Power Ratio & $<$ 1dB \\
  Threshold SNR (AWGN) & -3dB & AWGN channel, 3000 Hz noise bandwidth \\
