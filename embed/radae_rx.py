@@ -43,74 +43,76 @@ from matplotlib import pyplot as plt
 import torch
 from radae import RADAE,complex_bpf,acquisition,receiver_one
 
-# Hard code all this for now to avoid arg passing complexities TODO: consider a way to pass in at init-time
-latent_dim = 80
-auxdata = True
-bottleneck = 3
-use_stdout=True
-bpf=True
-v=2
-
 # make sure we don't use a GPU
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
 device = torch.device("cpu")
 
 nb_total_features = 36
 num_used_features = 20
-num_features = 20
-if auxdata:
-    num_features += 1
-
-# load model from a checkpoint file
-model = RADAE(num_features, latent_dim, EbNodB=100, rate_Fs=True, 
-              pilots=True, pilot_eq=True, eq_mean6 = False, cyclic_prefix=0.004,
-              coarse_mag=True,time_offset=-16, bottleneck=bottleneck)
-model.eval()
-
-# check a bunch of model options we rely on for receiver to work
-assert model.pilots and model.pilot_eq
-assert model.per_carrier_eq
-assert model.eq_mean6 == False   # we are using least squares algorithm
-assert model.phase_mag_eq == False
-assert model.coarse_mag
-receiver = receiver_one(model.latent_dim,model.Fs,model.M,model.Ncp,model.Wfwd,model.Nc,
-                        model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain,
-                        model.time_offset,model.coarse_mag)
-
-M = model.M
-Ncp = model.Ncp
-Ns = model.Ns               # number of data symbols between pilots
-Nmf = int((Ns+1)*(M+Ncp))   # number of samples in one modem frame
-Nc = model.Nc
-p = np.array(model.p) 
-Fs = model.Fs
-Rs = model.Rs
-w = np.array(model.w)
-
-if bpf:
-   Ntap=101
-   bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
-   centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
-   print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
-   bpf = complex_bpf(Ntap, model.Fs, bandwidth,centre)
-
-acq = acquisition(Fs,Rs,M,Ncp,Nmf,p,model.pend)
 
 Tunsync = 3.0                        # allow some time before lossing sync to ride over fades
-Nmf_unsync = int(Tunsync*Fs/Nmf)
-endofover = False
 uw_error_thresh = 7 # P(reject|correct) = 1 -  binocdf(8,24,0.1) = 4.5E-4
                     # P(accept|false)   = binocdf(8,24,0.5)      = 3.2E-3
-synced_count_one_sec = Fs//Nmf
-
-# P DDD P DDD P Ncp
-# extra Ncp at end so we can handle timing slips
-rx_buf = np.zeros(2*Nmf+M+Ncp,np.csingle)
-rx = np.zeros(0,np.csingle)
-z_hat_log = torch.zeros(0,model.Nzmf,model.latent_dim)
 
 class radae_rx:
-   def __init__(self,model_name):
+   def __init__(self, model_name, latent_dim = 80, auxdata = True, bottleneck = 3, use_stdout=True, bpf_en=True, v=2):
+
+      self.latent_dim = latent_dim
+      self.auxdata = auxdata
+      self.bottleneck = bottleneck
+      self.use_stdout = use_stdout
+      self.bpf_en = bpf_en
+      self.v = v
+
+      self.num_features = 20
+      if self.auxdata:
+         self.num_features += 1
+
+      # load model from a checkpoint file
+      self.model = RADAE(self.num_features, latent_dim, EbNodB=100, rate_Fs=True, 
+                        pilots=True, pilot_eq=True, eq_mean6 = False, cyclic_prefix=0.004,
+                        coarse_mag=True,time_offset=-16, bottleneck=bottleneck)
+      model = self.model
+      self.model.eval()
+
+      # check a bunch of model options we rely on for receiver to work
+      assert self.model.pilots and model.pilot_eq
+      assert self.model.per_carrier_eq
+      assert self.model.eq_mean6 == False   # we are using least squares algorithm
+      assert self.model.phase_mag_eq == False
+      assert self.model.coarse_mag
+   
+      self.receiver = receiver_one(model.latent_dim,model.Fs,model.M,model.Ncp,model.Wfwd,model.Nc,
+                              model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain,
+                              model.time_offset,model.coarse_mag)
+
+      M = model.M
+      Ncp = model.Ncp
+      Ns = model.Ns               # number of data symbols between pilots
+      Nmf = int((Ns+1)*(M+Ncp))   # number of samples in one modem frame
+      self.Nmf = Nmf
+      Nc = model.Nc
+      p = np.array(model.p) 
+      Fs = model.Fs
+      Rs = model.Rs
+      w = np.array(model.w)
+
+      if bpf_en:
+         Ntap=101
+         bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
+         centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
+         print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
+         self.bpf = complex_bpf(Ntap, model.Fs, bandwidth,centre)
+
+      self.acq = acquisition(Fs,Rs,M,Ncp,Nmf,p,model.pend)
+
+      checkpoint = torch.load(model_name, map_location='cpu',weights_only=True)
+      model.load_state_dict(checkpoint['state_dict'], strict=False)
+      # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
+      model.core_decoder_statefull_load_state_dict()
+
+      self.Nmf_unsync = int(Tunsync*Fs/Nmf)
+ 
       self.nin = Nmf
       self.state = "search"
       self.tmax_candidate = 0
@@ -120,16 +122,18 @@ class radae_rx:
       self.synced_count = 0
       self.rx_phase = 1 + 1j*0
 
-      checkpoint = torch.load(model_name, map_location='cpu',weights_only=True)
-      model.load_state_dict(checkpoint['state_dict'], strict=False)
-      # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
-      model.core_decoder_statefull_load_state_dict()
+      self.synced_count_one_sec = Fs//Nmf
+
+      # P DDD P DDD P Ncp
+      # extra Ncp at end so we can handle timing slips
+      self.rx_buf = np.zeros(2*Nmf+M+Ncp,np.csingle)
+      self.z_hat_log = torch.zeros(0,model.Nzmf,model.latent_dim)
 
    def get_n_features_out(self):
-      return model.Nzmf*model.dec_stride*nb_total_features
+      return self.model.Nzmf*self.model.dec_stride*nb_total_features
                  
    def get_nin_max(self):
-      return Nmf+M
+      return self.Nmf+self.model.M
    
    def get_nin(self):
       return self.nin
@@ -138,15 +142,30 @@ class radae_rx:
       return self.state == "sync"
                  
    def do_radae_rx(self, buffer_complex, features_out):
+      acq = self.acq
+      bpf = self.bpf
+      receiver = self.receiver
+      model = self.model
+      M = model.M
+      Ncp = model.Ncp
+      Ns = model.Ns               
+      Nmf = int((Ns+1)*(M+Ncp)) 
+      Fs = model.Fs
+      w = np.array(model.w)
+      Nmf = self.Nmf
+      auxdata = self.auxdata
+      v = self.v
+      rx_buf = self.rx_buf
+
       with torch.inference_mode():
          prev_state = self.state
          valid_output = False
          endofover = False
          uw_fail = False
          buffer_complex = buffer_complex[:self.nin]
-         if bpf:
+         if self.bpf_en:
             buffer_complex = bpf.bpf(buffer_complex)
-         rx_buf[:-self.nin] = rx_buf[self.nin:]                           # out with the old
+         rx_buf[:-self.nin] = rx_buf[self.nin:]                      # out with the old
          rx_buf[-self.nin:] = buffer_complex                         # in with the new
          if self.state == "search" or self.state == "candidate":
             candidate, self.tmax, self.fmax = acq.detect_pilots(rx_buf)
@@ -171,7 +190,7 @@ class radae_rx:
                #print("slip-", file=sys.stderr)
 
             self.synced_count += 1
-            if self.synced_count % synced_count_one_sec == 0:
+            if self.synced_count % self.synced_count_one_sec == 0:
                if self.uw_errors > uw_error_thresh:
                   uw_fail = True
                self.uw_errors = 0
@@ -231,7 +250,7 @@ class radae_rx:
                   uw_fail = False
                   if auxdata:
                      self.uw_errors = 0
-                  self.valid_count = Nmf_unsync
+                  self.valid_count = self.Nmf_unsync
                   ffine_range = np.arange(self.fmax-10,self.fmax+10,0.25)
                   tfine_range = np.arange(self.tmax-1,self.tmax+2)
                   self.tmax,self.fmax = acq.refine(rx_buf, self.tmax, self.fmax, tfine_range, ffine_range)
@@ -242,7 +261,7 @@ class radae_rx:
             unsync_enable = True
 
             if candidate:
-               self.valid_count = Nmf_unsync
+               self.valid_count = self.Nmf_unsync
             else:
                self.valid_count -= 1
                if unsync_enable and self.valid_count == 0:
