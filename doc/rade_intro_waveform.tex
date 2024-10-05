@@ -51,7 +51,7 @@ This document is an introduction to Version 1 of RADE, and a description of the 
 
 \subsection{Acknowledgements}
 
-The RADE concept evolved from a discussion between Jean-Marc Valin and David Rowe, after which Jean-Marc quickly put together an initial proof-of-concept. Over a period of several months David built on this work to develop a practical over the air waveform for speech over HF radio channels.  Mooneer Salem is handling integration of RADE into the FreeDV GUI application. The FreeDV Project Leadership Team and many others have helped with support and testing over the course of 2024. The contributions from David, Mooneer and the FreeDV PLT was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
+The RADE concept evolved from a discussion between Jean-Marc Valin and David Rowe, after which Jean-Marc quickly put together an initial proof-of-concept demo. Over a period of several months David built on this work to develop a practical over the air waveform for speech over HF radio channels.  Mooneer Salem is handling integration of RADE into the FreeDV GUI application. The FreeDV Project Leadership Team and many others have helped with support and testing over the course of 2024. The contributions from David, Mooneer and the FreeDV PLT was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
 
 \section{Radio Autoencoder}
 
@@ -109,8 +109,7 @@ The RADE concept evolved from a discussion between Jean-Marc Valin and David Row
 \end{figure}
 
 Figure \ref{fig:radae_block} compares a traditional digital speech over radio system to RADE.
-In conventional digital speech systems, the speech encoder extracts features like pitch, voicing, and short term spectrum, and quantises them to a fixed number of bits, e.g. 700 bits/s.  Forward Error Correction adds extra bits to protect the encoded speech from bit errors.  The FEC encoded bit stream is then passed to a modulator that generates an analog signal we can send through a radio transmitter over the channel.  The demodulator takes the received signal, and converts it to a stream of bits.  Some of these bits will have errors, which the FEC decoder will attempt to correct
-.  Finally, the bits are converted back to vocoder features (De-quantised), and speech is synthesised.
+In conventional digital speech systems, the speech encoder extracts features like pitch, voicing, and short term spectrum, and quantises them to a fixed number of bits, e.g. 700 bits/s.  Forward Error Correction adds extra bits to protect the encoded speech from bit errors.  The FEC encoded bit stream is then passed to a modulator that generates an analog signal we can send through a radio transmitter over the channel.  The demodulator takes the received signal, and converts it to a stream of bits.  Some of these bits will have errors, which the FEC decoder will attempt to correct.  Finally, the bits are converted back to vocoder features (De-quantised), and speech is synthesised.
 
 RADE takes a novel twist – the Encoder converts vocoder features directly to Phase Shift Keyed (PSK) symbols. It effectively combines quantisation, FEC coding, and modulation.  The RADE Decoder converts received PSK symbols back to features that are synthesised using the high quality FARGAN synthesis engine. The RADE encoder, decoder, and FARGAN synthesiser are built using modern machine learning techniques.  RADE has been trained to produce good quality speech even with the distortion of the HF radio channel. Not shown on Figure \ref{fig:radae_block} is some traditional DSP that converts the PSK symbols to and from an OFDM signal, and house keeping tasks like synchronisation. The PSK symbols are sent over the channel at 2000 symbols/second.
 
