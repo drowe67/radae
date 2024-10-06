@@ -6,8 +6,8 @@ project(RADAE
   LANGUAGES C
   )
 
-option(BUILD_SHARED_LIBS
-    "Build shared library. Set to OFF for static library." ON)
+#option(BUILD_SHARED_LIBS
+#    "Build shared library. Set to OFF for static library." ON)
 option(AVX "Enable AVX CPU optimizations." ON)
 
 if(NOT CODEC2_DEV_BUILD_DIR)
