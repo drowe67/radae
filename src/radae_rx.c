@@ -10,6 +10,8 @@
 
 int main(void)
 {
+    rade_initialize();
+
     struct rade *r = rade_open("dummy");
     assert(r != NULL);
     int n_features_out = rade_n_features_in_out(r);
@@ -35,5 +37,6 @@ int main(void)
     }
 
     rade_close(r);
+    rade_finalize();
     return 0;
 }

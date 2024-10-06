@@ -63,6 +63,13 @@ extern "C" {
 #define RADE_MODEM_SAMPLE_RATE 8000           // modem waveform sample rate
 #define RADE_SPEECH_SAMPLE_RATE 16000         // speech sample rate
 
+// Must be called BEFORE any other RADE functions as this
+// initializes internal library state.
+RADE_EXPORT void rade_initialize();
+
+// Should be called when done with RADE.
+RADE_EXPORT void rade_finalize();
+
 // note single context only in this version, one context has one Tx, and one Rx
 RADE_EXPORT struct rade *rade_open(char model_file[]);
 RADE_EXPORT void rade_close(struct rade *r);
