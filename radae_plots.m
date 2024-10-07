@@ -38,15 +38,16 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         figure(5); clf; plot(real(rx)); xlabel('Time (samples)'); ylabel('rx');
         figure(6); clf; plot_specgram(rx, Fs=8000, 0, 3000);
         
+        % Spectrum plot
         figure(7); clf; 
-        Fs = 8000; y = pwelch(rx,[],[],1024,Fs); y_dB = 20*log10(y);
+        Fs = 8000; y = pwelch(rx,[],[],1024,Fs); y_dB = 10*log10(y);
         mx = max(y_dB); mx = ceil(mx/10)*10
         plot((0:length(y)-1)*Fs/length(y),y_dB-mx);
-        axis([0 3000 -40 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
+        axis([0 3000 -30 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
         if length(epslatex)
           print_eps_restore(sprintf("%s_psd.eps",epslatex),"-S300,200",textfontsize,linewidth);
         end
-      
+
         peak = max(abs(rx).^2);
         av = mean(abs(rx).^2);
         PAPRdB = 10*log10(peak/av);
@@ -56,6 +57,35 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         printf("Pav: %f PAPRdB: %5.2f PilotPAPRdB: %5.2f\n", av, PAPRdB, PilotPAPRdB);
     end
 endfunction
+
+
+function p = spec_power(y, centre, bandwidth)
+  n = length(y);
+  st = round(centre - bandwidth/2)
+  en = round(centre + bandwidth/2)
+  p = sum(y(st:en));
+endfunction
+
+
+function bandwidth(rx_fn)
+  rx=load_f32(rx_fn,1); 
+  rx=rx(1:2:end)+j*rx(2:2:end); 
+  Nfft = 1204;
+  Fs = 8000; y = pwelch(rx,[],[],Nfft,Fs); y_dB = 10*log10(y);
+  figure(1);
+  plot((0:length(y)-1)*Fs/Nfft,y_dB);
+
+  % 99% power bandwidth
+  total_power = sum(y)
+  centre = round(Nfft*1500/Fs);
+  bw = 1;
+  do
+    bw++;
+    p = spec_power(y, centre, bw)
+    printf("bandwith (Hz): %f power/total_power: %f\n", bw*Fs/Nfft, p/total_power);
+  until p > 0.99*total_power
+endfunction
+
 
 function multipath_example()
     Nc = 20; Rs = 50; d = 0.002;
