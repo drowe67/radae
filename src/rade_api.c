@@ -233,12 +233,12 @@ void rade_rx_close(struct rade *r) {
   free(r->rx_in);
 }
 
-void rade_initialize() {
+void rade_initialize(void) {
   Py_Initialize();
   main_thread_state = PyEval_SaveThread();
 }
 
-void rade_finalize() {
+void rade_finalize(void) {
   PyEval_RestoreThread(main_thread_state);
   int ret = Py_FinalizeEx();
   if (ret < 0) {

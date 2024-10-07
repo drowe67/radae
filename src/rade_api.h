@@ -39,11 +39,19 @@
 
 #include <sys/types.h>
 
+#if IS_BUILDING_RADE_API
 #if _WIN32
 #define RADE_EXPORT __declspec(dllexport) __stdcall
 #else
 #define RADE_EXPORT __attribute__((visibility("default")))
 #endif // _WIN32
+#else
+#if _WIN32
+#define RADE_EXPORT __declspec(dllimport) __stdcall
+#else
+#define RADE_EXPORT 
+#endif // _WIN32
+#endif // IS_BUILDING_RADE_API
 
 // This declares a single-precision (float) complex number
 
@@ -65,10 +73,10 @@ extern "C" {
 
 // Must be called BEFORE any other RADE functions as this
 // initializes internal library state.
-RADE_EXPORT void rade_initialize();
+RADE_EXPORT void rade_initialize(void);
 
 // Should be called when done with RADE.
-RADE_EXPORT void rade_finalize();
+RADE_EXPORT void rade_finalize(void);
 
 // note single context only in this version, one context has one Tx, and one Rx
 RADE_EXPORT struct rade *rade_open(char model_file[]);
