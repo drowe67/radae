@@ -8,12 +8,12 @@ endif (CMAKE_CROSSCOMPILING)
 
 include(ExternalProject)
 ExternalProject_Add(build_opus
-    URL https://gitlab.xiph.org/xiph/opus/-/archive/main/opus-main.tar.gz
     DOWNLOAD_EXTRACT_TIMESTAMP NO
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ${CONFIGURE_COMMAND}
     BUILD_COMMAND $(MAKE)
     INSTALL_COMMAND ""
+    URL https://gitlab.xiph.org/xiph/opus/-/archive/main/opus-main.tar.gz
 )
 
 ExternalProject_Get_Property(build_opus BINARY_DIR)
