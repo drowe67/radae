@@ -7,7 +7,7 @@ add_library(rade rade_api.c)
 target_link_libraries(rade Python3::Python)
 target_include_directories(rade PRIVATE
     "$<TARGET_PROPERTY:Python3::NumPy,INTERFACE_INCLUDE_DIRECTORIES>")
-
+target_compile_definitions(rade PRIVATE -DIS_BUILDING_RADE_API=1)
 set_target_properties(rade PROPERTIES
     SOVERSION "0.1"
     PUBLIC_HEADER "rade_api.h"
