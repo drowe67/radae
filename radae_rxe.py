@@ -55,7 +55,7 @@ uw_error_thresh = 7 # P(reject|correct) = 1 -  binocdf(8,24,0.1) = 4.5E-4
                     # P(accept|false)   = binocdf(8,24,0.5)      = 3.2E-3
 
 class radae_rx:
-   def __init__(self, model_name, latent_dim = 80, auxdata = True, bottleneck = 3, bpf_en=True, v=2, disable_unsync=False):
+   def __init__(self, model_name, latent_dim = 80, auxdata = True, bottleneck = 3, bpf_en=True, v=2, disable_unsync=False, foff_err=0):
 
       self.latent_dim = latent_dim
       self.auxdata = auxdata
@@ -63,6 +63,7 @@ class radae_rx:
       self.bpf_en = bpf_en
       self.v = v
       self.disable_unsync = disable_unsync
+      self.foff_err = foff_err
 
       self.num_features = 20
       if self.auxdata:
@@ -255,12 +256,15 @@ class radae_rx:
                   ffine_range = np.arange(self.fmax-10,self.fmax+10,0.25)
                   tfine_range = np.arange(self.tmax-1,self.tmax+2)
                   self.tmax,self.fmax = acq.refine(rx_buf, self.tmax, self.fmax, tfine_range, ffine_range)
+                  # testing: only insert freq offset error on first sync
+                  self.fmax += self.foff_err
+                  self.foff_err = 0
             else:
                next_state = "search"
          elif self.state == "sync":
             # during some tests it's useful to disable these unsync features
             unsync_enable = True
-            if args.disable_unsync:
+            if self.disable_unsync:
                if self.synced_count > int(self.disable_unsync*Fs/Nmf):
                   unsync_enable = False
 
@@ -281,16 +285,17 @@ class radae_rx:
 
 if __name__ == '__main__':
    parser = argparse.ArgumentParser(description='RADAE streaming receiver, IQ.f32 on stdin to features.f32 on stdout')
-   parser.add_argument('--model_name', type=str, help='path to model in .pth format', default="../model19_check3/checkpoints/checkpoint_epoch_100.pth")
+   parser.add_argument('--model_name', type=str, help='path to model in .pth format', default="model19_check3/checkpoints/checkpoint_epoch_100.pth")
    parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injectiopn of auxillary data symbols')
    parser.add_argument('-v', type=int, default=2, help='Verbose level (default 2)')
    parser.add_argument('--disable_unsync', type=float, default=0.0, help='test mode: disable auxdata based unsyncs after this many seconds (default disabled)')
    parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
+   parser.add_argument('--foff_err', type=float, default=0.0, help='Artifical freq offset error after first sync to test false sync (default 0.0)')
    parser.set_defaults(auxdata=True)
    parser.set_defaults(use_stdout=True)
    args = parser.parse_args()
 
-   rx = radae_rx(args.model_name,auxdata=args.auxdata,v=args.v,disable_unsync=args.disable_unsync)
+   rx = radae_rx(args.model_name,auxdata=args.auxdata,v=args.v,disable_unsync=args.disable_unsync, foff_err=args.foff_err)
 
    # allocate storage for output features
    features_out = np.zeros(rx.get_n_features_out(),dtype=np.float32)

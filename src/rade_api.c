@@ -104,7 +104,7 @@ long call_getter(PyObject *pInst, char meth_name[]) {
 int rade_tx_open(struct rade *r) {
     PyObject *pName;
     PyObject *pValue;
-    char *python_module_name = "radae_tx";
+    char *python_module_name = "radae_txe";
     char *do_radae_tx_func_name = "do_radae_tx";
     char *do_eoo_func_name = "do_eoo";
 
@@ -175,10 +175,11 @@ int rade_rx_open(struct rade *r) {
     PyObject *pName, *pClass;
     PyObject *pValue;
     PyObject *pArgs;
-    char *python_module_name = "radae_rx";
+    char *python_module_name = "radae_rxe";
     char *do_radae_rx_meth_name = "do_radae_rx";
 
     // Load module of Python code
+    fprintf(stderr, "loading: %s\n", python_module_name);
     pName = PyUnicode_DecodeFSDefault(python_module_name);
     r->pModule_radae_rx = PyImport_Import(pName);
     check_error(r->pModule_radae_rx, "importing", python_module_name);
@@ -187,7 +188,7 @@ int rade_rx_open(struct rade *r) {
     // Find class and create an instance
     pClass = PyObject_GetAttrString(r->pModule_radae_rx, "radae_rx");
     check_error(pClass, "finding class", "radae_rx");
-    pArgs = Py_BuildValue("(s)", "../model19_check3/checkpoints/checkpoint_epoch_100.pth");
+    pArgs = Py_BuildValue("(s)", "model19_check3/checkpoints/checkpoint_epoch_100.pth");
     r->pInst_radae_rx = PyObject_CallObject(pClass, pArgs);
     check_error(r->pInst_radae_rx, "Creating instance of class", "radae_rx");
     Py_DECREF(pClass);
@@ -237,14 +238,16 @@ struct rade *rade_open(char model_file[]) {
   assert(r != NULL);
 
   // TODO: implement me
-  fprintf(stderr, "model file: %s", model_file);
+  fprintf(stderr, "model file: %s\n", model_file);
   Py_Initialize();
 
   // need import array for numpy
   ret = _import_array();
   fprintf(stderr, "import_array returned: %d\n", ret);
   
+  fprintf(stderr, "before tx_open()\n");
   rade_tx_open(r);
+  fprintf(stderr, "after tx_open()\n");
   rade_rx_open(r);
   assert(r->n_features_in == r->n_features_out);
 

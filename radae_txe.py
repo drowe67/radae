@@ -38,7 +38,7 @@ import torch
 from radae import RADAE,transmitter_one
 
 # Hard code all this for now to avoid arg passing complexities
-model_name = "../model19_check3/checkpoints/checkpoint_epoch_100.pth"
+model_name = "model19_check3/checkpoints/checkpoint_epoch_100.pth"
 latent_dim = 80
 auxdata = True
 bottleneck = 3
