@@ -55,14 +55,14 @@ uw_error_thresh = 7 # P(reject|correct) = 1 -  binocdf(8,24,0.1) = 4.5E-4
                     # P(accept|false)   = binocdf(8,24,0.5)      = 3.2E-3
 
 class radae_rx:
-   def __init__(self, model_name, latent_dim = 80, auxdata = True, bottleneck = 3, use_stdout=True, bpf_en=True, v=2):
+   def __init__(self, model_name, latent_dim = 80, auxdata = True, bottleneck = 3, bpf_en=True, v=2, disable_unsync=False):
 
       self.latent_dim = latent_dim
       self.auxdata = auxdata
       self.bottleneck = bottleneck
-      self.use_stdout = use_stdout
       self.bpf_en = bpf_en
       self.v = v
+      self.disable_unsync = disable_unsync
 
       self.num_features = 20
       if self.auxdata:
@@ -156,6 +156,7 @@ class radae_rx:
       auxdata = self.auxdata
       v = self.v
       rx_buf = self.rx_buf
+      aux_bits = np.zeros(model.Nzmf,dtype=np.int16)
 
       with torch.inference_mode():
          prev_state = self.state
@@ -259,6 +260,9 @@ class radae_rx:
          elif self.state == "sync":
             # during some tests it's useful to disable these unsync features
             unsync_enable = True
+            if args.disable_unsync:
+               if self.synced_count > int(self.disable_unsync*Fs/Nmf):
+                  unsync_enable = False
 
             if candidate:
                self.valid_count = self.Nmf_unsync
@@ -277,10 +281,16 @@ class radae_rx:
 
 if __name__ == '__main__':
    parser = argparse.ArgumentParser(description='RADAE streaming receiver, IQ.f32 on stdin to features.f32 on stdout')
-   parser.add_argument('model_name', type=str, help='path to model in .pth format', 
-                       default="../model19_check3/checkpoints/checkpoint_epoch_100.pth")
+   parser.add_argument('--model_name', type=str, help='path to model in .pth format', default="../model19_check3/checkpoints/checkpoint_epoch_100.pth")
+   parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injectiopn of auxillary data symbols')
+   parser.add_argument('-v', type=int, default=2, help='Verbose level (default 2)')
+   parser.add_argument('--disable_unsync', type=float, default=0.0, help='test mode: disable auxdata based unsyncs after this many seconds (default disabled)')
+   parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
+   parser.set_defaults(auxdata=True)
+   parser.set_defaults(use_stdout=True)
+   args = parser.parse_args()
 
-   rx = radae_rx(model_name = "../model19_check3/checkpoints/checkpoint_epoch_100.pth")
+   rx = radae_rx(args.model_name,auxdata=args.auxdata,v=args.v,disable_unsync=args.disable_unsync)
 
    # allocate storage for output features
    features_out = np.zeros(rx.get_n_features_out(),dtype=np.float32)
@@ -290,5 +300,5 @@ if __name__ == '__main__':
          break
       buffer_complex = np.frombuffer(buffer,np.csingle)
       valid_output = rx.do_radae_rx(buffer_complex, features_out)
-      if valid_output:
+      if valid_output and args.use_stdout:
          sys.stdout.buffer.write(features_out)
