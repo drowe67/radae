@@ -6,8 +6,6 @@ if (CMAKE_CROSSCOMPILING)
 set(CONFIGURE_COMMAND ${CONFIGURE_COMMAND} --host=${CMAKE_C_COMPILER_TARGET} --target=${CMAKE_C_COMPILER_TARGET})
 endif (CMAKE_CROSSCOMPILING)
 
-message(STATUS "${CONFIGURE_COMMAND}")
-
 include(ExternalProject)
 ExternalProject_Add(build_opus
     URL https://gitlab.xiph.org/xiph/opus/-/archive/main/opus-main.tar.gz
