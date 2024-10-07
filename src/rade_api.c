@@ -44,6 +44,8 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include "numpy/arrayobject.h"
 
+static PyThreadState* main_thread_state; // needed to unlock the GIL after initialization
+
 struct rade {
   npy_intp Nmf, Neoo;     
   npy_intp nin, nin_max;   
@@ -233,9 +235,11 @@ void rade_rx_close(struct rade *r) {
 
 void rade_initialize() {
   Py_Initialize();
+  main_thread_state = PyEval_SaveThread();
 }
 
 void rade_finalize() {
+  PyEval_RestoreThread(main_thread_state);
   int ret = Py_FinalizeEx();
   if (ret < 0) {
     fprintf(stderr, "Error with Py_FinalizeEx()\n");
