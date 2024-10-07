@@ -6,6 +6,8 @@ project(RADAE
   LANGUAGES C
   )
 
+option(BUILD_SHARED_LIBS
+    "Build shared library. Set to OFF for static library." ON)
 option(AVX "Enable AVX CPU optimizations." ON)
 
 if(NOT CODEC2_DEV_BUILD_DIR)
@@ -31,13 +33,35 @@ endif("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 # Set default flags (from opus-ng build)
 set(CMAKE_C_FLAGS "-O2 -fvisibility=hidden -fstack-protector-strong -W -Wall -Wextra -Wcast-align -Wnested-externs -Wshadow -Wstrict-prototypes")
 
-# Python tells us the CFLAGS we need for Embedding Python in a C lib.
-# We also need to make sure we select the libraries in any activated venv first,
-# in case the user is using that for e.g. NumPy/PyTorch.
-set(Python3_FIND_STRATEGY LOCATION)
-set(Python_FIND_REGISTRY LAST)
-set(CMAKE_FIND_FRAMEWORK LAST)
-find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
+if(NOT CMAKE_CROSSCOMPILING)
+    # Python tells us the CFLAGS we need for Embedding Python in a C lib.
+    # We also need to make sure we select the libraries in any activated venv first,
+    # in case the user is using that for e.g. NumPy/PyTorch.
+    set(Python3_FIND_STRATEGY LOCATION)
+    set(Python_FIND_REGISTRY LAST)
+    set(CMAKE_FIND_FRAMEWORK LAST)
+    find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
+else(NOT CMAKE_CROSSCOMPILING)
+    # Cross-compiling. find_package(Python3) will find the host's Python,
+    # not the target's, so we can't use it. The user will need to specify
+    # the root directory of a target's Python.
+    if (NOT Python3_ROOT_DIR)
+        message(FATAL_ERROR "Must provide -DPython3_ROOT_DIR when cross-compiling.")
+    endif (NOT Python3_ROOT_DIR)
+    
+    add_library(Python3::Python SHARED IMPORTED)
+    add_library(Python3::NumPy STATIC IMPORTED)
+    if(WIN32)
+        target_include_directories(Python3::Python INTERFACE ${Python3_ROOT_DIR}/include)
+        target_include_directories(Python3::NumPy INTERFACE ${Python3_ROOT_DIR}/Lib/site-packages/numpy/_core/include)
+        set_property(TARGET Python3::Python PROPERTY IMPORTED_IMPLIB ${Python3_ROOT_DIR}/libs/python312.lib)
+        set_property(TARGET Python3::Python PROPERTY IMPORTED_LOCATION ${Python3_ROOT_DIR}/python312.dll)
+        set_property(TARGET Python3::NumPy PROPERTY IMPORTED_IMPLIB ${Python3_ROOT_DIR}/Lib/site-packages/numpy/core/lib/npymath.lib)
+        set_property(TARGET Python3::NumPy PROPERTY IMPORTED_LOCATION ${Python3_ROOT_DIR}/Lib/site-packages/numpy/core/lib/npymath.lib)
+    else(WIN32)
+        message(FATAL_ERROR "Currently only supports Windows when cross-compiling.")
+    endif(WIN32)
+endif(NOT CMAKE_CROSSCOMPILING)
 
 add_subdirectory(src)
 

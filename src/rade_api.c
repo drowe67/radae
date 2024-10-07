@@ -232,14 +232,27 @@ void rade_rx_close(struct rade *r) {
   free(r->rx_in);
 }
 
+void rade_initialize() {
+  Py_Initialize();
+}
+
+void rade_finalize() {
+  int ret = Py_FinalizeEx();
+  if (ret < 0) {
+    fprintf(stderr, "Error with Py_FinalizeEx()\n");
+  }
+}
+
 struct rade *rade_open(char model_file[]) {
   int ret;
   struct rade *r = (struct rade*)malloc(sizeof(struct rade));
   assert(r != NULL);
 
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
   // TODO: implement me
   fprintf(stderr, "model file: %s\n", model_file);
-  Py_Initialize();
 
   // need import array for numpy
   ret = _import_array();
@@ -251,17 +264,21 @@ struct rade *rade_open(char model_file[]) {
   rade_rx_open(r);
   assert(r->n_features_in == r->n_features_out);
 
+  // Release Python GIL
+  PyGILState_Release(gstate);
+
   return r;
 }
 
 void rade_close(struct rade *r) {
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
   rade_tx_close(r);
   rade_rx_close(r);
 
-  int ret = Py_FinalizeEx();
-  if (ret < 0) {
-    fprintf(stderr, "Error with Py_FinalizeEx()\n");
-  }
+  // Release Python GIL
+  PyGILState_Release(gstate);
 }
 
 int rade_version(void) { return VERSION; }
@@ -280,17 +297,32 @@ int rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]) {
   assert(features_in != NULL);
   assert(tx_out != NULL);
 
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
   memcpy(r->features_in, features_in, sizeof(float)*(r->n_features_in));
   PyObject_CallObject(r->pFunc_radae_tx, r->pArgs_radae_tx);
   memcpy(tx_out, r->tx_out, sizeof(RADE_COMP)*(r->Nmf));
+
+  // Release Python GIL
+  PyGILState_Release(gstate);
+
   return r->Nmf;
 }
 
 int rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]) {
   assert(r != NULL);
   assert(tx_eoo_out != NULL);
+
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
   PyObject_CallObject(r->pFunc_radae_tx_eoo, r->pArgs_radae_tx_eoo);
   memcpy(tx_eoo_out, r->tx_eoo_out, sizeof(RADE_COMP)*(r->Neoo));
+
+  // Release Python GIL
+  PyGILState_Release(gstate);
+
   return r->Neoo;
 }
 
@@ -300,13 +332,21 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
   assert(features_out != NULL);
   assert(rx_in != NULL);
 
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
   memcpy(r->rx_in, rx_in, sizeof(RADE_COMP)*(r->nin));
   pValue = PyObject_CallObject(r->pMeth_radae_rx, r->pArgs_radae_rx);
   check_error(pValue, "return value", "from do_rx_radae");
   long valid_out = PyLong_AsLong(pValue);
   memcpy(features_out, r->features_out, sizeof(float)*(r->n_features_out));
+
   // sample nin so we have an updated copy
   r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");
+
+  // Release Python GIL
+  PyGILState_Release(gstate);
+
   if (valid_out)
     return r->n_features_out;
   else
@@ -315,7 +355,16 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
 
 int rade_sync(struct rade *r) {
   assert(r != NULL);
-  return (int)call_getter(r->pInst_radae_rx, "get_sync");
+
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
+  int result = (int)call_getter(r->pInst_radae_rx, "get_sync");
+
+  // Release Python GIL
+  PyGILState_Release(gstate);
+
+  return result;
 }
 
 // TODO: we need a float getter
