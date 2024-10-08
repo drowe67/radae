@@ -34,6 +34,17 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
     if length(rx_fn)
         rx=load_f32(rx_fn,1); 
         rx=rx(1:2:end)+j*rx(2:2:end); 
+        
+        tx_bpf = 1;
+        if tx_bpf
+          lpf=fir1(100,900/4000);
+          w = 2*pi*1500/8000;
+          N=length(rx);
+          lo = exp(j*(0:N-1)*w)';
+          rx = filter(lpf,1,rx.*lo).*conj(lo);
+          ind = find(abs(rx) > 1);
+          rx(ind) = exp(j*angle(rx(ind)));
+        end
         figure(4); clf; plot(rx); title('rate Fs Scatter (IQ)'); mx = max(abs(rx))*1.5; axis([-mx mx -mx mx]);
         figure(5); clf; plot(real(rx)); xlabel('Time (samples)'); ylabel('rx');
         figure(6); clf; plot_specgram(rx, Fs=8000, 0, 3000);
@@ -43,11 +54,13 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         Fs = 8000; y = pwelch(rx,[],[],1024,Fs); y_dB = 10*log10(y);
         mx = max(y_dB); mx = ceil(mx/10)*10
         plot((0:length(y)-1)*Fs/length(y),y_dB-mx);
-        axis([0 3000 -30 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
+        axis([0 3000 -40 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
         if length(epslatex)
           print_eps_restore(sprintf("%s_psd.eps",epslatex),"-S300,200",textfontsize,linewidth);
         end
 
+        max(abs(rx).^2)
+        mean(abs(rx).^2)
         peak = max(abs(rx).^2);
         av = mean(abs(rx).^2);
         PAPRdB = 10*log10(peak/av);
@@ -55,35 +68,35 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         av = mean(abs(rx(1:160)).^2);
         PilotPAPRdB = 10*log10(peak/av);
         printf("Pav: %f PAPRdB: %5.2f PilotPAPRdB: %5.2f\n", av, PAPRdB, PilotPAPRdB);
+        bandwidth(rx)
     end
 endfunction
 
 
 function p = spec_power(y, centre, bandwidth)
   n = length(y);
-  st = round(centre - bandwidth/2)
-  en = round(centre + bandwidth/2)
+  st = round(centre - bandwidth/2); st = max(1,st);
+  en = round(centre + bandwidth/2); 
   p = sum(y(st:en));
 endfunction
 
 
-function bandwidth(rx_fn)
-  rx=load_f32(rx_fn,1); 
-  rx=rx(1:2:end)+j*rx(2:2:end); 
+function bandwidth(rx)
   Nfft = 1204;
   Fs = 8000; y = pwelch(rx,[],[],Nfft,Fs); y_dB = 10*log10(y);
   figure(1);
   plot((0:length(y)-1)*Fs/Nfft,y_dB);
 
   % 99% power bandwidth
-  total_power = sum(y)
+  total_power = sum(y);
   centre = round(Nfft*1500/Fs);
   bw = 1;
   do
     bw++;
-    p = spec_power(y, centre, bw)
-    printf("bandwith (Hz): %f power/total_power: %f\n", bw*Fs/Nfft, p/total_power);
+    p = spec_power(y, centre, bw);
   until p > 0.99*total_power
+  printf("bandwidth (Hz): %f power/total_power: %f\n", bw*Fs/Nfft, p/total_power);
+
 endfunction
 
 
