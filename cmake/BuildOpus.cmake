@@ -4,9 +4,12 @@ set(CONFIGURE_COMMAND ./autogen.sh && ./configure --enable-dred --disable-shared
 
 if (CMAKE_CROSSCOMPILING)
 set(CONFIGURE_COMMAND ${CONFIGURE_COMMAND} --host=${CMAKE_C_COMPILER_TARGET} --target=${CMAKE_C_COMPILER_TARGET})
+else (CMAKE_CROSSCOMPILING)
+if(APPLE)
+if(BUILD_OSX_UNIVERSAL)
+    set(CONFIGURE_COMMAND ${CONFIGURE_COMMAND} CFLAGS=-g\ -O2\ -mmacosx-version-min=10.9\ -arch\ x86_64\ -arch\ arm64 CXXFLAGS=-g\ -O2\ -mmacosx-version-min=10.9\ -arch\ x86_64\ -arch\ arm64)
+endif(BUILD_OSX_UNIVERSAL)
 endif (CMAKE_CROSSCOMPILING)
-
-message(STATUS "${CONFIGURE_COMMAND}")
 
 include(ExternalProject)
 ExternalProject_Add(build_opus

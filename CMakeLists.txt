@@ -12,6 +12,12 @@ if(NOT CODEC2_DEV_BUILD_DIR)
     set(CODEC2_DEV_BUILD_DIR $HOME/codec2-dev/build_linux )
 endif()
 
+# Build universal ARM64 and x86_64 binaries on Mac.
+if(BUILD_OSX_UNIVERSAL)
+set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
+endif(BUILD_OSX_UNIVERSAL)
+
+PYTHON_BIN-$(sdk)=$$(PYTHON_INSTALL-$(sdk))/bin
 # Build opus with FARGAN support.
 include(cmake/BuildOpus.cmake)
 
