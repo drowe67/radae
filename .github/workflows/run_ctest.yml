@@ -9,7 +9,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04]
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.10"]
 
     steps:
       - name: Checkout radae code
@@ -27,7 +27,7 @@ jobs:
         shell: bash
         run: |
           sudo apt update
-          sudo apt install octave octave-common octave-signal sox cmake git
+          sudo apt install octave octave-common octave-signal sox cmake git python3.10-dev
 
       - name: Install python packages
         shell: bash
