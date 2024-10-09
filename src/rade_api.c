@@ -44,16 +44,18 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include "numpy/arrayobject.h"
 
+static PyThreadState* main_thread_state; // needed to unlock the GIL after initialization
+
 struct rade {
   npy_intp Nmf, Neoo;     
   npy_intp nin, nin_max;   
   npy_intp n_features_in, n_features_out;
 
-  PyObject *pModule_radae_tx;
-  PyObject *pFunc_radae_tx, *pArgs_radae_tx;
+  PyObject *pModule_radae_tx, *pInst_radae_tx;
+  PyObject *pMeth_radae_tx, *pArgs_radae_tx;
   float *features_in;
   RADE_COMP *tx_out;
-  PyObject *pFunc_radae_tx_eoo, *pArgs_radae_tx_eoo;
+  PyObject *pMeth_radae_tx_eoo, *pArgs_radae_tx_eoo;
   RADE_COMP *tx_eoo_out;
 
   PyObject *pModule_radae_rx, *pInst_radae_rx;
@@ -102,29 +104,39 @@ long call_getter(PyObject *pInst, char meth_name[]) {
 
 // returns 0 for success
 int rade_tx_open(struct rade *r) {
-    PyObject *pName;
-    PyObject *pValue;
-    char *python_module_name = "radae_tx";
-    char *do_radae_tx_func_name = "do_radae_tx";
-    char *do_eoo_func_name = "do_eoo";
+    PyObject *pName, *pClass;
+    PyObject *pValue, *pArgs;
+    char *python_module_name = "radae_txe";
+    char *do_radae_tx_meth_name = "do_radae_tx";
+    char *do_eoo_meth_name = "do_eoo";
 
+    // Load module of Python code
     pName = PyUnicode_DecodeFSDefault(python_module_name);
     r->pModule_radae_tx = PyImport_Import(pName);
     check_error(r->pModule_radae_tx, "importing", python_module_name);
     Py_DECREF(pName);
 
-    r->n_features_in = (int)call_getter(r->pModule_radae_tx, "get_nb_floats");
-    r->Nmf = (int)call_getter(r->pModule_radae_tx, "get_Nmf");
-    r->Neoo = (int)call_getter(r->pModule_radae_tx, "get_Neoo");
+    // Find class and create an instance
+    pClass = PyObject_GetAttrString(r->pModule_radae_tx, "radae_tx");
+    check_error(pClass, "finding class", "radae_tx");
+    pArgs = Py_BuildValue("(s)", "model19_check3/checkpoints/checkpoint_epoch_100.pth");
+    r->pInst_radae_tx = PyObject_CallObject(pClass, pArgs);
+    check_error(r->pInst_radae_tx, "Creating instance of class", "radae_tx");
+    Py_DECREF(pClass);
+    Py_DECREF(pArgs);
+
+    r->n_features_in = (int)call_getter(r->pInst_radae_tx, "get_nb_floats");
+    r->Nmf = (int)call_getter(r->pInst_radae_tx, "get_Nmf");
+    r->Neoo = (int)call_getter(r->pInst_radae_tx, "get_Neoo");
     fprintf(stderr, "n_features_in: %d Nmf: %d Neoo: %d\n", (int)r->n_features_in, (int)r->Nmf, (int)r->Neoo);
         
     // RADAE Tx ---------------------------------------------------------
 
     r->pArgs_radae_tx = PyTuple_New(2);
 
-    r->pFunc_radae_tx = PyObject_GetAttrString(r->pModule_radae_tx, do_radae_tx_func_name);
-    check_error(r->pFunc_radae_tx, "finding",  do_radae_tx_func_name);
-    check_callable(r->pFunc_radae_tx, do_radae_tx_func_name, "not callable");
+    r->pMeth_radae_tx = PyObject_GetAttrString(r->pInst_radae_tx, do_radae_tx_meth_name);
+    check_error(r->pMeth_radae_tx, "finding",  do_radae_tx_meth_name);
+    check_callable(r->pMeth_radae_tx, do_radae_tx_meth_name, "not callable");
 
     // 1st Python function arg - numpy array of float features
     r->features_in = (float*)malloc(sizeof(float)*r->n_features_in);
@@ -142,9 +154,9 @@ int rade_tx_open(struct rade *r) {
 
     // End of Over --------------------------------------------------------
 
-    r->pFunc_radae_tx_eoo = PyObject_GetAttrString(r->pModule_radae_tx, do_eoo_func_name);
-    check_error(r->pFunc_radae_tx_eoo, "finding",  do_eoo_func_name);
-    check_callable(r->pFunc_radae_tx_eoo, do_eoo_func_name, "not callable");
+    r->pMeth_radae_tx_eoo = PyObject_GetAttrString(r->pInst_radae_tx, do_eoo_meth_name);
+    check_error(r->pMeth_radae_tx_eoo, "finding",  do_eoo_meth_name);
+    check_callable(r->pMeth_radae_tx_eoo, do_eoo_meth_name, "not callable");
     r->pArgs_radae_tx_eoo = PyTuple_New(1);
 
     // Python arg is a numpy array used for output to C
@@ -160,9 +172,10 @@ int rade_tx_open(struct rade *r) {
 void rade_tx_close(struct rade *r) {
   // TODO we may need more of these, see if there are any memory leaks
   Py_DECREF(r->pArgs_radae_tx);
-  Py_DECREF(r->pFunc_radae_tx);
-  Py_DECREF(r->pFunc_radae_tx_eoo);
+  Py_DECREF(r->pMeth_radae_tx);
+  Py_DECREF(r->pMeth_radae_tx_eoo);
   Py_DECREF(r->pArgs_radae_tx_eoo);
+  Py_DECREF(r->pInst_radae_tx);
   Py_DECREF(r->pModule_radae_tx);
 
   free(r->features_in);
@@ -175,10 +188,11 @@ int rade_rx_open(struct rade *r) {
     PyObject *pName, *pClass;
     PyObject *pValue;
     PyObject *pArgs;
-    char *python_module_name = "radae_rx";
+    char *python_module_name = "radae_rxe";
     char *do_radae_rx_meth_name = "do_radae_rx";
 
     // Load module of Python code
+    fprintf(stderr, "loading: %s\n", python_module_name);
     pName = PyUnicode_DecodeFSDefault(python_module_name);
     r->pModule_radae_rx = PyImport_Import(pName);
     check_error(r->pModule_radae_rx, "importing", python_module_name);
@@ -187,7 +201,7 @@ int rade_rx_open(struct rade *r) {
     // Find class and create an instance
     pClass = PyObject_GetAttrString(r->pModule_radae_rx, "radae_rx");
     check_error(pClass, "finding class", "radae_rx");
-    pArgs = Py_BuildValue("(s)", "../model19_check3/checkpoints/checkpoint_epoch_100.pth");
+    pArgs = Py_BuildValue("(s)", "model19_check3/checkpoints/checkpoint_epoch_100.pth");
     r->pInst_radae_rx = PyObject_CallObject(pClass, pArgs);
     check_error(r->pInst_radae_rx, "Creating instance of class", "radae_rx");
     Py_DECREF(pClass);
@@ -231,14 +245,29 @@ void rade_rx_close(struct rade *r) {
   free(r->rx_in);
 }
 
+void rade_initialize(void) {
+  Py_Initialize();
+  main_thread_state = PyEval_SaveThread();
+}
+
+void rade_finalize(void) {
+  PyEval_RestoreThread(main_thread_state);
+  int ret = Py_FinalizeEx();
+  if (ret < 0) {
+    fprintf(stderr, "Error with Py_FinalizeEx()\n");
+  }
+}
+
 struct rade *rade_open(char model_file[]) {
   int ret;
   struct rade *r = (struct rade*)malloc(sizeof(struct rade));
   assert(r != NULL);
 
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
   // TODO: implement me
-  fprintf(stderr, "model file: %s", model_file);
-  Py_Initialize();
+  fprintf(stderr, "model file: %s\n", model_file);
 
   // need import array for numpy
   ret = _import_array();
@@ -248,17 +277,21 @@ struct rade *rade_open(char model_file[]) {
   rade_rx_open(r);
   assert(r->n_features_in == r->n_features_out);
 
+  // Release Python GIL
+  PyGILState_Release(gstate);
+
   return r;
 }
 
 void rade_close(struct rade *r) {
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
   rade_tx_close(r);
   rade_rx_close(r);
 
-  int ret = Py_FinalizeEx();
-  if (ret < 0) {
-    fprintf(stderr, "Error with Py_FinalizeEx()\n");
-  }
+  // Release Python GIL
+  PyGILState_Release(gstate);
 }
 
 int rade_version(void) { return VERSION; }
@@ -277,17 +310,32 @@ int rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]) {
   assert(features_in != NULL);
   assert(tx_out != NULL);
 
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
   memcpy(r->features_in, features_in, sizeof(float)*(r->n_features_in));
-  PyObject_CallObject(r->pFunc_radae_tx, r->pArgs_radae_tx);
+  PyObject_CallObject(r->pMeth_radae_tx, r->pArgs_radae_tx);
   memcpy(tx_out, r->tx_out, sizeof(RADE_COMP)*(r->Nmf));
+
+  // Release Python GIL
+  PyGILState_Release(gstate);
+
   return r->Nmf;
 }
 
 int rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]) {
   assert(r != NULL);
   assert(tx_eoo_out != NULL);
-  PyObject_CallObject(r->pFunc_radae_tx_eoo, r->pArgs_radae_tx_eoo);
+
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
+  PyObject_CallObject(r->pMeth_radae_tx_eoo, r->pArgs_radae_tx_eoo);
   memcpy(tx_eoo_out, r->tx_eoo_out, sizeof(RADE_COMP)*(r->Neoo));
+
+  // Release Python GIL
+  PyGILState_Release(gstate);
+
   return r->Neoo;
 }
 
@@ -297,13 +345,21 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
   assert(features_out != NULL);
   assert(rx_in != NULL);
 
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
   memcpy(r->rx_in, rx_in, sizeof(RADE_COMP)*(r->nin));
   pValue = PyObject_CallObject(r->pMeth_radae_rx, r->pArgs_radae_rx);
   check_error(pValue, "return value", "from do_rx_radae");
   long valid_out = PyLong_AsLong(pValue);
   memcpy(features_out, r->features_out, sizeof(float)*(r->n_features_out));
+
   // sample nin so we have an updated copy
   r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");
+
+  // Release Python GIL
+  PyGILState_Release(gstate);
+
   if (valid_out)
     return r->n_features_out;
   else
@@ -312,7 +368,16 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
 
 int rade_sync(struct rade *r) {
   assert(r != NULL);
-  return (int)call_getter(r->pInst_radae_rx, "get_sync");
+
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
+  int result = (int)call_getter(r->pInst_radae_rx, "get_sync");
+
+  // Release Python GIL
+  PyGILState_Release(gstate);
+
+  return result;
 }
 
 // TODO: we need a float getter
