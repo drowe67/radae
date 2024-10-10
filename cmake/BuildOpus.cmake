@@ -6,16 +6,14 @@ if (CMAKE_CROSSCOMPILING)
 set(CONFIGURE_COMMAND ${CONFIGURE_COMMAND} --host=${CMAKE_C_COMPILER_TARGET} --target=${CMAKE_C_COMPILER_TARGET})
 endif (CMAKE_CROSSCOMPILING)
 
-message(STATUS "${CONFIGURE_COMMAND}")
-
 include(ExternalProject)
 ExternalProject_Add(build_opus
-    GIT_REPOSITORY https://gitlab.xiph.org/xiph/opus.git
-    GIT_TAG main
+    DOWNLOAD_EXTRACT_TIMESTAMP NO
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ${CONFIGURE_COMMAND}
     BUILD_COMMAND $(MAKE)
     INSTALL_COMMAND ""
+    URL https://gitlab.xiph.org/xiph/opus/-/archive/main/opus-main.tar.gz
 )
 
 ExternalProject_Get_Property(build_opus BINARY_DIR)

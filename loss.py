@@ -67,7 +67,7 @@ def find_loss(features_fn, features_hat_fn):
    features_hat = features_hat[:,args.clip_start:features_hat.shape[1]-args.clip_end,:]
    features_seq_length = features.shape[1]
    features_hat_seq_length = features_hat.shape[1]
-   print(features.shape, features_hat.shape)
+   #print(features.shape, features_hat.shape)
    assert features_hat_seq_length
    assert features_hat_seq_length <= features_seq_length
 
@@ -84,7 +84,7 @@ def find_loss(features_fn, features_hat_fn):
 
    # compute frame by frame loss for plotting
    nframes = features_hat_seq_length - min_start
-   print(min_start,nframes)
+   #print(min_start,nframes)
    loss = np.zeros(nframes)
    for f in range(nframes):
       loss[f] = distortion_loss(features[:,f+min_start:f+min_start+1,:],features_hat[:,f:f+1,:]).cpu().detach().numpy()[0]
