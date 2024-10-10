@@ -127,7 +127,7 @@ class radae_tx:
 if __name__ == '__main__':
    parser = argparse.ArgumentParser(description='RADAE streaming trannsmnitter, features.f32 on stdit, IQ.f32 on output')
    parser.add_argument('--model_name', type=str, help='path to model in .pth format', default="model19_check3/checkpoints/checkpoint_epoch_100.pth")
-   parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injectiopn of auxillary data symbols')
+   parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injection of auxillary data symbols')
    parser.add_argument('--txbpf', action='store_true', help='enable Tx BPF')
    parser.set_defaults(auxdata=True)
    args = parser.parse_args()
