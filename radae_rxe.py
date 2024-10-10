@@ -244,7 +244,7 @@ class radae_rx:
                self.valid_count = 1
          elif self.state == "candidate":
             # look for 3 consecutive matches with about the same timing offset  
-            if candidate and np.abs(self.tmax-self.tmax_candidate) < 0.02*M:
+            if candidate and np.abs(self.tmax-self.tmax_candidate) < Ncp:
                self.valid_count = self.valid_count + 1
                if self.valid_count > 3:
                   next_state = "sync"
@@ -295,7 +295,7 @@ if __name__ == '__main__':
    parser.set_defaults(use_stdout=True)
    args = parser.parse_args()
 
-   rx = radae_rx(args.model_name,auxdata=args.auxdata,v=args.v,disable_unsync=args.disable_unsync, foff_err=args.foff_err)
+   rx = radae_rx(args.model_name,auxdata=args.auxdata,v=args.v,disable_unsync=args.disable_unsync,foff_err=args.foff_err)
 
    # allocate storage for output features
    features_out = np.zeros(rx.get_n_features_out(),dtype=np.float32)
