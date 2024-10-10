@@ -123,7 +123,7 @@ RADE takes a novel twist – the Encoder converts vocoder features directly to P
 
 As shown in Figure \ref{fig:psk_scatter} the PSK symbols from RADE are not discrete constellation points like traditional digital modems, instead they appear to be positioned at random.  This constellation was ``designed" by training the Autoencoder using many examples of speech and HF channels. Interestingly, there are no ``bits" anywhere in the RADE system.  The values from the features extractor, PSK symbols, through to synthesis are floating point numbers. The RADE signal can be seen as a form of sampled, analog PSK, built with a combination of machine learning and classical DSP techniques.
 
-Figure \ref{fig:rade_psd} is the spectrum of the RADE V1 signal. This is similar to other OFDM waveforms, with a RF bandwidth of 1500 Hz. The spectral ``grass" at the low and high frequency edges is relatively high at around -25dB from the peak, suppression of this has not been optimised in the V1 release.
+Figure \ref{fig:rade_psd} is the spectrum of the RADE V1 signal. This is similar to other OFDM waveforms, with a RF bandwidth of 1500 Hz. The spectral ``grass" at the low and high frequency edges is high at around -12dB from the peak, as suppression of this has not been optimised in the V1 release.  The bandwidth of the signal is effectively set by the SSB Radio Tx filter.  This will be improved in future releases of RADE.
   
 \begin{figure}[h]
 \caption{Spectrum of RADE V1 Signal.}
