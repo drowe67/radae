@@ -14,7 +14,7 @@ if(NOT CODEC2_DEV_BUILD_DIR)
     set(CODEC2_DEV_BUILD_DIR $HOME/codec2-dev/build_linux )
 endif()
 
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.11" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.11" CACHE STRING "Minimum OS X deployment version" FORCE)
 
 # Build universal ARM64 and x86_64 binaries on Mac.
 if(BUILD_OSX_UNIVERSAL)
