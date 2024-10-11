@@ -45,8 +45,8 @@ if(NOT CMAKE_CROSSCOMPILING)
     # We also need to make sure we select the libraries in any activated venv first,
     # in case the user is using that for e.g. NumPy/PyTorch.
     set(Python3_FIND_STRATEGY LOCATION)
-    set(Python_FIND_REGISTRY LAST)
-    set(CMAKE_FIND_FRAMEWORK LAST)
+    set(Python3_FIND_REGISTRY LAST)
+    set(Python3_FIND_FRAMEWORK LAST)
     find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
 else(NOT CMAKE_CROSSCOMPILING)
     # Cross-compiling. find_package(Python3) will find the host's Python,
