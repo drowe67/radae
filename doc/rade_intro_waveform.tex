@@ -1,0 +1,172 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{calc,arrows,shapes,positioning,automata}
+\usepackage{tkz-euclide}
+\usepackage[numbib]{tocbibind}
+\usepackage{float}
+\usepackage{array}
+\usepackage{bm}
+\usepackage{siunitx}  
+\usepackage{xstring}
+\usepackage{catchfile}
+
+\CatchFileDef{\headfull}{../.git/HEAD}{}
+\StrGobbleRight{\headfull}{1}[\head]
+\StrBehind[2]{\head}{/}[\branch]
+\IfFileExists{../.git/refs/heads/\branch}{%
+    \CatchFileDef{\commit}{../.git/refs/heads/\branch}{}}{%
+    \newcommand{\commit}{\dots~(in \emph{packed-refs})}}
+\newcommand{\gitrevision}{%
+  \StrLeft{\commit}{7}%
+}
+
+\begin{document}
+
+% Tikz code used to support block diagrams
+% credit: https://tex.stackexchange.com/questions/175969/block-diagrams-using-tikz
+
+\tikzset{
+block/.style = {draw, fill=white, rectangle, minimum height=3em, minimum width=3em},
+tmp/.style  = {coordinate}, 
+circ/.style= {draw, fill=white, circle, node distance=1cm, minimum size=0.6cm},
+input/.style = {coordinate},
+output/.style= {coordinate},
+pinstyle/.style = {pin edge={to-,thin,black}}
+}
+
+\title{FreeDV-036 Radio Autoencoder (RADE) V1 Introduction and Waveform Description}
+\author{David Rowe VK5DGR}
+\date{\today \quad Git: \texttt{\gitrevision} on branch \texttt{\branch}\\}
+\maketitle
+
+\section{Introduction}
+
+The purpose of the Radio Autoencoder (RADE) V1 is to send speech over a HF radio channel. The speech signal has an audio bandwidth of 8kHz, but the RADE V1 signal requires just 1500Hz of RF bandwidth. The Peak to Average Power Ratio (PAPR) is less than 1dB, allowing efficient use of transmitter power amplifiers. Our testing indicates RADE works well on low and high SNR HF radio channels, and has impressive speech quality compared to SSB and traditional digital voice over radio systems. RADE V1 requires more memory and CPU than a traditional digital voice system, but will run just fine with the resources of a typical PC.
+
+You can run RADE on a Windows PC or laptop using the FreeDV-GUI application V2.0 and above.
+
+This document is an introduction to Version 1 of RADE, and a description of the waveform. The target audience is the Radio Amateur and regulatory organisations that govern Amateur Radio.
+
+\subsection{Acknowledgements}
+
+The RADE concept evolved from a discussion between Jean-Marc Valin and David Rowe, after which Jean-Marc quickly put together an initial proof-of-concept demo. Over a period of several months David built on this work to develop a practical over the air waveform for speech over HF radio channels.  Mooneer Salem is handling integration of RADE into the FreeDV GUI application. The FreeDV Project Leadership Team and many others have helped with support and testing over the course of 2024. The contributions from David, Mooneer and the FreeDV PLT was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
+
+\section{Radio Autoencoder}
+
+\begin{figure}
+\caption{Traditional Digital Voice at left, RADE at right.}
+\label{fig:radae_block}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
+
+% Classical DSP System
+
+\node [input] (rinput1) {};
+\node [block, below of=rinput1, node distance=1cm,text width=2cm] (feature_ext) {Feature Extraction};
+\node [block, below of=feature_ext,node distance=1.5cm] (quant) {Quantisation};
+\node [block, below of=quant,node distance=1.5cm] (fec_enc) {FEC Encode};
+\node [block, below of=fec_enc,node distance=1.5cm] (mod1) {Modulator};
+\node [block, below of=mod1,node distance=1.5cm] (channel1) {Radio Channel};
+\node [block, below of=channel1,node distance=1.5cm] (demod1) {Demodulator};
+\node [block, below of=demod1,node distance=1.5cm] (fec_dec) {FEC Decode};
+\node [block, below of=fec_dec,node distance=1.5cm] (dequant) {De-Quant};
+\node [block, below of=dequant,node distance=1.5cm] (synth) {Speech Synth};
+\node [output, below of=synth,node distance=1cm] (routput1) {};
+
+\draw [->] node[above,text width=2cm] {Input Speech} (rinput1) -- (feature_ext);
+\draw [->] (feature_ext) -- (quant);
+\draw [->] (quant) -- (fec_enc);
+\draw [->] (fec_enc) -- (mod1);
+\draw [->] (mod1) -- (channel1);
+\draw [->] (channel1) -- (demod1);
+\draw [->] (demod1) -- (fec_dec);
+\draw [->] (fec_dec) -- (dequant);
+\draw [->] (dequant) -- (synth);
+\draw [->] (synth) -- (routput1) node[below,text width=1.5cm] {Output Speech};
+
+% RADE System
+
+\node [input] [right of=rinput1, node distance=3cm] (rinput2) {};
+\node [block, below of=rinput2, node distance=1cm] (feature_ext2) {Feature Extraction};
+\node [block, right of=fec_enc,node distance=3cm] (radae_enc) {\emph{RADE} Encoder};
+\node [block, right of=channel1,node distance=3cm] (channel2) {Radio Channel};
+\node [block, right of=fec_dec,node distance=3cm] (radae_dec) {\emph{RADE} Decoder};
+\node [block, right of=synth,node distance=3cm] (fargan) {\scalebox{0.8}[0.8]{FARGAN}};
+\node [output, below of=fargan,node distance=1cm] (routput2) {};
+
+\draw [->] (rinput2) node[above,text width=2cm] {Input Speech} -- (feature_ext2);
+\draw [->] (feature_ext2) -- (radae_enc);
+\draw [->] (radae_enc) -- (channel2);
+\draw [->] (channel2) -- (radae_dec);
+\draw [->] (radae_dec) -- (fargan);
+\draw [->] (fargan) -- (routput2) node[below,text width=1.5cm] {Output Speech};
+
+
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
+Figure \ref{fig:radae_block} compares a traditional digital speech over radio system to RADE.
+In conventional digital speech systems, the speech encoder extracts features like pitch, voicing, and short term spectrum, and quantises them to a fixed number of bits, e.g. 700 bits/s.  Forward Error Correction adds extra bits to protect the encoded speech from bit errors.  The FEC encoded bit stream is then passed to a modulator that generates an analog signal we can send through a radio transmitter over the channel.  The demodulator takes the received signal, and converts it to a stream of bits.  Some of these bits will have errors, which the FEC decoder will attempt to correct.  Finally, the bits are converted back to vocoder features (De-quantised), and speech is synthesised.
+
+RADE takes a novel twist – the Encoder converts vocoder features directly to Phase Shift Keyed (PSK) symbols. It effectively combines quantisation, FEC coding, and modulation.  The RADE Decoder converts received PSK symbols back to features that are synthesised using the high quality FARGAN synthesis engine. The RADE encoder, decoder, and FARGAN synthesiser are built using modern machine learning techniques.  RADE has been trained to produce good quality speech even with the distortion of the HF radio channel. Not shown on Figure \ref{fig:radae_block} is some traditional DSP that converts the PSK symbols to and from an OFDM signal, and house keeping tasks like synchronisation. The PSK symbols are sent over the channel at 2000 symbols/second.
+
+\begin{figure}[h]
+\caption{Constellation plot of RADE Encoder PSK symbols.  Compared to traditional QPSK, the constellation looks like noise.}
+\label{fig:psk_scatter}
+\begin{center}
+\input model19_aux3_z_scatter.tex
+\end{center}
+\end{figure}
+
+As shown in Figure \ref{fig:psk_scatter} the PSK symbols from RADE are not discrete constellation points like traditional digital modems, instead they appear to be positioned at random.  This constellation was ``designed" by training the Autoencoder using many examples of speech and HF channels. Interestingly, there are no ``bits" anywhere in the RADE system.  The values from the features extractor, PSK symbols, through to synthesis are floating point numbers. The RADE signal can be seen as a form of sampled, analog PSK, built with a combination of machine learning and classical DSP techniques.
+
+Figure \ref{fig:rade_psd} is the spectrum of the RADE V1 signal. This is similar to other OFDM waveforms, with a RF bandwidth of 1500 Hz. The spectral ``grass" at the low and high frequency edges is high at around -12dB from the peak, as suppression of this has not been optimised in the V1 release.  The bandwidth of the signal is effectively set by the SSB Radio Tx filter.  This will be improved in future releases of RADE.
+  
+\begin{figure}[h]
+\caption{Spectrum of RADE V1 Signal.}
+\label{fig:rade_psd}
+\begin{center}
+\input model19_aux3_z_psd.tex
+\end{center}
+\end{figure}
+
+\section{Waveform Description}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{m{4cm} | m{2cm} | m{5cm} }
+ \hline
+ Parameter & Value & Comment \\
+ \hline
+ Audio Bandwidth & 100-7900 Hz \\
+ RF Bandwidth & 1500 Hz & -6 dB from peak \\
+ Modulation & OFDM & Discrete time, continuously valued PSK symbols \\
+ Frame size & 120ms & Algorithmic latency \\
+ Vocoder & FARGAN & Low CPU complexity ML vocoder \\
+ Payload symbol rate & 2000 Hz & Payload data symbols, all subcarriers combined \\
+ Number of Subcarriers & 30 \\
+ Subcarrier Symbol rate & 50 Hz \\
+ Subcarrier Spacing & 50 Hz \\
+ Cyclic Prefix & 4ms \\
+ Tx Peak Average Power Ratio & $<$ 1 dB \\
+ Threshold SNR (AWGN) & -3 dB & AWGN channel, 3000 Hz noise bandwidth \\
+ Threshold C/No (AWGN) & 32 dBHz & AWGN channel \\
+ Threshold SNR (MPP) & 0 dB & Multipath Poor (MPP) channel (1Hz Doppler spread, 2ms path delay), two path Watterson model \\
+ Threshold C/No (MPP) & 35 dBHz  \\
+  Worst case channel & MPD & Multipath Disturbed (MPD) channel (2Hz Doppler spread, 4ms path delay) \\
+ Mean acquisition time & $<$ 1.5s & 0 dB SNR MPP channel \\
+ Acquisition frequency range & +/- 50 Hz \\
+ Acquisition co-channel interference tolerance & -3 dBC & Interfering sine wave level for $<$ 2s mean acquisition time \\
+ Auxilary text channel & 25 bits/s & Note all aux bits used for sync on RADE V1, no bits available for text \\
+ SNR measurement & No \\
+\hline
+\end{tabular}
+\caption{RADE V1 waveform and performance parameters}
+\label{tab:constant_eb}
+\end{table}
+
+
+\end{document}
