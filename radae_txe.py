@@ -32,10 +32,10 @@
 */
 """
 
-import os, sys, struct
+import os, sys, struct,argparse
 import numpy as np
 import torch
-from radae import RADAE,transmitter_one
+from radae import RADAE,transmitter_one,complex_bpf
 
 # make sure we don't use a GPU
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
@@ -45,11 +45,12 @@ nb_total_features = 36
 num_used_features = 20
 
 class radae_tx:
-   def __init__(self, model_name, latent_dim=80, auxdata=True, bottleneck=3):
+   def __init__(self, model_name, latent_dim=80, auxdata=True, bottleneck=3, txbpf_en=False):
 
       self.latent_dim = latent_dim
       self.auxdata = auxdata
       self.bottleneck = bottleneck
+      self.txbpf_en = txbpf_en
 
       self.num_features = 20
       if auxdata:
@@ -67,6 +68,14 @@ class radae_tx:
 
       self.transmitter = transmitter_one(model.latent_dim,model.enc_stride,model.Nzmf,model.Fs,model.M,model.Ncp,
                                          model.Winv,model.Nc,model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain)
+      if self.txbpf_en:
+         Ntap=101
+         w = np.array(model.w)
+         Nc = model.Nc
+         bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
+         centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
+         print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
+         self.txbpf = complex_bpf(Ntap, model.Fs, bandwidth,centre)
 
       # number of input floats per processing frame (TOOD refactor to more sensible variable names)
       self.nb_floats = model.Nzmf*model.enc_stride*nb_total_features
@@ -99,6 +108,10 @@ class radae_tx:
          z = model.core_encoder_statefull(features)
          tx = self.transmitter.transmitter_one(z,num_timesteps_at_rate_Rs)
          tx = tx.cpu().detach().numpy().flatten().astype('csingle')
+         if self.txbpf_en:
+            tx = self.txbpf.bpf(tx)
+            tx = np.clip(abs(tx),a_min=0, a_max=1)*np.exp(1j*np.angle(tx))
+         
          # not very Pythonic but works (TODO work out how to return numpy vecs to C)
          np.copyto(tx_out,tx)
 
@@ -106,10 +119,19 @@ class radae_tx:
    def do_eoo(self,tx_out):
       eoo = self.model.eoo
       eoo = eoo.cpu().detach().numpy().flatten().astype('csingle')
+      if self.txbpf_en:
+         eoo = self.txbpf.bpf(eoo)
+         eoo = np.clip(abs(eoo),a_min=0,a_max=1)*np.exp(1j*np.angle(eoo))
       np.copyto(tx_out,eoo)
 
 if __name__ == '__main__':
-   tx = radae_tx("model19_check3/checkpoints/checkpoint_epoch_100.pth")
+   parser = argparse.ArgumentParser(description='RADAE streaming trannsmnitter, features.f32 on stdit, IQ.f32 on output')
+   parser.add_argument('--model_name', type=str, help='path to model in .pth format', default="model19_check3/checkpoints/checkpoint_epoch_100.pth")
+   parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injection of auxillary data symbols')
+   parser.add_argument('--txbpf', action='store_true', help='enable Tx BPF')
+   parser.set_defaults(auxdata=True)
+   args = parser.parse_args()
+   tx = radae_tx(model_name=args.model_name, auxdata=args.auxdata, txbpf_en=args.txbpf)
 
    tx_out = np.zeros(tx.Nmf,dtype=np.csingle)
    while True:
