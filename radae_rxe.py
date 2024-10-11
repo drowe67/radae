@@ -3,7 +3,6 @@
   Radio Autoencoder streaming receiver, "embeddded" version.
   
   rate Fs complex float samples in, features out.
-  rate Fs real int16 samples in, features out.
 
   Designed to connected to a SDR to perform real time RADAE decoding on 
   received sample streams.  Full function state machine and continous 
