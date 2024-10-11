@@ -35,7 +35,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         rx=load_f32(rx_fn,1); 
         rx=rx(1:2:end)+j*rx(2:2:end); 
         
-        tx_bpf = 1;
+        tx_bpf = 0;
         if tx_bpf
           lpf=fir1(100,900/4000);
           w = 2*pi*1500/8000;

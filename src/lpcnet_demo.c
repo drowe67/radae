@@ -39,6 +39,12 @@
 #include "fargan.h"
 #include "cpu_support.h"
 
+#ifdef _WIN32
+// For _setmode().
+#include <io.h>
+#include <fcntl.h>
+#endif // _WIN32
+
 #ifdef USE_WEIGHTS_FILE
 # if __unix__
 #  include <fcntl.h>
@@ -120,7 +126,14 @@ int main(int argc, char **argv) {
     if (argc != 4) usage();
 
     if (strcmp(argv[2], "-") == 0)
+    {
+#ifdef _WIN32
+        // Note: freopen() returns NULL if filename is NULL, so
+        // we have to use setmode() to make it a binary stream instead.
+        _setmode(_fileno(stdin), O_BINARY);
+#endif // _WIN32
         fin = stdin;
+    }
     else
         fin = fopen(argv[2], "rb");
     if (fin == NULL) {
@@ -129,7 +142,14 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[3], "-") == 0)
+    {
+#ifdef _WIN32
+        // Note: freopen() returns NULL if filename is NULL, so
+        // we have to use setmode() to make it a binary stream instead.
+        _setmode(_fileno(stdout), O_BINARY);
+#endif // _WIN32
         fout = stdout;
+    }
     else 
         fout = fopen(argv[3], "wb");
     if (fout == NULL) {

@@ -160,7 +160,7 @@ function process_rx {
 
     # Use streaming RADAE Rx
     cat ${rx_radae}.raw | python3 int16tof32.py --zeropad > ${rx_radae}.f32
-    cat ${rx_radae}.f32 | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata 2>>${filename}_report.txt > features_rx_out.f32
+    cat ${rx_radae}.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 2>>${filename}_report.txt > features_rx_out.f32
     lpcnet_demo -fargan-synthesis features_rx_out.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_radae.wav
 }
 
