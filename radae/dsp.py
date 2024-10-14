@@ -442,3 +442,87 @@ class receiver_one():
       
       return z_hat
 
+# Generate root raised cosine (Root Nyquist) filter coefficients
+# thanks http://www.dsplog.com/db-install/wp-content/uploads/2008/05/raised_cosine_filter.m
+
+def gen_rn_coeffs(alpha, T, Rs, Nsym, M):
+
+  Ts = 1/Rs
+
+  n = np.arange(-Nsym*Ts/2,Nsym*Ts/2,T)
+  Nfilter = Nsym*M
+  Nfiltertiming = M+Nfilter+M
+
+  sincNum = np.sin(np.pi*n/Ts) # numerator of the sinc function
+  sincDen = np.pi*n/Ts    # denominator of the sinc function
+  sincDenZero = np.argwhere(np.abs(sincDen) < 10**-10)
+  sincOp = sincNum/sincDen
+  sincOp[sincDenZero] = 1; # sin(pix)/(pix) = 1 for x=0
+
+  cosNum = np.cos(alpha*np.pi*n/Ts)
+  cosDen = 1-(2*alpha*n/Ts)**2
+  cosDenZero = np.argwhere(np.abs(cosDen)<10**-10)
+  cosOp = cosNum/cosDen
+  cosOp[cosDenZero] = np.pi/4
+  gt_alpha5 = sincOp*cosOp
+  Nfft = 4096
+  GF_alpha5 = np.fft.fft(gt_alpha5,Nfft)/M
+
+  # sqrt causes stop band to be amplified, this hack pushes it down again
+  for i in np.arange(0,Nfft):
+    if np.abs(GF_alpha5[i]) < 0.02:
+      GF_alpha5[i] *= 0.001
+
+  GF_alpha5_root = np.sqrt(np.abs(GF_alpha5)) * np.exp(1j*np.angle(GF_alpha5))
+  ifft_GF_alpha5_root = np.fft.ifft(GF_alpha5_root)
+  return ifft_GF_alpha5_root[np.arange(0,Nfilter)].real
+
+# single carrier PSK modem, suitable for baseband FM channel (DC coupled or band pass), 
+# or directly over a VHF/UHF
+class single_carrier:
+   def __init__(self, fcentreHz=0, alpha=0.25):
+      self.fcentreHz = fcentreHz
+      self.alpha = alpha
+      self.Fs = 8000
+      self.T = 1/self.Fs
+      self.Rs = 2000
+      self.Nsym = 6
+      self.M = int(self.Fs/self.Rs)
+      self.rrc = gen_rn_coeffs(self.alpha, self.T, self.Rs, self.Nsym, self.M)
+      self.Ntap = len(self.rrc)
+      self.tx_filt_mem = np.zeros(self.Ntap)
+      self.rx_filt_mem = np.zeros(self.Ntap)
+      print(self.Ntap)
+
+   # input rate Rs symbols, output at rate Fs, preserves memory for next call
+   def tx(self, tx_symbs):
+      tx_filt_in = np.concatenate([self.tx_filt_mem, np.zeros(len(tx_symbs)*self.M)])
+      tx_filt_in[self.Ntap::self.M] = tx_symbs
+      tx_filt_out = np.convolve(tx_filt_in,self.rrc,mode="same")
+      self.tx_filt_mem = tx_filt_in[-self.Ntap:]
+      # TODO add freq shift
+      return tx_filt_out
+   
+   # input rate Fs, ouput rate Rs, preserves memory for next call
+   def rx(self, rx_samples):
+      # TODO add freq shift
+      rx_filt_in = np.concatenate([self.rx_filt_mem, rx_samples])
+      rx_filt_out = np.convolve(rx_filt_in,self.rrc,mode="same")
+      rx_symbs = rx_filt_out[2::self.M]
+      self.rx_filt_mem = rx_filt_in[-self.Ntap:]
+      return rx_symbs,rx_filt_out
+   
+   def test(self):
+      Nsymb_frame = 80
+      tx_symbs = 1 - 2*(np.random.rand(Nsymb_frame) > 0.5)
+      tx = self.tx(tx_symbs)
+      rx_symbs,rx_filt_out = self.rx(tx)
+      # allow for delay of two filters
+      print(len(rx_symbs))
+      delay = int(2*self.Ntap/self.M)
+      n_errors = np.sum(tx_symbs * rx_symbs[delay:] < 0)
+
+      print("n_errors",n_errors)
+      plt.plot(rx_symbs)
+      plt.show()
+      # TODO multiple frames to test memory
