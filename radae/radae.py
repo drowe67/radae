@@ -118,9 +118,13 @@ class GRUStatefull(nn.Module):
         self.hidden_dim = hidden_dim
         self.states = torch.zeros(1,1,self.hidden_dim)
         self.gru = nn.GRU(input_dim, hidden_dim, batch_first=batch_first)
+
     def forward(self, x):
         gru_out,self.states = self.gru(x,self.states)
         return gru_out
+
+    def reset(self):
+       self.states = torch.zeros(1,1,self.hidden_dim)
 
 # Wrapper for conv1D layer that maintains state internally
 class Conv1DStatefull(nn.Module):
@@ -139,6 +143,9 @@ class Conv1DStatefull(nn.Module):
         self.states = conv_in[:,-self.states_len:,:]
         conv_in = conv_in.permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
+
+    def reset(self):
+        self.states = torch.zeros(1,self.states_len,self.input_dim)
 
 #Gated Linear Unit activation
 class GLU(nn.Module):
@@ -427,6 +434,20 @@ class CoreDecoderStatefull(nn.Module):
         features = torch.reshape(x,(1,z.shape[1]*self.FRAMES_PER_STEP,self.output_dim))
         return features
 
+    def reset(self):
+        self.conv1.reset()
+        self.conv2.reset()
+        self.conv3.reset()
+        self.conv4.reset()
+        self.conv5.reset()
+
+        self.gru1.reset()
+        self.gru1.reset()
+        self.gru2.reset()
+        self.gru3.reset()
+        self.gru4.reset()
+        self.gru5.reset()
+        
 class RADAE(nn.Module):
     def __init__(self,
                  feature_dim,
