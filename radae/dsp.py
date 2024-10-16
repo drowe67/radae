@@ -541,7 +541,6 @@ class single_carrier:
       for i in np.arange(0,len(rx_filt_out)):
          rx_filt_out[i] = np.dot(rx_filt_in[i+1:i+self.Ntap+1],self.rrc)
       # fine timing and decimation to symbol rate
-      #rx_symbs = rx_filt_out[2::self.M]
       rx_symbs = self.rx_est_timing(rx_filt_out)
       self.rx_filt_mem = rx_filt_in[-self.Ntap:]
       return rx_symbs,rx_filt_out
@@ -562,6 +561,8 @@ class single_carrier:
       plt.plot(rx_symbs[:100])
       plt.show()
       # TODO 
-      # 2. fine timing est using non-lin method
-      # 3. add some noise
-      # 4. insert P.25 UW 
+      # * add some noise
+      # * insert P.25 UW 
+      # * streaming operation
+      # * deal with timing slips
+      
