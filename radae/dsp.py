@@ -483,21 +483,35 @@ class single_carrier:
    def __init__(self, fcentreHz=0, alpha=0.25):
       self.fcentreHz = fcentreHz
       self.alpha = alpha
-      self.Fs = 8000
+      self.Fs = 9600
       self.T = 1/self.Fs
-      self.Rs = 2000
-      self.Nsym = 6
+      self.Rs = 2400
+      self.Nfilt_sym = 6
       self.M = int(self.Fs/self.Rs)
-      self.rrc = gen_rn_coeffs(self.alpha, self.T, self.Rs, self.Nsym, self.M)
-      self.Ntap = len(self.rrc)
-      self.tx_filt_mem = np.zeros(self.Ntap)
-      self.rx_filt_mem = np.zeros(self.Ntap)
+      # M must be an integer
+      assert self.M == self.Fs/self.Rs
+
       # +++++-++--++----+-+-----
       self.p25_frame_sync = np.array([1,1,1,1,1,-1,1,1,-1,-1,1,1,-1,-1,-1,-1,1,-1,1,-1,-1,-1,-1,-1])
-      print(len(self.p25_frame_sync),np.sum(self.p25_frame_sync))
+      self.Nsync_syms = 16
+      self.Nframe_syms = 96
+      self.Npayload_syms = self.Nframe_syms - self.Nsync_syms
+
+      self.rrc = gen_rn_coeffs(self.alpha, self.T, self.Rs, self.Nfilt_sym, self.M)
+      self.Ntap = len(self.rrc)
+
+      self.tx_filt_mem = np.zeros(self.Ntap)
+      self.rx_filt_mem = np.zeros(self.Ntap)
+      self.rx_filt_out = np.zeros((self.Nframe_syms+2)*self.M)
+
+      self.sample_point = 4
+      self.nin = self.Nframe_syms*self.M
 
    # input rate Rs symbols, output at rate Fs, preserves memory for next call
    def tx(self, tx_symbs):
+      assert len(tx_symbs) == 80
+      # pre-pend frame sync word
+      tx_symbs = np.concatenate([self.p25_frame_sync[:self.Nsync_syms],tx_symbs])
       tx_filt_in = np.concatenate([self.tx_filt_mem, np.zeros(len(tx_symbs)*self.M)])
       tx_filt_in[self.Ntap::self.M] = tx_symbs*self.M
       tx_filt_out = np.zeros(len(tx_symbs)*self.M)
@@ -508,61 +522,97 @@ class single_carrier:
       return tx_filt_out
 
    def rx_est_timing(self, rx_filt):
+      # rx_filt contains (1+Nframe_syms+1)*M samples.  The current frame being demodulated is the 
+      # middle Nframe_syms. The symbols at the start and end are to cope with timing slips beyond
+      # the current frame 
       M = self.M
 
+      # Fine Timing:
+      #
       # The envelope has a frequency component at the symbol rate.  The
-      # phase of this frequency component indicates the timing.  So work out
-      # single DFT at frequency 2*pi/M
+      # phase of this frequency component indicates the optimum sampling
+      # point (modulo one symbol). We compute the angle with a single point
+      # DFT at frequency 2*pi/M
 
-      env = np.abs(rx_filt)
+      # we estimate fine timing referenced to current sample_point
+      env = np.abs(rx_filt[int(self.sample_point):])
       x = np.dot(env,np.exp(-1j*2*np.pi*np.arange(0,len(env))/M))
-      
       norm_rx_timing = np.angle(x)/(2*np.pi)
       rx_timing = norm_rx_timing*M
-      if rx_timing < 0:
-         rx_timing += M
 
-      # Use linear interpolation to resample at the optimum sampling instant
-   
-      low_sample = int(np.floor(rx_timing))
-      fract = rx_timing - low_sample
-      high_sample = int(np.ceil(rx_timing))
-      print(f"norm_rx_timing: {norm_rx_timing:f} rx_timing: {rx_timing:f} low_sample: {low_sample:f} high_sample: {high_sample:f} fract: {fract:f}")
+      # sample each symbol in frame at opt sampling point, correction in opp direction to timing offset
+      rx_timing_correction = -rx_timing   
+      low_sample = int(np.floor(rx_timing_correction))
+      fract = rx_timing_correction - low_sample
       
-      rx_symbols = rx_filt[low_sample::M]*(1-fract) + rx_filt[high_sample::M]*fract
+      # Use linear interpolation to resample at the optimum sampling point
+      sample = self.sample_point + low_sample + np.arange(0,self.Nframe_syms*M,M)
+      rx_symbols = rx_filt[sample]*(1-fract) + rx_filt[sample+1]*fract
+
+      # TODO adjust next frames nin to keep timing in the sweet spot
+      self.nin = self.Nframe_syms*M
+      sample_point_ = self.sample_point
+      if norm_rx_timing < -0.45:
+         self.nin -= M/4
+         #self.sample_point += M/4
+      if norm_rx_timing > 0.45:
+         self.nin += M/4
+         #self.sample_point -= M/4
+      self.sample_point = int(self.sample_point)
+      self.nin = int(self.nin)
+
+      print(f"norm_rx_timing: {norm_rx_timing:5.2f} rx_timing: {rx_timing:5.2f} nin: {self.nin:4d}")
 
       return rx_symbols
 
    # input rate Fs, output rate Rs, preserves memory for next call
    def rx(self, rx_samples):
+      assert len(rx_samples) == self.nin
+      M = self.M
       # TODO add freq shift
+      # TODO these all proportional to nin, need two symbol filtered memory
+
+      # filter received sample stream
       rx_filt_in = np.concatenate([self.rx_filt_mem, rx_samples])
-      rx_filt_out = np.zeros(len(rx_samples))
-      for i in np.arange(0,len(rx_filt_out)):
-         rx_filt_out[i] = np.dot(rx_filt_in[i+1:i+self.Ntap+1],self.rrc)
-      # fine timing and decimation to symbol rate
-      rx_symbs = self.rx_est_timing(rx_filt_out)
+      Nframe_sams = self.Nframe_syms*self.M
+      to_keep = len(self.rx_filt_out) - self.nin
+      self.rx_filt_out[:to_keep] = self.rx_filt_out[-to_keep:]
+      for i in np.arange(0,self.nin):
+         self.rx_filt_out[to_keep+i] = np.dot(rx_filt_in[i+1:i+self.Ntap+1],self.rrc)
       self.rx_filt_mem = rx_filt_in[-self.Ntap:]
-      return rx_symbs,rx_filt_out
+
+      # fine timing and decimation to symbol rate
+      rx_symbs = self.rx_est_timing(self.rx_filt_out)
+
+      #self.rx_filt_mem = rx_filt_in[-self.Ntap:]
+      # return symbols after removing frame sync word
+      return rx_symbs[self.Nsync_syms:]
    
    def test(self,Nframes=10):
       Nsymb_frame = 80
-      Nframes = 1
       tx_symbs = 1 - 2*(np.random.rand(Nsymb_frame*Nframes) > 0.5)
-      rx_symbs = np.array([])
+      tx = np.array([])
       for f in np.arange(0,Nframes):
-         tx = self.tx(tx_symbs[f*Nsymb_frame:(f+1)*Nsymb_frame])
-         aframe_of_rx_symbs,rx_filt_out = self.rx(tx)
+         atx = self.tx(tx_symbs[f*Nsymb_frame:(f+1)*Nsymb_frame])
+         tx = np.concatenate([tx,atx])
+      
+      rx_symbs = np.array([])
+      nin = self.nin
+      print(len(tx), nin)
+      while len(tx) >= nin:
+         aframe_of_rx_symbs = self.rx(tx[:nin])
+         tx = tx[nin:]
          rx_symbs = np.concatenate([rx_symbs,aframe_of_rx_symbs])
+         nin = self.nin
+
       # allow for delay of two filters
       delay = 5
-      n_errors = np.sum(tx_symbs[:-delay] * rx_symbs[delay:] < 0)
-      print("n_errors",n_errors)
-      plt.plot(rx_symbs[:100])
+      #n_errors = np.sum(tx_symbs[:-delay] * rx_symbs[delay:] < 0)
+      #print("n_errors",n_errors)
+      plt.plot(rx_symbs,'+')
       plt.show()
       # TODO 
       # * add some noise
-      # * insert P.25 UW 
       # * streaming operation
       # * deal with timing slips
       
