@@ -33,7 +33,7 @@
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
-import sys
+import math
 
 class complex_bpf():
    def __init__(self, Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz):
@@ -602,7 +602,7 @@ class single_carrier:
       return rx_symbs
    
    # python3 -c "from radae import single_carrier; s=single_carrier(); s.run_test(100,sample_clock_offset_ppm=-100,plots_en=True)"
-   def run_test(self,Nframes=10, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
+   def run_test(self,Nframes=10, EbNodB = 100, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
       Nframe_syms = self.Nframe_syms
       Nsync_syms = self.Nsync_syms
       Npayload_syms = self.Npayload_syms
@@ -622,6 +622,10 @@ class single_carrier:
       tx_zp[0::4] = tx
       tx_4 = self.lpf.bpf(tx_zp)
       rx = sample_clock_offset(tx_4, sample_clock_offset_ppm)[0::4].real
+
+      sigma = np.sqrt(1/(self.M*10**(EbNodB/10)))
+      noise = (sigma/np.sqrt(2))*np.random.randn(len(rx))
+      rx = rx + noise
 
       # demodulate stream with rx
       rx_symb_buf = np.zeros(2*Nframe_syms)
@@ -662,22 +666,24 @@ class single_carrier:
          print()
       
       ber = total_errors/total_bits
-      print(f"total_bits: {total_bits:4d} total_errors: {total_errors:4d} BER: {ber:5.2f}")
+      print(f"total_bits: {total_bits:4d} total_errors: {total_errors:4d} BER: {ber:5.4f} Target BER: {target_ber:5.4f}")
 
       if plots_en:
          plt.figure(1)
          plt.subplot(311)
-         plt.plot(rx_symb_log,'+')
+         plt.plot(rx_symb_log,'+'); plt.ylabel('Symbols')
          plt.subplot(312)
-         plt.plot(error_log)
+         plt.plot(error_log); plt.ylabel('Errors/frame')
          plt.subplot(313)
-         plt.plot(norm_rx_timing_log,'+')
+         plt.plot(norm_rx_timing_log,'+'); plt.ylabel('Fine Timing')
 
          plt.show()
 
       test_pass = ber <= target_ber
       if test_pass:
          print("PASS")
+      else:
+         print("FAIL")
       return test_pass
    
       # TODO 
@@ -691,4 +697,10 @@ class single_carrier:
       total += 1; passes += self.run_test()
       total += 1; passes += self.run_test(Nframes=100, sample_clock_offset_ppm=100)
       total += 1; passes += self.run_test(Nframes=100, sample_clock_offset_ppm=-100)
+
+      # BER test: allow 0.5dB implementation loss
+      EbNodB = 4
+      target_ber = 0.5*math.erfc(np.sqrt(10**((EbNodB-0.5)/10)))
+      total += 1; passes += self.run_test(Nframes=100, sample_clock_offset_ppm=-100, EbNodB=EbNodB, target_ber=target_ber)
+       
       print(f"{passes:d}/{total:d}")
