@@ -477,6 +477,19 @@ def gen_rn_coeffs(alpha, T, Rs, Nsym, M):
   ifft_GF_alpha5_root = np.fft.ifft(GF_alpha5_root)
   return ifft_GF_alpha5_root[np.arange(0,Nfilter)].real
 
+def sample_clock_offset(tx, sample_clock_offset_ppm):
+   tin=0
+   tout=0
+   rx = np.zeros(len(tx), dtype=np.csingle)
+   while tin+1 < len(tx) and tout < len(rx):
+      t1 = int(np.floor(tin))
+      t2 = int(np.ceil(tin))
+      f = tin - t1
+      rx[tout] = (1-f)*tx[t1] + f*tx[t2]
+      tout += 1
+      tin  += 1 + sample_clock_offset_ppm/1E6
+   return rx
+
 # single carrier PSK modem, suitable for baseband FM channel (DC coupled or band pass), 
 # or directly over a VHF/UHF
 class single_carrier:
@@ -496,6 +509,7 @@ class single_carrier:
       self.Nsync_syms = 16
       self.Nframe_syms = 96
       self.Npayload_syms = self.Nframe_syms - self.Nsync_syms
+      self.fs_thresh =  self.Nsync_syms - 2
 
       self.rrc = gen_rn_coeffs(self.alpha, self.T, self.Rs, self.Nfilt_sym, self.M)
       self.Ntap = len(self.rrc)
@@ -504,8 +518,11 @@ class single_carrier:
       self.rx_filt_mem = np.zeros(self.Ntap)
       self.rx_filt_out = np.zeros((self.Nframe_syms+2)*self.M)
 
-      self.sample_point = 4
+      self.sample_point = 5
       self.nin = self.Nframe_syms*self.M
+
+      # 4x oversampling filter for timing offset simulation
+      self.lpf = complex_bpf(101,self.Fs*4,self.Fs, 0)
 
    # input rate Rs symbols, output at rate Fs, preserves memory for next call
    def tx(self, tx_symbs):
@@ -521,10 +538,12 @@ class single_carrier:
       # TODO add freq shift
       return tx_filt_out
 
-   def rx_est_timing(self, rx_filt):
+   # estimate fine timing and resample (decimate) at optimim timing estimate, returning 
+   # rate Rs symbols for this frame
+   def rx_est_timing_and_decimate(self, rx_filt):
       # rx_filt contains (1+Nframe_syms+1)*M samples.  The current frame being demodulated is the 
-      # middle Nframe_syms. The symbols at the start and end are to cope with timing slips beyond
-      # the current frame 
+      # middle Nframe_syms. The extra samples at the start and end are to cope with fine timing
+      # requiring samples just outside the current frame 
       M = self.M
 
       # Fine Timing:
@@ -534,35 +553,33 @@ class single_carrier:
       # point (modulo one symbol). We compute the angle with a single point
       # DFT at frequency 2*pi/M
 
-      # we estimate fine timing referenced to current sample_point
+      # we estimate fine timing referenced to the nominal sample_point
       env = np.abs(rx_filt[int(self.sample_point):])
       x = np.dot(env,np.exp(-1j*2*np.pi*np.arange(0,len(env))/M))
-      norm_rx_timing = np.angle(x)/(2*np.pi)
-      rx_timing = norm_rx_timing*M
+      norm_rx_timing = np.angle(x)/(2*np.pi) # -0.5 ... 0.5
+      rx_timing = norm_rx_timing*M           # -M/2 ... M/2
 
-      # sample each symbol in frame at opt sampling point, correction in opp direction to timing offset
+      # correct sampling instant in opp direction to timing offset
       rx_timing_correction = -rx_timing   
+      
+      # Use linear interpolation to resample at the optimum sampling point.  We assume fine timing
+      # is a constant over the frame
       low_sample = int(np.floor(rx_timing_correction))
       fract = rx_timing_correction - low_sample
-      
-      # Use linear interpolation to resample at the optimum sampling point
       sample = self.sample_point + low_sample + np.arange(0,self.Nframe_syms*M,M)
       rx_symbols = rx_filt[sample]*(1-fract) + rx_filt[sample+1]*fract
 
-      # TODO adjust next frames nin to keep timing in the sweet spot
+      # adjust number of samples for next frames to keep timing in the sweet spot
       self.nin = self.Nframe_syms*M
-      sample_point_ = self.sample_point
-      if norm_rx_timing < -0.45:
-         self.nin -= M/4
-         #self.sample_point += M/4
-      if norm_rx_timing > 0.45:
+      if norm_rx_timing < -0.35:
          self.nin += M/4
-         #self.sample_point -= M/4
-      self.sample_point = int(self.sample_point)
+      if norm_rx_timing > 0.35:
+         self.nin -= M/4
       self.nin = int(self.nin)
 
-      print(f"norm_rx_timing: {norm_rx_timing:5.2f} rx_timing: {rx_timing:5.2f} nin: {self.nin:4d}")
-
+      print(f"norm_rx_timing: {norm_rx_timing:5.2f} rx_timing: {rx_timing:5.2f} nin: {self.nin:4d} ", end='')
+      self.norm_rx_timing = norm_rx_timing
+      
       return rx_symbols
 
    # input rate Fs, output rate Rs, preserves memory for next call
@@ -570,11 +587,9 @@ class single_carrier:
       assert len(rx_samples) == self.nin
       M = self.M
       # TODO add freq shift
-      # TODO these all proportional to nin, need two symbol filtered memory
 
       # filter received sample stream
       rx_filt_in = np.concatenate([self.rx_filt_mem, rx_samples])
-      Nframe_sams = self.Nframe_syms*self.M
       to_keep = len(self.rx_filt_out) - self.nin
       self.rx_filt_out[:to_keep] = self.rx_filt_out[-to_keep:]
       for i in np.arange(0,self.nin):
@@ -582,37 +597,98 @@ class single_carrier:
       self.rx_filt_mem = rx_filt_in[-self.Ntap:]
 
       # fine timing and decimation to symbol rate
-      rx_symbs = self.rx_est_timing(self.rx_filt_out)
+      rx_symbs = self.rx_est_timing_and_decimate(self.rx_filt_out)
 
-      #self.rx_filt_mem = rx_filt_in[-self.Ntap:]
-      # return symbols after removing frame sync word
-      return rx_symbs[self.Nsync_syms:]
+      return rx_symbs
    
-   def test(self,Nframes=10):
-      Nsymb_frame = 80
-      tx_symbs = 1 - 2*(np.random.rand(Nsymb_frame*Nframes) > 0.5)
+   # python3 -c "from radae import single_carrier; s=single_carrier(); s.run_test(100,sample_clock_offset_ppm=-100,plots_en=True)"
+   def run_test(self,Nframes=10, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
+      Nframe_syms = self.Nframe_syms
+      Nsync_syms = self.Nsync_syms
+      Npayload_syms = self.Npayload_syms
+
+      # single fixed test frame
+      tx_symbs = 1 - 2*(np.random.rand(Npayload_syms) > 0.5)
+
+      # create a stream of tx samples
       tx = np.array([])
       for f in np.arange(0,Nframes):
-         atx = self.tx(tx_symbs[f*Nsymb_frame:(f+1)*Nsymb_frame])
+         atx = self.tx(tx_symbs)
          tx = np.concatenate([tx,atx])
       
-      rx_symbs = np.array([])
+      # simulate timing offset, 4x oversampling then linear interpolation
+      # TODO: is ppm correct when we oversample by 4 ?
+      tx_zp = np.zeros(4*len(tx))
+      tx_zp[0::4] = tx
+      tx_4 = self.lpf.bpf(tx_zp)
+      rx = sample_clock_offset(tx_4, sample_clock_offset_ppm)[0::4].real
+
+      # demodulate stream with rx
+      rx_symb_buf = np.zeros(2*Nframe_syms)
+      rx_symb_log = np.array([])
+      error_log = np.array([])
+      norm_rx_timing_log = np.array([])
       nin = self.nin
-      print(len(tx), nin)
-      while len(tx) >= nin:
-         aframe_of_rx_symbs = self.rx(tx[:nin])
-         tx = tx[nin:]
-         rx_symbs = np.concatenate([rx_symbs,aframe_of_rx_symbs])
+      total_errors = 0
+      total_bits = 0
+
+      print("hello",len(tx))
+      while len(rx) >= nin:
+         # demod next frame
+         rx_symb_buf[:Nframe_syms] = rx_symb_buf[Nframe_syms:] 
+         rx_symb_buf[Nframe_syms:] = self.rx(rx[:nin])
+         rx_symb_log = np.concatenate([rx_symb_log,rx_symb_buf[Nframe_syms:]])
+         norm_rx_timing_log = np.append(norm_rx_timing_log, self.norm_rx_timing)
+         rx = rx[nin:]
          nin = self.nin
 
-      # allow for delay of two filters
-      delay = 5
-      #n_errors = np.sum(tx_symbs[:-delay] * rx_symbs[delay:] < 0)
-      #print("n_errors",n_errors)
-      plt.plot(rx_symbs,'+')
-      plt.show()
+         # look for frame sync in two frame buffer
+         max_fs_correct = 0
+         max_s = 0
+         for s in np.arange(0,Nframe_syms):
+            fs_correct = np.sum(rx_symb_buf[s:s+Nsync_syms] * self.p25_frame_sync[:self.Nsync_syms] > 0)
+            if fs_correct > max_fs_correct:
+               max_s = s
+               max_fs_correct = fs_correct
+
+         print(f"max_fs_correct: {max_fs_correct:4d}", end='')
+         # if good frame sync count errors      
+         if max_fs_correct >= self.fs_thresh:
+            n_errors = np.sum(rx_symb_buf[max_s+Nsync_syms:max_s+Nsync_syms+Npayload_syms] * tx_symbs < 0)
+            error_log = np.append(error_log,n_errors)
+            total_errors += n_errors
+            total_bits += len(tx_symbs)
+            print(f" max_s: {max_s:4d} n_errors: {n_errors:4d}", end='')
+         print()
+      
+      ber = total_errors/total_bits
+      print(f"total_bits: {total_bits:4d} total_errors: {total_errors:4d} BER: {ber:5.2f}")
+
+      if plots_en:
+         plt.figure(1)
+         plt.subplot(311)
+         plt.plot(rx_symb_log,'+')
+         plt.subplot(312)
+         plt.plot(error_log)
+         plt.subplot(313)
+         plt.plot(norm_rx_timing_log,'+')
+
+         plt.show()
+
+      test_pass = ber <= target_ber
+      if test_pass:
+         print("PASS")
+      return test_pass
+   
       # TODO 
       # * add some noise
       # * streaming operation
       # * deal with timing slips
-      
+
+   # python3 -c "from radae import single_carrier; s=single_carrier(); s.tests()"
+   def tests(self):
+      total = 0; passes = 0
+      total += 1; passes += self.run_test()
+      total += 1; passes += self.run_test(Nframes=100, sample_clock_offset_ppm=100)
+      total += 1; passes += self.run_test(Nframes=100, sample_clock_offset_ppm=-100)
+      print(f"{passes:d}/{total:d}")
