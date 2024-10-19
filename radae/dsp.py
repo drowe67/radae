@@ -505,7 +505,7 @@ class single_carrier:
       assert self.M == self.Fs/self.Rs
 
       # +++++-++--++----+-+-----
-      self.p25_frame_sync = np.array([1,1,1,1,1,-1,1,1,-1,-1,1,1,-1,-1,-1,-1,1,-1,1,-1,-1,-1,-1,-1])
+      self.p25_frame_sync = np.array([1,1,1,1,1,-1,1,1,-1,-1,1,1,-1,-1,-1,-1,1,-1,1,-1,-1,-1,-1,-1], dtype=np.csingle)
       self.Nsync_syms = 16
       self.Nframe_syms = 96
       self.Npayload_syms = self.Nframe_syms - self.Nsync_syms
@@ -514,9 +514,9 @@ class single_carrier:
       self.rrc = gen_rn_coeffs(self.alpha, self.T, self.Rs, self.Nfilt_sym, self.M)
       self.Ntap = len(self.rrc)
 
-      self.tx_filt_mem = np.zeros(self.Ntap)
-      self.rx_filt_mem = np.zeros(self.Ntap)
-      self.rx_filt_out = np.zeros((self.Nframe_syms+2)*self.M)
+      self.tx_filt_mem = np.zeros(self.Ntap, dtype=np.csingle)
+      self.rx_filt_mem = np.zeros(self.Ntap, dtype=np.csingle)
+      self.rx_filt_out = np.zeros((self.Nframe_syms+2)*self.M, dtype=np.csingle)
 
       self.sample_point = 5
       self.nin = self.Nframe_syms*self.M
@@ -529,16 +529,16 @@ class single_carrier:
       assert len(tx_symbs) == 80
       # pre-pend frame sync word
       tx_symbs = np.concatenate([self.p25_frame_sync[:self.Nsync_syms],tx_symbs])
-      tx_filt_in = np.concatenate([self.tx_filt_mem, np.zeros(len(tx_symbs)*self.M)])
+      tx_filt_in = np.concatenate([self.tx_filt_mem, np.zeros(len(tx_symbs)*self.M, dtype=np.csingle)])
       tx_filt_in[self.Ntap::self.M] = tx_symbs*self.M
-      tx_filt_out = np.zeros(len(tx_symbs)*self.M)
+      tx_filt_out = np.zeros(len(tx_symbs)*self.M, dtype=np.csingle)
       for i in np.arange(0,len(tx_symbs)*self.M):
          tx_filt_out[i] = np.dot(tx_filt_in[i+1:i+self.Ntap+1],self.rrc)
       self.tx_filt_mem = tx_filt_in[-self.Ntap:]
       # TODO add freq shift
       return tx_filt_out
 
-   # estimate fine timing and resample (decimate) at optimim timing estimate, returning 
+   # estimate fine timing and resample (decimate) at optimum timing estimate, returning 
    # rate Rs symbols for this frame
    def rx_est_timing_and_decimate(self, rx_filt):
       # rx_filt contains (1+Nframe_syms+1)*M samples.  The current frame being demodulated is the 
@@ -550,7 +550,7 @@ class single_carrier:
       #
       # The envelope has a frequency component at the symbol rate.  The
       # phase of this frequency component indicates the optimum sampling
-      # point (modulo one symbol). We compute the angle with a single point
+      # point (modulo one symbol). We compute the phase with a single point
       # DFT at frequency 2*pi/M
 
       # we estimate fine timing referenced to the nominal sample_point
@@ -569,7 +569,7 @@ class single_carrier:
       sample = self.sample_point + low_sample + np.arange(0,self.Nframe_syms*M,M)
       rx_symbols = rx_filt[sample]*(1-fract) + rx_filt[sample+1]*fract
 
-      # adjust number of samples for next frames to keep timing in the sweet spot
+      # adjust number of samples for next frame to keep timing in the sweet spot
       self.nin = self.Nframe_syms*M
       if norm_rx_timing < -0.35:
          self.nin += M/4
@@ -602,41 +602,41 @@ class single_carrier:
       return rx_symbs
    
    # python3 -c "from radae import single_carrier; s=single_carrier(); s.run_test(100,sample_clock_offset_ppm=-100,plots_en=True)"
-   def run_test(self,Nframes=10, EbNodB = 100, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
+   def run_test(self,Nframes=10, EbNodB=100, phase=0, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
       Nframe_syms = self.Nframe_syms
       Nsync_syms = self.Nsync_syms
       Npayload_syms = self.Npayload_syms
 
       # single fixed test frame
-      tx_symbs = 1 - 2*(np.random.rand(Npayload_syms) > 0.5)
+      tx_symbs = 1 - 2*(np.random.rand(Npayload_syms) > 0.5) + 0*1j
 
       # create a stream of tx samples
-      tx = np.array([])
+      tx = np.array([], dtype=np.csingle)
       for f in np.arange(0,Nframes):
          atx = self.tx(tx_symbs)
          tx = np.concatenate([tx,atx])
       
       # simulate timing offset, 4x oversampling then linear interpolation
       # TODO: is ppm correct when we oversample by 4 ?
-      tx_zp = np.zeros(4*len(tx))
+      tx_zp = np.zeros(4*len(tx), dtype=np.csingle)
       tx_zp[0::4] = tx
       tx_4 = self.lpf.bpf(tx_zp)
-      rx = sample_clock_offset(tx_4, sample_clock_offset_ppm)[0::4].real
+      rx = sample_clock_offset(tx_4, sample_clock_offset_ppm)[0::4]
 
+      rx *= np.exp(1j*phase)
       sigma = np.sqrt(1/(self.M*10**(EbNodB/10)))
-      noise = (sigma/np.sqrt(2))*np.random.randn(len(rx))
+      noise = (sigma/np.sqrt(2))*(np.random.randn(len(rx)) + 1j*np.random.randn(len(rx)))
       rx = rx + noise
 
       # demodulate stream with rx
-      rx_symb_buf = np.zeros(2*Nframe_syms)
-      rx_symb_log = np.array([])
+      rx_symb_buf = np.zeros(2*Nframe_syms, dtype=np.csingle)
+      rx_symb_log = np.array([], dtype=np.csingle)
       error_log = np.array([])
       norm_rx_timing_log = np.array([])
       nin = self.nin
       total_errors = 0
       total_bits = 0
 
-      print("hello",len(tx))
       while len(rx) >= nin:
          # demod next frame
          rx_symb_buf[:Nframe_syms] = rx_symb_buf[Nframe_syms:] 
@@ -670,11 +670,12 @@ class single_carrier:
 
       if plots_en:
          plt.figure(1)
-         plt.subplot(311)
-         plt.plot(rx_symb_log,'+'); plt.ylabel('Symbols')
-         plt.subplot(312)
+         plt.plot(rx_symb_log.real,rx_symb_log.imag,'+'); plt.ylabel('Symbols')
+         plt.axis([-0.5,0.5,-0.5,0.5])
+         plt.figure(2)
+         plt.subplot(211)
          plt.plot(error_log); plt.ylabel('Errors/frame')
-         plt.subplot(313)
+         plt.subplot(212)
          plt.plot(norm_rx_timing_log,'+'); plt.ylabel('Fine Timing')
 
          plt.show()
@@ -687,9 +688,9 @@ class single_carrier:
       return test_pass
    
    # TODO 
-   # * user supplied analog or internal digital test symbols
-   # * handle amplitude normalisation
-   # * separate tx/rx cmd line applications
+   # * user supplied analog or internal digital test symbols 
+   # * handle amplitude normalisation (could be a source of distortion for ML - measure loss)
+   # * separate tx/rx cmd line applications that talk to BBFM ML enc/dec
    # * bandpass using freq offset, phase estimation, ambiguity resolution
 
    # python3 -c "from radae import single_carrier; s=single_carrier(); s.tests()"
