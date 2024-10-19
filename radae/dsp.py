@@ -540,7 +540,7 @@ class single_carrier:
 
    # estimate fine timing and resample (decimate) at optimum timing estimate, returning 
    # rate Rs symbols for this frame
-   def rx_est_timing_and_decimate(self, rx_filt):
+   def est_timing_and_decimate(self, rx_filt):
       # rx_filt contains (1+Nframe_syms+1)*M samples.  The current frame being demodulated is the 
       # middle Nframe_syms. The extra samples at the start and end are to cope with fine timing
       # requiring samples just outside the current frame 
@@ -582,6 +582,15 @@ class single_carrier:
       
       return rx_symbols
 
+   # estimate and restunr an estimate of the phase offset
+   def est_phase(self,rx_symbs):
+      # maintain a buffer centered on the current symbol
+      symbol_buf = np.concatente(self.phase_est_mem, rx_symbs)
+   
+      # strip modulation, note this means estimate is modulo pi/4, this ambiguity is resolved with
+      # frame sync word
+      return phase_est
+   
    # input rate Fs, output rate Rs, preserves memory for next call
    def rx(self, rx_samples):
       assert len(rx_samples) == self.nin
@@ -597,7 +606,11 @@ class single_carrier:
       self.rx_filt_mem = rx_filt_in[-self.Ntap:]
 
       # fine timing and decimation to symbol rate
-      rx_symbs = self.rx_est_timing_and_decimate(self.rx_filt_out)
+      rx_symbs = self.est_timing_and_decimate(self.rx_filt_out)
+
+      # phase estimation and correction
+      #phase_est = self.est_phase(self.rx_symbs)
+      #rx_symbs *= np.exp(-1j*phase_est)
 
       return rx_symbs
    
