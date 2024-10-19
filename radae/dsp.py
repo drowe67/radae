@@ -686,15 +686,20 @@ class single_carrier:
          print("FAIL")
       return test_pass
    
-      # TODO 
-      # * add some noise
-      # * streaming operation
-      # * deal with timing slips
+   # TODO 
+   # * user supplied analog or internal digital test symbols
+   # * handle amplitude normalisation
+   # * separate tx/rx cmd line applications
+   # * bandpass using freq offset, phase estimation, ambiguity resolution
 
    # python3 -c "from radae import single_carrier; s=single_carrier(); s.tests()"
-   def tests(self):
+   def run_tests(self):
       total = 0; passes = 0
+
+      # baseline test with vanilla channel
       total += 1; passes += self.run_test()
+
+      # sample clock offsets
       total += 1; passes += self.run_test(Nframes=100, sample_clock_offset_ppm=100)
       total += 1; passes += self.run_test(Nframes=100, sample_clock_offset_ppm=-100)
 
