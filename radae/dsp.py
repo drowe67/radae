@@ -520,6 +520,11 @@ class single_carrier:
 
       self.sample_point = 5
       self.nin = self.Nframe_syms*self.M
+      
+      self.Nphase = 21
+      # Nphase must be odd
+      assert np.mod(self.Nphase,2) == 1
+      self.phase_est_mem = np.zeros(self.Nphase, dtype=np.csingle)
 
       # 4x oversampling filter for timing offset simulation
       self.lpf = complex_bpf(101,self.Fs*4,self.Fs, 0)
@@ -582,14 +587,24 @@ class single_carrier:
       
       return rx_symbols
 
-   # estimate and restunr an estimate of the phase offset
-   def est_phase(self,rx_symbs):
-      # maintain a buffer centered on the current symbol
-      symbol_buf = np.concatente(self.phase_est_mem, rx_symbs)
+   # estimate the phase offset and return phase corrected symbol
+   def est_phase_and_correct(self,rx_symbs):
+      mod_order = 2
+
+      # maintain a buffer of symbols, current sample is at centre of self.Nphase sample window
+      symbol_buf = np.concatenate([self.phase_est_mem, rx_symbs])
    
-      # strip modulation, note this means estimate is modulo pi/4, this ambiguity is resolved with
-      # frame sync word
-      return phase_est
+      rx_symbs_corrected = np.zeros(len(rx_symbs), dtype=np.csingle)
+      for s in np.arange(0,len(rx_symbs)):
+         # strip BPSK modulation by taking symbol to mod_order power, note this means estimate is 
+         # modulo pi/mod_order, this ambiguity is resolved with frame sync word.
+         phase_est = np.angle(sum(symbol_buf[s+1:s+1+self.Nphase]**mod_order))/mod_order
+         centre = s + self.Nphase//2
+         rx_symbs_corrected[s] = symbol_buf[centre]*np.exp(-1j*phase_est)
+
+      self.phase_est_mem = symbol_buf[-self.Nphase:]
+
+      return rx_symbs_corrected
    
    # input rate Fs, output rate Rs, preserves memory for next call
    def rx(self, rx_samples):
@@ -605,12 +620,8 @@ class single_carrier:
          self.rx_filt_out[to_keep+i] = np.dot(rx_filt_in[i+1:i+self.Ntap+1],self.rrc)
       self.rx_filt_mem = rx_filt_in[-self.Ntap:]
 
-      # fine timing and decimation to symbol rate
       rx_symbs = self.est_timing_and_decimate(self.rx_filt_out)
-
-      # phase estimation and correction
-      #phase_est = self.est_phase(self.rx_symbs)
-      #rx_symbs *= np.exp(-1j*phase_est)
+      rx_symbs = self.est_phase_and_correct(rx_symbs)
 
       return rx_symbs
    
@@ -703,6 +714,7 @@ class single_carrier:
    # TODO 
    # * user supplied analog or internal digital test symbols 
    # * handle amplitude normalisation (could be a source of distortion for ML - measure loss)
+   # * handle DC offset removal
    # * separate tx/rx cmd line applications that talk to BBFM ML enc/dec
    # * bandpass using freq offset, phase estimation, ambiguity resolution
 
