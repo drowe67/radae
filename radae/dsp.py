@@ -509,7 +509,7 @@ class single_carrier:
       self.Nsync_syms = 16
       self.Nframe_syms = 96
       self.Npayload_syms = self.Nframe_syms - self.Nsync_syms
-      self.fs_thresh =  self.Nsync_syms - 2
+      self.metric_thresh =  0.25
 
       self.rrc = gen_rn_coeffs(self.alpha, self.T, self.Rs, self.Nfilt_sym, self.M)
       self.Ntap = len(self.rrc)
@@ -596,7 +596,7 @@ class single_carrier:
    
       rx_symbs_corrected = np.zeros(len(rx_symbs), dtype=np.csingle)
       for s in np.arange(0,len(rx_symbs)):
-         # strip BPSK modulation by taking symbol to mod_order power, note this means estimate is 
+         # strip (BPSK) modulation by taking symbol to mod_order power, note this means estimate is 
          # modulo pi/mod_order, this ambiguity is resolved with frame sync word.
          phase_est = np.angle(sum(symbol_buf[s+1:s+1+self.Nphase]**mod_order))/mod_order
          centre = s + self.Nphase//2
@@ -671,25 +671,37 @@ class single_carrier:
          nin = self.nin
 
          # look for frame sync in two frame buffer
-         max_fs_correct = 0
+         max_metric = 0
          max_s = 0
          for s in np.arange(0,Nframe_syms):
-            fs_correct = np.sum(rx_symb_buf[s:s+Nsync_syms] * self.p25_frame_sync[:self.Nsync_syms] > 0)
-            if fs_correct > max_fs_correct:
+            rx_symbs = rx_symb_buf[s+Nsync_syms:s+Nsync_syms+Npayload_syms]
+            corr = np.dot(rx_symbs,tx_symbs)
+            energy = np.dot(rx_symbs,rx_symbs)
+            metric = corr/np.sqrt(energy)
+            if np.abs(metric) > np.abs(max_metric):
                max_s = s
-               max_fs_correct = fs_correct
+               max_metric = metric
+   
+         # reset phase ambiguity based on frame sync
+         #if np.angle(max_metric) < 0:
+         #   self.phase_ambiguity = np.pi
+         #else:
+         self.phase_ambiguity = 0
+         print(f"max_metric: {np.abs(max_metric):5.2f} {np.angle(max_metric):5.2f}", end='')
 
-         print(f"max_fs_correct: {max_fs_correct:4d}", end='')
          # if good frame sync count errors      
-         if max_fs_correct >= self.fs_thresh:
-            n_errors = np.sum(rx_symb_buf[max_s+Nsync_syms:max_s+Nsync_syms+Npayload_syms] * tx_symbs < 0)
+         if max_metric >= self.metric_thresh:
+            rx_symbs = np.exp(1j*self.phase_ambiguity)*rx_symb_buf[max_s+Nsync_syms:max_s+Nsync_syms+Npayload_syms]
+            n_errors = np.sum(rx_symbs * tx_symbs < 0)
             error_log = np.append(error_log,n_errors)
             total_errors += n_errors
             total_bits += len(tx_symbs)
             print(f" max_s: {max_s:4d} n_errors: {n_errors:4d}", end='')
          print()
       
-      ber = total_errors/total_bits
+      ber = 0
+      if total_bits:
+         ber = total_errors/total_bits
       print(f"total_bits: {total_bits:4d} total_errors: {total_errors:4d} BER: {ber:5.4f} Target BER: {target_ber:5.4f}")
 
       if plots_en:
