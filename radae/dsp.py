@@ -525,6 +525,7 @@ class single_carrier:
       # Nphase must be odd
       assert np.mod(self.Nphase,2) == 1
       self.phase_est_mem = np.zeros(self.Nphase, dtype=np.csingle)
+      self.phase_est_log = np.array([], dtype=np.csingle)
 
       # 4x oversampling filter for timing offset simulation
       self.lpf = complex_bpf(101,self.Fs*4,self.Fs, 0)
@@ -598,7 +599,8 @@ class single_carrier:
       for s in np.arange(0,len(rx_symbs)):
          # strip (BPSK) modulation by taking symbol to mod_order power, note this means estimate is 
          # modulo pi/mod_order, this ambiguity is resolved with frame sync word.
-         phase_est = np.angle(sum(symbol_buf[s+1:s+1+self.Nphase]**mod_order))/mod_order
+         phase_est = np.angle(sum((symbol_buf[s+1:s+1+self.Nphase]*np.exp(1j*np.pi/4))**mod_order))/mod_order
+         self.phase_est_log = np.append(self.phase_est_log, np.exp(1j*phase_est))
          centre = s + self.Nphase//2
          rx_symbs_corrected[s] = symbol_buf[centre]*np.exp(-1j*phase_est)
 
@@ -675,8 +677,8 @@ class single_carrier:
          max_s = 0
          for s in np.arange(0,Nframe_syms):
             rx_symbs = rx_symb_buf[s+Nsync_syms:s+Nsync_syms+Npayload_syms]
-            corr = np.dot(rx_symbs,tx_symbs)
-            energy = np.dot(rx_symbs,rx_symbs)
+            corr = np.dot(np.conj(rx_symbs),tx_symbs)
+            energy = np.dot(np.conj(rx_symbs),rx_symbs)
             metric = corr/np.sqrt(energy)
             if np.abs(metric) > np.abs(max_metric):
                max_s = s
@@ -713,7 +715,8 @@ class single_carrier:
          plt.plot(error_log); plt.ylabel('Errors/frame')
          plt.subplot(212)
          plt.plot(norm_rx_timing_log,'+'); plt.ylabel('Fine Timing')
-
+         plt.figure(3)
+         plt.plot(self.phase_est_log.real,self.phase_est_log.imag,'+'); plt.ylabel('Phase Est')
          plt.show()
 
       test_pass = ber <= target_ber
