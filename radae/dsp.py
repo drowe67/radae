@@ -402,7 +402,7 @@ class receiver_one():
 
       # est ampl across one just two sets of pilots seems to work OK (loss isn't impacted)
       if self.coarse_mag:
-         mag = torch.mean(torch.abs(rx_pilots)**2)**0.5
+         mag = torch.mean(torch.abs(rx_pilots)**2)**0.5 + 1E-6
          if self.bottleneck == 3:
             mag = mag*torch.abs(self.P[0])/self.pilot_gain
          #print(f"coarse mag: {mag:f}", file=sys.stderr)
