@@ -353,3 +353,25 @@ function plot_SNR_CNR(epslatex="")
         print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
     end
 endfunction
+
+% test handling of single sample per symbol phase jumps
+function test_phase_est
+  theta = 0:0.01:2*pi;
+  phi_fine =angle((exp(j*theta)).^2)/2;
+  phi_coarse = zeros(1,length(phi_fine));
+  for n=2:length(phi_fine)
+    phi_coarse(n) = phi_coarse(n-1);
+    if phi_fine(n) - phi_fine(n-1) < -0.9*pi
+      phi_coarse(n) += pi;
+    end
+    if phi_fine(n) - phi_fine(n-1) > 0.9*pi
+      phi_coarse(n) -= pi;
+    end
+  end
+  phi = phi_coarse + phi_fine;
+  figure(1); clf; hold on;
+  plot(theta, phi_fine, "b-;fine;")
+  plot(theta, phi_coarse, "g-;coarse;")
+  plot(theta, phi, "r-;phi;")
+  hold off
+endfunction

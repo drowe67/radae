@@ -524,6 +524,8 @@ class single_carrier:
       self.Nphase = 21
       # Nphase must be odd
       assert np.mod(self.Nphase,2) == 1
+      self.phase_est_fine = 0
+      self.phase_est_coarse = 0
       self.phase_est_mem = np.zeros(self.Nphase, dtype=np.csingle)
       self.phase_est_log = np.array([], dtype=np.csingle)
 
@@ -598,9 +600,24 @@ class single_carrier:
       rx_symbs_corrected = np.zeros(len(rx_symbs), dtype=np.csingle)
       for s in np.arange(0,len(rx_symbs)):
          # strip (BPSK) modulation by taking symbol to mod_order power, note this means estimate is 
-         # modulo pi/mod_order, this ambiguity is resolved with frame sync word.
-         phase_est = np.angle(sum((symbol_buf[s+1:s+1+self.Nphase]*np.exp(1j*np.pi/4))**mod_order))/mod_order
+         # modulo 2*pi/mod_order.  We track jumps in phase due to this modulo effect, and the initial 
+         # ambiguity is resolved with the frame sync word.
+
+         # sum a window of modulation stripped symbols to get a good average centred on this symbol
+         phase_est_fine = np.angle(sum((symbol_buf[s+1:s+1+self.Nphase])**mod_order))/mod_order
+
+         # track phase jummps and adjust coarse past of phase est
+         if phase_est_fine - self.phase_est_fine < -0.9*np.pi:
+            self.phase_est_coarse += np.pi
+         if phase_est_fine - self.phase_est_fine > 0.9*np.pi:
+            self.phase_est_coarse -= np.pi
+         self.phase_est_fine = phase_est_fine
+         phase_est = self.phase_est_coarse + self.phase_est_fine
+
+         # update log for plotting purposes
          self.phase_est_log = np.append(self.phase_est_log, np.exp(1j*phase_est))
+         
+         # correct phase of symbol at the centre of window
          centre = s + self.Nphase//2
          rx_symbs_corrected[s] = symbol_buf[centre]*np.exp(-1j*phase_est)
 
@@ -628,7 +645,7 @@ class single_carrier:
       return rx_symbs
    
    # python3 -c "from radae import single_carrier; s=single_carrier(); s.run_test(100,sample_clock_offset_ppm=-100,plots_en=True)"
-   def run_test(self,Nframes=10, EbNodB=100, phase=0, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
+   def run_test(self,Nframes=10, EbNodB=100, phase=0, freq=0, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
       Nframe_syms = self.Nframe_syms
       Nsync_syms = self.Nsync_syms
       Npayload_syms = self.Npayload_syms
@@ -649,7 +666,8 @@ class single_carrier:
       tx_4 = self.lpf.bpf(tx_zp)
       rx = sample_clock_offset(tx_4, sample_clock_offset_ppm)[0::4]
 
-      rx *= np.exp(1j*phase)
+      phase_vec = 2*np.pi*freq*np.arange(0,len(rx))/self.Fs + phase
+      rx *= np.exp(1j*phase_vec)
       sigma = np.sqrt(1/(self.M*10**(EbNodB/10)))
       noise = (sigma/np.sqrt(2))*(np.random.randn(len(rx)) + 1j*np.random.randn(len(rx)))
       rx = rx + noise
@@ -685,14 +703,14 @@ class single_carrier:
                max_metric = metric
    
          # reset phase ambiguity based on frame sync
-         #if np.angle(max_metric) < 0:
-         #   self.phase_ambiguity = np.pi
-         #else:
-         self.phase_ambiguity = 0
-         print(f"max_metric: {np.abs(max_metric):5.2f} {np.angle(max_metric):5.2f}", end='')
+         if max_metric.real < 0:
+            self.phase_ambiguity = np.pi
+         else:
+            self.phase_ambiguity = 0
+         print(f"max_metric: {max_metric.real:5.2f} {self.phase_ambiguity:5.2f}", end='')
 
          # if good frame sync count errors      
-         if max_metric >= self.metric_thresh:
+         if np.abs(max_metric) >= self.metric_thresh:
             rx_symbs = np.exp(1j*self.phase_ambiguity)*rx_symb_buf[max_s+Nsync_syms:max_s+Nsync_syms+Npayload_syms]
             n_errors = np.sum(rx_symbs * tx_symbs < 0)
             error_log = np.append(error_log,n_errors)
@@ -716,7 +734,8 @@ class single_carrier:
          plt.subplot(212)
          plt.plot(norm_rx_timing_log,'+'); plt.ylabel('Fine Timing')
          plt.figure(3)
-         plt.plot(self.phase_est_log.real,self.phase_est_log.imag,'+'); plt.ylabel('Phase Est')
+         plt.plot(self.phase_est_log.real,self.phase_est_log.imag,'+'); plt.title('Phase Est')
+         plt.plot(np.angle(self.phase_est_log),'+'); plt.title('Phase Est')
          plt.show()
 
       test_pass = ber <= target_ber
