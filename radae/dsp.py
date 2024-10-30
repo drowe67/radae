@@ -510,7 +510,8 @@ class single_carrier:
       self.Nframe_syms = 96
       self.Npayload_syms = self.Nframe_syms - self.Nsync_syms
       self.metric_thresh =  0.25
-
+      p = self.p25_frame_sync[:self.Nsync_syms]*self.M
+      self.metric_max = np.dot(p,p)/np.sqrt(np.dot(p,p))
       self.rrc = gen_rn_coeffs(self.alpha, self.T, self.Rs, self.Nfilt_sym, self.M)
       self.Ntap = len(self.rrc)
 
@@ -697,7 +698,7 @@ class single_carrier:
             rx_symbs = rx_symb_buf[s+Nsync_syms:s+Nsync_syms+Npayload_syms]
             corr = np.dot(np.conj(rx_symbs),tx_symbs)
             energy = np.dot(np.conj(rx_symbs),rx_symbs)
-            metric = corr/np.sqrt(energy)
+            metric = corr/(np.sqrt(energy)*self.metric_max+1E-12)
             if np.abs(metric) > np.abs(max_metric):
                max_s = s
                max_metric = metric
