@@ -503,15 +503,16 @@ class single_carrier:
       self.M = int(self.Fs/self.Rs)
       # M must be an integer
       assert self.M == self.Fs/self.Rs
-
+      self.lo_omega_rect = np.exp(1j*2*np.pi*fcentreHz/self.Fs)
+      
       # +++++-++--++----+-+-----
       self.p25_frame_sync = np.array([1,1,1,1,1,-1,1,1,-1,-1,1,1,-1,-1,-1,-1,1,-1,1,-1,-1,-1,-1,-1], dtype=np.csingle)
       self.Nsync_syms = 16
       self.Nframe_syms = 96
       self.Npayload_syms = self.Nframe_syms - self.Nsync_syms
       self.metric_thresh =  0.25
-      p = self.p25_frame_sync[:self.Nsync_syms]*self.M
-      self.metric_max = np.dot(p,p)/np.sqrt(np.dot(p,p))
+      p = self.p25_frame_sync[:self.Nsync_syms]
+      self.p_scale = np.dot(p,p)/np.sqrt(np.dot(p,p))
       self.rrc = gen_rn_coeffs(self.alpha, self.T, self.Rs, self.Nfilt_sym, self.M)
       self.Ntap = len(self.rrc)
 
@@ -530,21 +531,35 @@ class single_carrier:
       self.phase_est_mem = np.zeros(self.Nphase, dtype=np.csingle)
       self.phase_est_log = np.array([], dtype=np.csingle)
 
+      self.tx_lo_phase_rect = 1 + 1j*0
+      self.rx_lo_phase_rect = 1 + 1j*0
+      
       # 4x oversampling filter for timing offset simulation
       self.lpf = complex_bpf(101,self.Fs*4,self.Fs, 0)
 
    # input rate Rs symbols, output at rate Fs, preserves memory for next call
    def tx(self, tx_symbs):
       assert len(tx_symbs) == 80
+
       # pre-pend frame sync word
       tx_symbs = np.concatenate([self.p25_frame_sync[:self.Nsync_syms],tx_symbs])
+ 
+      # RN filter
       tx_filt_in = np.concatenate([self.tx_filt_mem, np.zeros(len(tx_symbs)*self.M, dtype=np.csingle)])
       tx_filt_in[self.Ntap::self.M] = tx_symbs*self.M
       tx_filt_out = np.zeros(len(tx_symbs)*self.M, dtype=np.csingle)
       for i in np.arange(0,len(tx_symbs)*self.M):
          tx_filt_out[i] = np.dot(tx_filt_in[i+1:i+self.Ntap+1],self.rrc)
       self.tx_filt_mem = tx_filt_in[-self.Ntap:]
-      # TODO add freq shift
+
+      # freq shift up to centre freq
+      for i in np.arange(len(tx_filt_out)):
+         tx_filt_out[i] *= self.tx_lo_phase_rect
+         self.tx_lo_phase_rect *= self.lo_omega_rect
+         #print(self.tx_lo_phase_rect)
+      # normalise tx LO rect cooordinates  
+      self.tx_lo_phase_rect /= np.abs(self.tx_lo_phase_rect)
+ 
       return tx_filt_out
 
    # estimate fine timing and resample (decimate) at optimum timing estimate, returning 
@@ -630,10 +645,17 @@ class single_carrier:
    def rx(self, rx_samples):
       assert len(rx_samples) == self.nin
       M = self.M
-      # TODO add freq shift
+      
+      # shift samples from centre freq to baseband
+      rx_bb_samples = np.copy(rx_samples)
+      for i in np.arange(len(rx_samples)):
+         rx_bb_samples[i] *= self.rx_lo_phase_rect
+         self.rx_lo_phase_rect *= np.conj(self.lo_omega_rect)
+      # normaliase rx LO rect cooordinates  
+      self.rx_lo_phase_rect /= np.abs(self.rx_lo_phase_rect)
 
       # filter received sample stream
-      rx_filt_in = np.concatenate([self.rx_filt_mem, rx_samples])
+      rx_filt_in = np.concatenate([self.rx_filt_mem, rx_bb_samples])
       to_keep = len(self.rx_filt_out) - self.nin
       self.rx_filt_out[:to_keep] = self.rx_filt_out[-to_keep:]
       for i in np.arange(0,self.nin):
@@ -646,7 +668,7 @@ class single_carrier:
       return rx_symbs
    
    # python3 -c "from radae import single_carrier; s=single_carrier(); s.run_test(100,sample_clock_offset_ppm=-100,plots_en=True)"
-   def run_test(self,Nframes=10, EbNodB=100, phase=0, freq=0, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
+   def run_test(self,Nframes=10, EbNodB=100, phase_off=0, freq_off=0, mag_off=0, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
       Nframe_syms = self.Nframe_syms
       Nsync_syms = self.Nsync_syms
       Npayload_syms = self.Npayload_syms
@@ -667,11 +689,12 @@ class single_carrier:
       tx_4 = self.lpf.bpf(tx_zp)
       rx = sample_clock_offset(tx_4, sample_clock_offset_ppm)[0::4]
 
-      phase_vec = 2*np.pi*freq*np.arange(0,len(rx))/self.Fs + phase
+      # simulate freq, phase, mag offsets and AWGN noise
+      phase_vec = 2*np.pi*freq_off*np.arange(0,len(rx))/self.Fs + phase_off
       rx *= np.exp(1j*phase_vec)
       sigma = np.sqrt(1/(self.M*10**(EbNodB/10)))
       noise = (sigma/np.sqrt(2))*(np.random.randn(len(rx)) + 1j*np.random.randn(len(rx)))
-      rx = rx + noise
+      rx = mag_off*(rx + noise)
 
       # demodulate stream with rx
       rx_symb_buf = np.zeros(2*Nframe_syms, dtype=np.csingle)
@@ -682,36 +705,43 @@ class single_carrier:
       total_errors = 0
       total_bits = 0
 
-      while len(rx) >= nin:
+      n = 0
+      while len(rx[n:]) >= nin:
          # demod next frame
          rx_symb_buf[:Nframe_syms] = rx_symb_buf[Nframe_syms:] 
-         rx_symb_buf[Nframe_syms:] = self.rx(rx[:nin])
+         rx_symb_buf[Nframe_syms:] = self.rx(rx[n:n+nin])
          rx_symb_log = np.concatenate([rx_symb_log,rx_symb_buf[Nframe_syms:]])
          norm_rx_timing_log = np.append(norm_rx_timing_log, self.norm_rx_timing)
-         rx = rx[nin:]
+         n += nin
          nin = self.nin
 
-         # look for frame sync in two frame buffer
-         max_metric = 0
+         # look for frame sync in two frame buffer, Cs is a normalised correlation at
+         # symbol s (ref freedv_low.pdf "Coarse Timing Estimation")
+         max_Cs = 0
          max_s = 0
          for s in np.arange(0,Nframe_syms):
-            rx_symbs = rx_symb_buf[s+Nsync_syms:s+Nsync_syms+Npayload_syms]
-            corr = np.dot(np.conj(rx_symbs),tx_symbs)
-            energy = np.dot(np.conj(rx_symbs),rx_symbs)
-            metric = corr/(np.sqrt(energy)*self.metric_max+1E-12)
-            if np.abs(metric) > np.abs(max_metric):
+            rx_symbs = rx_symb_buf[s:s+Nsync_syms]
+            num = np.dot(np.conj(rx_symbs),self.p25_frame_sync[:self.Nsync_syms]/self.p_scale)
+            denom = np.sqrt(np.dot(np.conj(rx_symbs),rx_symbs))
+            Cs = num/(denom+1E-12)
+            if np.abs(Cs) > np.abs(max_Cs):
                max_s = s
-               max_metric = metric
+               max_Cs = Cs
    
          # reset phase ambiguity based on frame sync
-         if max_metric.real < 0:
+         if max_Cs.real < 0:
             self.phase_ambiguity = np.pi
          else:
             self.phase_ambiguity = 0
-         print(f"max_metric: {max_metric.real:5.2f} {self.phase_ambiguity:5.2f}", end='')
+         print(f"max_metric: {max_Cs.real:5.2f} {self.phase_ambiguity:5.2f}", end='')
+
+         # amplitude norm based on frame sync word
+         fs_symbs = rx_symb_buf[max_s:max_s+Nsync_syms]
+         g = 1/(np.mean(np.abs(fs_symbs)**2)**0.5+1E-12)
+         print(f" g: {g:5.2f}", end='')
 
          # if good frame sync count errors      
-         if np.abs(max_metric) >= self.metric_thresh:
+         if np.abs(max_Cs) >= self.metric_thresh:
             rx_symbs = np.exp(1j*self.phase_ambiguity)*rx_symb_buf[max_s+Nsync_syms:max_s+Nsync_syms+Npayload_syms]
             n_errors = np.sum(rx_symbs * tx_symbs < 0)
             error_log = np.append(error_log,n_errors)
@@ -727,16 +757,22 @@ class single_carrier:
 
       if plots_en:
          plt.figure(1)
-         plt.plot(rx_symb_log.real,rx_symb_log.imag,'+'); plt.ylabel('Symbols')
-         plt.axis([-0.5,0.5,-0.5,0.5])
+         plt.plot(g*rx_symb_log.real,g*rx_symb_log.imag,'+'); plt.ylabel('Symbols')
+         plt.axis([-2,2,-2,2])
          plt.figure(2)
          plt.subplot(211)
          plt.plot(error_log); plt.ylabel('Errors/frame')
          plt.subplot(212)
          plt.plot(norm_rx_timing_log,'+'); plt.ylabel('Fine Timing')
          plt.figure(3)
-         plt.plot(self.phase_est_log.real,self.phase_est_log.imag,'+'); plt.title('Phase Est')
          plt.plot(np.angle(self.phase_est_log),'+'); plt.title('Phase Est')
+         plt.figure(4)
+         from matplotlib.mlab import psd
+         P, frequencies = psd(rx,Fs=self.Fs)
+         PdB = 10*np.log10(P)
+         plt.plot(frequencies,PdB); plt.title('PSD'); plt.grid()
+         mx = 10*np.ceil(max(PdB)/10)
+         plt.axis([-self.Fs/2, self.Fs/2, mx-40, mx])
          plt.show()
 
       test_pass = ber <= target_ber
@@ -751,7 +787,8 @@ class single_carrier:
    # * handle amplitude normalisation (could be a source of distortion for ML - measure loss)
    # * handle DC offset removal
    # * separate tx/rx cmd line applications that talk to BBFM ML enc/dec
-   # * bandpass using freq offset, phase estimation, ambiguity resolution
+   # * state machine
+   # * refactor so complete rx (with state mach etc) is in a function
 
    # python3 -c "from radae import single_carrier; s=single_carrier(); s.tests()"
    def run_tests(self):
