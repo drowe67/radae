@@ -838,23 +838,35 @@ class single_carrier:
    # * user supplied analog or internal digital test symbols 
    # * DC offset removal
    # * separate tx/rx cmd line applications that talk to BBFM ML enc/dec
-   # * state machine
-   # * refactor so complete rx (with state mach etc) is in a function
-
-   # python3 -c "from radae import single_carrier; s=single_carrier(); s.tests()"
-   def run_tests(self):
+ 
+# python3 -c "from radae import single_carrier,single_carrier_tests; single_carrier_tests()"
+def single_carrier_tests():
+      modem = single_carrier()
       total = 0; passes = 0
 
       # baseline test with vanilla channel
-      total += 1; passes += self.run_test()
+      total += 1; modem = single_carrier(); passes += modem.run_test()
 
       # sample clock offsets
-      total += 1; passes += self.run_test(Nframes=100, sample_clock_offset_ppm=100)
-      total += 1; passes += self.run_test(Nframes=100, sample_clock_offset_ppm=-100)
+      total += 1; modem = single_carrier(); passes += modem.run_test(Nframes=100, sample_clock_offset_ppm=100)
+      total += 1; modem = single_carrier(); passes += modem.run_test(Nframes=100, sample_clock_offset_ppm=-100)
 
       # BER test: allow 0.5dB implementation loss
       EbNodB = 4
       target_ber = 0.5*math.erfc(np.sqrt(10**((EbNodB-0.5)/10)))
-      total += 1; passes += self.run_test(Nframes=100, sample_clock_offset_ppm=-100, EbNodB=EbNodB, target_ber=target_ber)
-       
+
+      # DC coupled 
+      total += 1; modem = single_carrier(); passes += modem.run_test(Nframes=100, sample_clock_offset_ppm=-100, EbNodB=EbNodB, target_ber=target_ber)
+
+      # 1500 Hz centre freq     
+      total += 1; modem = single_carrier(fcentreHz=1500); passes += modem.run_test(Nframes=100, 
+                                                                                   sample_clock_offset_ppm=-100, 
+                                                                                   EbNodB=EbNodB, 
+                                                                                   freq_off=1,
+                                                                                   mag=100,
+                                                                                   target_ber=target_ber)
+
       print(f"{passes:d}/{total:d}")
+
+      if passes == total:
+         print("ALL PASS")

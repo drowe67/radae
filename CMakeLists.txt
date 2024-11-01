@@ -393,6 +393,10 @@ add_test(NAME radae_rx_aux_mpp
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_start 300")
                        set_tests_properties(radae_rx_aux_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# evaluate.sh -----------------------------------------------------------------------------------------------
+# BBFM -----------------------------------------------------------------------------------------------
 
-# TODO test evaluate.sh to prevent bit rot
+add_test(NAME bbfm_single_carrier
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       python3 -c 'from radae import single_carrier,single_carrier_tests; exit(single_carrier_tests())'")
+                       set_tests_properties(bbfm_single_carrier PROPERTIES PASS_REGULAR_EXPRESSION "ALL PASS")
+
