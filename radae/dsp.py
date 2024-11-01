@@ -512,7 +512,7 @@ class single_carrier:
       self.Npayload_syms = self.Nframe_syms - self.Nsync_syms
       p = self.p25_frame_sync[:self.Nsync_syms]
       self.p_scale = np.dot(p,p)/np.sqrt(np.dot(p,p))
-      self.sync_thresh = 0.25
+      self.sync_thresh = 0.5
       self.unsync_thresh1 = 2
       self.unsync_thresh2 = 3
 
@@ -736,10 +736,6 @@ class single_carrier:
          fs_symbs = self.rx_symb_buf[fs_s:fs_s+Nsync_syms]
          self.g = 1/(np.mean(np.abs(fs_symbs)**2)**0.5+1E-12)
 
-      print(f"g: {self.g:5.2f} ", end='')      
-      print(f"rx_timing: {self.norm_rx_timing:5.2f} nin: {self.nin:4d} ", end='')
-      print(f"state: {self.state:6} next_state: {next_state:6} max_metric: {self.max_Cs.real:5.2f} {self.phase_ambiguity:5.2f}", end='')
-
       self.state = next_state
 
       # return payload symbols
@@ -788,12 +784,13 @@ class single_carrier:
       while len(rx[n:]) >= nin:
          # demod next frame
          rx_symbs = self.rx(rx[n:n+nin])
+         print(f"state: {self.state:6} nin: {self.nin:4d} rx_timing: {self.norm_rx_timing:5.2f} max_metric: {self.max_Cs.real:5.2f}", end='')
          if self.state == "sync":
             n_errors = np.sum(rx_symbs * tx_symbs < 0)
             error_log = np.append(error_log,n_errors)
             total_errors += n_errors
             total_bits += len(tx_symbs)
-            print(f" fs_s: {self.fs_s:4d} n_errors: {n_errors:4d}", end='')
+            print(f" fs_s: {self.fs_s:4d} ph_ambig: {self.phase_ambiguity:5.2f} g: {self.g:5.2f} n_errors: {n_errors:4d}", end='')
 
             # update logs for plotting
             rx_symb_log = np.concatenate([rx_symb_log,self.rx_symb_buf[Nframe_syms:]])
@@ -817,8 +814,10 @@ class single_carrier:
          plt.plot(error_log); plt.ylabel('Errors/frame')
          plt.subplot(212)
          plt.plot(norm_rx_timing_log,'+'); plt.ylabel('Fine Timing')
+         plt.axis([0,len(norm_rx_timing_log),-0.5,0.5])
          plt.figure(3)
-         plt.plot(np.angle(self.phase_est_log),'+'); plt.title('Phase Est')
+         plt.plot(np.angle(phase_est_log),'+'); plt.title('Phase Est')
+         plt.axis([0,len(phase_est_log),-np.pi,np.pi])
          plt.figure(4)
          from matplotlib.mlab import psd
          P, frequencies = psd(rx,Fs=self.Fs)
