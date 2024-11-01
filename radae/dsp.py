@@ -835,7 +835,6 @@ class single_carrier:
       return test_pass
    
    # TODO 
-   # * user supplied analog or internal digital test symbols 
    # * DC offset removal
    # * separate tx/rx cmd line applications that talk to BBFM ML enc/dec
  

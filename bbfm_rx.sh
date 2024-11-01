@@ -9,9 +9,9 @@ features_out=features_rx_out.f32
 
 if [ $# -lt 3 ]; then
     echo "usage (write output to file):"
-    echo "  ./rx_bbfm.sh model z_hat.f32 out.wav [optional rx_bbfm.py args]"
+    echo "  ./bbfm_rx.sh model z_hat.f32 out.wav [optional bbfm_rx.py args]"
     echo "usage (play output with aplay):"
-    echo "  ./rx_bbfm.sh model z_hat.f32 - [optional rx_bbfm.py args]"
+    echo "  ./bbfm_rx.sh model z_hat.f32 - [optional bbfm_rx.py args]"
     exit 1
 fi
 if [ ! -f $1 ]; then
@@ -30,7 +30,10 @@ output_speech=$3
 # eat first 3 args before passing rest to rx_bbfm.py in $@
 shift; shift; shift
 
-python3 ./rx_bbfm.py ${model} ${input_z_hat} ${features_out} "$@"
+python3 ./bbfm_rx.py ${model} ${input_z_hat} ${features_out} "$@"
+if [ $? -ne 0 ]; then
+  exit 1
+fi
 if [ $output_speech == "-" ]; then
     lpcnet_demo -fargan-synthesis ${features_out} - | aplay -r 16000 -f S16_LE
 elif [ $output_speech != "/dev/null" ]; then
