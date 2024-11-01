@@ -510,30 +510,41 @@ class single_carrier:
       self.Nsync_syms = 16
       self.Nframe_syms = 96
       self.Npayload_syms = self.Nframe_syms - self.Nsync_syms
-      self.metric_thresh =  0.25
       p = self.p25_frame_sync[:self.Nsync_syms]
       self.p_scale = np.dot(p,p)/np.sqrt(np.dot(p,p))
+      self.sync_thresh = 0.25
+      self.unsync_thresh1 = 2
+      self.unsync_thresh2 = 3
+
       self.rrc = gen_rn_coeffs(self.alpha, self.T, self.Rs, self.Nfilt_sym, self.M)
       self.Ntap = len(self.rrc)
-
       self.tx_filt_mem = np.zeros(self.Ntap, dtype=np.csingle)
       self.rx_filt_mem = np.zeros(self.Ntap, dtype=np.csingle)
       self.rx_filt_out = np.zeros((self.Nframe_syms+2)*self.M, dtype=np.csingle)
 
       self.sample_point = 5
       self.nin = self.Nframe_syms*self.M
-      
+      self.rx_symb_buf = np.zeros(2*self.Nframe_syms, dtype=np.csingle)
+
       self.Nphase = 21
       # Nphase must be odd
       assert np.mod(self.Nphase,2) == 1
       self.phase_est_fine = 0
       self.phase_est_coarse = 0
       self.phase_est_mem = np.zeros(self.Nphase, dtype=np.csingle)
-      self.phase_est_log = np.array([], dtype=np.csingle)
+      self.phase_est_log = np.zeros(self.Nframe_syms, dtype=np.csingle)
+      self.phase_ambiguity = 0
+
+      #self.phase_est_log = np.array([], dtype=np.csingle)
+      rx_symb_buf = np.zeros(2*self.Nframe_syms, dtype=np.csingle)
 
       self.tx_lo_phase_rect = 1 + 1j*0
       self.rx_lo_phase_rect = 1 + 1j*0
       
+      self.state = "search"
+      self.fs_s = 0
+      self.g = 1
+
       # 4x oversampling filter for timing offset simulation
       self.lpf = complex_bpf(101,self.Fs*4,self.Fs, 0)
 
@@ -601,7 +612,6 @@ class single_carrier:
          self.nin -= M/4
       self.nin = int(self.nin)
 
-      print(f"norm_rx_timing: {norm_rx_timing:5.2f} rx_timing: {rx_timing:5.2f} nin: {self.nin:4d} ", end='')
       self.norm_rx_timing = norm_rx_timing
       
       return rx_symbols
@@ -631,7 +641,7 @@ class single_carrier:
          phase_est = self.phase_est_coarse + self.phase_est_fine
 
          # update log for plotting purposes
-         self.phase_est_log = np.append(self.phase_est_log, np.exp(1j*phase_est))
+         self.phase_est_log[s] = np.exp(1j*phase_est)
          
          # correct phase of symbol at the centre of window
          centre = s + self.Nphase//2
@@ -641,8 +651,9 @@ class single_carrier:
 
       return rx_symbs_corrected
    
+   # rx a single frame's worth of samples, output rate Rs symbols, performs filtering, phase and timing correction
    # input rate Fs, output rate Rs, preserves memory for next call
-   def rx(self, rx_samples):
+   def rx_Fs_to_Rs(self, rx_samples):
       assert len(rx_samples) == self.nin
       M = self.M
       
@@ -667,8 +678,76 @@ class single_carrier:
 
       return rx_symbs
    
+   # rx nin samples, outputs demodulated and frame aligned symbols, handles frame sync
+   def rx(self, rx_samples):
+      assert len(rx_samples) == self.nin
+      Nframe_syms = self.Nframe_syms
+      Nsync_syms = self.Nsync_syms
+      fs_s = self.fs_s
+
+      # demod next frame of symbols
+      self.rx_symb_buf[:Nframe_syms] = self.rx_symb_buf[Nframe_syms:] 
+      self.rx_symb_buf[Nframe_syms:] = self.rx_Fs_to_Rs(rx_samples)
+
+      # iterate sync state machine ----------------------------------------------
+
+      next_state = self.state
+      if self.state == "search":
+         # look for frame sync in two frame buffer, Cs is a normalised correlation at
+         # symbol s (ref freedv_low.pdf "Coarse Timing Estimation").  Note we perform
+         # a floating point cross-correlation rather than just error count in FS word,
+         # as we use the sign of the correlation to resolve the phase ambiguity 
+         max_Cs = 0
+         max_s = 0
+         for s in np.arange(0,Nframe_syms):
+            rx_symbs = self.rx_symb_buf[s:s+Nsync_syms]
+            num = np.dot(np.conj(rx_symbs),self.p25_frame_sync[:self.Nsync_syms]/self.p_scale)
+            denom = np.sqrt(np.dot(np.conj(rx_symbs),rx_symbs))
+            Cs = num/(denom+1E-12)
+            if np.abs(Cs) > np.abs(max_Cs):
+               max_s = s
+               max_Cs = Cs
+         self.max_Cs = max_Cs
+
+         if np.abs(max_Cs) >= self.sync_thresh:
+            next_state = "sync"
+            fs_s = max_s
+            self.fs_s = fs_s
+            self.bad_fs = 0
+
+            # resolve phase ambiguity based on frame sync, we assume phase est tracks from here
+            if max_Cs.real < 0:
+               self.phase_ambiguity = np.pi
+            else:
+               self.phase_ambiguity = 0
+
+      if self.state == "sync":
+         # count errors in FS word to see if we are still in sync
+         rx_symbs = np.exp(1j*self.phase_ambiguity)*self.rx_symb_buf[fs_s:fs_s+Nsync_syms]
+         n_errors = np.sum(rx_symbs * self.p25_frame_sync[:self.Nsync_syms] < 0)
+         if n_errors > self.unsync_thresh1:
+            self.bad_fs += 1
+         else:
+            self.bad_fs = 0
+         if self.bad_fs >= self.unsync_thresh2:
+            next_state = "search"
+
+         # amplitude norm based on frame sync word
+         fs_symbs = self.rx_symb_buf[fs_s:fs_s+Nsync_syms]
+         self.g = 1/(np.mean(np.abs(fs_symbs)**2)**0.5+1E-12)
+
+      print(f"g: {self.g:5.2f} ", end='')      
+      print(f"rx_timing: {self.norm_rx_timing:5.2f} nin: {self.nin:4d} ", end='')
+      print(f"state: {self.state:6} next_state: {next_state:6} max_metric: {self.max_Cs.real:5.2f} {self.phase_ambiguity:5.2f}", end='')
+
+      self.state = next_state
+
+      # return payload symbols
+      return np.exp(1j*self.phase_ambiguity)*self.rx_symb_buf[fs_s+Nsync_syms:fs_s+Nframe_syms]
+
+
    # python3 -c "from radae import single_carrier; s=single_carrier(); s.run_test(100,sample_clock_offset_ppm=-100,plots_en=True)"
-   def run_test(self,Nframes=10, EbNodB=100, phase_off=0, freq_off=0, mag_off=0, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
+   def run_test(self,Nframes=10, EbNodB=100, phase_off=0, freq_off=0, mag=1, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
       Nframe_syms = self.Nframe_syms
       Nsync_syms = self.Nsync_syms
       Npayload_syms = self.Npayload_syms
@@ -694,13 +773,13 @@ class single_carrier:
       rx *= np.exp(1j*phase_vec)
       sigma = np.sqrt(1/(self.M*10**(EbNodB/10)))
       noise = (sigma/np.sqrt(2))*(np.random.randn(len(rx)) + 1j*np.random.randn(len(rx)))
-      rx = mag_off*(rx + noise)
+      rx = mag*(rx + noise)
 
       # demodulate stream with rx
-      rx_symb_buf = np.zeros(2*Nframe_syms, dtype=np.csingle)
       rx_symb_log = np.array([], dtype=np.csingle)
       error_log = np.array([])
       norm_rx_timing_log = np.array([])
+      phase_est_log = np.array([], dtype=np.csingle)
       nin = self.nin
       total_errors = 0
       total_bits = 0
@@ -708,48 +787,22 @@ class single_carrier:
       n = 0
       while len(rx[n:]) >= nin:
          # demod next frame
-         rx_symb_buf[:Nframe_syms] = rx_symb_buf[Nframe_syms:] 
-         rx_symb_buf[Nframe_syms:] = self.rx(rx[n:n+nin])
-         rx_symb_log = np.concatenate([rx_symb_log,rx_symb_buf[Nframe_syms:]])
-         norm_rx_timing_log = np.append(norm_rx_timing_log, self.norm_rx_timing)
-         n += nin
-         nin = self.nin
-
-         # look for frame sync in two frame buffer, Cs is a normalised correlation at
-         # symbol s (ref freedv_low.pdf "Coarse Timing Estimation")
-         max_Cs = 0
-         max_s = 0
-         for s in np.arange(0,Nframe_syms):
-            rx_symbs = rx_symb_buf[s:s+Nsync_syms]
-            num = np.dot(np.conj(rx_symbs),self.p25_frame_sync[:self.Nsync_syms]/self.p_scale)
-            denom = np.sqrt(np.dot(np.conj(rx_symbs),rx_symbs))
-            Cs = num/(denom+1E-12)
-            if np.abs(Cs) > np.abs(max_Cs):
-               max_s = s
-               max_Cs = Cs
-   
-         # reset phase ambiguity based on frame sync
-         if max_Cs.real < 0:
-            self.phase_ambiguity = np.pi
-         else:
-            self.phase_ambiguity = 0
-         print(f"max_metric: {max_Cs.real:5.2f} {self.phase_ambiguity:5.2f}", end='')
-
-         # amplitude norm based on frame sync word
-         fs_symbs = rx_symb_buf[max_s:max_s+Nsync_syms]
-         g = 1/(np.mean(np.abs(fs_symbs)**2)**0.5+1E-12)
-         print(f" g: {g:5.2f}", end='')
-
-         # if good frame sync count errors      
-         if np.abs(max_Cs) >= self.metric_thresh:
-            rx_symbs = np.exp(1j*self.phase_ambiguity)*rx_symb_buf[max_s+Nsync_syms:max_s+Nsync_syms+Npayload_syms]
+         rx_symbs = self.rx(rx[n:n+nin])
+         if self.state == "sync":
             n_errors = np.sum(rx_symbs * tx_symbs < 0)
             error_log = np.append(error_log,n_errors)
             total_errors += n_errors
             total_bits += len(tx_symbs)
-            print(f" max_s: {max_s:4d} n_errors: {n_errors:4d}", end='')
+            print(f" fs_s: {self.fs_s:4d} n_errors: {n_errors:4d}", end='')
+
+            # update logs for plotting
+            rx_symb_log = np.concatenate([rx_symb_log,self.rx_symb_buf[Nframe_syms:]])
+            norm_rx_timing_log = np.append(norm_rx_timing_log, self.norm_rx_timing)
+            phase_est_log = np.append(phase_est_log, self.phase_est_log)
+         n += nin
+         nin = self.nin
          print()
-      
+
       ber = 0
       if total_bits:
          ber = total_errors/total_bits
@@ -757,7 +810,7 @@ class single_carrier:
 
       if plots_en:
          plt.figure(1)
-         plt.plot(g*rx_symb_log.real,g*rx_symb_log.imag,'+'); plt.ylabel('Symbols')
+         plt.plot(self.g*rx_symb_log.real,self.g*rx_symb_log.imag,'+'); plt.ylabel('Symbols')
          plt.axis([-2,2,-2,2])
          plt.figure(2)
          plt.subplot(211)
@@ -784,8 +837,7 @@ class single_carrier:
    
    # TODO 
    # * user supplied analog or internal digital test symbols 
-   # * handle amplitude normalisation (could be a source of distortion for ML - measure loss)
-   # * handle DC offset removal
+   # * DC offset removal
    # * separate tx/rx cmd line applications that talk to BBFM ML enc/dec
    # * state machine
    # * refactor so complete rx (with state mach etc) is in a function
