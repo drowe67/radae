@@ -493,12 +493,12 @@ def sample_clock_offset(tx, sample_clock_offset_ppm):
 # single carrier PSK modem, suitable for baseband FM channel (DC coupled or band pass), 
 # or directly over a VHF/UHF
 class single_carrier:
-   def __init__(self, fcentreHz=0, alpha=0.25):
+   def __init__(self, Rs=2400, Fs=9600, fcentreHz=0, alpha=0.25):
       self.fcentreHz = fcentreHz
       self.alpha = alpha
-      self.Fs = 9600
+      self.Fs = Fs
       self.T = 1/self.Fs
-      self.Rs = 2400
+      self.Rs = Rs
       self.Nfilt_sym = 6
       self.M = int(self.Fs/self.Rs)
       # M must be an integer
