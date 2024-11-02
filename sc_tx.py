@@ -1,7 +1,7 @@
 """
-   Single Carrier Modem Tx (modulator).  Takes BBFM symbols on stdin and 
-   outputs a sequence of real int16 samples of stdout for input to a 
-   FM radio modulator. 
+   Single Carrier Modem Tx (modulator).  Takes BBFM symbols on stdin 
+   from the BBFM encoder and outputs a sequence of real int16 samples on
+   stdout for input to a FM radio modulator. 
 
 /* Copyright (c) 2024 David Rowe */
    
@@ -43,14 +43,17 @@ parser.add_argument('--ber_test', action='store_true', help='Send test frames of
 parser.add_argument('--fcentreHz', type=float, help='Centre frequency',default=1500)
 parser.add_argument('--Rs', type=float, help='Symbol rate',default=2400)
 parser.add_argument('--Fs', type=float, help='Sample rate, Fs/Rs must be an integer',default=9600)
-parser.add_argument('--complex_out', dest="real", action='store_false', help='complex 2*int16 output samples (default real)')
+parser.add_argument('--complex', dest="real", action='store_false', help='complex 2*int16 output samples (default real)')
 parser.set_defaults(real=True)
 args = parser.parse_args()
 
 if (args.fcentreHz < args.Rs/2) and args.real and (args.fcentreHz != 0):
-   print("Warning - aliased output with real valued output samples, consider --complex")
+   print("Warning - aliased likely with real valued output samples, consider --complex")
 modem = single_carrier(Rs=args.Rs, Fs=args.Fs, fcentreHz=args.fcentreHz)
 assert modem.Npayload_syms == args.latent_dim
+
+if args.ber_test:
+   tx_symbs = 1 - 2*(modem.rng.random(args.latent_dim) > 0.5) + 0*1j
 
 n_floats_in = args.latent_dim*struct.calcsize("f")
 while True:
@@ -58,7 +61,10 @@ while True:
    if len(buffer) != n_floats_in:
       break
    z = np.frombuffer(buffer,np.float32)
-   tx = args.scale*modem.tx(z)
+   if args.ber_test:
+       tx = args.scale*modem.tx(tx_symbs)
+   else:
+       tx = args.scale*modem.tx(z)
    if args.real:
       tx = tx.real
    tx = tx.astype(np.int16)

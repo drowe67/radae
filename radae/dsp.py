@@ -34,6 +34,7 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 import math
+import sys
 
 class complex_bpf():
    def __init__(self, Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz):
@@ -547,6 +548,9 @@ class single_carrier:
 
       # 4x oversampling filter for timing offset simulation
       self.lpf = complex_bpf(101,self.Fs*4,self.Fs, 0)
+      # create a RNG with same sequence for BER testing with separate tx and rx
+      seed = 65647437836358831880808032086803839626
+      self.rng = np.random.default_rng(seed)
 
    # input rate Rs symbols, output at rate Fs, preserves memory for next call
    def tx(self, tx_symbs):
@@ -745,11 +749,10 @@ class single_carrier:
    # python3 -c "from radae import single_carrier; s=single_carrier(); s.run_test(100,sample_clock_offset_ppm=-100,plots_en=True)"
    def run_test(self,Nframes=10, EbNodB=100, phase_off=0, freq_off=0, mag=1, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
       Nframe_syms = self.Nframe_syms
-      Nsync_syms = self.Nsync_syms
       Npayload_syms = self.Npayload_syms
 
       # single fixed test frame
-      tx_symbs = 1 - 2*(np.random.rand(Npayload_syms) > 0.5) + 0*1j
+      tx_symbs = 1 - 2*(self.rng.random(Npayload_syms) > 0.5) + 0*1j
 
       # create a stream of tx samples
       tx = np.array([], dtype=np.csingle)
