@@ -56,6 +56,7 @@ if args.ber_test:
    tx_symbs = 1 - 2*(modem.rng.random(args.latent_dim) > 0.5) + 0*1j
 
 n_floats_in = args.latent_dim*struct.calcsize("f")
+frames = 0
 while True:
    buffer = sys.stdin.buffer.read(n_floats_in)
    if len(buffer) != n_floats_in:
@@ -69,3 +70,6 @@ while True:
       tx = tx.real
    tx = tx.astype(np.int16)
    sys.stdout.buffer.write(tx) 
+   frames += 1
+
+print(f"{frames} frames processed", file=sys.stderr)

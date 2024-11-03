@@ -50,7 +50,7 @@ parser.set_defaults(real=True)
 args = parser.parse_args()
 
 if (args.fcentreHz < args.Rs/2) and args.real and (args.fcentreHz != 0):
-   print("Warning - aliasing likely with real valued input samples, consider --complex")
+   print("Warning - aliasing likely with real valued input samples, consider --complex", file=sys.stderr)
 modem = single_carrier(Rs=args.Rs, Fs=args.Fs, fcentreHz=args.fcentreHz)
 assert modem.Npayload_syms == args.latent_dim
 
@@ -72,6 +72,7 @@ if args.plots:
 
 bytes_in = modem.nin*int16s_per_sample*struct.calcsize("h")
 print(int16s_per_sample, modem.nin, bytes_in, file=sys.stderr)
+frames = 0
 while True:
    buffer = sys.stdin.buffer.read(bytes_in)
    if len(buffer) != bytes_in:
@@ -79,7 +80,6 @@ while True:
    rx = np.zeros(modem.nin,dtype=np.csingle)
    if args.real:
       tmp = np.frombuffer(buffer,np.int16)
-      print(len(tmp))
       rx.real = tmp
    else:
       tmp = np.frombuffer(buffer,np.int16)
@@ -89,13 +89,16 @@ while True:
    z_hat = modem.rx(rx)
 
    if modem.state == "sync":
+      z_hat = modem.g*np.array(z_hat.real,dtype=np.float32)
+      sys.stdout.buffer.write(z_hat) 
       if args.ber_test:
          n_errors = np.sum(z_hat * tx_symbs < 0)
          total_errors += n_errors
          total_bits += len(tx_symbs)
       if args.plots:
          rx_symb_log = np.concatenate([rx_symb_log,modem.rx_symb_buf[args.latent_dim:]])
-         error_log = np.append(error_log,n_errors)
+         if args.ber_test:
+            error_log = np.append(error_log,n_errors)
          norm_rx_timing_log = np.append(norm_rx_timing_log, modem.norm_rx_timing)
          phase_est_log = np.append(phase_est_log, modem.phase_est_log)
 
@@ -106,8 +109,10 @@ while True:
          print(f" n_errors: {n_errors:4d}", end='', file=sys.stderr)
       print(file=sys.stderr)
 
-   sys.stdout.buffer.write(z_hat) 
    bytes_in = modem.nin*int16s_per_sample*struct.calcsize("h")
+   frames += 1
+
+print(f"{frames} frames processed", file=sys.stderr)
 
 # optional debug info
 if args.ber_test:
@@ -122,7 +127,8 @@ if args.plots:
    plt.axis([-2,2,-2,2])
    plt.figure(2)
    plt.subplot(211)
-   plt.plot(error_log); plt.ylabel('Errors/frame')
+   if args.ber_test:
+      plt.plot(error_log); plt.ylabel('Errors/frame')
    plt.subplot(212)
    plt.plot(norm_rx_timing_log,'+'); plt.ylabel('Fine Timing')
    plt.axis([0,len(norm_rx_timing_log),-0.5,0.5])

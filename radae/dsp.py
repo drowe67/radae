@@ -724,6 +724,10 @@ class single_carrier:
                self.phase_ambiguity = np.pi
             else:
                self.phase_ambiguity = 0
+         
+            # amplitude norm based on frame sync word
+            fs_symbs = self.rx_symb_buf[fs_s:fs_s+Nsync_syms]
+            self.g = 1/(np.mean(np.abs(fs_symbs)**2)**0.5+1E-12)
 
       if self.state == "sync":
          # count errors in FS word to see if we are still in sync
