@@ -47,7 +47,7 @@ parser.add_argument('--acq_time_test', type=float, default=0, help='compare acqu
 parser.add_argument('--clip_start', type=int, default=0, help='remove this many frames from end, useful to remove start of over resync (default 0)')
 parser.add_argument('--clip_end', type=int, default=0, help='remove this many frames from end, useful to remove end of over noise (default 0)')
 parser.add_argument('--plot', action='store_true', help='plot loss versus time')
-parser.add_argument('--compare', action='store_true', help='plot loss versus time')
+parser.add_argument('--compare', action='store_true', help='compare features_hat and features_hat2')
 args = parser.parse_args()
 
 device = torch.device("cpu")

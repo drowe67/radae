@@ -46,6 +46,7 @@ parser.add_argument('--Fs', type=float, help='Sample rate, Fs/Rs must be an inte
 parser.add_argument('--complex', dest="real", action='store_false', help='complex 2*int16 input samples (default real)')
 parser.add_argument('-v', type=int, default=2, help='Verbose level (default 2)')
 parser.add_argument('--plots', action='store_true', help='Enable plots when input data finished')
+parser.add_argument('--target_ber', type=float, help='less than target BER to print Pass',default=2.0)
 parser.set_defaults(real=True)
 args = parser.parse_args()
 
@@ -114,12 +115,18 @@ while True:
 
 print(f"{frames} frames processed", file=sys.stderr)
 
-# optional debug info
+# optional BER tests (BSPK symbols)
 if args.ber_test:
    ber = 0
    if total_bits:
       ber = total_errors/total_bits
    print(f"total_bits: {total_bits:4d} total_errors: {total_errors:4d} BER: {ber:5.4f}", file=sys.stderr)
+   if args.target_ber < 1:
+      test_pass = ber <= args.target_ber
+      if test_pass:
+         print("PASS", file=sys.stderr)
+      else:
+         print("FAIL", file=sys.stderr)
 
 if args.plots:
    plt.figure(1)
