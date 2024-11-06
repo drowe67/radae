@@ -57,6 +57,10 @@ f'''
         writer.weight_arrays.append(name)
 
     if reshape_8x4:
+        if vector.shape[1] % 8 != 0:
+            n_extra = vector.shape[1] % 8
+            print(f"adding {n_extra:d} cols")
+            vector = np.append(vector, 1E-12*np.ones((vector.shape[0], n_extra)), axis=1)
         vector = vector.reshape((vector.shape[0]//4, 4, vector.shape[1]//8, 8))
         vector = vector.transpose((2, 0, 3, 1))
 
@@ -175,7 +179,9 @@ def compute_scaling(weight):
     """ computes optimal scaling vector for weight of shape (features_in, features_out) """
 
     n_in, n_out = weight.shape
-    assert n_in % 4 == 0 and n_out % 8 == 0
+    assert n_in % 4 == 0
+    if n_out % 8 != 0:
+        print(f"Warning: n_out: {n_out:d} not divisable by 8")
 
     weight_max_abs = np.max(np.abs(weight), axis=0)
     weight_max_sum = np.max(np.abs(weight[: n_in : 2] + weight[1 : n_in : 2]), axis=0)
@@ -216,6 +222,19 @@ def print_linear_layer(writer : CWriter,
     if len(weight.shape) != 2:
         raise ValueError('expecting 2-dim weight array in print_linear_layer')
 
+    """
+    n_in, n_out = weight.shape
+    print(n_in, n_out)
+    assert n_in % 4 == 0
+    # DR: add extra columns top make divisible by 8
+    if n_out % 8 != 0:
+        n_extra = int(n_out % 8)
+        weight = np.append(weight, 1E-12*np.ones((n_in, n_extra)), axis=1)
+        print(weight.shape)
+        print(f"Warning: n_out not divisable by 8, adding {n_extra:d} zero columns")
+        n_out += n_extra
+        #quit()
+    """
 
     bias_name           = "NULL" if bias is None else name + "_bias"
     subias_name         = name + "_subias" if quantize else "NULL"
