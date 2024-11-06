@@ -92,6 +92,34 @@ cmake ..
 make
 ```
 
+### Building on Windows
+
+While most of RADAE is in Python, there is a `lpcnet_demo` application
+that is required to be compiled. To do this for Windows, you can run
+something like the following from a Linux machine:
+
+```
+wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240619/llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz
+tar xzf llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz
+export PATH=`pwd`/llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64/bin:$PATH
+export RADAE_PATH=`pwd`/radae
+cd $RADAE_PATH
+mkdir build_windows
+cd build_windows
+cmake -DCMAKE_TOOLCHAIN_FILE=$RADAE_PATH/cross-compile/mingw-llvm-x86_64.cmake ..
+make
+```
+
+(Replace `x86_64` in `mingw-llvm-x86_64.cmake` with either `i686` or `aarch64` for 32-bit x86 or 64-bit ARM, respectively.)
+
+Once done, `lpcnet_demo.exe` will be inside the `src` folder inside `build_windows`.
+
+#### Limitations
+
+* ctests are untested and likely do not work without additional changes.
+* Visual Studio is not supported, only MinGW.
+* Generating a Windows installer is currently not supported. `lpcnet_demo.exe` is intended to be included with other applications built with MinGW (such as freedv-gui).
+
 # Automated Tests
 
 The `cmake/ctest` framework is being used as a build and test framework. The command lines in `CmakeLists.txt` are a good source of examples, if you are interested in running the code in this repo. The ctests are a work in progress and may not pass on all systems (see Scope above).
@@ -273,7 +301,7 @@ BER tests are useful to calibrate the system, and measure loss from classical DS
 `radae_rx.py` is s streaming receiver that accepts IQ samples on stdin, and outputs z vectors on stdout.  To listen to an example decode:
 ```
 ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32
-./radae_rx.sh model17/checkpoints/checkpoint_epoch_100.pth rx.f32 -
+cat rx.f32 | python3 radae_rx.py model17/checkpoints/checkpoint_epoch_100.pth | build/src/lpcnet_demo -fargan-synthesis - - | aplay -f S16_LE -r 16000
 ```
 To run just the core streaming decoder:
 ```
@@ -356,7 +384,7 @@ This section is optional - pre-trained models that run on a standard laptop CPU 
    python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model18 --latent-dim 40 --bottleneck 3 --h_file h_nc10_train_mpp.f32 --range_EbNo_start -3 --range_EbNo --plot_loss
    ```
 
-1, (Aug 2024) Training model with auxillary/embedded data at 25 bits/:
+1. (Aug 2024) Training model with auxillary/embedded data at 25 bits/s:
     ```
     python3 train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model19_check3 --bottleneck 3 --h_file h_nc20_train_mpp.f32 --range_EbNo --plot_loss --auxdata
     ```
@@ -391,13 +419,16 @@ A log of models trained by the author.
 | model05_auxdata | model05 (rate Rs h_nc20_train_mpp.f32) with --auxdata 100 bits/s see PR#13 | Rs | - |
 | model05_auxdata25 | model05 (rate Rs h_nc20_train_mpp.f32) with --auxdata 25 bits/s see PR#13 | Rs | - |
 | model19 | like model17 but with 25 bits/s auxdata, ep 100 loss 0.124 | Fs | - |
-| model19_check3 | model19 but loss function weighting for data symbols redcued fom 1/18 to 0.5/18, which reduced vocoder feature loss with just a small impact on BER.  Loss at various op points and channels very close to model17 | Fs | - |
+| model19_check3 | model19 but loss function weighting for data symbols reduced fom 1/18 to 0.5/18, which reduced vocoder feature loss with just a small impact on BER.  Loss at various op points and channels very close to model17 | Fs | - |
+| model20 | model19_check3 but loss function weighting for pitch and corr doubled, attempt to improve rick samples.  Didn't help. |  Fs | - |
+| model21 | very based fixed EbNodB model like model02 but at 20dB at epoch 30, produced good quality speech on rick, loss 0.02, but not a practical solution |  Rs | - |
+| model22 | very based fixed EbNodB model like model02 but at 10dB at epoch 30, rick sample starting to get tonal/pitch shift artefact, in between, loss 0.045 |  Rs | - |
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 
 # Specifications
 
-Using model 17 waveform:
+Using model19_check3 waveform:
 
 | Parameter | Value | Comment |
 | --- | --- | --- |
@@ -419,7 +450,7 @@ Using model 17 waveform:
 | Mean acquisition time | < 1.5s | 0dB SNR MPP channel | 
 | Acquisition frequency range | +/- 50 Hz | |
 | Acquisition co-channel interference tolerence | -3dBC | Interfering sine wave level, <2s mean acquisition time |
-| Auxilary text channel | No | |
+| Auxilary text channel | 25 bits/s | currently used for sync |
 | SNR measurement | No | |
 | Tx and Rx sample clock offset | 200ppm | e.g. Tx sample clock 8000 Hz, Rx sample clock 8001 Hz |
 

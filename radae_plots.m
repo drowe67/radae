@@ -4,21 +4,29 @@
 1;
 pkg load statistics signal;
 
-function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
+function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts(20);
+    end
     if length(z_fn)
       z=load_f32(z_fn,1);
       s=z(1:2:end)+j*z(2:2:end);
       figure(1); clf; plot(s,'.'); title('Scatter');
-      mx = max(abs(z))*1.5; axis([-mx mx -mx mx])
+      mx = max(abs(z))*1.2; axis([-mx mx -mx mx])
       if length(png_fn)
         print("-dpng",sprintf("%s_scatter.png",png_fn));
       end
+      if length(epslatex)
+        print_eps(sprintf("%s_scatter.eps",epslatex),"-S250,250");
+      end
       figure(2); clf;
       [nn cc] = hist3([real(s) imag(s)],[25 25]);
-      mesh(cc{1},cc{2},nn); title('Scatter 3D');
-    
+      mesh(cc{1},cc{2},nn); title('Scatter 3D');   
       if length(png_fn)
         print("-dpng",sprintf("%s_scatter_3d.png",png_fn));
+      end
+      if length(epslatex)
+        print_eps(sprintf("%s_scatter_3d.eps",epslatex),"-S300,300");
       end
       figure(3); clf; hist(abs(s));
     end
@@ -26,9 +34,33 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
     if length(rx_fn)
         rx=load_f32(rx_fn,1); 
         rx=rx(1:2:end)+j*rx(2:2:end); 
+        
+        tx_bpf = 0;
+        if tx_bpf
+          lpf=fir1(100,900/4000);
+          w = 2*pi*1500/8000;
+          N=length(rx);
+          lo = exp(j*(0:N-1)*w)';
+          rx = filter(lpf,1,rx.*lo).*conj(lo);
+          ind = find(abs(rx) > 1);
+          rx(ind) = exp(j*angle(rx(ind)));
+        end
         figure(4); clf; plot(rx); title('rate Fs Scatter (IQ)'); mx = max(abs(rx))*1.5; axis([-mx mx -mx mx]);
         figure(5); clf; plot(real(rx)); xlabel('Time (samples)'); ylabel('rx');
         figure(6); clf; plot_specgram(rx, Fs=8000, 0, 3000);
+        
+        % Spectrum plot
+        figure(7); clf; 
+        Fs = 8000; y = pwelch(rx,[],[],1024,Fs); y_dB = 10*log10(y);
+        mx = max(y_dB); mx = ceil(mx/10)*10
+        plot((0:length(y)-1)*Fs/length(y),y_dB-mx);
+        axis([0 3000 -40 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
+        if length(epslatex)
+          print_eps_restore(sprintf("%s_psd.eps",epslatex),"-S300,200",textfontsize,linewidth);
+        end
+
+        max(abs(rx).^2)
+        mean(abs(rx).^2)
         peak = max(abs(rx).^2);
         av = mean(abs(rx).^2);
         PAPRdB = 10*log10(peak/av);
@@ -36,6 +68,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='')
         av = mean(abs(rx(1:160)).^2);
         PilotPAPRdB = 10*log10(peak/av);
         printf("Pav: %f PAPRdB: %5.2f PilotPAPRdB: %5.2f\n", av, PAPRdB, PilotPAPRdB);
+        bandwidth(rx)
     end
 endfunction
 
@@ -54,6 +87,34 @@ function do_plots_bbfm(z1_fn, z2_fn="", png_fn='')
       print("-dpng",sprintf("%s.png",png_fn));
     end
 endfunction
+
+
+function p = spec_power(y, centre, bandwidth)
+  n = length(y);
+  st = round(centre - bandwidth/2); st = max(1,st);
+  en = round(centre + bandwidth/2); 
+  p = sum(y(st:en));
+endfunction
+
+
+function bandwidth(rx)
+  Nfft = 1204;
+  Fs = 8000; y = pwelch(rx,[],[],Nfft,Fs); y_dB = 10*log10(y);
+  figure(1);
+  plot((0:length(y)-1)*Fs/Nfft,y_dB);
+
+  % 99% power bandwidth
+  total_power = sum(y);
+  centre = round(Nfft*1500/Fs);
+  bw = 1;
+  do
+    bw++;
+    p = spec_power(y, centre, bw);
+  until p > 0.99*total_power
+  printf("bandwidth (Hz): %f power/total_power: %f\n", bw*Fs/Nfft, p/total_power);
+
+endfunction
+
 
 function multipath_example()
     Nc = 20; Rs = 50; d = 0.002;
@@ -156,9 +217,13 @@ function restore_fonts(textfontsize,linewidth)
   set(0, "defaultlinelinewidth", linewidth);
 end
 
-function print_eps_restore(fn,sz,textfontsize,linewidth)
+function print_eps(fn,sz)
   print(fn,sz,"-depslatex");
   printf("printing... %s\n", fn);
+end
+
+function print_eps_restore(fn,sz,textfontsize,linewidth)
+  print_eps(fn,sz);
   restore_fonts(textfontsize,linewidth);
 end
 
@@ -313,6 +378,7 @@ function test_rayleigh(epslatex="")
   end
 end
 
+<<<<<<< HEAD
 function y = relu(x)
   y = x;
   y(find(x<0)) = 0;
@@ -375,3 +441,48 @@ function test_phase_est
   plot(theta, phi, "r-;phi;")
   hold off
 endfunction
+=======
+function compare_pitch_corr(wav_fn,feat1_fn,feat2_fn,png_feat_fn="")
+  Fs=16000;
+  s=load_raw(wav_fn);
+  feat1=load_f32(feat1_fn,36);
+  feat2=load_f32(feat2_fn,36);
+
+  % plot a few features over first 5 seconds
+
+  x_wav=(1:Fs*5);
+  x=1:min(500,length(feat2));
+  figure(1); clf;
+  subplot(311);
+  plot(s(x_wav),'g'); 
+  axis([0 max(x_wav) -3E4 3E4]);
+  subplot(312);
+  plot(x,feat1(x,19),'g;fargan;');
+  hold on;  plot(x,feat2(x,19),'r;radae;'); hold off;
+  ylabel('Pitch'); axis([0 max(x) -1 1]);
+  subplot(313);
+  plot(x,feat1(x,20),'g;fargan;');
+  hold on; plot(x,feat2(x,20),'r;radae;'); hold off;
+  ylabel('Corr'); xlabel('10ms frames');
+  axis([0 max(x) -0.6 0.6])
+  if length(png_feat_fn)
+    print("-dpng",png_feat_fn,"-S1200,800");
+  end
+end
+
+function plot_sample_spec(wav_fn,png_spec_fn="")
+  % plot spectrum of entire sample, to get a feel for input mic filtering
+
+  Fs=16000;
+  s=load_raw(wav_fn);
+  figure(1); clf;
+  S = 20*log10(abs(fft(s)(1:length(s)/2)));
+  x_scale = (Fs/2)/length(S);
+  semilogx((1:length(S))*x_scale,S)
+  axis([1 8000 60 160]);
+  xlabel('Frequency (Hz)'); ylabel('Amplitude (dB)');
+  if length(png_spec_fn)
+    print("-dpng",png_spec_fn,"-S800,600");
+  end
+end
+>>>>>>> main

@@ -68,7 +68,7 @@ def complex_bpf_test(plot_en=0):
    Fs_Hz = 8000
    bandwidth_Hz = 800
    centre_freq_Hz = 1000
-   print(f"Input BPF bandwidth: {bandwidth_Hz:f} centre: {centre_freq_Hz:f}")
+   print(f"BPF bandwidth: {bandwidth_Hz:f} centre: {centre_freq_Hz:f}")
    bpf = complex_bpf(Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz)
 
    # -ve freq component of cos() should be attenuated by at least 40dB
