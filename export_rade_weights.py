@@ -31,7 +31,7 @@ import os
 import argparse
 import sys
 
-#sys.path.append(os.path.join(os.path.dirname(__file__), '../weight-exchange'))
+sys.path.append(os.path.join(os.path.dirname(__file__), 'weight-exchange'))
 
 parser = argparse.ArgumentParser()
 
@@ -39,7 +39,8 @@ parser.add_argument('checkpoint', type=str, help='model checkpoint')
 parser.add_argument('output_dir', type=str, help='output folder')
 parser.add_argument('--format', choices=['C', 'numpy'], help='output format, default: C', default='C')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
-
+parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injectiopn of auxillary data symbols')
+parser.set_defaults(auxdata=True)
 args = parser.parse_args()
 
 import torch
@@ -69,6 +70,7 @@ f"""
                 </tbody>
             </table>
 """)
+
 def dump_statistical_model(writer, w, name, xmlout):
     levels = w.shape[0]
 
@@ -93,9 +95,9 @@ def dump_statistical_model(writer, w, name, xmlout):
     p0_q8 = p0_q8[:, mask]
     N = r_q8.shape[-1]
 
-    print_vector(writer.source, quant_scales_q8, f'dred_{name}_quant_scales_q8', dtype='opus_uint8', static=False)
-    print_vector(writer.source, dead_zone_q8, f'dred_{name}_dead_zone_q8', dtype='opus_uint8', static=False)
-    print_vector(writer.source, r_q8, f'dred_{name}_r_q8', dtype='opus_uint8', static=False)
+    print_vector(writer.source, quant_scales_q8, f'rade_{name}_quant_scales_q8', dtype='opus_uint8', static=False)
+    print_vector(writer.source, dead_zone_q8, f'rade_{name}_dead_zone_q8', dtype='opus_uint8', static=False)
+    print_vector(writer.source, r_q8, f'rade_{name}_r_q8', dtype='opus_uint8', static=False)
     print_vector(writer.source, p0_q8, f'dred_{name}_p0_q8', dtype='opus_uint8', static=False)
 
     print_xml(xmlout, quant_scales_q8, "Scale", "scale", name)
@@ -148,9 +150,9 @@ f"""
         )
 
     latent_out = model.get_submodule('core_encoder.module.z_dense')
-    state_out = model.get_submodule('core_encoder.module.state_dense_2')
+    #state_out = model.get_submodule('core_encoder.module.state_dense_2')
     orig_latent_dim = latent_out.weight.shape[0]
-    orig_state_dim = state_out.weight.shape[0]
+    #orig_state_dim = state_out.weight.shape[0]
     """
     # statistical model
     qembedding = model.statistical_model.quant_embedding.weight.detach()
@@ -267,27 +269,19 @@ f"""
     # constants
     constants_writer.header.write(
 f"""
-#define DRED_NUM_FEATURES {model.feature_dim}
+#define RADE_NUM_FEATURES {model.feature_dim}
 
-#define DRED_LATENT_DIM {latent_dim}
+#define RADE_LATENT_DIM {args.latent_dim}
 
-#define DRED_STATE_DIM {state_dim}
+#define RADE_MAX_RNN_NEURONS {max(enc_max_rnn_units, dec_max_rnn_units)}
 
-#define DRED_PADDED_LATENT_DIM {padded_latent_dim}
+#define RADE_MAX_CONV_INPUTS {max(enc_max_conv_inputs, dec_max_conv_inputs)}
 
-#define DRED_PADDED_STATE_DIM {padded_state_dim}
+#define RADE_ENC_MAX_RNN_NEURONS {enc_max_conv_inputs}
 
-#define DRED_NUM_QUANTIZATION_LEVELS {model.quant_levels}
+#define RADE_ENC_MAX_CONV_INPUTS {enc_max_conv_inputs}
 
-#define DRED_MAX_RNN_NEURONS {max(enc_max_rnn_units, dec_max_rnn_units)}
-
-#define DRED_MAX_CONV_INPUTS {max(enc_max_conv_inputs, dec_max_conv_inputs)}
-
-#define DRED_ENC_MAX_RNN_NEURONS {enc_max_conv_inputs}
-
-#define DRED_ENC_MAX_CONV_INPUTS {enc_max_conv_inputs}
-
-#define DRED_DEC_MAX_RNN_NEURONS {dec_max_rnn_units}
+#define RADE_DEC_MAX_RNN_NEURONS {dec_max_rnn_units}
 
 """
     )
@@ -333,13 +327,18 @@ def numpy_export(args, model):
 
 if __name__ == "__main__":
 
-
+    num_features = 20
+    if args.auxdata:
+        num_features += 1
+    bottleneck = 3
     os.makedirs(args.output_dir, exist_ok=True)
 
     # load model from checkpoint
     checkpoint = torch.load(args.checkpoint, map_location='cpu')
-    # TODO: might need to look at constructor, not sure if we've saved all the args
-    model = RADAE(*checkpoint['model_args'], **checkpoint['model_kwargs'])
+    # TODO: in future this could be better handled with the args/kwargs mechanisim
+    model = RADAE(num_features, args.latent_dim, EbNodB=100, rate_Fs=True, 
+                  pilots=True, pilot_eq=True, eq_mean6 = False, cyclic_prefix=0.004,
+                  coarse_mag=True,time_offset=-16, bottleneck=bottleneck)
     missing_keys, unmatched_keys = model.load_state_dict(checkpoint['state_dict'], strict=False)
     def _remove_weight_norm(m):
         try:
@@ -347,7 +346,6 @@ if __name__ == "__main__":
         except ValueError:  # this module didn't have weight norm
             return
     model.apply(_remove_weight_norm)
-
 
     if len(missing_keys) > 0:
         raise ValueError(f"error: missing keys in state dict")
