@@ -31,20 +31,21 @@ import os
 import argparse
 import sys
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '../weight-exchange'))
+#sys.path.append(os.path.join(os.path.dirname(__file__), '../weight-exchange'))
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('checkpoint', type=str, help='rdovae model checkpoint')
+parser.add_argument('checkpoint', type=str, help='model checkpoint')
 parser.add_argument('output_dir', type=str, help='output folder')
 parser.add_argument('--format', choices=['C', 'numpy'], help='output format, default: C', default='C')
+parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
 
 args = parser.parse_args()
 
 import torch
 import numpy as np
 
-from rdovae import RDOVAE
+from radae import RADAE
 from wexchange.torch import dump_torch_weights
 from wexchange.c_export import CWriter, print_vector
 
@@ -150,6 +151,7 @@ f"""
     state_out = model.get_submodule('core_encoder.module.state_dense_2')
     orig_latent_dim = latent_out.weight.shape[0]
     orig_state_dim = state_out.weight.shape[0]
+    """
     # statistical model
     qembedding = model.statistical_model.quant_embedding.weight.detach()
     levels = qembedding.shape[0]
@@ -184,13 +186,11 @@ f"""
     state_in = model.get_submodule('core_decoder.module.hidden_init')
     latent_in.weight = torch.nn.Parameter(latent_in.weight[:,latent_mask]*latent_scale)
     state_in.weight = torch.nn.Parameter(state_in.weight[:,state_mask]*state_scale)
-
+    """
     # encoder
     encoder_dense_layers = [
         ('core_encoder.module.dense_1'       , 'enc_dense1',   'TANH', False,),
-        ('core_encoder.module.z_dense'       , 'enc_zdense',   'LINEAR', True,),
-        ('core_encoder.module.state_dense_1' , 'gdense1'    ,   'TANH', True,),
-        ('core_encoder.module.state_dense_2' , 'gdense2'    ,   'TANH', True)
+        ('core_encoder.module.z_dense'       , 'enc_zdense',   'LINEAR', True,)
     ]
 
     for name, export_name, _, quantize in encoder_dense_layers:
@@ -231,9 +231,7 @@ f"""
         ('core_decoder.module.glu3.gate'    , 'dec_glu3',    'TANH', True),
         ('core_decoder.module.glu4.gate'    , 'dec_glu4',    'TANH', True),
         ('core_decoder.module.glu5.gate'    , 'dec_glu5',    'TANH', True),
-        ('core_decoder.module.output'       , 'dec_output',  'LINEAR', True),
-        ('core_decoder.module.hidden_init'  , 'dec_hidden_init',        'TANH', False),
-        ('core_decoder.module.gru_init'     , 'dec_gru_init','TANH', True),
+        ('core_decoder.module.output'       , 'dec_output',  'LINEAR', True)
     ]
 
     for name, export_name, _, quantize in decoder_dense_layers:
@@ -264,7 +262,7 @@ f"""
 
     del dec_writer
 
-    del stats_writer
+    #del stats_writer
 
     # constants
     constants_writer.header.write(
@@ -338,10 +336,10 @@ if __name__ == "__main__":
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-
     # load model from checkpoint
     checkpoint = torch.load(args.checkpoint, map_location='cpu')
-    model = RDOVAE(*checkpoint['model_args'], **checkpoint['model_kwargs'])
+    # TODO: might need to look at constructor, not sure if we've saved all the args
+    model = RADAE(*checkpoint['model_args'], **checkpoint['model_kwargs'])
     missing_keys, unmatched_keys = model.load_state_dict(checkpoint['state_dict'], strict=False)
     def _remove_weight_norm(m):
         try:
