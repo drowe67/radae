@@ -168,13 +168,13 @@ add_test(NAME chirp_mpp
 # Low SNR ota_test.sh, with chirp measurement, AWGN
 add_test(NAME ota_test_awgn
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -21 0.4")
+                       ./test/ota_test_cal.sh ${CODEC2_DEV_BUILD_DIR} -21 0.4")
 
 # Low SNR ota_test.sh, with chirp measurement, MPP, high loss threshold as we only care about gross errors,
 # like stuck in false sync
 add_test(NAME ota_test_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./test/ota_test_cal.sh ~/codec2-dev/build_linux/ -24 0.4 --mpp --freq -25")
+                       ./test/ota_test_cal.sh ${CODEC2_DEV_BUILD_DIR} -24 0.4 --mpp --freq -25")
 
 
 # Acquisition tests ------------------------------------------------------------------------------------
@@ -432,6 +432,7 @@ add_test(NAME radae_rx_aux_mpp
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --clip_start 300")
                        set_tests_properties(radae_rx_aux_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+
 # Embedding Python in C callable library ------------------------------------------------------------------------------------------------------
 
 # Test Embedded version of streaming Tx, running with Python __main__
@@ -471,3 +472,40 @@ add_test(NAME radae_rx_embed_c
                        cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx > features_out.f32;
                        python3 loss.py features_in.f32 features_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_rx_embed_c PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+
+# BBFM -----------------------------------------------------------------------------------------------
+
+# single carrier modem internal (inside single_carrier class) tests
+add_test(NAME bbfm_sc_internal
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       python3 -c 'from radae import single_carrier,single_carrier_tests; single_carrier_tests()'")
+                       set_tests_properties(bbfm_sc_internal PROPERTIES PASS_REGULAR_EXPRESSION "ALL PASS")
+
+# single carrier modem stand alone tx/rx, using BPSK symbol/BER test mode
+add_test(NAME bbfm_sc_ber
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./bbfm_inference.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
+                       cat z.f32 | python3 sc_tx.py --ber_test > t.int16; \
+                       cat t.int16 | python3 sc_rx.py --ber_test --target_ber 0 > /dev/null")
+                       set_tests_properties(bbfm_sc_ber PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# single carrier modem stand alone tx/rx, using continuously valued BBFM symbols, compare loss in decoded features
+add_test(NAME bbfm_sc_loss
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./bbfm_inference.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
+                       cat z.f32 | python3 sc_tx.py | python3 sc_rx.py > z_hat.f32; \
+                       ./bbfm_rx.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth z_hat.f32 /dev/null; \
+                       python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
+                       set_tests_properties(bbfm_sc_loss PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# single carrier modem stand alone tx/rx with external 300-2700Hz band pass filter and no noise, measure loss.  In practice, SNR will be
+# quite high, so channel distortions other than noise may dominate
+add_test(NAME bbfm_sc_bpf_loss
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./bbfm_inference.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
+                       cat z.f32 | python3 sc_tx.py | ${CODEC2_DEV_BUILD_DIR}/src/ch - - | python3 sc_rx.py > z_hat.f32; \
+                       ./bbfm_rx.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth z_hat.f32 /dev/null; \
+                       python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
+                       set_tests_properties(bbfm_sc_bpf_loss PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+

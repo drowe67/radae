@@ -33,6 +33,7 @@
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
+import math
 import sys
 
 class complex_bpf():
@@ -442,3 +443,436 @@ class receiver_one():
       
       return z_hat
 
+# Generate root raised cosine (Root Nyquist) filter coefficients
+# thanks http://www.dsplog.com/db-install/wp-content/uploads/2008/05/raised_cosine_filter.m
+
+def gen_rn_coeffs(alpha, T, Rs, Nsym, M):
+
+  Ts = 1/Rs
+
+  n = np.arange(-Nsym*Ts/2,Nsym*Ts/2,T)
+  Nfilter = Nsym*M
+  Nfiltertiming = M+Nfilter+M
+
+  sincNum = np.sin(np.pi*n/Ts) # numerator of the sinc function
+  sincDen = np.pi*n/Ts    # denominator of the sinc function
+  sincDenZero = np.argwhere(np.abs(sincDen) < 10**-10)
+  sincOp = sincNum/sincDen
+  sincOp[sincDenZero] = 1; # sin(pix)/(pix) = 1 for x=0
+
+  cosNum = np.cos(alpha*np.pi*n/Ts)
+  cosDen = 1-(2*alpha*n/Ts)**2
+  cosDenZero = np.argwhere(np.abs(cosDen)<10**-10)
+  cosOp = cosNum/cosDen
+  cosOp[cosDenZero] = np.pi/4
+  gt_alpha5 = sincOp*cosOp
+  Nfft = 4096
+  GF_alpha5 = np.fft.fft(gt_alpha5,Nfft)/M
+
+  # sqrt causes stop band to be amplified, this hack pushes it down again
+  for i in np.arange(0,Nfft):
+    if np.abs(GF_alpha5[i]) < 0.02:
+      GF_alpha5[i] *= 0.001
+
+  GF_alpha5_root = np.sqrt(np.abs(GF_alpha5)) * np.exp(1j*np.angle(GF_alpha5))
+  ifft_GF_alpha5_root = np.fft.ifft(GF_alpha5_root)
+  return ifft_GF_alpha5_root[np.arange(0,Nfilter)].real
+
+def sample_clock_offset(tx, sample_clock_offset_ppm):
+   tin=0
+   tout=0
+   rx = np.zeros(len(tx), dtype=np.csingle)
+   while tin+1 < len(tx) and tout < len(rx):
+      t1 = int(np.floor(tin))
+      t2 = int(np.ceil(tin))
+      f = tin - t1
+      rx[tout] = (1-f)*tx[t1] + f*tx[t2]
+      tout += 1
+      tin  += 1 + sample_clock_offset_ppm/1E6
+   return rx
+
+# single carrier PSK modem, suitable for baseband FM channel (DC coupled or band pass), 
+# or directly over a VHF/UHF
+class single_carrier:
+   def __init__(self, Rs=2400, Fs=9600, fcentreHz=0, alpha=0.25):
+      self.fcentreHz = fcentreHz
+      self.alpha = alpha
+      self.Fs = Fs
+      self.T = 1/self.Fs
+      self.Rs = Rs
+      self.Nfilt_sym = 6
+      self.M = int(self.Fs/self.Rs)
+      # M must be an integer
+      assert self.M == self.Fs/self.Rs
+      self.lo_omega_rect = np.exp(1j*2*np.pi*fcentreHz/self.Fs)
+      
+      # +++++-++--++----+-+-----
+      self.p25_frame_sync = np.array([1,1,1,1,1,-1,1,1,-1,-1,1,1,-1,-1,-1,-1,1,-1,1,-1,-1,-1,-1,-1], dtype=np.csingle)
+      self.Nsync_syms = 16
+      self.Nframe_syms = 96
+      self.Npayload_syms = self.Nframe_syms - self.Nsync_syms
+      p = self.p25_frame_sync[:self.Nsync_syms]
+      self.p_scale = np.dot(p,p)/np.sqrt(np.dot(p,p))
+      self.sync_thresh = 0.5
+      self.unsync_thresh1 = 2
+      self.unsync_thresh2 = 3
+
+      self.rrc = gen_rn_coeffs(self.alpha, self.T, self.Rs, self.Nfilt_sym, self.M)
+      self.Ntap = len(self.rrc)
+      self.tx_filt_mem = np.zeros(self.Ntap, dtype=np.csingle)
+      self.rx_filt_mem = np.zeros(self.Ntap, dtype=np.csingle)
+      self.rx_filt_out = np.zeros((self.Nframe_syms+2)*self.M, dtype=np.csingle)
+
+      self.sample_point = 5
+      self.nin = self.Nframe_syms*self.M
+      self.rx_symb_buf = np.zeros(2*self.Nframe_syms, dtype=np.csingle)
+
+      self.Nphase = 21
+      # Nphase must be odd
+      assert np.mod(self.Nphase,2) == 1
+      self.phase_est_fine = 0
+      self.phase_est_coarse = 0
+      self.phase_est_mem = np.zeros(self.Nphase, dtype=np.csingle)
+      self.phase_est_log = np.zeros(self.Nframe_syms, dtype=np.csingle)
+      self.phase_ambiguity = 0
+
+      #self.phase_est_log = np.array([], dtype=np.csingle)
+      rx_symb_buf = np.zeros(2*self.Nframe_syms, dtype=np.csingle)
+
+      self.tx_lo_phase_rect = 1 + 1j*0
+      self.rx_lo_phase_rect = 1 + 1j*0
+      
+      self.state = "search"
+      self.fs_s = 0
+      self.g = 1
+
+      # 4x oversampling filter for timing offset simulation
+      self.lpf = complex_bpf(101,self.Fs*4,self.Fs, 0)
+      # create a RNG with same sequence for BER testing with separate tx and rx
+      seed = 65647437836358831880808032086803839626
+      self.rng = np.random.default_rng(seed)
+
+   # input rate Rs symbols, output at rate Fs, preserves memory for next call
+   def tx(self, tx_symbs):
+      assert len(tx_symbs) == 80
+
+      # pre-pend frame sync word
+      tx_symbs = np.concatenate([self.p25_frame_sync[:self.Nsync_syms],tx_symbs])
+ 
+      # RN filter
+      tx_filt_in = np.concatenate([self.tx_filt_mem, np.zeros(len(tx_symbs)*self.M, dtype=np.csingle)])
+      tx_filt_in[self.Ntap::self.M] = tx_symbs*self.M
+      tx_filt_out = np.zeros(len(tx_symbs)*self.M, dtype=np.csingle)
+      for i in np.arange(0,len(tx_symbs)*self.M):
+         tx_filt_out[i] = np.dot(tx_filt_in[i+1:i+self.Ntap+1],self.rrc)
+      self.tx_filt_mem = tx_filt_in[-self.Ntap:]
+
+      # freq shift up to centre freq
+      for i in np.arange(len(tx_filt_out)):
+         tx_filt_out[i] *= self.tx_lo_phase_rect
+         self.tx_lo_phase_rect *= self.lo_omega_rect
+         #print(self.tx_lo_phase_rect)
+      # normalise tx LO rect cooordinates  
+      self.tx_lo_phase_rect /= np.abs(self.tx_lo_phase_rect)
+ 
+      return tx_filt_out
+
+   # estimate fine timing and resample (decimate) at optimum timing estimate, returning 
+   # rate Rs symbols for this frame
+   def est_timing_and_decimate(self, rx_filt):
+      # rx_filt contains (1+Nframe_syms+1)*M samples.  The current frame being demodulated is the 
+      # middle Nframe_syms. The extra samples at the start and end are to cope with fine timing
+      # requiring samples just outside the current frame 
+      M = self.M
+
+      # Fine Timing:
+      #
+      # The envelope has a frequency component at the symbol rate.  The
+      # phase of this frequency component indicates the optimum sampling
+      # point (modulo one symbol). We compute the phase with a single point
+      # DFT at frequency 2*pi/M
+
+      # we estimate fine timing referenced to the nominal sample_point
+      env = np.abs(rx_filt[int(self.sample_point):])
+      x = np.dot(env,np.exp(-1j*2*np.pi*np.arange(0,len(env))/M))
+      norm_rx_timing = np.angle(x)/(2*np.pi) # -0.5 ... 0.5
+      rx_timing = norm_rx_timing*M           # -M/2 ... M/2
+
+      # correct sampling instant in opp direction to timing offset
+      rx_timing_correction = -rx_timing   
+      
+      # Use linear interpolation to resample at the optimum sampling point.  We assume fine timing
+      # is a constant over the frame
+      low_sample = int(np.floor(rx_timing_correction))
+      fract = rx_timing_correction - low_sample
+      sample = self.sample_point + low_sample + np.arange(0,self.Nframe_syms*M,M)
+      rx_symbols = rx_filt[sample]*(1-fract) + rx_filt[sample+1]*fract
+
+      # adjust number of samples for next frame to keep timing in the sweet spot
+      self.nin = self.Nframe_syms*M
+      if norm_rx_timing < -0.35:
+         self.nin += M/4
+      if norm_rx_timing > 0.35:
+         self.nin -= M/4
+      self.nin = int(self.nin)
+
+      self.norm_rx_timing = norm_rx_timing
+      
+      return rx_symbols
+
+   # estimate the phase offset and return phase corrected symbol
+   def est_phase_and_correct(self,rx_symbs):
+      mod_order = 2
+
+      # maintain a buffer of symbols, current sample is at centre of self.Nphase sample window
+      symbol_buf = np.concatenate([self.phase_est_mem, rx_symbs])
+   
+      rx_symbs_corrected = np.zeros(len(rx_symbs), dtype=np.csingle)
+      for s in np.arange(0,len(rx_symbs)):
+         # strip (BPSK) modulation by taking symbol to mod_order power, note this means estimate is 
+         # modulo 2*pi/mod_order.  We track jumps in phase due to this modulo effect, and the initial 
+         # ambiguity is resolved with the frame sync word.
+
+         # sum a window of modulation stripped symbols to get a good average centred on this symbol
+         phase_est_fine = np.angle(sum((symbol_buf[s+1:s+1+self.Nphase])**mod_order))/mod_order
+
+         # track phase jummps and adjust coarse past of phase est
+         if phase_est_fine - self.phase_est_fine < -0.9*np.pi:
+            self.phase_est_coarse += np.pi
+         if phase_est_fine - self.phase_est_fine > 0.9*np.pi:
+            self.phase_est_coarse -= np.pi
+         self.phase_est_fine = phase_est_fine
+         phase_est = self.phase_est_coarse + self.phase_est_fine
+
+         # update log for plotting purposes
+         self.phase_est_log[s] = np.exp(1j*phase_est)
+         
+         # correct phase of symbol at the centre of window
+         centre = s + self.Nphase//2
+         rx_symbs_corrected[s] = symbol_buf[centre]*np.exp(-1j*phase_est)
+
+      self.phase_est_mem = symbol_buf[-self.Nphase:]
+
+      return rx_symbs_corrected
+   
+   # rx a single frame's worth of samples, output rate Rs symbols, performs filtering, phase and timing correction
+   # input rate Fs, output rate Rs, preserves memory for next call
+   def rx_Fs_to_Rs(self, rx_samples):
+      assert len(rx_samples) == self.nin
+      M = self.M
+      
+      # shift samples from centre freq to baseband
+      rx_bb_samples = np.copy(rx_samples)
+      for i in np.arange(len(rx_samples)):
+         rx_bb_samples[i] *= self.rx_lo_phase_rect
+         self.rx_lo_phase_rect *= np.conj(self.lo_omega_rect)
+      # normaliase rx LO rect cooordinates  
+      self.rx_lo_phase_rect /= np.abs(self.rx_lo_phase_rect)
+
+      # filter received sample stream
+      rx_filt_in = np.concatenate([self.rx_filt_mem, rx_bb_samples])
+      to_keep = len(self.rx_filt_out) - self.nin
+      self.rx_filt_out[:to_keep] = self.rx_filt_out[-to_keep:]
+      for i in np.arange(0,self.nin):
+         self.rx_filt_out[to_keep+i] = np.dot(rx_filt_in[i+1:i+self.Ntap+1],self.rrc)
+      self.rx_filt_mem = rx_filt_in[-self.Ntap:]
+
+      rx_symbs = self.est_timing_and_decimate(self.rx_filt_out)
+      rx_symbs = self.est_phase_and_correct(rx_symbs)
+
+      return rx_symbs
+   
+   # rx nin samples, outputs demodulated and frame aligned symbols, handles frame sync
+   def rx(self, rx_samples):
+      assert len(rx_samples) == self.nin
+      Nframe_syms = self.Nframe_syms
+      Nsync_syms = self.Nsync_syms
+      fs_s = self.fs_s
+
+      # demod next frame of symbols
+      self.rx_symb_buf[:Nframe_syms] = self.rx_symb_buf[Nframe_syms:] 
+      self.rx_symb_buf[Nframe_syms:] = self.rx_Fs_to_Rs(rx_samples)
+
+      # iterate sync state machine ----------------------------------------------
+
+      next_state = self.state
+      if self.state == "search":
+         # look for frame sync in two frame buffer, Cs is a normalised correlation at
+         # symbol s (ref freedv_low.pdf "Coarse Timing Estimation").  Note we perform
+         # a floating point cross-correlation rather than just error count in FS word,
+         # as we use the sign of the correlation to resolve the phase ambiguity 
+         max_Cs = 0
+         max_s = 0
+         for s in np.arange(0,Nframe_syms):
+            rx_symbs = self.rx_symb_buf[s:s+Nsync_syms]
+            num = np.dot(np.conj(rx_symbs),self.p25_frame_sync[:self.Nsync_syms]/self.p_scale)
+            denom = np.sqrt(np.dot(np.conj(rx_symbs),rx_symbs))
+            Cs = num/(denom+1E-12)
+            if np.abs(Cs) > np.abs(max_Cs):
+               max_s = s
+               max_Cs = Cs
+         self.max_Cs = max_Cs
+
+         if np.abs(max_Cs) >= self.sync_thresh:
+            next_state = "sync"
+            fs_s = max_s
+            self.fs_s = fs_s
+            self.bad_fs = 0
+
+            # resolve phase ambiguity based on frame sync, we assume phase est tracks from here
+            if max_Cs.real < 0:
+               self.phase_ambiguity = np.pi
+            else:
+               self.phase_ambiguity = 0
+         
+            # amplitude norm based on frame sync word
+            fs_symbs = self.rx_symb_buf[fs_s:fs_s+Nsync_syms]
+            self.g = 1/(np.mean(np.abs(fs_symbs)**2)**0.5+1E-12)
+
+      if self.state == "sync":
+         # count errors in FS word to see if we are still in sync
+         rx_symbs = np.exp(1j*self.phase_ambiguity)*self.rx_symb_buf[fs_s:fs_s+Nsync_syms]
+         n_errors = np.sum(rx_symbs * self.p25_frame_sync[:self.Nsync_syms] < 0)
+         if n_errors > self.unsync_thresh1:
+            self.bad_fs += 1
+         else:
+            self.bad_fs = 0
+         if self.bad_fs >= self.unsync_thresh2:
+            next_state = "search"
+
+         # amplitude norm based on frame sync word
+         fs_symbs = self.rx_symb_buf[fs_s:fs_s+Nsync_syms]
+         self.g = 1/(np.mean(np.abs(fs_symbs)**2)**0.5+1E-12)
+
+      self.state = next_state
+
+      # return payload symbols
+      return np.exp(1j*self.phase_ambiguity)*self.rx_symb_buf[fs_s+Nsync_syms:fs_s+Nframe_syms]
+
+
+   # python3 -c "from radae import single_carrier; s=single_carrier(); s.run_test(100,sample_clock_offset_ppm=-100,plots_en=True)"
+   def run_test(self,Nframes=10, EbNodB=100, phase_off=0, freq_off=0, mag=1, sample_clock_offset_ppm=0, target_ber=0, plots_en=False):
+      Nframe_syms = self.Nframe_syms
+      Npayload_syms = self.Npayload_syms
+
+      # single fixed test frame
+      tx_symbs = 1 - 2*(self.rng.random(Npayload_syms) > 0.5) + 0*1j
+
+      # create a stream of tx samples
+      tx = np.array([], dtype=np.csingle)
+      for f in np.arange(0,Nframes):
+         atx = self.tx(tx_symbs)
+         tx = np.concatenate([tx,atx])
+      
+      # simulate timing offset, 4x oversampling then linear interpolation
+      # TODO: is ppm correct when we oversample by 4 ?
+      tx_zp = np.zeros(4*len(tx), dtype=np.csingle)
+      tx_zp[0::4] = tx
+      tx_4 = self.lpf.bpf(tx_zp)
+      rx = sample_clock_offset(tx_4, sample_clock_offset_ppm)[0::4]
+
+      # simulate freq, phase, mag offsets and AWGN noise
+      phase_vec = 2*np.pi*freq_off*np.arange(0,len(rx))/self.Fs + phase_off
+      rx *= np.exp(1j*phase_vec)
+      sigma = np.sqrt(1/(self.M*10**(EbNodB/10)))
+      noise = (sigma/np.sqrt(2))*(np.random.randn(len(rx)) + 1j*np.random.randn(len(rx)))
+      rx = mag*(rx + noise)
+
+      # demodulate stream with rx
+      rx_symb_log = np.array([], dtype=np.csingle)
+      error_log = np.array([])
+      norm_rx_timing_log = np.array([])
+      phase_est_log = np.array([], dtype=np.csingle)
+      nin = self.nin
+      total_errors = 0
+      total_bits = 0
+
+      n = 0
+      while len(rx[n:]) >= nin:
+         # demod next frame
+         rx_symbs = self.rx(rx[n:n+nin])
+         print(f"state: {self.state:6} nin: {self.nin:4d} rx_timing: {self.norm_rx_timing:5.2f} max_metric: {self.max_Cs.real:5.2f}", end='')
+         if self.state == "sync":
+            n_errors = np.sum(rx_symbs * tx_symbs < 0)
+            error_log = np.append(error_log,n_errors)
+            total_errors += n_errors
+            total_bits += len(tx_symbs)
+            print(f" fs_s: {self.fs_s:4d} ph_ambig: {self.phase_ambiguity:5.2f} g: {self.g:5.2f} n_errors: {n_errors:4d}", end='')
+
+            # update logs for plotting
+            rx_symb_log = np.concatenate([rx_symb_log,self.rx_symb_buf[Nframe_syms:]])
+            norm_rx_timing_log = np.append(norm_rx_timing_log, self.norm_rx_timing)
+            phase_est_log = np.append(phase_est_log, self.phase_est_log)
+         n += nin
+         nin = self.nin
+         print()
+
+      ber = 0
+      if total_bits:
+         ber = total_errors/total_bits
+      print(f"total_bits: {total_bits:4d} total_errors: {total_errors:4d} BER: {ber:5.4f} Target BER: {target_ber:5.4f}")
+
+      if plots_en:
+         plt.figure(1)
+         plt.plot(self.g*rx_symb_log.real,self.g*rx_symb_log.imag,'+'); plt.ylabel('Symbols')
+         plt.axis([-2,2,-2,2])
+         plt.figure(2)
+         plt.subplot(211)
+         plt.plot(error_log); plt.ylabel('Errors/frame')
+         plt.subplot(212)
+         plt.plot(norm_rx_timing_log,'+'); plt.ylabel('Fine Timing')
+         plt.axis([0,len(norm_rx_timing_log),-0.5,0.5])
+         plt.figure(3)
+         plt.plot(np.angle(phase_est_log),'+'); plt.title('Phase Est')
+         plt.axis([0,len(phase_est_log),-np.pi,np.pi])
+         plt.figure(4)
+         from matplotlib.mlab import psd
+         P, frequencies = psd(rx,Fs=self.Fs)
+         PdB = 10*np.log10(P)
+         plt.plot(frequencies,PdB); plt.title('PSD'); plt.grid()
+         mx = 10*np.ceil(max(PdB)/10)
+         plt.axis([-self.Fs/2, self.Fs/2, mx-40, mx])
+         plt.show()
+
+      test_pass = ber <= target_ber
+      if test_pass:
+         print("PASS")
+      else:
+         print("FAIL")
+      return test_pass
+   
+   # TODO 
+   # * DC offset removal
+   # * separate tx/rx cmd line applications that talk to BBFM ML enc/dec
+ 
+# python3 -c "from radae import single_carrier,single_carrier_tests; single_carrier_tests()"
+def single_carrier_tests():
+      modem = single_carrier()
+      total = 0; passes = 0
+
+      # baseline test with vanilla channel
+      total += 1; modem = single_carrier(); passes += modem.run_test()
+
+      # sample clock offsets
+      total += 1; modem = single_carrier(); passes += modem.run_test(Nframes=100, sample_clock_offset_ppm=100)
+      total += 1; modem = single_carrier(); passes += modem.run_test(Nframes=100, sample_clock_offset_ppm=-100)
+
+      # BER test: allow 0.5dB implementation loss
+      EbNodB = 4
+      target_ber = 0.5*math.erfc(np.sqrt(10**((EbNodB-0.5)/10)))
+
+      # DC coupled 
+      total += 1; modem = single_carrier(); passes += modem.run_test(Nframes=100, sample_clock_offset_ppm=-100, EbNodB=EbNodB, target_ber=target_ber)
+
+      # 1500 Hz centre freq     
+      total += 1; modem = single_carrier(fcentreHz=1500); passes += modem.run_test(Nframes=100, 
+                                                                                   sample_clock_offset_ppm=-100, 
+                                                                                   EbNodB=EbNodB, 
+                                                                                   freq_off=1,
+                                                                                   mag=100,
+                                                                                   target_ber=target_ber)
+
+      print(f"{passes:d}/{total:d}")
+
+      if passes == total:
+         print("ALL PASS")

@@ -1207,6 +1207,138 @@ At first 100 bit/s was attempted (on data symbol per 10ms feature vector), this 
 \end{center}
 \end{figure}
 
+\section{Baseband FM}
+
+Land Mobile Radio (LMR) systems for PTT VHF/UHF voice are typically based on a baseband FM radio architecture. Payload bits are mapped to a real, discretely valued (2 or 4 level) sequence of symbols driving an analog FM modulator.  The receiver employs a limiter and analog FM demodulator to recover the pulse train, which is converted to bits with a slicer.  The pulse train may be filtered to minimise ISI and constrain the spectrum of the transmitted signal.
+
+Win themes for this use case are speech quality and spectral mask - which defines spectral occupancy (bandwidth) and adjacent channel interference. This use case is not sensitive to low SNR performance.  Fading due to vehicle movement is present, but tends to be flat across the channel.
+
+Using the FM radio architecture has many advantages compared to SDRs:
+\begin{enumerate}
+\item It is inexpensive and ubiquitous (a complete handset may retail for \$40).
+\item Insensitive to frequency and phase offsets.
+\item Relatively insensitive to frequency accuracy, modulation index, and phase offsets. Low cost frequency references can be used.
+\item Only coarse (frame sync) and fine timing estimation is required - no phase or frequency estimation, making demodulator implementation straight forward.
+\item The waveform can be also generated and received by modern IQ SDR radios if desired.
+\end{enumerate}
+
+This section describes a ML based speech system that encodes vocoder features to a sequence of pulses that can be fed through the baseband FM radio channel.  It offers improved speech quality over classical analog FM and AMBE digital voice systems, and an improved spectral mask (lower spectral occupancy and adjacent channel interference). 
+
+Above a threshold CNR, the SNR of the demodulated analog FM signal is given by \cite{der_fmtutorial}:
+\begin{equation}
+SNR_{FM} = 3\beta^2(\beta+1) CNR
+\end{equation}
+where $\beta=f_d / f_m$ is the modulation index, $f_d$ is the deviation, $f_m$ is the maximum modulating frequency, CNR is the Carrier to Noise ratio of the received signal at the demodulator input, and $SNR_{FM}$ is the SNR at the demodulator output. CNR is measured in a noise bandwidth of $BW_{FM}$ and SNR is measured in a noise bandwidth of $f_m$.  The RF bandwidth can be approximated by:
+\begin{equation}
+BW_{FM} = 2(f_d+f_m)
+\end{equation}
+Consider a typical LMR FM system with $f_d=5$ kHz and $f_m=3$ kHz.  This gives $BW_{FM}=16$ kHz and $SNR_{FM}=13.5+CNR$.
+
+A rule of thumb for FM demodulators is a threshold CNR of 12 dB. Assuming $BW_{FM}=16$ kHz and a receiver noise figure of 5 dB this is equivalent to a threshold received signal level of $12 + 10log_{10}(15000) + 5  = -115$ dBm, and an output SNR of 25.5 dB. Our previous experiments show this is around 20dB more than RADAE needs to obtain good quality speech.  Using this first pass analysis we can conclude we have ample link margin.  This could be leveraged to reduce symbol rate or deviation, e.g. to obtain an improved spectral mask.
+
+Figure \ref{fig:bbfm_framework} illustrates the baseband FM model. The RRC filters implicitly convert between the symbol rate $R_s$ and sample rate $F_s$ using interpolation and decimation as required. Not shown is the DAC/ADC, pre and de-emphasis, RF frequency translation, and power amplifier which in total are assumed to have a unity transfer function and minimal impact on system performance.  FSYNC is a 24 symbol sequence used for frame synchronisation and fine timing.  All of the blocks not marked \emph{radae} are implemented with classical analog or digital signal processing, common to existing analog or digital FM radios, and requiring modest amounts of CPU and memory compared to the ML.
+ 
+\begin{figure}[H]
+\caption{Baseband FM model.  Transmitter (Tx) is on the LHS, at RHS is the Receiver (Rx). The RF channel is subject to fading $|H|$ and AWGN with noise power $\sigma_c^2$.}
+\label{fig:bbfm_framework}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.5cm]
+
+\node [input] (rinput) (z) {};
+\node [block, below of=z,node distance=1cm] (radae_enc) {\emph{radae} Encoder};
+\node [block, below of=radae_enc,node distance=2cm] (insert_fsync) {Insert FSYNC};
+\node [block, below of=insert_fsync,node distance=2cm] (rrc_tx) {RRC Tx Filter};
+\node [block, below of=rrc_tx,node distance=2cm] (fm_mod) {FM Mod};
+\node [circ, right of=fm_mod,node distance=2cm, text width=0.5cm] (mult) {$\times$};
+\node [circ, right of=mult,node distance=1.5cm, text width=0.5cm] (add) {$+$};
+\node [block, right of=add,node distance=2.5cm, text width=2cm] (fm_demod) {FM Demod};
+\node [block, above of=fm_demod,node distance=2cm, text width=2cm] (acq) {Acquisition \& Timing};
+\node [block, above of=acq,node distance=2cm,text width=2cm] (rrc_rx) {RRC Rx Filter};
+\node [block, above of=rrc_rx,node distance=2cm] (remove_fsync) {Remove FSYNC};
+\node [block, above of=remove_fsync,node distance=2cm] (radae_dec) {\emph{radae} Decoder};
+\node [output, right of=radae_dec,node distance=2cm] (routput) {};
+
+\draw [->] node[above,text width=1cm] {$\bf{f}$} (rinput) -- (radae_enc);
+\draw [->] (radae_enc) -- node[left, text width=0.5cm] {$\bf{z}$} (insert_fsync);
+\draw [->] (insert_fsync) -- (rrc_tx); 
+\draw [->] (rrc_tx)-- node[left, text width=0.5cm] {$F_s$} (fm_mod); 
+\draw [->] (fm_mod) -- (mult); 
+\draw [->] (mult) -- (add);
+\draw [->] (add) -- (fm_demod);
+\draw [->] (fm_demod)-- node[left, text width=0.5cm] {$F_s$} (acq); 
+\draw [->] (acq)-- node[left, text width=0.5cm] {$F_s$} (rrc_rx); 
+\draw [->] (rrc_rx)-- (remove_fsync); 
+\draw [->] (remove_fsync) -- node[left, text width=0.5cm] {$\hat{\bf{z}}$} (radae_dec); 
+\draw [->] (radae_dec) -- node[above, align=right, text width=1cm] {$\hat{\bf{f}}$} (routput) ;
+
+\node [input, above of=mult,node distance=1cm] (fading) {};
+\node [input, above of=add,node distance=1cm] (awgn) {};
+\draw [->] (fading) node[above, text width=0.75cm] {$|H|$} -- (mult); 
+\draw [->] (awgn) node[above, text width=0.75cm] {$\mathcal{N}(0,\sigma_c^2)$} -- (add); 
+
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
+Consider a typical LMR channel from a base station transmitter to a receiver that is pedestrian or vehicle mobile.  The propagation path will typically not be line of site, but will reflect off several terrestrial objects (such as buildings) to reach the receiver. The relative phase shifts of the paths will result in multipath fading, which due to the receiver movement will be time varying.  The multipath channel typically evolves slowly (e.g. a bandwidth of a few 10's of Hz at 60 km/hr) compared to the symbol rate (kHz), so the rate of change in phase has only a trivial impact on the output of the FM demodulator compared to the data symbols and can be ignored.  We can therefore model the multipath channel as Rayleigh distributed magnitude fading $|H|$ and AWGN noise with variance (power) $\sigma_c^2$ added to the FM carrier. 
+ 
+We can model the received symbols at the output of the FM demodulator DSP as the input symbols with additive Gaussian noise:
+\begin{equation}
+\label{eq:fm_noise}
+\hat{\bf{f}} = \bf{f} + \bf{\sigma_s}\mathcal{N}(0,1) 
+\end{equation}
+where the noise power applied to each symbol is defined by the vector $\bf{\sigma_s}$.  We note the mean magnitude of each symbols in $\hat{\bf{f}}$ at the output of a FM demodulator is a function of the deviation and not the channel CNR.  Thus as the CNR is modulated by fading, the mean value of each symbol in $\hat{\bf{f}}$ will be constant, however the FM demodulator output SNR will change, implying that output noise power $\sigma_s^2$ is modulated as a function of $|H|$.
+
+When fading is applied to the FM carrier, we model the FM demod output SNR as:
+\begin{equation}
+\begin{split}
+SNR &= 3\beta^2(\beta+1)(CNR)|H| \\
+SNR_{dB} &= 10log_{10}(3\beta^2(\beta+1)) + CNR_{dB} + H_{dB} \\
+SNR_{dB} &= G_{fm} + CNR_{dB} + H_{dB}
+\end{split}
+\end{equation}
+where $CNR$ is the mean (set point) channel carrier to noise ratio, and $|H|$ is the current magnitude of the fading channel.  We note that fading may push the input CNR beneath the demodulator threshold.  At this point the SNR drops rapidly, and the noise becomes impulsive rather than AWGN. Except for rare deep fades, our system is designed to operate above threshold.  For simplicity of training, we approximate the demodulator SNR using a piecewise linear model that increases AWGN rapidly as CNR drops:
+
+\begin{equation}
+\label{eq:fm_snr}
+SNR_{dB} = \begin{cases}
+           CNR^{\prime}_{dB} + G_{fm}, & CNR^{\prime}_{dB} \ge 12 \\
+           (1 + \frac{G_{fm}}{3})CNR^{\prime}_{dB} - 3G_{fm}, & CNR^{\prime}_{dB} < 12
+	       \end{cases}
+\end{equation}
+where $CNR^{\prime}_{dB} = CNR_{dB} + H_{dB}$. In this model, $SNR_{dB}=CNR_{dB}=9 \si{dB}$, i.e. over a 3dB range the FM ``processing gain" is reduced to zero.
+
+\begin{figure}[H]
+\caption{SNR versus CNR for FM demodulator model in (\ref{eq:fm_snr}) with $\beta=5/3$. Red crosses are an efficient implementation for ML using $relu()$ functions. SSB product detector plotted as a control.}
+\label{fig:fm_cnr_snr}
+\begin{center}
+\input fm_cnr_snr.tex
+\end{center}
+\end{figure}
+
+To calculate the noise power to apply in simulation we solve for $\sigma_s$:
+\begin{equation}
+\label{eq:fm_sigma}
+\begin{split}
+\frac{S}{\sigma_s^2} &= SNR \\
+\sigma_s &= \frac{A}{\sqrt{SNR}}
+\end{split}
+\end{equation}
+where $A$ is the amplitude of the symbol corresponding to maximum deviation $f_d$.  As $|H|$ evolves over time, $\sigma_s$ should be re-calculated for every symbol using the latest sample of $|H|$.  In practice the statistics of $|H|$ vary based on the vehicle speed.  Our approach is to using sequences of $|H|$ derived for a variety of speeds.
+The channel simulation procedure for each training sequence is:
+\begin{enumerate}
+\item Select a set point (mean) $CNR$ and vehicle speed.
+\item Generate a set of $|H|$ samples based on a vehicle speed.
+\item Calculate $SNR$ for each $|H|$ sample in the set using (\ref{eq:fm_snr}). 
+\item Estimate $\sigma_s$ for each sample in the set using (\ref{eq:fm_sigma}).
+\item Apply noise to each transmitted symbol using (\ref{eq:fm_noise}).
+\end{enumerate}
+
+TODO:
+\begin{enumerate}
+\item include correction factor from $F_s$=3000 to $R_s=2000$, this will only affect set point CNR.
+\end{enumerate}
+
 \section{Glossary}
 
 \begin{table} [H]

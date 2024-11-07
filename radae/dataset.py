@@ -75,7 +75,7 @@ class RADAEDataset(torch.utils.data.Dataset):
         else:
             # dummy multipath model that is equivalent to AWGN
             self.H_num_sequences = 100
-            self.H = np.ones((self.H_num_sequences*self.H_sequence_length,Nc))
+            self.H = np.ones((self.H_num_sequences*self.H_sequence_length,Nc), dtype=np.float32)
 
         # optionally set up rate Fs multipath model
         self.G_sequence_length = G_sequence_length

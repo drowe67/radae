@@ -72,6 +72,22 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
     end
 endfunction
 
+function do_plots_bbfm(z1_fn, z2_fn="", png_fn='')
+    z1=load_f32(z1_fn,1);
+    figure(1); clf; 
+    stem(z1(1:40),'g');
+    if length(z2_fn) 
+      z2=load_f32(z2_fn,1);
+      hold on;
+      stem(z2(1:40),'r');
+      hold off;
+    end
+    title('Rx Symbols');
+    if length(png_fn)
+      print("-dpng",sprintf("%s.png",png_fn));
+    end
+endfunction
+
 
 function p = spec_power(y, centre, bandwidth)
   n = length(y);
@@ -362,6 +378,70 @@ function test_rayleigh(epslatex="")
   end
 end
 
+<<<<<<< HEAD
+function y = relu(x)
+  y = x;
+  y(find(x<0)) = 0;
+end
+
+% Plot SNR v CNR for FM demod model
+function plot_SNR_CNR(epslatex="")
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts();
+    end
+    figure(1); clf; hold on;
+    fd=5000; fm=3000; 
+    beta= fd/fm;
+    Gfm=10*log10(3*(beta^2)*(beta+1))
+    BWfm = 2*(fd+fm);
+
+    % vanilla implementation of curve
+    CNRdB=0:20;
+    for i=1:length(CNRdB)
+      if CNRdB(i) >= 12
+        SNRdB(i) = CNRdB(i) + Gfm;
+      else
+        SNRdB(i) = (1+Gfm/3)*CNRdB(i) - 3*Gfm;
+      end
+    end
+
+    % implementation using relus (suitable for PyTorch)
+    SNRdB_relu = relu(CNRdB-12) + 12 + Gfm;
+    SNRdB_relu += -relu(-(CNRdB-12))*(1+Gfm/3);
+
+    plot(CNRdB,SNRdB,'g;FM;'); 
+    plot(CNRdB,SNRdB_relu,'r+;FM relu;'); 
+    SSBdB = CNRdB + 10*log10(BWfm) - 10*log10(fm);
+    plot(CNRdB,SSBdB,'b;SSB;'); 
+    axis([min(CNRdB) max(CNRdB) 10 30]);
+    hold off; grid('minor'); xlabel('CNR (dB)'); ylabel('SNR (dB)'); legend('boxoff'); legend('location','northwest');
+    if length(epslatex)
+        print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
+    end
+endfunction
+
+% test handling of single sample per symbol phase jumps
+function test_phase_est
+  theta = 0:0.01:2*pi;
+  phi_fine =angle((exp(j*theta)).^2)/2;
+  phi_coarse = zeros(1,length(phi_fine));
+  for n=2:length(phi_fine)
+    phi_coarse(n) = phi_coarse(n-1);
+    if phi_fine(n) - phi_fine(n-1) < -0.9*pi
+      phi_coarse(n) += pi;
+    end
+    if phi_fine(n) - phi_fine(n-1) > 0.9*pi
+      phi_coarse(n) -= pi;
+    end
+  end
+  phi = phi_coarse + phi_fine;
+  figure(1); clf; hold on;
+  plot(theta, phi_fine, "b-;fine;")
+  plot(theta, phi_coarse, "g-;coarse;")
+  plot(theta, phi, "r-;phi;")
+  hold off
+endfunction
+=======
 function compare_pitch_corr(wav_fn,feat1_fn,feat2_fn,png_feat_fn="")
   Fs=16000;
   s=load_raw(wav_fn);
@@ -405,3 +485,4 @@ function plot_sample_spec(wav_fn,png_spec_fn="")
     print("-dpng",png_spec_fn,"-S800,600");
   end
 end
+>>>>>>> main
