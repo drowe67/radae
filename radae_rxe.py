@@ -140,7 +140,7 @@ class radae_rx:
                  
    def get_sync(self):
       return self.state == "sync"
-                 
+              
    def do_radae_rx(self, buffer_complex, features_out):
       acq = self.acq
       bpf = self.bpf
@@ -247,6 +247,7 @@ class radae_rx:
                self.valid_count = self.valid_count + 1
                if self.valid_count > 3:
                   next_state = "sync"
+                  model.core_decoder_statefull.module.reset()
                   self.synced_count = 0
                   uw_fail = False
                   if auxdata:

@@ -410,3 +410,17 @@ class CoreDecoderStatefull(nn.Module):
         features = torch.reshape(x,(1,z.shape[1]*self.FRAMES_PER_STEP,self.output_dim))
         return features
 
+    def reset(self):
+        self.conv1.reset()
+        self.conv2.reset()
+        self.conv3.reset()
+        self.conv4.reset()
+        self.conv5.reset()
+
+        self.gru1.reset()
+        self.gru1.reset()
+        self.gru2.reset()
+        self.gru3.reset()
+        self.gru4.reset()
+        self.gru5.reset()
+        
