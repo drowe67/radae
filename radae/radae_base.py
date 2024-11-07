@@ -104,6 +104,8 @@ class GRUStatefull(nn.Module):
     def forward(self, x):
         gru_out,self.states = self.gru(x,self.states)
         return gru_out
+    def reset(self):
+       self.states = torch.zeros(1,1,self.hidden_dim)
 
 # Wrapper for conv1D layer that maintains state internally
 class Conv1DStatefull(nn.Module):
@@ -122,6 +124,9 @@ class Conv1DStatefull(nn.Module):
         self.states = conv_in[:,-self.states_len:,:]
         conv_in = conv_in.permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
+    
+    def reset(self):
+        self.states = torch.zeros(1,self.states_len,self.input_dim)
 
 #Gated Linear Unit activation
 class GLU(nn.Module):
