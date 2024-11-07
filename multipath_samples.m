@@ -41,6 +41,7 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="")
     if Nc > 1 
       mesh(H(1:10*Rs,:))
     else
+      # single carrier case
       Nsecplot=1
       subplot(211); plot(H(1:Nsecplot*Rs,:)); xlabel('Symbols'); ylabel('|H|')
       subplot(212); plot(20*log10(H(1:Nsecplot*Rs,:))); xlabel('Symbols'); ylabel('|H| (dB)')
@@ -58,8 +59,8 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="")
         end
       end
       LCR_meas = LC/Nseconds
+      subplot(211); hold on; stem(LC_log,sqrt(P)*ones(length(LC_log))); hold off; axis([0 Nsecplot*Rs 0 3]);
     end
-    subplot(211); hold on; stem(LC_log,sqrt(P)*ones(length(LC_log))); hold off; axis([0 Nsecplot*Rs 0 3]);
     printf("H file size is Nseconds*Rs*Nc*(4 bytes/sample) = %d*%d*%d*4 = %d bytes\n", Nseconds,Rs,Nc,Nseconds*Rs*Nc*4)
     f=fopen(H_fn,"wb");
     [r c] = size(H);
