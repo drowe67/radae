@@ -79,5 +79,5 @@ A single carrier PSK modem "back end" that connects the ML symbols to the radio.
      python3 loss.py features_in.f32 features_rx_out.f32
      loss: 0.035
    ```
-  This is a really good result, and likely inaudible. The `feature*.f32` files are produced as intermediate outputs form the `bbfm_inference.sh` and `bbfm_rx.sh` scripts.
+  This is a really good result, and likely inaudible. The `feature*.f32` files are produced as intermediate outputs from the `bbfm_inference.sh` and `bbfm_rx.sh` scripts.
 
