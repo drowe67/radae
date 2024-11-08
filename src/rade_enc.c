@@ -36,6 +36,12 @@
 #include "os_support.h"
 #include "rade_constants.h"
 
+void rade_init_encoder(RADEEncState *enc_state)
+{
+    memset(enc_state, 0, sizeof(*enc_state));
+
+}
+
 static void conv1_cond_init(float *mem, int len, int dilation, int *init)
 {
     if (!*init) {
@@ -45,18 +51,19 @@ static void conv1_cond_init(float *mem, int len, int dilation, int *init)
     *init = 1;
 }
 
-void rade_encode_dframe(
-    RDOVAEEncState *enc_state,       /* io: encoder state */
-    const RDOVAEEnc *model,
-    const float *input,              /* i: double feature frame (concatenated) */
-    int arch
+void rade_core_encoder(
+    RADEEncState  *enc_state,      
+    const RADEEnc *model,
+    float           *latents,
+    const float     *input,
+    int              arch
     )
 {
     //float padded_latents[DRED_PADDED_LATENT_DIM];
     //float padded_state[DRED_PADDED_STATE_DIM];
     float buffer[ENC_DENSE1_OUT_SIZE + ENC_GRU1_OUT_SIZE + ENC_GRU2_OUT_SIZE + ENC_GRU3_OUT_SIZE + ENC_GRU4_OUT_SIZE + ENC_GRU5_OUT_SIZE
                + ENC_CONV1_OUT_SIZE + ENC_CONV2_OUT_SIZE + ENC_CONV3_OUT_SIZE + ENC_CONV4_OUT_SIZE + ENC_CONV5_OUT_SIZE];
-    float state_hidden[GDENSE1_OUT_SIZE];
+    //float state_hidden[GDENSE1_OUT_SIZE];
     int output_index = 0;
 
     /* run encoder stack and concatenate output in buffer*/
@@ -98,8 +105,8 @@ void rade_encode_dframe(
     compute_generic_conv1d_dilation(&model->enc_conv5, &buffer[output_index], enc_state->conv5_state, buffer, output_index, 2, ACTIVATION_TANH, arch);
     output_index += ENC_CONV5_OUT_SIZE;
 
-    compute_generic_dense(&model->enc_zdense, padded_latents, buffer, ACTIVATION_LINEAR, arch);
-    OPUS_COPY(latents, padded_latents, RADE_LATENT_DIM);
+    compute_generic_dense(&model->enc_zdense, latents, buffer, ACTIVATION_LINEAR, arch);
+    //OPUS_COPY(latents, padded_latents, RADE_LATENT_DIM);
 
     // DR: don't think we need this?
     #ifdef RM_ME

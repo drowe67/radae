@@ -23,3 +23,8 @@ target_link_libraries(radae_rx rade Python3::Python)
 target_include_directories(radae_rx PRIVATE
     "$<TARGET_PROPERTY:Python3::NumPy,INTERFACE_INCLUDE_DIRECTORIES>")
 
+add_library(radecore rade_enc.c rade_enc_data.c)
+set_target_properties(radecore PROPERTIES
+    SOVERSION "0.1"
+    PUBLIC_HEADER "rade_api.h"
+)

@@ -59,7 +59,6 @@ def c_export(args, model):
     dec_writer = CWriter(os.path.join(args.output_dir, "rade_dec_data"), message=message, model_struct_name='RADEDec')
     #stats_writer = CWriter(os.path.join(args.output_dir, "rade_stats_data"), message=message, enable_binary_blob=False)
     constants_writer = CWriter(os.path.join(args.output_dir, "rade_constants"), message=message, header_only=True, enable_binary_blob=False)
-    xmlout = open("stats.xml", "w")
 
     # some custom includes
     for writer in [enc_writer, dec_writer]:
@@ -67,7 +66,7 @@ def c_export(args, model):
 f"""
 #include "opus_types.h"
 
-#include "rade.h"
+#include "rade_core.h"
 
 #include "rade_constants.h"
 
