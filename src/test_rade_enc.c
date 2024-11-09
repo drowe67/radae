@@ -28,7 +28,7 @@ int main(void)
         num_features += 1;
     }
 
-    if (init_radeenc(&enc_model, rdovaeenc_arrays) != 0) {
+    if (init_radeenc(&enc_model, radeenc_arrays) != 0) {
         fprintf(stderr, "Error initialising encoder model\n");
         exit(1);        
     }
@@ -36,7 +36,7 @@ int main(void)
 
     int n_features_in = enc_model.enc_dense1.nb_inputs;
     assert(enc_model.enc_zdense.nb_outputs == RADE_LATENT_DIM);
-    fprintf(stderr, "n_features_in: %d n_z_out: %d", n_features_in, enc_model.enc_zdense.nb_outputs);
+    fprintf(stderr, "n_features_in: %d n_z_out: %d\n", n_features_in, enc_model.enc_zdense.nb_outputs);
 
     float features_read[frames_per_step*nb_total_features];
     float features[n_features_in];
@@ -48,7 +48,7 @@ int main(void)
             for(int j=0; j<num_used_features; j++)
                 features[i*num_features+j] = features_read[i*nb_total_features+j];
             if (auxdata)
-                features[i*num_features+num_used_features] = 0.0;
+                features[i*num_features+num_used_features] = -1.0;
         }
         rade_core_encoder(&enc_state, &enc_model, z, features, arch);
         fwrite(z, sizeof(float), RADE_LATENT_DIM, stdout);

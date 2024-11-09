@@ -45,12 +45,13 @@ nb_total_features = 36
 num_used_features = 20
 
 class radae_tx:
-   def __init__(self, model_name, latent_dim=80, auxdata=True, bottleneck=3, txbpf_en=False):
+   def __init__(self, model_name, latent_dim=80, auxdata=True, bottleneck=3, txbpf_en=False, bypass_enc=False):
 
       self.latent_dim = latent_dim
       self.auxdata = auxdata
       self.bottleneck = bottleneck
       self.txbpf_en = txbpf_en
+      self.bypass_enc = bypass_enc
 
       self.num_features = 20
       if auxdata:
@@ -77,8 +78,11 @@ class radae_tx:
          print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
          self.txbpf = complex_bpf(Ntap, model.Fs, bandwidth,centre)
 
-      # number of input floats per processing frame (TOOD refactor to more sensible variable names)
-      self.nb_floats = model.Nzmf*model.enc_stride*nb_total_features
+      # number of input floats per processing frame (TODO refactor to more sensible variable names)
+      if not self.bypass_enc:
+         self.nb_floats = model.Nzmf*model.enc_stride*nb_total_features
+      else:
+         self.nb_floats = model.Nzmf*self.latent_dim
       # number of output csingles per processing frame
       self.Nmf = int((model.Ns+1)*(model.M+model.Ncp))
       # number of output csingles for EOO frame
@@ -93,19 +97,23 @@ class radae_tx:
 
    def do_radae_tx(self,buffer_f32,tx_out):
       model = self.model
+      num_timesteps_at_rate_Rs = model.num_timesteps_at_rate_Rs(model.Nzmf*model.enc_stride)
 
       with torch.inference_mode():
-         features = torch.reshape(torch.tensor(buffer_f32),(1,model.Nzmf*model.enc_stride, nb_total_features))
-         features = features[:,:,:num_used_features]
-         if self.auxdata:
-            aux_symb =  -torch.ones((1,features.shape[1],1))
-            symb_repeat = 4
-            for i in range(1,symb_repeat):
-               aux_symb[0,i::symb_repeat,:] = aux_symb[0,::symb_repeat,:]
-            features = torch.concatenate([features, aux_symb],axis=2)
-         #print(features.shape, file=sys.stderr)
-         num_timesteps_at_rate_Rs = model.num_timesteps_at_rate_Rs(model.Nzmf*model.enc_stride)
-         z = model.core_encoder_statefull(features)
+         if not self.bypass_enc:
+            features = torch.reshape(torch.tensor(buffer_f32),(1,model.Nzmf*model.enc_stride, nb_total_features))
+            features = features[:,:,:num_used_features]
+            if self.auxdata:
+               aux_symb =  -torch.ones((1,features.shape[1],1))
+               symb_repeat = 4
+               for i in range(1,symb_repeat):
+                  aux_symb[0,i::symb_repeat,:] = aux_symb[0,::symb_repeat,:]
+               features = torch.concatenate([features, aux_symb],axis=2)
+            #print(features.shape, file=sys.stderr)
+            z = model.core_encoder_statefull(features)
+         else:
+            z = torch.reshape(torch.tensor(buffer_f32),(1,model.Nzmf,self.latent_dim))      
+         #print(z.shape, file=sys.stderr)
          tx = self.transmitter.transmitter_one(z,num_timesteps_at_rate_Rs)
          tx = tx.cpu().detach().numpy().flatten().astype('csingle')
          if self.txbpf_en:
@@ -129,9 +137,10 @@ if __name__ == '__main__':
    parser.add_argument('--model_name', type=str, help='path to model in .pth format', default="model19_check3/checkpoints/checkpoint_epoch_100.pth")
    parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injection of auxillary data symbols')
    parser.add_argument('--txbpf', action='store_true', help='enable Tx BPF')
+   parser.add_argument('--bypass_enc', action='store_true', help='Bypass core encoder, read z from stdin')
    parser.set_defaults(auxdata=True)
    args = parser.parse_args()
-   tx = radae_tx(model_name=args.model_name, auxdata=args.auxdata, txbpf_en=args.txbpf)
+   tx = radae_tx(model_name=args.model_name, auxdata=args.auxdata, txbpf_en=args.txbpf, bypass_enc=args.bypass_enc)
 
    tx_out = np.zeros(tx.Nmf,dtype=np.csingle)
    while True:
