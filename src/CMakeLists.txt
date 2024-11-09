@@ -28,3 +28,6 @@ set_target_properties(radecore PROPERTIES
     SOVERSION "0.1"
     PUBLIC_HEADER "rade_api.h"
 )
+
+add_executable(test_rade_enc test_rade_enc.c)
+target_link_libraries(test_rade_enc radecore opus m)

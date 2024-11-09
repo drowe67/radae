@@ -10,7 +10,8 @@
 
    - Redistributions in binary form must reproduce the above copyright
    notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
+   documentatio
+   n and/or other materials provided with the distribution.
 
    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
    ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
@@ -32,7 +33,7 @@
 
 #include "opus_types.h"
 
-typedef struct RADEDec RADEDec;
+typedef struct RADEDec RADEDec; 
 typedef struct RADEEnc RADEEnc;
 typedef struct RADEDecStruct RADEDecState;
 typedef struct RADEEncStruct RADEEncState;

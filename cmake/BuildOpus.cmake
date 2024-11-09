@@ -15,6 +15,7 @@ if(APPLE AND BUILD_OSX_UNIVERSAL)
 ExternalProject_Add(build_opus_x86
     DOWNLOAD_EXTRACT_TIMESTAMP NO
     BUILD_IN_SOURCE 1
+    PATCH_COMMAND sh -c "patch dnn/nnet.h < ${CMAKE_SOURCE_DIR}/src/opus-export.diff"
     CONFIGURE_COMMAND ${CONFIGURE_COMMAND} --host=x86_64-apple-darwin --target=x86_64-apple-darwin CFLAGS=-arch\ x86_64\ -O2\ -mmacosx-version-min=10.11
     BUILD_COMMAND $(MAKE)
     INSTALL_COMMAND ""
@@ -23,6 +24,7 @@ ExternalProject_Add(build_opus_x86
 ExternalProject_Add(build_opus_arm
     DOWNLOAD_EXTRACT_TIMESTAMP NO
     BUILD_IN_SOURCE 1
+    PATCH_COMMAND sh -c "patch dnn/nnet.h < ${CMAKE_SOURCE_DIR}/src/opus-export.diff"
     CONFIGURE_COMMAND ${CONFIGURE_COMMAND} --host=aarch64-apple-darwin --target=aarch64-apple-darwin CFLAGS=-arch\ arm64\ -O2\ -mmacosx-version-min=10.11
     BUILD_COMMAND $(MAKE)
     INSTALL_COMMAND ""
@@ -56,6 +58,7 @@ else(APPLE AND BUILD_OSX_UNIVERSAL)
 ExternalProject_Add(build_opus
     DOWNLOAD_EXTRACT_TIMESTAMP NO
     BUILD_IN_SOURCE 1
+    PATCH_COMMAND sh -c "patch dnn/nnet.h < ${CMAKE_SOURCE_DIR}/src/opus-export.diff"
     CONFIGURE_COMMAND ${CONFIGURE_COMMAND}
     BUILD_COMMAND $(MAKE)
     INSTALL_COMMAND ""
@@ -72,5 +75,5 @@ set_target_properties(opus PROPERTIES
     IMPORTED_IMPLIB   "${BINARY_DIR}/.libs/libopus${CMAKE_STATIC_LIBRARY_SUFFIX}"
 )
 
-include_directories(${SOURCE_DIR}/dnn ${SOURCE_DIR}/celt ${SOURCE_DIR}/include)
+include_directories(${SOURCE_DIR}/dnn ${SOURCE_DIR}/celt ${SOURCE_DIR}/include ${SOURCE_DIR})
 endif(APPLE AND BUILD_OSX_UNIVERSAL)
