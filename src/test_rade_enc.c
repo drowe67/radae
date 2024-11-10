@@ -41,7 +41,21 @@ int main(void)
     float features_read[frames_per_step*nb_total_features];
     float features[n_features_in];
     float z[RADE_LATENT_DIM];
-    int arch = opus_select_arch();
+    
+    // From celt/cpu_support.h:
+    /* We currently support 5 x86 variants:
+    * arch[0] -> non-sse
+    * arch[1] -> sse
+    * arch[2] -> sse2
+    * arch[3] -> sse4.1
+    * arch[4] -> avx
+    */
+    int arch = 0;
+    
+    // This auto-magically selects best arch
+    // arch = opus_select_arch();
+
+    fprintf(stderr, "arch: %d n_features_in: %d n_z_out: %d\n", arch, n_features_in, enc_model.enc_zdense.nb_outputs);
 
     while((size_t)frames_per_step*nb_total_features == fread(features_read, sizeof(float), frames_per_step*nb_total_features, stdin)) {
         for (int i=0; i<frames_per_step; i++) {

@@ -57,10 +57,12 @@ f'''
         writer.weight_arrays.append(name)
 
     if reshape_8x4:
+        """
         if vector.shape[1] % 8 != 0:
             n_extra = vector.shape[1] % 8
             print(f"adding {n_extra:d} cols")
             vector = np.append(vector, 1E-12*np.ones((vector.shape[0], n_extra)), axis=1)
+        """
         vector = vector.reshape((vector.shape[0]//4, 4, vector.shape[1]//8, 8))
         vector = vector.transpose((2, 0, 3, 1))
 
@@ -175,13 +177,12 @@ def print_sparse_weight(writer, A, name, scale=1/128, have_diag=True, quantize=F
 
 
 
-def compute_scaling(weight):
+def compute_scaling(weight,quantize):
     """ computes optimal scaling vector for weight of shape (features_in, features_out) """
 
     n_in, n_out = weight.shape
-    assert n_in % 4 == 0
-    if n_out % 8 != 0:
-        print(f"Warning: n_out: {n_out:d} not divisable by 8")
+    if quantize:
+        assert n_in % 4 == 0 and n_out % 8 == 0
 
     weight_max_abs = np.max(np.abs(weight), axis=0)
     weight_max_sum = np.max(np.abs(weight[: n_in : 2] + weight[1 : n_in : 2]), axis=0)
@@ -247,7 +248,7 @@ def print_linear_layer(writer : CWriter,
     nb_inputs, nb_outputs = weight.shape
 
     if scale is None:
-        scale = compute_scaling(weight)
+        scale = compute_scaling(weight,quantize)
 
 
     if sparse:

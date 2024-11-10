@@ -9,7 +9,7 @@
 
 #include "opus_types.h"
 
-#include "rade.h"
+#include "rade_core.h"
 
 #include "rade_constants.h"
 

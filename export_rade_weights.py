@@ -77,7 +77,7 @@ f"""
     # encoder
     encoder_dense_layers = [
         ('core_encoder.module.dense_1'       , 'enc_dense1',   'TANH', False,),
-        ('core_encoder.module.z_dense'       , 'enc_zdense',   'LINEAR', True,)
+        ('core_encoder.module.z_dense'       , 'enc_zdense',   'LINEAR', False,)
     ]
 
     for name, export_name, _, quantize in encoder_dense_layers:
@@ -118,7 +118,7 @@ f"""
         ('core_decoder.module.glu3.gate'    , 'dec_glu3',    'TANH', True),
         ('core_decoder.module.glu4.gate'    , 'dec_glu4',    'TANH', True),
         ('core_decoder.module.glu5.gate'    , 'dec_glu5',    'TANH', True),
-        ('core_decoder.module.output'       , 'dec_output',  'LINEAR', True)
+        ('core_decoder.module.output'       , 'dec_output',  'LINEAR', False)
     ]
 
     for name, export_name, _, quantize in decoder_dense_layers:

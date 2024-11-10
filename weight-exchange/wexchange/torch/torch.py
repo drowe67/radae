@@ -104,7 +104,6 @@ def load_torch_gru_weights(where, gru):
 
 
 def dump_torch_dense_weights(where, dense, name='dense', scale=1/128, sparse=False, diagonal=False, quantize=False):
-
     w = dense.weight.detach().cpu().numpy().copy()
     if dense.bias is None:
         b = np.zeros(dense.out_features, dtype=w.dtype)
