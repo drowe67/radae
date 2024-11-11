@@ -81,3 +81,12 @@ A single carrier PSK modem "back end" that connects the ML symbols to the radio.
    ```
   This is a really good result, and likely inaudible. The `feature*.f32` files are produced as intermediate outputs from the `bbfm_inference.sh` and `bbfm_rx.sh` scripts.
 
+5. Playing samples over a USB sounds card connected to a radio, note selection of sample rate:
+   ```
+   aplay --device="plughw:CARD=Audio,DEV=0" -r 9600 -f S16_LE t1.int16
+   ```
+
+6. Feeding samples from an off air wave file captured from a Rx to demod. Note `sc_xx` tools default to a centre freq of 1500Hz
+   ```
+   sox ~/Desktop/sc-ber-003.wav -t .s16 -r 9600 -c 1 - highpass 100 | python3 sc_rx.py --plots > z_hat.f32
+   ```
