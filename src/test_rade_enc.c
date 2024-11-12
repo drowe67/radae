@@ -13,12 +13,18 @@
 
 int opus_select_arch(void);
 
-int main(void)
+int main(int argc, char *argv[])
 {
     RADEEnc      enc_model;
     RADEEncState enc_state;
 
-    int auxdata = 0;         // TODO: this could be a CLI option, defaults to 1
+    if (argc < 2) {
+        fprintf(stderr, "usage: %s bottleneck[1-3] auxdata[0-1]\n", argv[0]);
+        exit(1);
+    }
+
+    int bottleneck = atoi(argv[1]);
+    int auxdata = atoi(argv[2]);
     int nb_total_features = 36;
     int num_features = 20;
     int num_used_features = 20;
@@ -36,7 +42,6 @@ int main(void)
 
     int n_features_in = enc_model.enc_dense1.nb_inputs;
     assert(enc_model.enc_zdense.nb_outputs == RADE_LATENT_DIM);
-    fprintf(stderr, "n_features_in: %d n_z_out: %d\n", n_features_in, enc_model.enc_zdense.nb_outputs);
 
     float features_read[frames_per_step*nb_total_features];
     float features[n_features_in];
@@ -55,7 +60,8 @@ int main(void)
     // This auto-magically selects best arch
     // arch = opus_select_arch();
 
-    fprintf(stderr, "arch: %d n_features_in: %d n_z_out: %d\n", arch, n_features_in, enc_model.enc_zdense.nb_outputs);
+    fprintf(stderr, "arch: %d bottleneck: %d auxdata: %d n_features_in: %d n_z_out: %d\n", 
+            arch, bottleneck, auxdata, n_features_in, enc_model.enc_zdense.nb_outputs);
     int nb_feature_vecs = 0;
     size_t to_read, nb_read;
     to_read = frames_per_step*nb_total_features;
@@ -66,7 +72,7 @@ int main(void)
             if (auxdata)
                 features[i*num_features+num_used_features] = -1.0;
         }
-        rade_core_encoder(&enc_state, &enc_model, z, features, arch);
+        rade_core_encoder(&enc_state, &enc_model, z, features, arch, bottleneck);
         fwrite(z, sizeof(float), RADE_LATENT_DIM, stdout);
         fflush(stdout);
         nb_feature_vecs++;

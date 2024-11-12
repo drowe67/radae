@@ -57,7 +57,8 @@ void rade_core_encoder(
     const RADEEnc   *model,
     float           *latents,
     const float     *input,
-    int              arch
+    int              arch,
+    int              bottleneck
     )
 {
     //float padded_latents[DRED_PADDED_LATENT_DIM];
@@ -117,7 +118,13 @@ void rade_core_encoder(
     compute_generic_conv1d_dilation(&model->enc_conv5, &buffer[output_index], enc_state->conv5_state, buffer, output_index, 2, ACTIVATION_TANH, arch);
     output_index += ENC_CONV5_OUT_SIZE;
     //fprintf(stderr,"output_index: %d arch: %d\n", output_index, arch);
-    compute_generic_dense(&model->enc_zdense, latents, buffer, ACTIVATION_TANH, arch);
+    int activation;
+    if (bottleneck == 1) 
+        activation = ACTIVATION_TANH;
+    else
+        activation = ACTIVATION_LINEAR;
+   
+    compute_generic_dense(&model->enc_zdense, latents, buffer, activation, arch);
     //fprintf(stderr, "latents: %f %f %f\n", latents[0], latents[1], latents[2]);
     #ifdef TT
     {
