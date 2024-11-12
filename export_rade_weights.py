@@ -39,7 +39,7 @@ parser.add_argument('checkpoint', type=str, help='model checkpoint')
 parser.add_argument('output_dir', type=str, help='output folder')
 parser.add_argument('--format', choices=['C', 'numpy'], help='output format, default: C', default='C')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
-parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injectiopn of auxillary data symbols')
+parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injection of auxillary data symbols')
 parser.set_defaults(auxdata=True)
 args = parser.parse_args()
 
