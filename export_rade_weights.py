@@ -215,28 +215,21 @@ if __name__ == "__main__":
     num_features = 20
     if args.auxdata:
         num_features += 1
-    bottleneck = 3
     os.makedirs(args.output_dir, exist_ok=True)
 
     # load model from checkpoint
     checkpoint = torch.load(args.checkpoint, map_location='cpu')
-    # TODO: in future this could be better handled with the args/kwargs mechanisim
-    model = RADAE(num_features, args.latent_dim, EbNodB=100, rate_Fs=True, 
-                  pilots=True, pilot_eq=True, eq_mean6 = False, cyclic_prefix=0.004,
-                  coarse_mag=True,time_offset=-16, bottleneck=bottleneck)
-    missing_keys, unmatched_keys = model.load_state_dict(checkpoint['state_dict'], strict=False)
+    # Note only a few parms required to extract weights for core encoder/decoder.  The weights are not affected
+    # by the "bottleneck" and rate Rs or rate Fs operation. For example this script can be used for model05 and model19_check3
+    model = RADAE(num_features, args.latent_dim, EbNodB=100)
+    model.load_state_dict(checkpoint['state_dict'], strict=False)
+
     def _remove_weight_norm(m):
         try:
             torch.nn.utils.remove_weight_norm(m)
         except ValueError:  # this module didn't have weight norm
             return
     model.apply(_remove_weight_norm)
-
-    if len(missing_keys) > 0:
-        raise ValueError(f"error: missing keys in state dict")
-
-    if len(unmatched_keys) > 0:
-        print(f"warning: the following keys were unmatched {unmatched_keys}")
 
     if args.format == 'C':
         c_export(args, model)

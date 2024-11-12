@@ -509,3 +509,11 @@ add_test(NAME bbfm_sc_bpf_loss
                        python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
                        set_tests_properties(bbfm_sc_bpf_loss PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# C Port of Core Encoder/decoder
+
+add_test(NAME c_encoder
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+         ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.hat; \
+         cat features_in.f32 |  ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_enc > z_c.f32
+         python3 stateful_encoder.py model05/checkpoints/checkpoint_epoch_100.pth features_in.f32 /dev/null --read_latent z_c.f32 --loss_test 0.2")
+         set_tests_properties(c_encoder PROPERTIES PASS_REGULAR_EXPRESSION "PASS")

@@ -51,7 +51,7 @@ static void conv1_cond_init(float *mem, int len, int dilation, int *init)
     *init = 1;
 }
 #include <stdio.h>
-static int frames = 0;
+
 void rade_core_encoder(
     RADEEncState    *enc_state,      
     const RADEEnc   *model,
@@ -116,16 +116,18 @@ void rade_core_encoder(
     conv1_cond_init(enc_state->conv5_state, output_index, 2, &enc_state->initialized);
     compute_generic_conv1d_dilation(&model->enc_conv5, &buffer[output_index], enc_state->conv5_state, buffer, output_index, 2, ACTIVATION_TANH, arch);
     output_index += ENC_CONV5_OUT_SIZE;
-    fprintf(stderr,"output_index: %d arch: %d\n", output_index, arch);
-    compute_generic_dense(&model->enc_zdense, latents, buffer, ACTIVATION_LINEAR, arch);
-    fprintf(stderr, "latents: %f %f %f\n", latents[0], latents[1], latents[2]);
+    //fprintf(stderr,"output_index: %d arch: %d\n", output_index, arch);
+    compute_generic_dense(&model->enc_zdense, latents, buffer, ACTIVATION_TANH, arch);
+    //fprintf(stderr, "latents: %f %f %f\n", latents[0], latents[1], latents[2]);
+    #ifdef TT
     {
         FILE *f=fopen("buffer.f32","wb");
         fwrite(buffer,sizeof(buffer),1,f);
         fclose(f);
         exit(0);
     }
-    
+    #endif
+
     //OPUS_COPY(latents, padded_latents, RADE_LATENT_DIM);
 
     // DR: don't think we need this?

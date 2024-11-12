@@ -18,7 +18,7 @@ int main(void)
     RADEEnc      enc_model;
     RADEEncState enc_state;
 
-    int auxdata = 1;         // TODO: this could be a CLI option, defaults to 1
+    int auxdata = 0;         // TODO: this could be a CLI option, defaults to 1
     int nb_total_features = 36;
     int num_features = 20;
     int num_used_features = 20;
@@ -56,8 +56,10 @@ int main(void)
     // arch = opus_select_arch();
 
     fprintf(stderr, "arch: %d n_features_in: %d n_z_out: %d\n", arch, n_features_in, enc_model.enc_zdense.nb_outputs);
-
-    while((size_t)frames_per_step*nb_total_features == fread(features_read, sizeof(float), frames_per_step*nb_total_features, stdin)) {
+    int nb_feature_vecs = 0;
+    size_t to_read, nb_read;
+    to_read = frames_per_step*nb_total_features;
+    while((nb_read = fread(features_read, sizeof(float), to_read, stdin)) == to_read) {
         for (int i=0; i<frames_per_step; i++) {
             for(int j=0; j<num_used_features; j++)
                 features[i*num_features+j] = features_read[i*nb_total_features+j];
@@ -67,7 +69,8 @@ int main(void)
         rade_core_encoder(&enc_state, &enc_model, z, features, arch);
         fwrite(z, sizeof(float), RADE_LATENT_DIM, stdout);
         fflush(stdout);
+        nb_feature_vecs++;
     }
-
+    fprintf(stderr, "%d feature vectors processed\n", nb_feature_vecs);
     return 0;
 }
