@@ -99,6 +99,5 @@ struct RADEEnc {
 };
 
 int init_radeenc(RADEEnc *model, const WeightArray *arrays);
-extern const WeightArray radeenc_arrays[];
 
 #endif /* RADE_ENC_DATA_H */

@@ -32,6 +32,7 @@
 #include <stdlib.h>
 
 #include "opus_types.h"
+#include "nnet.h"
 
 typedef struct RADEDec RADEDec; 
 typedef struct RADEEnc RADEEnc;
@@ -43,5 +44,7 @@ void rade_core_encoder(RADEEncState *enc_state, const RADEEnc *model, float *z, 
 
 void rade_init_decoder(RADEDecState *dec_state);
 void rade_core_decoder(RADEDecState *dec_state, const RADEDec *model, float *features, const float *z_hat);
+
+extern const WeightArray radeenc_arrays[];
 
 #endif
