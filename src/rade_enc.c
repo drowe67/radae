@@ -61,28 +61,14 @@ void rade_core_encoder(
     int              bottleneck
     )
 {
-    //float padded_latents[DRED_PADDED_LATENT_DIM];
-    //float padded_state[DRED_PADDED_STATE_DIM];
     float buffer[ENC_DENSE1_OUT_SIZE + ENC_GRU1_OUT_SIZE + ENC_GRU2_OUT_SIZE + ENC_GRU3_OUT_SIZE + ENC_GRU4_OUT_SIZE + ENC_GRU5_OUT_SIZE
                + ENC_CONV1_OUT_SIZE + ENC_CONV2_OUT_SIZE + ENC_CONV3_OUT_SIZE + ENC_CONV4_OUT_SIZE + ENC_CONV5_OUT_SIZE];
-    //for(int i=0; i<sizeof(buffer)/sizeof(float); i++)
-    //    buffer[i] = 100;
-    //float state_hidden[GDENSE1_OUT_SIZE];
+
     int output_index = 0;
-    #ifdef TT
-    fprintf(stderr, "\n\ninputs %d:\n", model->enc_dense1.nb_inputs);
-    for(int i=0; i<model->enc_dense1.nb_inputs; i++)
-        fprintf(stderr, "%f\t",input[i]);
-    #endif
     /* run encoder stack and concatenate output in buffer*/
     compute_generic_dense(&model->enc_dense1, &buffer[output_index], input, ACTIVATION_TANH, arch);
     output_index += ENC_DENSE1_OUT_SIZE;
-    #ifdef TT
-    fprintf(stderr, "\n\noutputs %d:\n", model->enc_dense1.nb_outputs);
-    for(int i=0; i<model->enc_dense1.nb_outputs; i++)
-        fprintf(stderr, "%f\t",buffer[i]);
-    if (++frames == 1) exit(0);
-    #endif
+
     compute_generic_gru(&model->enc_gru1_input, &model->enc_gru1_recurrent, enc_state->gru1_state, buffer, arch);
     OPUS_COPY(&buffer[output_index], enc_state->gru1_state, ENC_GRU1_OUT_SIZE);
     output_index += ENC_GRU1_OUT_SIZE;
@@ -117,7 +103,7 @@ void rade_core_encoder(
     conv1_cond_init(enc_state->conv5_state, output_index, 2, &enc_state->initialized);
     compute_generic_conv1d_dilation(&model->enc_conv5, &buffer[output_index], enc_state->conv5_state, buffer, output_index, 2, ACTIVATION_TANH, arch);
     output_index += ENC_CONV5_OUT_SIZE;
-    //fprintf(stderr,"output_index: %d arch: %d\n", output_index, arch);
+ 
     int activation;
     if (bottleneck == 1) 
         activation = ACTIVATION_TANH;
@@ -125,23 +111,4 @@ void rade_core_encoder(
         activation = ACTIVATION_LINEAR;
    
     compute_generic_dense(&model->enc_zdense, latents, buffer, activation, arch);
-    //fprintf(stderr, "latents: %f %f %f\n", latents[0], latents[1], latents[2]);
-    #ifdef TT
-    {
-        FILE *f=fopen("buffer.f32","wb");
-        fwrite(buffer,sizeof(buffer),1,f);
-        fclose(f);
-        exit(0);
-    }
-    #endif
-
-    //OPUS_COPY(latents, padded_latents, RADE_LATENT_DIM);
-
-    // DR: don't think we need this?
-    #ifdef RM_ME
-    /* next, calculate initial state */
-    compute_generic_dense(&model->gdense1, state_hidden, buffer, ACTIVATION_TANH, arch);
-    compute_generic_dense(&model->gdense2, padded_state, state_hidden, ACTIVATION_LINEAR, arch);
-    OPUS_COPY(initial_state, padded_state, DRED_STATE_DIM);
-    #endif
 }

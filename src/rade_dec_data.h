@@ -26,7 +26,7 @@
 
 #define DEC_GLU5_OUT_SIZE 96
 
-#define DEC_OUTPUT_OUT_SIZE 80
+#define DEC_OUTPUT_OUT_SIZE 84
 
 #define DEC_GRU1_OUT_SIZE 96
 

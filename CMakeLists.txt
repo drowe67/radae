@@ -511,9 +511,20 @@ add_test(NAME bbfm_sc_bpf_loss
 
 # C Port of Core Encoder/decoder
 
-add_test(NAME c_encoder
+# we test by comparing loss of features_in/features_out, can all happen at rate Rs
+add_test(NAME c_encoder_model5
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
          ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null; \
-         cat features_in.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_enc 1 0 > z_c.f32
+         cat features_in.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_enc 1 0 > z_c.f32; \
          python3 stateful_encoder.py model05/checkpoints/checkpoint_epoch_100.pth features_in.f32 /dev/null --read_latent z_c.f32 --loss_test 0.2")
-         set_tests_properties(c_encoder PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+         set_tests_properties(c_encoder_model5 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# we need the DSP code in the loop to test the core encoder with model19_check3 as the bottleneck (3) is at rate Fs
+add_test(NAME c_encoder_model19_check3
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+         ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
+         cat features_in.f32 | python3 radae_txe.py | python3 radae_rxe.py > features_out.f32; \
+         cat features_in.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_enc 3 1 > z_c.f32; \
+         cat z_c.f32 | python3 radae_txe.py --bypass_enc | python3 radae_rxe.py > features_rx_out.f32; \
+         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
+         set_tests_properties(c_encoder_model19_check3 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
