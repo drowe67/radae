@@ -31,3 +31,6 @@ set_target_properties(radecore PROPERTIES
 
 add_executable(test_rade_enc test_rade_enc.c)
 target_link_libraries(test_rade_enc radecore opus m)
+
+add_executable(write_rade_weights write_rade_weights.c)
+target_link_libraries(write_rade_weights radecore opus m)

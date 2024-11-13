@@ -3,6 +3,10 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -18,8 +22,8 @@ int main(int argc, char *argv[])
     RADEEnc      enc_model;
     RADEEncState enc_state;
 
-    if (argc < 2) {
-        fprintf(stderr, "usage: %s bottleneck[1-3] auxdata[0-1]\n", argv[0]);
+    if (argc < 3) {
+        fprintf(stderr, "usage: %s bottleneck[1-3] auxdata[0-1] [weights_blob.bin]\n", argv[0]);
         exit(1);
     }
 
@@ -34,8 +38,34 @@ int main(int argc, char *argv[])
         num_features += 1;
     }
 
-    if (init_radeenc(&enc_model, radeenc_arrays) != 0) {
-        fprintf(stderr, "Error initialising encoder model\n");
+    int fd;
+    void *data;
+    int len;
+    int nb_arrays;
+    struct stat st;
+    WeightArray *list;
+
+    if (argc == 4) {
+        const char *filename = argv[3];
+        fprintf(stderr, "loading %s ....\n", filename);
+        int ret = stat(filename, &st);
+        assert(ret != -1);
+        len = st.st_size;
+        fprintf(stderr, "size is %d\n", len);
+        fd = open(filename, O_RDONLY);
+        assert(fd != -1);
+        // note this needs to stay mapped at run time 
+        data = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
+        nb_arrays = parse_weights(&list, data, len);
+        for (int i=0;i<nb_arrays;i++) {
+            fprintf(stderr, "found %s: size %d\n", list[i].name, list[i].size);
+        }
+        if (init_radeenc(&enc_model, list) != 0) {
+            fprintf(stderr, "Error initialising encoder model from %s\n", argv[3]);
+            exit(1);       
+        }
+    } else if (init_radeenc(&enc_model, radeenc_arrays) != 0) {
+        fprintf(stderr, "Error initialising built-in encoder model\n");
         exit(1);        
     }
     rade_init_encoder(&enc_state);
@@ -78,5 +108,12 @@ int main(int argc, char *argv[])
         nb_feature_vecs++;
     }
     fprintf(stderr, "%d feature vectors processed\n", nb_feature_vecs);
+
+    if (argc == 4) {
+        munmap(data, len);
+        close(fd);
+        free(list);
+    }
+
     return 0;
 }

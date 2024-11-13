@@ -38,7 +38,7 @@ if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 endif("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 
 # Set default flags (from opus-ng build)
-set(CMAKE_C_FLAGS "-O2 -fstack-protector-strong -W -Wall -Wextra -Wcast-align -Wnested-externs -Wshadow -Wstrict-prototypes -DHAVE_CONFIG_H")
+set(CMAKE_C_FLAGS "-g -O2 -fstack-protector-strong -W -Wall -Wextra -Wcast-align -Wnested-externs -Wshadow -Wstrict-prototypes -DHAVE_CONFIG_H")
 
 if(NOT CMAKE_CROSSCOMPILING)
     # Python tells us the CFLAGS we need for Embedding Python in a C lib.
@@ -524,7 +524,7 @@ add_test(NAME c_encoder_model19_check3
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
          ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
          cat features_in.f32 | python3 radae_txe.py | python3 radae_rxe.py > features_out.f32; \
-         cat features_in.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_enc 3 1 > z_c.f32; \
+         cat features_in.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_enc 3 1 ${CMAKE_CURRENT_BINARY_DIR}/model19_check3.bin > z_c.f32; \
          cat z_c.f32 | python3 radae_txe.py --bypass_enc | python3 radae_rxe.py > features_rx_out.f32; \
          python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
          set_tests_properties(c_encoder_model19_check3 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
