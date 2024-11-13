@@ -154,7 +154,7 @@ f"""
     # constants
     constants_writer.header.write(
 f"""
-#define RADE_NUM_FEATURES {model.feature_dim}
+#define RADE_FRAMES_PER_STEP {model.enc_stride}
 
 #define RADE_LATENT_DIM {args.latent_dim}
 

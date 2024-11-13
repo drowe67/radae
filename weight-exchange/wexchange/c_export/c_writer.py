@@ -40,7 +40,7 @@ class CWriter:
                  model_struct_name="Model",
                  nnet_header="nnet.h"):
         """
-        Writer class for creating souce and header files for weight exports to C
+        Writer class for creating source and header files for weight exports to C
 
         Parameters:
         -----------

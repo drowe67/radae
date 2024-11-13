@@ -32,11 +32,12 @@ int main(int argc, char *argv[])
     int nb_total_features = 36;
     int num_features = 20;
     int num_used_features = 20;
-    int frames_per_step = 4; // TODO dig this out of network somehow
-
+    int frames_per_step = RADE_FRAMES_PER_STEP;
+    
     if (auxdata) {
         num_features += 1;
     }
+    int input_dim = num_features*frames_per_step;
 
     int fd;
     void *data;
@@ -60,21 +61,20 @@ int main(int argc, char *argv[])
         for (int i=0;i<nb_arrays;i++) {
             fprintf(stderr, "found %s: size %d\n", list[i].name, list[i].size);
         }
-        if (init_radeenc(&enc_model, list) != 0) {
+        if (init_radeenc(&enc_model, list, input_dim) != 0) {
             fprintf(stderr, "Error initialising encoder model from %s\n", argv[3]);
             exit(1);       
         }
-    } else if (init_radeenc(&enc_model, radeenc_arrays) != 0) {
+    } else if (init_radeenc(&enc_model, radeenc_arrays, input_dim) != 0) {
         fprintf(stderr, "Error initialising built-in encoder model\n");
         exit(1);        
     }
     rade_init_encoder(&enc_state);
 
-    int n_features_in = enc_model.enc_dense1.nb_inputs;
     assert(enc_model.enc_zdense.nb_outputs == RADE_LATENT_DIM);
 
     float features_read[frames_per_step*nb_total_features];
-    float features[n_features_in];
+    float features[input_dim];
     float z[RADE_LATENT_DIM];
     
     // From celt/cpu_support.h:
@@ -90,8 +90,8 @@ int main(int argc, char *argv[])
     // This auto-magically selects best arch
     // arch = opus_select_arch();
 
-    fprintf(stderr, "arch: %d bottleneck: %d auxdata: %d n_features_in: %d n_z_out: %d\n", 
-            arch, bottleneck, auxdata, n_features_in, enc_model.enc_zdense.nb_outputs);
+    fprintf(stderr, "arch: %d bottleneck: %d auxdata: %d input_dim: %d n_z_out: %d\n", 
+            arch, bottleneck, auxdata, input_dim, enc_model.enc_zdense.nb_outputs);
     int nb_feature_vecs = 0;
     size_t to_read, nb_read;
     to_read = frames_per_step*nb_total_features;

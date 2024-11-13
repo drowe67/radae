@@ -7,7 +7,7 @@
 #include "nnet.h"
 
 
-#define RADE_NUM_FEATURES 21
+#define RADE_FRAMES_PER_STEP 4
 
 #define RADE_LATENT_DIM 80
 
