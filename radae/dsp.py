@@ -775,7 +775,7 @@ class single_carrier:
       phase_vec = 2*np.pi*freq_off*np.arange(0,len(rx))/self.Fs + phase_off
       rx *= np.exp(1j*phase_vec)
       sigma = np.sqrt(1/(self.M*10**(EbNodB/10)))
-      noise = (sigma/np.sqrt(2))*(np.random.randn(len(rx)) + 1j*np.random.randn(len(rx)))
+      noise = (sigma/np.sqrt(2))*(self.rng.standard_normal(len(rx)) + 1j*self.rng.standard_normal(len(rx)))
       rx = mag*(rx + noise)
 
       # demodulate stream with rx
