@@ -572,3 +572,29 @@ Work in progress notes, needs a clean up once this settles down.
    ```
    sox ~/Downloads/sdr.ironstonerange.com_2024-08-19T22_03_13Z_7185.00_lsb.wav -t .s16 -r 8000 -c 1 - | python3 int16tof32.py --zeropad | python3 radae_rx.py model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 --auxdata | ./build/src/lpcnet_demo -fargan-synthesis - - | aplay -f S16_LE -r 16000
    ```
+# C Port of Core Encoder and Decoder
+
+The model weights can be compiled in or loaded at init-time from a binary blob.  The actual model is hard coded in `rade_enc.c` and `rade_dec.c`, and can't be easily changed.
+
+To compile-in the weights:
+1. Export weights:
+   ```
+   cd radae
+   python3 export_rade_weights.py model19_check3/checkpoints/checkpoint_epoch_100.pth src
+   ```
+1. We need to make some manual changes to the weight files to support changing input dimension at run time.  In `rade_enc_dat.c`, the first call to `linear_init()` should look like:
+   ```
+   int init_radeenc(RADEEnc *model, const WeightArray *arrays, int input_dim) {
+     if (linear_init(&model->enc_dense1, arrays, "enc_dense1_bias", NULL, NULL,"enc_dense1_weights_float", NULL, NULL, NULL, input_dim, 64)) return 1;
+   ```
+   e.g. the fixed input dimension (84 for `model19_check3`, 80 for earlier models without auxdata) should be changed to the `input_dim` variable. This allows us to enable/disable `auxdata` at init time, without changing the C code for the model.
+1. Also make manual changes to support `output_dim` in `rade_dec_dat.c`, `init_radedec()`.
+3. Build C code.
+4. Run ctests.
+
+To export the compiled in weights to a binary blob:
+```
+cd radae/build
+./src/write_rade_weights ../bin/model05.bin
+```
+These can then be loaded at init-time, see examples in `src/test_rand_enc.c` and `src/test_rand_dec.c`.
