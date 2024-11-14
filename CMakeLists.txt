@@ -515,7 +515,7 @@ add_test(NAME bbfm_sc_bpf_loss
 # compiled-in weights are for model19_check3
 add_test(NAME c_encoder_model5
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
-         ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null; \
+         ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
          cat features_in.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_enc 1 0 ${CMAKE_SOURCE_DIR}/bin/model05.bin > z_c.f32; \
          python3 stateful_encoder.py model05/checkpoints/checkpoint_epoch_100.pth features_in.f32 /dev/null --read_latent z_c.f32 --loss_test 0.2")
          set_tests_properties(c_encoder_model5 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
@@ -523,9 +523,27 @@ add_test(NAME c_encoder_model5
 # we need the DSP code in the loop to test the core encoder with model19_check3 as the bottleneck (3) is at rate Fs
 add_test(NAME c_encoder_model19_check3
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
-         ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
+         ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
          cat features_in.f32 | python3 radae_txe.py | python3 radae_rxe.py > features_out.f32; \
          cat features_in.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_enc 3 1 > z_c.f32; \
          cat z_c.f32 | python3 radae_txe.py --bypass_enc | python3 radae_rxe.py > features_rx_out.f32; \
          python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
          set_tests_properties(c_encoder_model19_check3 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# compare Python decoder (features_out.f32) C decoder (features_c.f32), for same latent inputs z.f32
+# note inference.sh creates features_in.f32 & features_out.f32
+add_test(NAME c_decoder_model5
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+         ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
+         cat z.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_dec 0 ${CMAKE_SOURCE_DIR}/bin/model05.bin > features_c.f32; \
+         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_c.f32 --compare")
+         set_tests_properties(c_decoder_model5 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+add_test(NAME c_decoder_model19_check3
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+         ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --correct_freq_offset \
+                       --write_latent z_hat.f32; \
+         cat z_hat.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_dec 1 > features_c.f32; \
+         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_c.f32 --compare")
+         set_tests_properties(c_decoder_model19_check3 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")

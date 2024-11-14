@@ -46,7 +46,4 @@ struct RADEEncStruct {
     float conv5_state[2*ENC_CONV5_STATE_SIZE];
 };
 
-void rade_encode_dframe(RADEEncState *enc_state, const RADEEnc *model, float *latents, float *initial_state, const float *input);
-
-
 #endif

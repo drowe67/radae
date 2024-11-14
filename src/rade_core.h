@@ -43,8 +43,9 @@ void rade_init_encoder(RADEEncState *enc_state);
 void rade_core_encoder(RADEEncState *enc_state, const RADEEnc *model, float *z, const float *features, int arch, int bottleneck);
 
 void rade_init_decoder(RADEDecState *dec_state);
-void rade_core_decoder(RADEDecState *dec_state, const RADEDec *model, float *features, const float *z_hat);
+void rade_core_decoder(RADEDecState *dec_state, const RADEDec *model, float *features, const float *z_hat, int arch);
 
 extern const WeightArray radeenc_arrays[];
+extern const WeightArray radedec_arrays[];
 
 #endif

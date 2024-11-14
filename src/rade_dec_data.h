@@ -113,6 +113,6 @@ struct RADEDec {
     LinearLayer dec_conv5;
 };
 
-int init_radedec(RADEDec *model, const WeightArray *arrays);
+int init_radedec(RADEDec *model, const WeightArray *arrays, int output_dim);
 
 #endif /* RADE_DEC_DATA_H */
