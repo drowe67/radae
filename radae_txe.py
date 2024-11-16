@@ -58,14 +58,15 @@ class radae_tx:
       if auxdata:
          self. num_features += 1
 
-      # load model from a checkpoint file
       self.model = RADAE(self.num_features, latent_dim, EbNodB=100, rate_Fs=True, 
                   pilots=True, pilot_eq=True, eq_mean6 = False, cyclic_prefix=0.004,
                   coarse_mag=True,time_offset=-16, bottleneck=bottleneck)
       model = self.model
-      checkpoint = torch.load(model_name, map_location='cpu')
-      model.load_state_dict(checkpoint['state_dict'], strict=False)
-      model.core_encoder_statefull_load_state_dict()
+      if not self.bypass_enc:
+         # load model from a checkpoint file
+         checkpoint = torch.load(model_name, map_location='cpu')
+         model.load_state_dict(checkpoint['state_dict'], strict=False)
+         model.core_encoder_statefull_load_state_dict()
       model.eval()
 
       self.transmitter = transmitter_one(model.latent_dim,model.enc_stride,model.Nzmf,model.Fs,model.M,model.Ncp,

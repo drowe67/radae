@@ -509,7 +509,7 @@ add_test(NAME bbfm_sc_bpf_loss
                        python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
                        set_tests_properties(bbfm_sc_bpf_loss PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# C Port of Core Encoder/decoder
+# C Port of Core Encoder/decoder ------------------------------------------------------------------------------------
 
 # we test by comparing loss of features_in/features_out, can all happen at rate Rs.  We load model05.bin weights as 
 # compiled-in weights are for model19_check3
@@ -539,11 +539,13 @@ add_test(NAME c_decoder_model5
          python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_c.f32 --compare")
          set_tests_properties(c_decoder_model5 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# As well as testing C core decoder, this test also uses radae_rxe.py in bypass mode
 add_test(NAME c_decoder_model19_check3
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
          ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --correct_freq_offset \
-                       --write_latent z_hat.f32; \
+                       --write_rx rx.f32; \
+         cat rx.f32 | python3 radae_rxe.py --bypass_dec > z_hat.f32
          cat z_hat.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_dec 1 > features_c.f32; \
          python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_c.f32 --compare")
          set_tests_properties(c_decoder_model19_check3 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
