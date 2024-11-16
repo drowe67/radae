@@ -52,6 +52,7 @@ class radae_tx:
       self.bottleneck = bottleneck
       self.txbpf_en = txbpf_en
       self.bypass_enc = bypass_enc
+      print(f"model_name: {model_name} bypass_enc: {bypass_enc}", file=sys.stderr)
 
       self.num_features = 20
       if auxdata:
@@ -80,16 +81,18 @@ class radae_tx:
 
       # number of input floats per processing frame (TODO refactor to more sensible variable names)
       if not self.bypass_enc:
-         self.nb_floats = model.Nzmf*model.enc_stride*nb_total_features
+         self.n_floats_in = model.Nzmf*model.enc_stride*nb_total_features
       else:
-         self.nb_floats = model.Nzmf*self.latent_dim
+         self.n_floats_in = model.Nzmf*self.latent_dim
       # number of output csingles per processing frame
       self.Nmf = int((model.Ns+1)*(model.M+model.Ncp))
       # number of output csingles for EOO frame
       self.Neoo = int((model.Ns+2)*(model.M+model.Ncp))
 
-   def get_nb_floats(self):
-      return self.nb_floats
+   def get_n_features_in(self):
+      return self.model.Nzmf*self.model.enc_stride*nb_total_features
+   def get_n_floats_in(self):
+      return self.n_floats_in
    def get_Nmf(self):
       return self.Nmf
    def get_Neoo(self):
@@ -112,6 +115,7 @@ class radae_tx:
             #print(features.shape, file=sys.stderr)
             z = model.core_encoder_statefull(features)
          else:
+            #print("Using external core encoder", file=sys.stderr)
             z = torch.reshape(torch.tensor(buffer_f32),(1,model.Nzmf,self.latent_dim))      
          #print(z.shape, file=sys.stderr)
          tx = self.transmitter.transmitter_one(z,num_timesteps_at_rate_Rs)
@@ -133,7 +137,7 @@ class radae_tx:
       np.copyto(tx_out,eoo)
 
 if __name__ == '__main__':
-   parser = argparse.ArgumentParser(description='RADAE streaming trannsmnitter, features.f32 on stdit, IQ.f32 on output')
+   parser = argparse.ArgumentParser(description='RADAE streaming transmitter, features.f32 on stdin, IQ.f32 on output')
    parser.add_argument('--model_name', type=str, help='path to model in .pth format', default="model19_check3/checkpoints/checkpoint_epoch_100.pth")
    parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injection of auxillary data symbols')
    parser.add_argument('--txbpf', action='store_true', help='enable Tx BPF')
@@ -144,8 +148,8 @@ if __name__ == '__main__':
 
    tx_out = np.zeros(tx.Nmf,dtype=np.csingle)
    while True:
-      buffer = sys.stdin.buffer.read(tx.nb_floats*struct.calcsize("f"))
-      if len(buffer) != tx.nb_floats*struct.calcsize("f"):
+      buffer = sys.stdin.buffer.read(tx.n_floats_in*struct.calcsize("f"))
+      if len(buffer) != tx.n_floats_in*struct.calcsize("f"):
          break
       buffer_f32 = np.frombuffer(buffer,np.single)
       tx.do_radae_tx(buffer_f32,tx_out)

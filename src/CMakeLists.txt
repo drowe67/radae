@@ -14,12 +14,12 @@ set_target_properties(rade PROPERTIES
 )
 
 add_executable(radae_tx radae_tx.c)
-target_link_libraries(radae_tx rade Python3::Python)
+target_link_libraries(radae_tx rade radecore opus m Python3::Python)
 target_include_directories(radae_tx PRIVATE
     "$<TARGET_PROPERTY:Python3::NumPy,INTERFACE_INCLUDE_DIRECTORIES>")
 
 add_executable(radae_rx radae_rx.c)
-target_link_libraries(radae_rx rade Python3::Python)
+target_link_libraries(radae_rx rade radecore opus m Python3::Python)
 target_include_directories(radae_rx PRIVATE
     "$<TARGET_PROPERTY:Python3::NumPy,INTERFACE_INCLUDE_DIRECTORIES>")
 

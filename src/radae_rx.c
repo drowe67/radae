@@ -12,7 +12,7 @@ int main(void)
 {
     rade_initialize();
 
-    struct rade *r = rade_open("dummy");
+    struct rade *r = rade_open("dummy", 0);
     assert(r != NULL);
     int n_features_out = rade_n_features_in_out(r);
     float features_out[n_features_out];
