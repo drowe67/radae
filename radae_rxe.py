@@ -209,20 +209,6 @@ class radae_rx:
 
                # run through RADAE receiver DSP
                z_hat = receiver.receiver_one(rx)
-               # decode z_hat to features
-               assert(z_hat.shape[1] == model.Nzmf)
-               features_hat = model.core_decoder_statefull(z_hat)
-               if auxdata:
-                  symb_repeat = 4
-                  aux_symb = features_hat[:,:,20].detach().numpy()
-                  aux_bits = 1*(aux_symb[0,::symb_repeat] > 0)
-                  features_hat = features_hat[:,:,0:20]
-                  self.uw_errors += np.sum(aux_bits)
-
-               # add unused features and output
-               features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
-               features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
-               np.copyto(features_out, features_hat)
                valid_output = True
             
          if v == 2 or (v == 1 and (self.state == "search" or self.state == "candidate" or prev_state == "candidate")):
@@ -281,6 +267,23 @@ class radae_rx:
          self.state = next_state
          self.mf += 1
 
+         # We call core decoder at end to model behaivour with external C core decoder
+         if valid_output:
+            # decode z_hat to features
+            assert(z_hat.shape[1] == model.Nzmf)
+            features_hat = model.core_decoder_statefull(z_hat)
+            if auxdata:
+               symb_repeat = 4
+               aux_symb = features_hat[:,:,20].detach().numpy()
+               aux_bits = 1*(aux_symb[0,::symb_repeat] > 0)
+               features_hat = features_hat[:,:,0:20]
+               self.uw_errors += np.sum(aux_bits)
+
+            # add unused features and output
+            features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
+            features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
+            np.copyto(features_out, features_hat)
+            
          return valid_output
 
 if __name__ == '__main__':
