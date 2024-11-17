@@ -80,7 +80,7 @@ class radae_tx:
          print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
          self.txbpf = complex_bpf(Ntap, model.Fs, bandwidth,centre)
 
-      # number of input floats per processing frame (TODO refactor to more sensible variable names)
+      # number of input floats per processing frame
       if not self.bypass_enc:
          self.n_floats_in = model.Nzmf*model.enc_stride*nb_total_features
       else:

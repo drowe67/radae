@@ -50,6 +50,8 @@
 #include "rade_core.h" 
 #include "rade_enc.h"
 #include "rade_enc_data.h"
+#include "rade_dec.h"
+#include "rade_dec_data.h"
 
 static PyThreadState* main_thread_state; // needed to unlock the GIL after initialization
 
@@ -74,9 +76,13 @@ struct rade {
   PyObject *pMeth_radae_tx_eoo, *pArgs_radae_tx_eoo;
   RADE_COMP *tx_eoo_out;
 
+  RADEDec      dec_model;
+  RADEDecState dec_state;
   PyObject *pModule_radae_rx, *pInst_radae_rx;
   PyObject *pMeth_radae_rx, *pArgs_radae_rx;
-  float *features_out;
+  PyObject *pMeth_sum_uw_errors;
+  npy_intp n_floats_out;
+  float *floats_out;
   RADE_COMP *rx_in;
 };
 
@@ -141,6 +147,7 @@ int rade_tx_open(struct rade *r) {
     check_error(r->pInst_radae_tx, "Creating instance of class", "radae_tx");
     Py_DECREF(pClass);
     Py_DECREF(pArgs);
+    Py_DECREF(pkwArgs);
 
     r->n_features_in = (int)call_getter(r->pInst_radae_tx, "get_n_features_in");
     r->n_floats_in = (int)call_getter(r->pInst_radae_tx, "get_n_floats_in");
@@ -156,7 +163,7 @@ int rade_tx_open(struct rade *r) {
     check_error(r->pMeth_radae_tx, "finding",  do_radae_tx_meth_name);
     check_callable(r->pMeth_radae_tx, do_radae_tx_meth_name, "not callable");
 
-    // 1st Python function arg - numpy array of float features
+    // 1st Python function arg - numpy array of float features (Python core encoder) or latents (C core encoder)
     r->floats_in = (float*)malloc(sizeof(float)*r->n_floats_in);
     assert(r->floats_in != NULL);
     pValue = PyArray_SimpleNewFromData(1, &r->n_floats_in, NPY_FLOAT, r->floats_in);
@@ -213,9 +220,10 @@ void rade_tx_close(struct rade *r) {
 int rade_rx_open(struct rade *r) {
     PyObject *pName, *pClass;
     PyObject *pValue;
-    PyObject *pArgs;
+    PyObject *pArgs, *pkwArgs;
     char *python_module_name = "radae_rxe";
     char *do_radae_rx_meth_name = "do_radae_rx";
+    char *sum_uw_errors_meth_name = "sum_uw_errors";
 
     // Load module of Python code
     fprintf(stderr, "loading: %s\n", python_module_name);
@@ -228,15 +236,18 @@ int rade_rx_open(struct rade *r) {
     pClass = PyObject_GetAttrString(r->pModule_radae_rx, "radae_rx");
     check_error(pClass, "finding class", "radae_rx");
     pArgs = Py_BuildValue("(s)", "model19_check3/checkpoints/checkpoint_epoch_100.pth");
-    r->pInst_radae_rx = PyObject_CallObject(pClass, pArgs);
+    pkwArgs = Py_BuildValue("{s:i}", "bypass_dec", r->flags & RADE_USE_C_DECODER);
+    r->pInst_radae_rx = PyObject_Call(pClass, pArgs, pkwArgs);
     check_error(r->pInst_radae_rx, "Creating instance of class", "radae_rx");
     Py_DECREF(pClass);
     Py_DECREF(pArgs);
+    Py_DECREF(pkwArgs);
 
     r->n_features_out = (int)call_getter(r->pInst_radae_rx, "get_n_features_out");
+    r->n_floats_out = (int)call_getter(r->pInst_radae_rx, "get_n_floats_out");
     r->nin_max = (int)call_getter(r->pInst_radae_rx, "get_nin_max");
     r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");
-    fprintf(stderr, "n_features_out: %d nin_max: %d nin: %d\n", (int)r->n_features_out, (int)r->nin_max, (int)r->nin);
+    fprintf(stderr, "n_features_out: %d n_floats_out: %d nin_max: %d nin: %d\n", (int)r->n_features_out, (int)r->n_floats_out, (int)r->nin_max, (int)r->nin);
         
     r->pMeth_radae_rx = PyObject_GetAttrString(r->pInst_radae_rx, do_radae_rx_meth_name);
     check_error(r->pMeth_radae_rx, "finding",  do_radae_rx_meth_name);
@@ -251,23 +262,36 @@ int rade_rx_open(struct rade *r) {
     check_error(pValue, "setting up numpy array", "buffer_complex");
     PyTuple_SetItem(r->pArgs_radae_rx, 0, pValue);
 
-    // 2nd Python arg - output numpy array of float features
-    r->features_out = (float*)malloc(sizeof(float)*r->n_features_out);
-    assert(r->features_out != NULL);
-    pValue = PyArray_SimpleNewFromData(1, &r->n_features_out, NPY_FLOAT, r->features_out);
-    check_error(pValue, "setting up numpy array", "features_out");
+    // 2nd Python arg - output numpy array of float features (Python core dec) or latents (C core decoder)
+    r->floats_out = (float*)malloc(sizeof(float)*r->n_floats_out);
+    assert(r->floats_out != NULL);
+    pValue = PyArray_SimpleNewFromData(1, &r->n_floats_out, NPY_FLOAT, r->floats_out);
+    check_error(pValue, "setting up numpy array", "floats_out");
     PyTuple_SetItem(r->pArgs_radae_rx, 1, pValue);
  
+    r->pMeth_sum_uw_errors = PyObject_GetAttrString(r->pInst_radae_rx, sum_uw_errors_meth_name);
+    check_error(r->pMeth_sum_uw_errors, "finding", sum_uw_errors_meth_name);
+    check_callable(r->pMeth_sum_uw_errors, sum_uw_errors_meth_name, "not callable");
+
+    if (r->flags & RADE_USE_C_DECODER) {
+      if (init_radedec(&r->dec_model, radedec_arrays, r->num_features*RADE_FRAMES_PER_STEP) != 0) {
+        fprintf(stderr, "Error initialising built-in C decoder model\n");
+        exit(1);        
+      }
+      rade_init_decoder(&r->dec_state);
+    }
+
     return 0;
 }
 
 void rade_rx_close(struct rade *r) {
   Py_DECREF(r->pArgs_radae_rx);
   Py_DECREF(r->pMeth_radae_rx);
+  Py_DECREF(r->pMeth_sum_uw_errors);
   Py_DECREF(r->pInst_radae_rx);
   Py_DECREF(r->pModule_radae_rx);
 
-  free(r->features_out);
+  free(r->floats_out);
   free(r->rx_in);
 }
 
@@ -347,7 +371,7 @@ int rade_tx(struct rade *r, RADE_COMP tx_out[], float floats_in[]) {
   PyGILState_STATE gstate = PyGILState_Ensure();
 
   if (r->flags & RADE_USE_C_ENCODER) {
-    // sanity check: need integer number number of feature vecs
+    // sanity check: need integer number of feature vecs
     assert(r->n_features_in % r->nb_total_features == 0);
     int n_feature_vecs = r->n_features_in/r->nb_total_features;
     // sanity check: integer number of core_encoder calls
@@ -411,7 +435,48 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
   pValue = PyObject_CallObject(r->pMeth_radae_rx, r->pArgs_radae_rx);
   check_error(pValue, "return value", "from do_rx_radae");
   long valid_out = PyLong_AsLong(pValue);
-  memcpy(features_out, r->features_out, sizeof(float)*(r->n_features_out));
+
+  if (valid_out) {
+    if (r->flags & RADE_USE_C_DECODER) {
+      // sanity check: need integer number of latent vecs
+      assert(r->n_floats_out % RADE_LATENT_DIM == 0);
+      int n_latent_vecs = r->n_floats_out/RADE_LATENT_DIM;
+      int output_dim = r->num_features*RADE_FRAMES_PER_STEP;
+      float features[output_dim];
+
+      // zero out unused ends of feature vecs
+      for(int i=0; i<r->n_features_out; i++) features_out[i] = 0.0;
+
+      // TODO: need a way to configure arch for testing (and/or automagically detect using opus logic)
+      int arch = 0;
+      //fprintf(stderr,"n_latent_vecs: %d output_dim: %d\n", n_latent_vecs, output_dim);
+
+      int uw_errors = 0;
+      for(int c=0; c<n_latent_vecs; c++) {
+        rade_core_decoder(&r->dec_state, &r->dec_model, features, &r->floats_out[RADE_LATENT_DIM*c], arch);
+        for (int i=0; i<RADE_FRAMES_PER_STEP; i++) {
+          for(int j=0; j<r->num_used_features; j++)
+            features_out[(c*RADE_FRAMES_PER_STEP+i)*r->nb_total_features+j] = features[i*r->num_features + j];
+        }
+        // just use first aux data symbol for each set of RADE_FRAMES_PER_STEP, as they are all the same decoded value
+        if (r->auxdata) {
+          if (features[r->num_used_features] > 0) uw_errors++;
+          //fprintf(stderr, "aux_symb: %f uw_errors: %d\n", features[r->num_used_features],uw_errors);
+        }
+      }
+
+      // write number of errors in aux bits back to radae_rxe instance for use by state machine
+      if (r->auxdata) {
+        PyObject *pArgs_sum_uw_errors = Py_BuildValue("(i)", uw_errors);
+        PyObject_CallObject(r->pMeth_sum_uw_errors, pArgs_sum_uw_errors);
+        Py_DECREF(pArgs_sum_uw_errors);
+      }
+    }
+    else {
+      assert(r->n_floats_out == r->n_features_out);
+      memcpy(features_out, r->floats_out, sizeof(float)*(r->n_floats_out));
+    }
+  }
 
   // sample nin so we have an updated copy
   r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");

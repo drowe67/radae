@@ -549,3 +549,18 @@ add_test(NAME c_decoder_model19_check3
          cat z_hat.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_dec 1 > features_c.f32; \
          python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_c.f32 --compare")
          set_tests_properties(c_decoder_model19_check3 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# Test embedded data (--auxdata) use for false sync detection, with C core decoder, with C callable embedded Python API.
+# --foff_err forces a  false sync state after first sync. See also "radae_rx_aux_mpp" above.  Tests uw_errors are being passed
+# back from C decoder to Python state machine
+add_test(NAME c_decoder_aux_mpp
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       test/make_g.sh; \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --auxdata \
+                       --EbNodB 4 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \
+                       cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx > features_c.f32; \
+                       python3 loss.py features_in.f32 features_c.f32 --loss 0.3 --clip_start 300")
+                       set_tests_properties(c_decoder_aux_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+

@@ -229,7 +229,7 @@ class radae_rx:
             print(f"{self.mf:3d} state: {self.state:10s} valid: {candidate:d} {endofover:d} {self.valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ", end='', file=sys.stderr)
             print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {self.tmax:4d} fmax: {self.fmax:6.2f}", end='', file=sys.stderr)
             if auxdata and self.state == "sync":
-               print(f" aux: {aux_bits:} uw_err: {self.uw_errors:d}", file=sys.stderr)
+               print(f" uw_err: {self.uw_errors:d}", file=sys.stderr)
             else:
                print("",file=sys.stderr)
 
@@ -291,6 +291,8 @@ class radae_rx:
                   symb_repeat = 4
                   aux_symb = features_hat[:,:,20].detach().numpy()
                   aux_bits = 1*(aux_symb[0,::symb_repeat] > 0)
+                  #print(aux_symb,aux_symb[0,::symb_repeat],aux_bits,file=sys.stderr)
+
                   features_hat = features_hat[:,:,0:20]
                   self.sum_uw_errors(np.sum(aux_bits))
 
