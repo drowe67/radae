@@ -75,6 +75,7 @@ extern "C" {
 #define RADE_USE_C_ENCODER 0x1
 #define RADE_USE_C_DECODER 0x2
 #define RADE_FOFF_TEST     0x4                // test mode used only by developers
+#define RADE_VERBOSE_0     0x8                // reduce verbosity to "quiet"
 
 // Must be called BEFORE any other RADE functions as this
 // initializes internal library state.

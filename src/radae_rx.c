@@ -12,7 +12,7 @@
 int main(int argc, char *argv[])
 {
     rade_initialize();
-    int flags = RADE_USE_C_DECODER;
+    int flags = RADE_USE_C_DECODER | RADE_VERBOSE_0;
     /* special test mode that induces a frequency offset error to test UW false sync detection */
     if (argc == 2) {
         if (atoi(argv[1]) == 1) {

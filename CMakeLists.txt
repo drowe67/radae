@@ -401,20 +401,32 @@ add_test(NAME radae_rx_slip_minus
 # profiles a run with a 50 second file (no pass/fail, run with -V to get a rough idea of execution time)
 add_test(NAME radae_rx_profile
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
-                       --EbNodB 1 --freq_offset 13 --df_dt 0.1 \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --EbNodB 1 --freq_offset 13 --auxdata \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
                        --prepend_noise 1 --append_noise 3 --end_of_over; \
-                       cat rx.f32 | python3 -m cProfile -s time radae_rxe.py --model model17/checkpoints/checkpoint_epoch_100.pth -v 0 --noauxdata --no_stdout | head -n20")
+                       cat rx.f32 | python3 -m cProfile -s time radae_rxe.py -v 1 --no_stdout | head -n20")
 
 # performs a run using the streaming FARGAN decoder, ie the full simplex rx decode stack.  No pass/fail, just for characterisation of run time
-add_test(NAME radae_rx_fargan
+add_test(NAME radae_rx_fargan_py
         COMMAND bash -c "WAV='wav/all.wav'; cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth $WAV /dev/null \
-                       --EbNodB 10 --freq_offset 13 --df_dt -0.1 \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $WAV /dev/null \
+                       --EbNodB 10 --freq_offset 13 --df_dt -0.1 --auxdata \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
-                       --prepend_noise 1 --append_noise 3 --end_of_over; \
-                       \\time -o log.txt -f '%e' cat rx.f32 | python3 radae_rxe.py --model model17/checkpoints/checkpoint_epoch_100.pth -v 0 --noauxdata | \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset ; \
+                       \\time -o log.txt -f '%e' cat rx.f32 | python3 radae_rxe.py -v 0 | \
+                       ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -fargan-synthesis - /dev/null; \
+                       RUN_TIME=$(cat log.txt); DUR=$(soxi -D $WAV); percent=$(python3 -c \"percent=100*$RUN_TIME/$DUR; print('%f' % percent)\"); \
+                       printf \"\nrun time: %5.2f duration: %5.2f percent CPU: %5.2f\n\n\" $RUN_TIME $DUR $percent ")
+
+# As above but with C core decoder for comparison
+add_test(NAME radae_rx_fargan_c
+        COMMAND bash -c "WAV='wav/all.wav'; cd ${CMAKE_SOURCE_DIR}; \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $WAV /dev/null \
+                       --EbNodB 10 --freq_offset 13 --df_dt -0.1 --auxdata \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset ; \
+                       \\time -o log.txt -f '%e' cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx | \
                        ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -fargan-synthesis - /dev/null; \
                        RUN_TIME=$(cat log.txt); DUR=$(soxi -D $WAV); percent=$(python3 -c \"percent=100*$RUN_TIME/$DUR; print('%f' % percent)\"); \
                        printf \"\nrun time: %5.2f duration: %5.2f percent CPU: %5.2f\n\n\" $RUN_TIME $DUR $percent ")
