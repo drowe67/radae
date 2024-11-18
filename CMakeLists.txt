@@ -542,7 +542,7 @@ add_test(NAME c_decoder_model5
 # As well as testing C core decoder, this test also uses radae_rxe.py in bypass mode
 add_test(NAME c_decoder_model19_check3
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
-         ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --correct_freq_offset \
                        --write_rx rx.f32; \
          cat rx.f32 | python3 radae_rxe.py --bypass_dec > z_hat.f32
@@ -551,7 +551,7 @@ add_test(NAME c_decoder_model19_check3
          set_tests_properties(c_decoder_model19_check3 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # Test embedded data (--auxdata) use for false sync detection, with C core decoder, with C callable embedded Python API.
-# --foff_err forces a  false sync state after first sync. See also "radae_rx_aux_mpp" above.  Tests uw_errors are being passed
+# --foff_err forces a false sync state after first sync. See also "radae_rx_aux_mpp" above.  Tests uw_errors are being passed
 # back from C decoder to Python state machine
 add_test(NAME c_decoder_aux_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
@@ -560,7 +560,7 @@ add_test(NAME c_decoder_aux_mpp
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --auxdata \
                        --EbNodB 4 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
                        --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \
-                       cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx > features_c.f32; \
+                       cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx 1 > features_c.f32; \
                        python3 loss.py features_in.f32 features_c.f32 --loss 0.3 --clip_start 300")
                        set_tests_properties(c_decoder_aux_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 

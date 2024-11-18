@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #ifdef _WIN32
 // For _setmode().
 #include <io.h>
@@ -8,11 +9,18 @@
 
 #include "rade_api.h"
 
-int main(void)
+int main(int argc, char *argv[])
 {
     rade_initialize();
-
-    struct rade *r = rade_open("dummy", RADE_USE_C_DECODER);
+    int flags = RADE_USE_C_DECODER;
+    /* special test mode that induces a frequency offset error to test UW false sync detection */
+    if (argc == 2) {
+        if (atoi(argv[1]) == 1) {
+            fprintf(stderr, "foff_test\n");
+            flags |= RADE_FOFF_TEST;
+        }
+    }
+    struct rade *r = rade_open("dummy", flags);
     assert(r != NULL);
     int n_features_out = rade_n_features_in_out(r);
     float features_out[n_features_out];

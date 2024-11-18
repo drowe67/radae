@@ -65,6 +65,8 @@ class radae_rx:
       self.foff_err = foff_err
       self.bypass_dec = bypass_dec
 
+      print(f"bypass_dec: {bypass_dec} foff_err: {foff_err:f}", file=sys.stderr)
+
       self.num_features = 20
       if self.auxdata:
          self.num_features += 1

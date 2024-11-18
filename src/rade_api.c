@@ -236,7 +236,10 @@ int rade_rx_open(struct rade *r) {
     pClass = PyObject_GetAttrString(r->pModule_radae_rx, "radae_rx");
     check_error(pClass, "finding class", "radae_rx");
     pArgs = Py_BuildValue("(s)", "model19_check3/checkpoints/checkpoint_epoch_100.pth");
-    pkwArgs = Py_BuildValue("{s:i}", "bypass_dec", r->flags & RADE_USE_C_DECODER);
+    float foff_err = 0.0;
+    if (r->flags & RADE_FOFF_TEST) foff_err = 10.0;
+    pkwArgs = Py_BuildValue("{s:i,s:f}", "bypass_dec", r->flags & RADE_USE_C_DECODER, "foff_err", foff_err);
+    check_error(pkwArgs, "setting up pkwArgs", "");
     r->pInst_radae_rx = PyObject_Call(pClass, pArgs, pkwArgs);
     check_error(r->pInst_radae_rx, "Creating instance of class", "radae_rx");
     Py_DECREF(pClass);
@@ -280,7 +283,6 @@ int rade_rx_open(struct rade *r) {
       }
       rade_init_decoder(&r->dec_state);
     }
-
     return 0;
 }
 
