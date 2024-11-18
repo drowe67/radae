@@ -486,41 +486,6 @@ add_test(NAME radae_rx_embed_c
                        set_tests_properties(radae_rx_embed_c PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 
-# BBFM -----------------------------------------------------------------------------------------------
-
-# single carrier modem internal (inside single_carrier class) tests
-add_test(NAME bbfm_sc_internal
-        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       python3 -c 'from radae import single_carrier,single_carrier_tests; single_carrier_tests()'")
-                       set_tests_properties(bbfm_sc_internal PROPERTIES PASS_REGULAR_EXPRESSION "ALL PASS")
-
-# single carrier modem stand alone tx/rx, using BPSK symbol/BER test mode
-add_test(NAME bbfm_sc_ber
-        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./bbfm_inference.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
-                       cat z.f32 | python3 sc_tx.py --ber_test > t.int16; \
-                       cat t.int16 | python3 sc_rx.py --ber_test --target_ber 0 > /dev/null")
-                       set_tests_properties(bbfm_sc_ber PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
-
-# single carrier modem stand alone tx/rx, using continuously valued BBFM symbols, compare loss in decoded features
-add_test(NAME bbfm_sc_loss
-        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./bbfm_inference.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
-                       cat z.f32 | python3 sc_tx.py | python3 sc_rx.py > z_hat.f32; \
-                       ./bbfm_rx.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth z_hat.f32 /dev/null; \
-                       python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
-                       set_tests_properties(bbfm_sc_loss PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
-
-# single carrier modem stand alone tx/rx with external 300-2700Hz band pass filter and no noise, measure loss.  In practice, SNR will be
-# quite high, so channel distortions other than noise may dominate
-add_test(NAME bbfm_sc_bpf_loss
-        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./bbfm_inference.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
-                       cat z.f32 | python3 sc_tx.py | ${CODEC2_DEV_BUILD_DIR}/src/ch - - | python3 sc_rx.py > z_hat.f32; \
-                       ./bbfm_rx.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth z_hat.f32 /dev/null; \
-                       python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
-                       set_tests_properties(bbfm_sc_bpf_loss PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
-
 # C Port of Core Encoder/decoder ------------------------------------------------------------------------------------
 
 # we test by comparing loss of features_in/features_out, can all happen at rate Rs.  We load model05.bin weights as 
@@ -575,4 +540,39 @@ add_test(NAME c_decoder_aux_mpp
                        cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx 1 > features_c.f32; \
                        python3 loss.py features_in.f32 features_c.f32 --loss 0.3 --clip_start 300")
                        set_tests_properties(c_decoder_aux_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# BBFM -----------------------------------------------------------------------------------------------
+
+# single carrier modem internal (inside single_carrier class) tests
+add_test(NAME bbfm_sc_internal
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       python3 -c 'from radae import single_carrier,single_carrier_tests; single_carrier_tests()'")
+                       set_tests_properties(bbfm_sc_internal PROPERTIES PASS_REGULAR_EXPRESSION "ALL PASS")
+
+# single carrier modem stand alone tx/rx, using BPSK symbol/BER test mode
+add_test(NAME bbfm_sc_ber
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./bbfm_inference.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
+                       cat z.f32 | python3 sc_tx.py --ber_test > t.int16; \
+                       cat t.int16 | python3 sc_rx.py --ber_test --target_ber 0 > /dev/null")
+                       set_tests_properties(bbfm_sc_ber PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# single carrier modem stand alone tx/rx, using continuously valued BBFM symbols, compare loss in decoded features
+add_test(NAME bbfm_sc_loss
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./bbfm_inference.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
+                       cat z.f32 | python3 sc_tx.py | python3 sc_rx.py > z_hat.f32; \
+                       ./bbfm_rx.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth z_hat.f32 /dev/null; \
+                       python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
+                       set_tests_properties(bbfm_sc_loss PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# single carrier modem stand alone tx/rx with external 300-2700Hz band pass filter and no noise, measure loss.  In practice, SNR will be
+# quite high, so channel distortions other than noise may dominate
+add_test(NAME bbfm_sc_bpf_loss
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./bbfm_inference.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
+                       cat z.f32 | python3 sc_tx.py | ${CODEC2_DEV_BUILD_DIR}/src/ch - - | python3 sc_rx.py > z_hat.f32; \
+                       ./bbfm_rx.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth z_hat.f32 /dev/null; \
+                       python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
+                       set_tests_properties(bbfm_sc_bpf_loss PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
