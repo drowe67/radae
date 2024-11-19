@@ -64,7 +64,7 @@ class radae_tx:
       model = self.model
       if not self.bypass_enc:
          # load model from a checkpoint file
-         checkpoint = torch.load(model_name, map_location='cpu')
+         checkpoint = torch.load(model_name, map_location='cpu', weights_only=True)
          model.load_state_dict(checkpoint['state_dict'], strict=False)
          model.core_encoder_statefull_load_state_dict()
       model.eval()

@@ -222,7 +222,7 @@ if __name__ == "__main__":
     # Note only a few parms required to extract weights for core encoder/decoder.  The weights are not affected
     # by the "bottleneck" and rate Rs or rate Fs operation. For example this script can be used for model05 and model19_check3
     model = RADAE(num_features, args.latent_dim, EbNodB=100)
-    model.load_state_dict(checkpoint['state_dict'], strict=False)
+    model.load_state_dict(checkpoint['state_dict'], strict=False, weights_only=True)
 
     def _remove_weight_norm(m):
         try:
