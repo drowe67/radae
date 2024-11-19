@@ -407,8 +407,16 @@ add_test(NAME radae_rx_profile
                        --prepend_noise 1 --append_noise 3 --end_of_over; \
                        cat rx.f32 | python3 -m cProfile -s time radae_rxe.py -v 1 --no_stdout | head -n20")
 
-# performs a run using the streaming FARGAN decoder, ie the full simplex rx decode stack.  No pass/fail, just for characterisation of run time
-add_test(NAME radae_rx_fargan_py
+# Characterise run time using full simplex Tx stack (C core encoder version).  No pass/fail, just for characterisation of run time
+add_test(NAME radae_tx_stack_c
+        COMMAND bash -c "WAV='wav/all.wav'; cd ${CMAKE_SOURCE_DIR}; \
+                       \\time -o log.txt -f '%e' ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features $WAV - | 
+                       PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_tx > /dev/null; \
+                       RUN_TIME=$(cat log.txt); DUR=$(soxi -D $WAV); percent=$(python3 -c \"percent=100*$RUN_TIME/$DUR; print('%f' % percent)\"); \
+                       printf \"\nrun time: %5.2f duration: %5.2f percent CPU: %5.2f\n\n\" $RUN_TIME $DUR $percent ")
+
+#  Characterise run time using full simplex Rx stack (Python core decoder version).  No pass/fail, just for characterisation of run time
+add_test(NAME radae_rx_stack_py
         COMMAND bash -c "WAV='wav/all.wav'; cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $WAV /dev/null \
                        --EbNodB 10 --freq_offset 13 --df_dt -0.1 --auxdata \
@@ -420,7 +428,7 @@ add_test(NAME radae_rx_fargan_py
                        printf \"\nrun time: %5.2f duration: %5.2f percent CPU: %5.2f\n\n\" $RUN_TIME $DUR $percent ")
 
 # As above but with C core decoder for comparison
-add_test(NAME radae_rx_fargan_c
+add_test(NAME radae_rx_stack_c
         COMMAND bash -c "WAV='wav/all.wav'; cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $WAV /dev/null \
                        --EbNodB 10 --freq_offset 13 --df_dt -0.1 --auxdata \
