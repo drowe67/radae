@@ -38,7 +38,7 @@ if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 endif("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 
 # Set default flags (from opus-ng build)
-set(CMAKE_C_FLAGS "-g -O2 -fstack-protector-strong -W -Wall -Wextra -Wcast-align -Wnested-externs -Wshadow -Wstrict-prototypes -DHAVE_CONFIG_H")
+set(CMAKE_C_FLAGS "-O2 -fstack-protector-strong -W -Wall -Wextra -Wcast-align -Wnested-externs -Wshadow -Wstrict-prototypes -DHAVE_CONFIG_H")
 
 if(NOT CMAKE_CROSSCOMPILING)
     # Python tells us the CFLAGS we need for Embedding Python in a C lib.
