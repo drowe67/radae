@@ -200,31 +200,29 @@ class acquisition():
    
       Dt1 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
       Dt2 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
-      t_ind = 0
       tmax_ind = 0
       Dtmax = 0
-
-      for t in tfine_range:
-         f_ind = 0
-         for f in ffine_range:
-            w = 2*np.pi*f/Fs
+      
+      f_ind = 0
+      for f in ffine_range:
+         t_ind = 0
+         w = 2*np.pi*f/Fs
+         w_vec1 = np.exp(-1j*w*np.arange(M))
+         w_vec2 = w_vec1*np.exp(-1j*w*Nmf)
+         for t in tfine_range:
             # current pilot samples at start of this modem frame
-            # TODO should this be using |Dt|?
-            w_vec = np.exp(-1j*w*np.arange(M))
-            #print(f"t_ind: {t_ind:d} f_ind: {f_ind:d}")
-            Dt1[t_ind,f_ind] = np.dot(np.conj(w_vec*rx[t:t+M]),p)
+            Dt1[t_ind,f_ind] = np.dot(np.conj(w_vec1*rx[t:t+M]),p)
             # next pilot samples at end of this modem frame
-            w_vec = np.exp(-1j*w*(Nmf+np.arange(M)))
-            Dt2[t_ind,f_ind] = np.dot(np.conj(w_vec*rx[t+Nmf:t+Nmf+M]),p)
+            Dt2[t_ind,f_ind] = np.dot(np.conj(w_vec2*rx[t+Nmf:t+Nmf+M]),p)
 
             if np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind]) > Dtmax:
                Dtmax = np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind])
                tmax = t
                tmax_ind = t_ind
                fmax = f 
-            f_ind = f_ind + 1
-         t_ind = t_ind + 1
-       
+            t_ind = t_ind + 1
+         f_ind = f_ind + 1
+         
       self.D_fine = Dt1[tmax_ind,:]
       
       return tmax, fmax
