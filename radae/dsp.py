@@ -208,12 +208,14 @@ class acquisition():
          t_ind = 0
          w = 2*np.pi*f/Fs
          w_vec1 = np.exp(-1j*w*np.arange(M))
+         w_vec1_p = w_vec1*np.conj(p)
          w_vec2 = w_vec1*np.exp(-1j*w*Nmf)
+         w_vec2_p = w_vec2*np.conj(p)
          for t in tfine_range:
             # current pilot samples at start of this modem frame
-            Dt1[t_ind,f_ind] = np.dot(np.conj(w_vec1*rx[t:t+M]),p)
+            Dt1[t_ind,f_ind] = np.dot(rx[t:t+M],w_vec1_p)
             # next pilot samples at end of this modem frame
-            Dt2[t_ind,f_ind] = np.dot(np.conj(w_vec2*rx[t+Nmf:t+Nmf+M]),p)
+            Dt2[t_ind,f_ind] = np.dot(rx[t+Nmf:t+Nmf+M],w_vec2_p)
 
             if np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind]) > Dtmax:
                Dtmax = np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind])
