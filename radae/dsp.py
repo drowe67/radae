@@ -47,6 +47,9 @@ class complex_bpf():
       for i in range(Ntap):
          n = i-(Ntap-1)/2
          self.h[i] = B*np.sinc(n*B)
+      
+      # if true we can remove time flip from convolution
+      assert np.all(self.h == np.flip(self.h))
 
       self.mem = np.zeros(self.Ntap-1, dtype=np.csingle)
       self.phase = 1 + 0j
@@ -58,7 +61,7 @@ class complex_bpf():
       x_mem = np.concatenate([self.mem,x_baseband])                    # pre-pend filter memory
       x_filt = np.zeros(n, dtype=np.csingle)
       for i in np.arange(n):
-         x_filt[i] = np.dot(np.flip(x_mem[i:i+self.Ntap]),self.h)
+         x_filt[i] = np.dot(x_mem[i:i+self.Ntap],self.h)
       self.mem = x_mem[-self.Ntap-1:]                                  # save filter state for next time
       self.phase = phase_vec[-1]                                       # save phase state for next time
       return x_filt*np.conj(phase_vec)                                 # mix back up to centre freq
