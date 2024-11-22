@@ -4,7 +4,11 @@ add_executable(lpcnet_demo lpcnet_demo.c)
 target_link_libraries(lpcnet_demo opus m)
 
 add_library(rade rade_api.c rade_enc.c rade_dec.c rade_enc_data.c rade_dec_data.c)
+if(APPLE)
+target_link_libraries(rade Python3::Python opus)
+else(APPLE)
 target_link_libraries(rade Python3::Python)
+endif(APPLE)
 target_include_directories(rade PRIVATE
     "$<TARGET_PROPERTY:Python3::NumPy,INTERFACE_INCLUDE_DIRECTORIES>")
 target_compile_definitions(rade PRIVATE -DIS_BUILDING_RADE_API=1)
