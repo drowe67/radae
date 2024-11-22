@@ -205,6 +205,7 @@ class RADAE(nn.Module):
         # Normal frame ...PDDDDP... 
         # EOO frame    ...PE000E... 
         # Key: P = self.p_cp, D = data symbols, E = self.pend_cp, 0 = zeros
+        
         if self.Ncp:
             M = self.M
             Ncp = self.Ncp
@@ -217,7 +218,42 @@ class RADAE(nn.Module):
             if self.bottleneck == 3:
                 eoo = torch.tanh(torch.abs(eoo)) * torch.exp(1j*torch.angle(eoo))
             self.eoo = eoo
+
+        # experimental EOO data symbols (quick and dirty supplimentary txt channel)
+        self.Nseoo = (Ns-1)*Nc  # number of EOO data symbols
+        #print(self.Nseoo)
+        # construct random QPSK symbols
+        eoo_bits = torch.sign(torch.rand(self.Nseoo*bps)-0.5)
+        eoo_syms = eoo_bits[::2] + 1j*eoo_bits[1::2]
+        eoo_syms = torch.reshape(eoo_syms,(1,Ns-1,Nc))
+        #print(eoo_syms.shape)
         
+        eoo_tx = torch.matmul(eoo_syms,self.Winv)
+        #print(M,Ncp,eoo_tx.shape)
+        if self.Ncp:
+            eoo_tx_cp = torch.zeros((1,Ns-1,self.M+Ncp),dtype=torch.complex64)
+            eoo_tx_cp[:,:,Ncp:] = eoo_tx
+            eoo_tx_cp[:,:,:Ncp] = eoo_tx_cp[:,:,-Ncp:]
+            eoo_tx = eoo_tx_cp
+        eoo_tx = torch.reshape(eoo_tx,(1,(Ns-1)*(self.M+Ncp)))
+        #print(Nmf, eoo_tx.shape,self.eoo.shape,Nmf-2*(M+Ncp))
+        self.eoo[0,2*(M+Ncp):Nmf] = eoo_tx*self.pilot_gain
+        #quit()
+
+        # map z to QPSK symbols, note Es = var(tx_sym) = 2 var(z) = 2 
+        # assuming |z| ~ 1 after training
+        # scale them correctly
+        # reshape into Ns-1 x Nc
+        # IDFT
+        # Add CP to each symbol
+        # Insert into EOO frame
+        # bottleneck 3 on mag
+        # run ctests to make sure nothing breaks
+        # try to demod them with 0 phase/freq offset
+        # add basic phase recovery
+        # test they work to some extent at high SNR
+        # add API access to write/read them
+
         print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}", file=sys.stderr)
 
         self.Tmf = Tmf
