@@ -27,11 +27,13 @@ target_link_libraries(radae_rx rade opus m Python3::Python)
 target_include_directories(radae_rx PRIVATE
     "$<TARGET_PROPERTY:Python3::NumPy,INTERFACE_INCLUDE_DIRECTORIES>")
 
+if (NOT WIN32)
 add_executable(test_rade_enc test_rade_enc.c)
 target_link_libraries(test_rade_enc rade opus m)
 
 add_executable(test_rade_dec test_rade_dec.c)
 target_link_libraries(test_rade_dec rade opus m)
+endif (NOT WIN32)
 
 add_executable(write_rade_weights write_rade_weights.c)
 target_link_libraries(write_rade_weights rade opus m)

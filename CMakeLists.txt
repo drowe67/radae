@@ -496,6 +496,7 @@ add_test(NAME radae_rx_embed_c
 
 # C Port of Core Encoder/decoder ------------------------------------------------------------------------------------
 
+if (NOT WIN32)
 # we test by comparing loss of features_in/features_out, can all happen at rate Rs.  We load model05.bin weights as 
 # compiled-in weights are for model19_check3
 add_test(NAME c_encoder_model5
@@ -534,6 +535,7 @@ add_test(NAME c_decoder_model19_check3
          cat z_hat.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_dec 1 > features_c.f32; \
          python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_c.f32 --compare")
          set_tests_properties(c_decoder_model19_check3 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+endif(NOT WIN32)
 
 # Test embedded data (--auxdata) use for false sync detection, with C core decoder, with C callable embedded Python API.
 # --foff_err forces a false sync state after first sync. See also "radae_rx_aux_mpp" above.  Tests uw_errors are being passed
