@@ -199,7 +199,6 @@ class RADAE(nn.Module):
             self.pilot_gain = pilot_backoff*self.M/(Nc**0.5)
 
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
-        self.Ncp = int(cyclic_prefix*self.Fs)
         
         # set up End Of Over sequence
         # Normal frame ...PDDDDP... 
@@ -234,11 +233,12 @@ class RADAE(nn.Module):
             eoo_tx_cp = torch.zeros((1,Ns-1,self.M+Ncp),dtype=torch.complex64)
             eoo_tx_cp[:,:,Ncp:] = eoo_tx
             eoo_tx_cp[:,:,:Ncp] = eoo_tx_cp[:,:,-Ncp:]
-            eoo_tx = eoo_tx_cp
-        eoo_tx = torch.reshape(eoo_tx,(1,(Ns-1)*(self.M+Ncp)))
-        #print(Nmf, eoo_tx.shape,self.eoo.shape,Nmf-2*(M+Ncp))
-        self.eoo[0,2*(M+Ncp):Nmf] = eoo_tx*self.pilot_gain
-        #quit()
+            eoo_tx = torch.reshape(eoo_tx_cp,(1,(Ns-1)*(self.M+Ncp)))*self.pilot_gain
+            if self.bottleneck == 3:
+                eoo_tx = torch.tanh(torch.abs(eoo_tx)) * torch.exp(1j*torch.angle(eoo_tx))
+            #print(Nmf, eoo_tx.shape,self.eoo.shape,Nmf-2*(M+Ncp))
+            self.eoo[0,2*(M+Ncp):Nmf] = eoo_tx
+            #quit()
 
         # map z to QPSK symbols, note Es = var(tx_sym) = 2 var(z) = 2 
         # assuming |z| ~ 1 after training
