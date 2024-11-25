@@ -226,7 +226,46 @@ class radae_rx:
                # run through RADAE receiver DSP
                z_hat = receiver.receiver_one(rx)
                valid_output = True
-            
+            else:
+               # experimental - try to extract EOO QPSK symbols
+
+               # correct freq offset (TODO: reconcile with above)
+               w = 2*np.pi*self.fmax/Fs
+               rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
+               for n in range(Nmf+M+Ncp):
+                  self.rx_phase = self.rx_phase*np.exp(-1j*w)
+                  rx_phase_vec[n] = self.rx_phase
+
+               # extract samples for frame+netx frames pilots at correct timing offset
+               rx1 = rx_buf[self.tmax-Ncp:self.tmax-Ncp+Nmf+M+Ncp]
+               rx = torch.tensor(rx1*rx_phase_vec, dtype=torch.complex64)
+               Ns1 = Ns + 1
+
+               # we expect: Pilot - EOO Piots - 3 data symbols - EOO Pilots
+               num_timesteps_at_rate_Rs = len(rx) // (M+Ncp)
+               num_modem_frames = num_timesteps_at_rate_Rs // Ns1
+               assert num_modem_frames == 1
+               assert num_timesteps_at_rate_Rs == (Ns1+1)
+
+               # remove cyclic prefix
+               rx = torch.reshape(rx,(1,num_timesteps_at_rate_Rs,M+Ncp))
+               rx_dash = rx[:,:,Ncp+model.time_offset:Ncp+model.time_offset+M]
+
+               # DFT to transform M time domain samples to Nc carriers
+               rx_sym = torch.matmul(rx_dash, model.Wfwd)
+
+               # these will have random phase offsets, so we need to do some basic EQ
+               # use single pilot at start of frame (not v robust)
+               for c in range(model.Nc):
+                  phase_offset = torch.angle(rx_sym[0,0,c]/model.P[c] + rx_sym[0,1,c]/model.Pend[c] + rx_sym[0,5,c]/model.Pend[c])
+                  rx_sym[0,2:5,c] *= torch.exp(-1j*phase_offset)
+               #print(rx_sym.shape, file=sys.stderr)
+               print(rx_sym[0,2,:5], file=sys.stderr)
+               rx_sym = rx_sym[0,2:5,:].cpu().detach().numpy().flatten().astype('csingle')
+               rx_sym.tofile("eoo_rx_syms.f32")
+
+               #quit()
+               
          if v == 2 or (v == 1 and (self.state == "search" or self.state == "candidate" or prev_state == "candidate")):
             print(f"{self.mf:3d} state: {self.state:10s} valid: {candidate:d} {endofover:d} {self.valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ", end='', file=sys.stderr)
             print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {self.tmax:4d} fmax: {self.fmax:6.2f}", end='', file=sys.stderr)
