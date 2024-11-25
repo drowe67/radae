@@ -47,6 +47,9 @@ class complex_bpf():
       for i in range(Ntap):
          n = i-(Ntap-1)/2
          self.h[i] = B*np.sinc(n*B)
+      
+      # if true we can remove time flip from convolution
+      assert np.all(self.h == np.flip(self.h))
 
       self.mem = np.zeros(self.Ntap-1, dtype=np.csingle)
       self.phase = 1 + 0j
@@ -58,7 +61,7 @@ class complex_bpf():
       x_mem = np.concatenate([self.mem,x_baseband])                    # pre-pend filter memory
       x_filt = np.zeros(n, dtype=np.csingle)
       for i in np.arange(n):
-         x_filt[i] = np.dot(np.flip(x_mem[i:i+self.Ntap]),self.h)
+         x_filt[i] = np.dot(x_mem[i:i+self.Ntap],self.h)
       self.mem = x_mem[-self.Ntap-1:]                                  # save filter state for next time
       self.phase = phase_vec[-1]                                       # save phase state for next time
       return x_filt*np.conj(phase_vec)                                 # mix back up to centre freq
@@ -200,31 +203,31 @@ class acquisition():
    
       Dt1 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
       Dt2 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
-      t_ind = 0
       tmax_ind = 0
       Dtmax = 0
-
-      for t in tfine_range:
-         f_ind = 0
-         for f in ffine_range:
-            w = 2*np.pi*f/Fs
+      
+      f_ind = 0
+      for f in ffine_range:
+         t_ind = 0
+         w = 2*np.pi*f/Fs
+         w_vec1 = np.exp(-1j*w*np.arange(M))
+         w_vec1_p = w_vec1*np.conj(p)
+         w_vec2 = w_vec1*np.exp(-1j*w*Nmf)
+         w_vec2_p = w_vec2*np.conj(p)
+         for t in tfine_range:
             # current pilot samples at start of this modem frame
-            # TODO should this be using |Dt|?
-            w_vec = np.exp(-1j*w*np.arange(M))
-            #print(f"t_ind: {t_ind:d} f_ind: {f_ind:d}")
-            Dt1[t_ind,f_ind] = np.dot(np.conj(w_vec*rx[t:t+M]),p)
+            Dt1[t_ind,f_ind] = np.dot(rx[t:t+M],w_vec1_p)
             # next pilot samples at end of this modem frame
-            w_vec = np.exp(-1j*w*(Nmf+np.arange(M)))
-            Dt2[t_ind,f_ind] = np.dot(np.conj(w_vec*rx[t+Nmf:t+Nmf+M]),p)
+            Dt2[t_ind,f_ind] = np.dot(rx[t+Nmf:t+Nmf+M],w_vec2_p)
 
             if np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind]) > Dtmax:
                Dtmax = np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind])
                tmax = t
                tmax_ind = t_ind
                fmax = f 
-            f_ind = f_ind + 1
-         t_ind = t_ind + 1
-       
+            t_ind = t_ind + 1
+         f_ind = f_ind + 1
+         
       self.D_fine = Dt1[tmax_ind,:]
       
       return tmax, fmax
@@ -775,7 +778,7 @@ class single_carrier:
       phase_vec = 2*np.pi*freq_off*np.arange(0,len(rx))/self.Fs + phase_off
       rx *= np.exp(1j*phase_vec)
       sigma = np.sqrt(1/(self.M*10**(EbNodB/10)))
-      noise = (sigma/np.sqrt(2))*(np.random.randn(len(rx)) + 1j*np.random.randn(len(rx)))
+      noise = (sigma/np.sqrt(2))*(self.rng.standard_normal(len(rx)) + 1j*self.rng.standard_normal(len(rx)))
       rx = mag*(rx + noise)
 
       # demodulate stream with rx

@@ -55,7 +55,7 @@ num_used_features = 20
 
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, 100.0)
-checkpoint = torch.load(args.model_name, map_location='cpu')
+checkpoint = torch.load(args.model_name, map_location='cpu', weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
 model.core_decoder_statefull_load_state_dict()

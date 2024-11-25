@@ -201,7 +201,10 @@ class RADAE(nn.Module):
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)
         
-        # set up End Of Over pilot seequence
+        # set up End Of Over sequence
+        # Normal frame ...PDDDDP... 
+        # EOO frame    ...PE000E... 
+        # Key: P = self.p_cp, D = data symbols, E = self.pend_cp, 0 = zeros
         if self.Ncp:
             M = self.M
             Ncp = self.Ncp

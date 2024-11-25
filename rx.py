@@ -82,7 +82,7 @@ model = RADAE(num_features, latent_dim, EbNodB=100, ber_test=args.ber_test, rate
               pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = False, cyclic_prefix=args.cp,
               coarse_mag=args.coarse_mag,time_offset=args.time_offset, bottleneck=args.bottleneck,
               stateful_decoder=args.stateful)
-checkpoint = torch.load(args.model_name, map_location='cpu')
+checkpoint = torch.load(args.model_name, map_location='cpu', weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 model.core_decoder_statefull_load_state_dict()
 

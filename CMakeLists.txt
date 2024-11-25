@@ -38,7 +38,7 @@ if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 endif("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 
 # Set default flags (from opus-ng build)
-set(CMAKE_C_FLAGS "-O2 -fvisibility=hidden -fstack-protector-strong -W -Wall -Wextra -Wcast-align -Wnested-externs -Wshadow -Wstrict-prototypes")
+set(CMAKE_C_FLAGS "-O2 -fstack-protector-strong -W -Wall -Wextra -Wcast-align -Wnested-externs -Wshadow -Wstrict-prototypes -DHAVE_CONFIG_H")
 
 if(NOT CMAKE_CROSSCOMPILING)
     # Python tells us the CFLAGS we need for Embedding Python in a C lib.
@@ -307,7 +307,7 @@ add_test(NAME radae_rx_awgn
                        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
                        --EbNodB 1 --freq_offset 13 \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
-                       --prepend_noise 1 --append_noise 3 --end_of_over --auxdata; \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --auxdata --correct_freq_offset; \
                        cat rx.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32; \
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 1.0 --clip_end 100")
                        set_tests_properties(radae_rx_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
@@ -401,20 +401,40 @@ add_test(NAME radae_rx_slip_minus
 # profiles a run with a 50 second file (no pass/fail, run with -V to get a rough idea of execution time)
 add_test(NAME radae_rx_profile
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
-                       --EbNodB 1 --freq_offset 13 --df_dt 0.1 \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --EbNodB 1 --freq_offset 13 --auxdata \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
                        --prepend_noise 1 --append_noise 3 --end_of_over; \
-                       cat rx.f32 | python3 -m cProfile -s time radae_rxe.py --model model17/checkpoints/checkpoint_epoch_100.pth -v 0 --noauxdata --no_stdout | head -n20")
+                       cat rx.f32 | python3 -m cProfile -s time radae_rxe.py -v 1 --no_stdout | head -n20")
 
-# performs a run using the streaming FARGAN decoder, ie the full simplex rx decode stack.  No pass/fail, just for characterisation of run time
-add_test(NAME radae_rx_fargan
+# Characterise run time using full simplex Tx stack (C core encoder version).  No pass/fail, just for characterisation of run time
+add_test(NAME radae_tx_stack_c
         COMMAND bash -c "WAV='wav/all.wav'; cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth $WAV /dev/null \
-                       --EbNodB 10 --freq_offset 13 --df_dt -0.1 \
+                       \\time -o log.txt -f '%e' ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features $WAV - | 
+                       PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_tx > /dev/null; \
+                       RUN_TIME=$(cat log.txt); DUR=$(soxi -D $WAV); percent=$(python3 -c \"percent=100*$RUN_TIME/$DUR; print('%f' % percent)\"); \
+                       printf \"\nrun time: %5.2f duration: %5.2f percent CPU: %5.2f\n\n\" $RUN_TIME $DUR $percent ")
+
+#  Characterise run time using full simplex Rx stack (Python core decoder version).  No pass/fail, just for characterisation of run time
+add_test(NAME radae_rx_stack_py
+        COMMAND bash -c "WAV='wav/all.wav'; cd ${CMAKE_SOURCE_DIR}; \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $WAV /dev/null \
+                       --EbNodB 10 --freq_offset 13 --df_dt -0.1 --auxdata \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
-                       --prepend_noise 1 --append_noise 3 --end_of_over; \
-                       \\time -o log.txt -f '%e' cat rx.f32 | python3 radae_rxe.py --model model17/checkpoints/checkpoint_epoch_100.pth -v 0 --noauxdata | \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset ; \
+                       \\time -o log.txt -f '%e' cat rx.f32 | python3 radae_rxe.py -v 0 | \
+                       ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -fargan-synthesis - /dev/null; \
+                       RUN_TIME=$(cat log.txt); DUR=$(soxi -D $WAV); percent=$(python3 -c \"percent=100*$RUN_TIME/$DUR; print('%f' % percent)\"); \
+                       printf \"\nrun time: %5.2f duration: %5.2f percent CPU: %5.2f\n\n\" $RUN_TIME $DUR $percent ")
+
+# As above but with C core decoder for comparison
+add_test(NAME radae_rx_stack_c
+        COMMAND bash -c "WAV='wav/all.wav'; cd ${CMAKE_SOURCE_DIR}; \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $WAV /dev/null \
+                       --EbNodB 10 --freq_offset 13 --df_dt -0.1 --auxdata \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset ; \
+                       \\time -o log.txt -f '%e' cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx | \
                        ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -fargan-synthesis - /dev/null; \
                        RUN_TIME=$(cat log.txt); DUR=$(soxi -D $WAV); percent=$(python3 -c \"percent=100*$RUN_TIME/$DUR; print('%f' % percent)\"); \
                        printf \"\nrun time: %5.2f duration: %5.2f percent CPU: %5.2f\n\n\" $RUN_TIME $DUR $percent ")
@@ -473,6 +493,63 @@ add_test(NAME radae_rx_embed_c
                        python3 loss.py features_in.f32 features_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_rx_embed_c PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+
+# C Port of Core Encoder/decoder ------------------------------------------------------------------------------------
+
+if (NOT WIN32)
+# we test by comparing loss of features_in/features_out, can all happen at rate Rs.  We load model05.bin weights as 
+# compiled-in weights are for model19_check3
+add_test(NAME c_encoder_model5
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+         ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
+         cat features_in.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_enc 1 0 ${CMAKE_SOURCE_DIR}/bin/model05.bin > z_c.f32; \
+         python3 stateful_encoder.py model05/checkpoints/checkpoint_epoch_100.pth features_in.f32 /dev/null --read_latent z_c.f32 --loss_test 0.2")
+         set_tests_properties(c_encoder_model5 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# we need the DSP code in the loop to test the core encoder with model19_check3 as the bottleneck (3) is at rate Fs
+add_test(NAME c_encoder_model19_check3
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+         ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
+         cat features_in.f32 | python3 radae_txe.py | python3 radae_rxe.py > features_out.f32; \
+         cat features_in.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_enc 3 1 > z_c.f32; \
+         cat z_c.f32 | python3 radae_txe.py --bypass_enc | python3 radae_rxe.py > features_rx_out.f32; \
+         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
+         set_tests_properties(c_encoder_model19_check3 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# compare Python decoder (features_out.f32) C decoder (features_c.f32), for same latent inputs z.f32
+# note inference.sh creates features_in.f32 & features_out.f32
+add_test(NAME c_decoder_model5
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+         ./inference.sh model05/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z.f32; \
+         cat z.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_dec 0 ${CMAKE_SOURCE_DIR}/bin/model05.bin > features_c.f32; \
+         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_c.f32 --compare")
+         set_tests_properties(c_decoder_model5 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# As well as testing C core decoder, this test also uses radae_rxe.py in bypass mode
+add_test(NAME c_decoder_model19_check3
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --correct_freq_offset \
+                       --write_rx rx.f32; \
+         cat rx.f32 | python3 radae_rxe.py --bypass_dec > z_hat.f32
+         cat z_hat.f32 | ${CMAKE_CURRENT_BINARY_DIR}/src/test_rade_dec 1 > features_c.f32; \
+         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_c.f32 --compare")
+         set_tests_properties(c_decoder_model19_check3 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+endif(NOT WIN32)
+
+# Test embedded data (--auxdata) use for false sync detection, with C core decoder, with C callable embedded Python API.
+# --foff_err forces a false sync state after first sync. See also "radae_rx_aux_mpp" above.  Tests uw_errors are being passed
+# back from C decoder to Python state machine
+add_test(NAME c_decoder_aux_mpp
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       test/make_g.sh; \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --auxdata \
+                       --EbNodB 4 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --correct_freq_offset; \
+                       cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx 1 > features_c.f32; \
+                       python3 loss.py features_in.f32 features_c.f32 --loss 0.3 --clip_start 300")
+                       set_tests_properties(c_decoder_aux_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # BBFM -----------------------------------------------------------------------------------------------
 

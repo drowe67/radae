@@ -71,6 +71,12 @@ extern "C" {
 #define RADE_MODEM_SAMPLE_RATE 8000           // modem waveform sample rate
 #define RADE_SPEECH_SAMPLE_RATE 16000         // speech sample rate
 
+// init rade_open() flags
+#define RADE_USE_C_ENCODER 0x1
+#define RADE_USE_C_DECODER 0x2
+#define RADE_FOFF_TEST     0x4                // test mode used only by developers
+#define RADE_VERBOSE_0     0x8                // reduce verbosity to "quiet"
+
 // Must be called BEFORE any other RADE functions as this
 // initializes internal library state.
 RADE_EXPORT void rade_initialize(void);
@@ -79,7 +85,7 @@ RADE_EXPORT void rade_initialize(void);
 RADE_EXPORT void rade_finalize(void);
 
 // note single context only in this version, one context has one Tx, and one Rx
-RADE_EXPORT struct rade *rade_open(char model_file[]);
+RADE_EXPORT struct rade *rade_open(char model_file[], int flags);
 RADE_EXPORT void rade_close(struct rade *r);
 
 // Allows API users to determine if the API has changed

@@ -68,7 +68,7 @@ num_used_features = 20
 
 # load model from a checkpoint file
 model = BBFM(num_features, latent_dim, args.CNRdB)
-checkpoint = torch.load(args.model_name, map_location='cpu')
+checkpoint = torch.load(args.model_name, map_location='cpu', weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
 
