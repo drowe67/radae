@@ -264,6 +264,16 @@ if __name__ == '__main__':
             # appends a frame containing a final pilot so the last RADAE frame
             # has a good phase reference, and two "end of over" symbols
             eoo = model.eoo
+
+            # this is messy! - continue phase, freq and dF/dt track from inside forward()
+            freq = torch.zeros_like(eoo)
+            freq[:,] = model.freq_offset*torch.ones_like(eoo) + model.df_dt*torch.arange(eoo.shape[1])/model.Fs
+            omega = freq*2*torch.pi/model.Fs
+            lin_phase = torch.cumsum(omega,dim=1)
+            lin_phase = torch.exp(1j*lin_phase)
+            eoo = eoo*lin_phase
+            #print(model.final_phase)
+
             eoo = eoo + sigma*torch.randn_like(eoo)
             rx = torch.concatenate([rx,eoo],dim=1)
          if args.prepend_noise > 0.0:
