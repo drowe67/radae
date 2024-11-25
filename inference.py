@@ -57,7 +57,7 @@ parser.add_argument('--write_rx', type=str, default="", help='path to output fil
 parser.add_argument('--rx_gain', type=float, default=1.0, help='gain to apply to --write_rx samples (default 1.0)')
 parser.add_argument('--write_tx', type=str, default="", help='path to output file of rate Fs tx samples in ..IQIQ...f32 format')
 parser.add_argument('--phase_offset', type=float, default=0, help='phase offset in rads')
-parser.add_argument('--freq_offset', type=float, help='freq offset in Hz')
+parser.add_argument('--freq_offset', type=float, default=0, help='freq offset in Hz')
 parser.add_argument('--time_offset', type=int, default=0, help='sampling time offset in samples')
 parser.add_argument('--df_dt', type=float, default=0, help='rate of change of freq offset in Hz/s')
 parser.add_argument('--gain', type=float, default=1.0, help='rx gain (defaul 1.0)')
@@ -271,7 +271,7 @@ if __name__ == '__main__':
             omega = freq*2*torch.pi/model.Fs
             lin_phase = torch.cumsum(omega,dim=1)
             lin_phase = torch.exp(1j*lin_phase)
-            eoo = eoo*lin_phase
+            eoo = eoo*lin_phase*model.final_phase
             #print(model.final_phase)
 
             eoo = eoo + sigma*torch.randn_like(eoo)

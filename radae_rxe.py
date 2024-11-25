@@ -228,7 +228,7 @@ class radae_rx:
             if not endofover:
                valid_output = True
             else:
-               if args.eoo_data_test:
+               if self.eoo_data_test:
                   n_bits = torch.numel(z_hat)
                   assert n_bits == model.Nseoo*model.bps
                   n_errors = sum(z_hat[0,:]*model.eoo_bits < 0)

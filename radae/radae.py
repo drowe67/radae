@@ -500,6 +500,7 @@ class RADAE(nn.Module):
 
         tx_before_channel = None
         rx = None
+        self.final_phase = 0
         if self.rate_Fs:
             num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*self.M
  
