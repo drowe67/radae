@@ -46,7 +46,7 @@ add_custom_target(
     libopus.a
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libopus${CMAKE_STATIC_LIBRARY_SUFFIX})
 
-include_directories(${SOURCE_DIR}/dnn ${SOURCE_DIR}/celt ${SOURCE_DIR}/include)
+include_directories(${SOURCE_DIR}/dnn ${SOURCE_DIR}/celt ${SOURCE_DIR}/include ${SOURCE_DIR})
 
 add_library(opus STATIC IMPORTED)
 add_dependencies(opus libopus.a)
