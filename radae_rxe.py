@@ -54,7 +54,8 @@ uw_error_thresh = 7 # P(reject|correct) = 1 -  binocdf(8,24,0.1) = 4.5E-4
                     # P(accept|false)   = binocdf(8,24,0.5)      = 3.2E-3
 
 class radae_rx:
-   def __init__(self, model_name, latent_dim = 80, auxdata = True, bottleneck = 3, bpf_en=True, v=2, disable_unsync=False, foff_err=0, bypass_dec=False):
+   def __init__(self, model_name, latent_dim = 80, auxdata = True, bottleneck = 3, bpf_en=True, v=2, 
+                disable_unsync=False, foff_err=0, bypass_dec=False, eoo_data_test=False):
 
       self.latent_dim = latent_dim
       self.auxdata = auxdata
@@ -64,6 +65,7 @@ class radae_rx:
       self.disable_unsync = disable_unsync
       self.foff_err = foff_err
       self.bypass_dec = bypass_dec
+      self.eoo_data_test = eoo_data_test
 
       print(f"bypass_dec: {bypass_dec} foff_err: {foff_err:f}", file=sys.stderr)
 
@@ -85,7 +87,7 @@ class radae_rx:
       assert self.model.coarse_mag
    
       self.receiver = receiver_one(model.latent_dim,model.Fs,model.M,model.Ncp,model.Wfwd,model.Nc,
-                              model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain,
+                              model.Ns,model.w,model.P,model.Pend,model.bottleneck,model.pilot_gain,
                               model.time_offset,model.coarse_mag)
 
       M = model.M
@@ -212,59 +214,27 @@ class radae_rx:
                   uw_fail = True
                self.uw_errors = 0
 
-            if not endofover:
-               # correct frequency offset, note we preserve state of phase
-               # TODO do we need preserve state of phase?  We're passing entire vector and there isn't any memory (I think)
-               w = 2*np.pi*self.fmax/Fs
-               rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
-               for n in range(Nmf+M+Ncp):
-                  self.rx_phase = self.rx_phase*np.exp(-1j*w)
-                  rx_phase_vec[n] = self.rx_phase
-               rx1 = rx_buf[self.tmax-Ncp:self.tmax-Ncp+Nmf+M+Ncp]
-               rx = torch.tensor(rx1*rx_phase_vec, dtype=torch.complex64)
+            # correct frequency offset, note we preserve state of phase (TODO: I don't think we need to)
+            w = 2*np.pi*self.fmax/Fs
+            rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
+            for n in range(Nmf+M+Ncp):
+               self.rx_phase = self.rx_phase*np.exp(-1j*w)
+               rx_phase_vec[n] = self.rx_phase
+            rx1 = rx_buf[self.tmax-Ncp:self.tmax-Ncp+Nmf+M+Ncp]
+            rx = torch.tensor(rx1*rx_phase_vec, dtype=torch.complex64)
 
-               # run through RADAE receiver DSP
-               z_hat = receiver.receiver_one(rx)
+            # run through RADAE receiver DSP
+            z_hat = receiver.receiver_one(rx, endofover)
+            if not endofover:
                valid_output = True
             else:
-               # experimental - try to extract EOO QPSK symbols
-
-               # correct freq offset (TODO: reconcile with above)
-               w = 2*np.pi*self.fmax/Fs
-               rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
-               for n in range(Nmf+M+Ncp):
-                  self.rx_phase = self.rx_phase*np.exp(-1j*w)
-                  rx_phase_vec[n] = self.rx_phase
-
-               # extract samples for frame+netx frames pilots at correct timing offset
-               rx1 = rx_buf[self.tmax-Ncp:self.tmax-Ncp+Nmf+M+Ncp]
-               rx = torch.tensor(rx1*rx_phase_vec, dtype=torch.complex64)
-               Ns1 = Ns + 1
-
-               # we expect: Pilot - EOO Piots - 3 data symbols - EOO Pilots
-               num_timesteps_at_rate_Rs = len(rx) // (M+Ncp)
-               num_modem_frames = num_timesteps_at_rate_Rs // Ns1
-               assert num_modem_frames == 1
-               assert num_timesteps_at_rate_Rs == (Ns1+1)
-
-               # remove cyclic prefix
-               rx = torch.reshape(rx,(1,num_timesteps_at_rate_Rs,M+Ncp))
-               rx_dash = rx[:,:,Ncp+model.time_offset:Ncp+model.time_offset+M]
-
-               # DFT to transform M time domain samples to Nc carriers
-               rx_sym = torch.matmul(rx_dash, model.Wfwd)
-
-               # these will have random phase offsets, so we need to do some basic EQ
-               # use single pilot at start of frame (not v robust)
-               for c in range(model.Nc):
-                  phase_offset = torch.angle(rx_sym[0,0,c]/model.P[c] + rx_sym[0,1,c]/model.Pend[c] + rx_sym[0,5,c]/model.Pend[c])
-                  rx_sym[0,2:5,c] *= torch.exp(-1j*phase_offset)
-               #print(rx_sym.shape, file=sys.stderr)
-               print(rx_sym[0,2,:5], file=sys.stderr)
-               rx_sym = rx_sym[0,2:5,:].cpu().detach().numpy().flatten().astype('csingle')
-               rx_sym.tofile("eoo_rx_syms.f32")
-
-               #quit()
+               if args.eoo_data_test:
+                  n_bits = torch.numel(z_hat)
+                  assert n_bits == model.Nseoo*model.bps
+                  n_errors = sum(z_hat[0,:]*model.eoo_bits < 0)
+                  print(f"EOO data n_bits: {n_bits} n_errors: {n_errors}", file=sys.stderr)
+                  z_hat = z_hat.cpu().detach().numpy().flatten()
+                  z_hat.tofile("z_hat_eoo.f32")
                
          if v == 2 or (v == 1 and (self.state == "search" or self.state == "candidate" or prev_state == "candidate")):
             print(f"{self.mf:3d} state: {self.state:10s} valid: {candidate:d} {endofover:d} {self.valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ", end='', file=sys.stderr)
@@ -355,11 +325,13 @@ if __name__ == '__main__':
    parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
    parser.add_argument('--foff_err', type=float, default=0.0, help='Artifical freq offset error after first sync to test false sync (default 0.0)')
    parser.add_argument('--bypass_dec', action='store_true', help='Bypass core decoder, write z_hat to stdout')
+   parser.add_argument('--eoo_data_test', action='store_true', help='experimental EOO data test - count bit errors')
    parser.set_defaults(auxdata=True)
    parser.set_defaults(use_stdout=True)
    args = parser.parse_args()
 
-   rx = radae_rx(args.model_name,auxdata=args.auxdata,v=args.v,disable_unsync=args.disable_unsync,foff_err=args.foff_err, bypass_dec=args.bypass_dec)
+   rx = radae_rx(args.model_name,auxdata=args.auxdata,v=args.v,disable_unsync=args.disable_unsync,foff_err=args.foff_err, 
+                 bypass_dec=args.bypass_dec,eoo_data_test=args.eoo_data_test)
 
    # allocate storage for output features
    floats_out = np.zeros(rx.get_n_floats_out(),dtype=np.float32)

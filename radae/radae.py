@@ -220,15 +220,13 @@ class RADAE(nn.Module):
 
         # experimental EOO data symbols (quick and dirty supplimentary txt channel)
         self.Nseoo = (Ns-1)*Nc  # number of EOO data symbols
-        #print(self.Nseoo)
-        # construct random QPSK symbols
+
         eoo_bits = torch.sign(torch.rand(self.Nseoo*bps)-0.5)
+        self.eoo_bits = eoo_bits
         eoo_syms = eoo_bits[::2] + 1j*eoo_bits[1::2]
         eoo_syms = torch.reshape(eoo_syms,(1,Ns-1,Nc))
-        #print(eoo_syms.shape)
         
         eoo_tx = torch.matmul(eoo_syms,self.Winv)
-        #print(M,Ncp,eoo_tx.shape)
         if self.Ncp:
             eoo_tx_cp = torch.zeros((1,Ns-1,self.M+Ncp),dtype=torch.complex64)
             eoo_tx_cp[:,:,Ncp:] = eoo_tx
@@ -236,23 +234,7 @@ class RADAE(nn.Module):
             eoo_tx = torch.reshape(eoo_tx_cp,(1,(Ns-1)*(self.M+Ncp)))*self.pilot_gain
             if self.bottleneck == 3:
                 eoo_tx = torch.tanh(torch.abs(eoo_tx)) * torch.exp(1j*torch.angle(eoo_tx))
-            #print(Nmf, eoo_tx.shape,self.eoo.shape,Nmf-2*(M+Ncp))
             self.eoo[0,2*(M+Ncp):Nmf] = eoo_tx
-            #quit()
-
-        # map z to QPSK symbols, note Es = var(tx_sym) = 2 var(z) = 2 
-        # assuming |z| ~ 1 after training
-        # scale them correctly
-        # reshape into Ns-1 x Nc
-        # IDFT
-        # Add CP to each symbol
-        # Insert into EOO frame
-        # bottleneck 3 on mag
-        # run ctests to make sure nothing breaks
-        # try to demod them with 0 phase/freq offset
-        # add basic phase recovery
-        # test they work to some extent at high SNR
-        # add API access to write/read them
 
         print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}", file=sys.stderr)
 
@@ -566,6 +548,7 @@ class RADAE(nn.Module):
                 lin_phase = torch.cumsum(omega,dim=1)
                 lin_phase = torch.exp(1j*lin_phase)
                 tx = tx*lin_phase
+                self.final_phase = lin_phase[:,-1]
 
             # insert per sequence random phase and freq offset (training time)
             if self.freq_rand:

@@ -292,9 +292,9 @@ add_test(NAME rx_streaming
 add_test(NAME radae_rx_basic
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
-                       --EbNodB 100 --freq_offset 1 --prepend_noise 1 --append_noise 1 --end_of_over --auxdata \
+                       --EbNodB 10 --freq_offset 11 --prepend_noise 1 --append_noise 1 --end_of_over --auxdata \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
-                       cat rx.f32 | PYTHONPATH='../' python3 radae_rxe.py -v 2 > features_rxs_out.f32; \
+                       cat rx.f32 | PYTHONPATH='../' python3 radae_rxe.py -v 2 --eoo_data_test > features_rxs_out.f32; \
                        python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_rx_basic PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
