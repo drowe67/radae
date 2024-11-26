@@ -249,7 +249,8 @@ int rade_rx_open(struct rade *r) {
     Py_DECREF(pkwArgs);
 
     r->n_features_out = (int)call_getter(r->pInst_radae_rx, "get_n_features_out");
-    r->n_eoo_features_out = (int)call_getter(r->pInst_radae_rx, "get_n_eoo_features_out");
+    // num floats is 2 x number of complex QPSK symbols
+    r->n_eoo_features_out = (int)2*call_getter(r->pInst_radae_rx, "get_n_eoo_features_out");
     r->n_floats_out = (int)call_getter(r->pInst_radae_rx, "get_n_floats_out");
     r->nin_max = (int)call_getter(r->pInst_radae_rx, "get_nin_max");
     r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");

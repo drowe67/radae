@@ -117,7 +117,7 @@ class radae_rx:
          # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
          model.core_decoder_statefull_load_state_dict()
 
-      # number of input floats per processing frame
+      # number of output floats per processing frame
       if not self.bypass_dec:
          self.n_floats_out = model.Nzmf*model.enc_stride*nb_total_features
       else:
