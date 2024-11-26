@@ -446,7 +446,9 @@ class receiver_one():
          #print(Ns,rx_sym_pilots.shape, file=sys.stderr)
          # Simpler EQ as average of pilots, as LS set up for PDDDDP, rather than out PEDDDE
          for c in range(self.Nc):
-            phase_offset = torch.angle(rx_sym_pilots[0,0,0,c]/self.P[c] + rx_sym_pilots[0,0,1,c]/self.Pend[c] + rx_sym_pilots[0,0,Ns,c]/self.Pend[c])
+            phase_offset = torch.angle(rx_sym_pilots[0,0,0,c]/self.P[c] +
+                           rx_sym_pilots[0,0,1,c]/self.Pend[c] +
+                           rx_sym_pilots[0,0,Ns,c]/self.Pend[c])
             #print(phase_offset.shape, file=sys.stderr)
             rx_sym_pilots[:,:,:Ns+1,c] *= torch.exp(-1j*phase_offset)
          rx_sym = torch.reshape(rx_sym_pilots[:,:,2:Ns,:],(1,(Ns-2)*self.Nc))

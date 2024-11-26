@@ -64,7 +64,7 @@ struct rade {
  
   npy_intp Nmf, Neoo;     
   npy_intp nin, nin_max;   
-  npy_intp n_features_in, n_features_out;  
+  npy_intp n_features_in, n_features_out, n_eoo_features_out;  
       
   RADEEnc      enc_model;
   RADEEncState enc_state;
@@ -249,10 +249,12 @@ int rade_rx_open(struct rade *r) {
     Py_DECREF(pkwArgs);
 
     r->n_features_out = (int)call_getter(r->pInst_radae_rx, "get_n_features_out");
+    r->n_eoo_features_out = (int)call_getter(r->pInst_radae_rx, "get_n_eoo_features_out");
     r->n_floats_out = (int)call_getter(r->pInst_radae_rx, "get_n_floats_out");
     r->nin_max = (int)call_getter(r->pInst_radae_rx, "get_nin_max");
     r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");
-    fprintf(stderr, "n_features_out: %d n_floats_out: %d nin_max: %d nin: %d\n", (int)r->n_features_out, (int)r->n_floats_out, (int)r->nin_max, (int)r->nin);
+    fprintf(stderr, "n_features_out: %d n_eoo_features_out: %d n_floats_out: %d nin_max: %d nin: %d\n",
+            (int)r->n_features_out, (int)r->n_eoo_features_out, (int)r->n_floats_out, (int)r->nin_max, (int)r->nin);
         
     r->pMeth_radae_rx = PyObject_GetAttrString(r->pInst_radae_rx, do_radae_rx_meth_name);
     check_error(r->pMeth_radae_rx, "finding",  do_radae_rx_meth_name);
@@ -360,11 +362,8 @@ int rade_n_tx_out(struct rade *r) { assert(r != NULL); return (int)r->Nmf; }
 int rade_n_tx_eoo_out(struct rade *r) { assert(r != NULL); return (int)r->Neoo; }
 int rade_nin_max(struct rade *r) { assert(r != NULL); return r->nin_max; }
 int rade_nin(struct rade *r) { assert(r != NULL); return r->nin; }
-
-int rade_n_features_in_out(struct rade *r) {
-  assert(r != NULL); 
-  return r->n_features_in; 
-}
+int rade_n_features_in_out(struct rade *r) { assert(r != NULL);  return r->n_features_in; }
+int rade_n_eoo_features_out(struct rade *r) { assert(r != NULL);  return r->n_eoo_features_out; }
 
 int rade_tx(struct rade *r, RADE_COMP tx_out[], float floats_in[]) {
   assert(r != NULL);

@@ -96,6 +96,7 @@ RADE_EXPORT int rade_n_tx_out(struct rade *r);
 RADE_EXPORT int rade_n_tx_eoo_out(struct rade *r);
 RADE_EXPORT int rade_nin_max(struct rade *r);
 RADE_EXPORT int rade_n_features_in_out(struct rade *r);
+RADE_EXPORT int rade_n_eoo_features_out(struct rade *r);
 
 // note vocoder is not encapsulated in API in this version
 // returns number of RADE_COMP samples written to tx_out[]
@@ -109,7 +110,9 @@ RADE_EXPORT int rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]);
 RADE_EXPORT int rade_nin(struct rade *r);
 
 // returns non-zero if features_out[] contains valid output. The number
-// returned is the number of samples written to features_out[]
+// returned is the number of samples written to features_out[].  If the
+// number returned is equal to rade_n_eoo_features_out(), features_out[]
+// contains End of Over soft decision bits rather that vocoder features
 RADE_EXPORT int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]);
 
 // returns non-zero if Rx is currently in sync

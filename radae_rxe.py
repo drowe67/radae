@@ -144,6 +144,9 @@ class radae_rx:
    def get_n_features_out(self):
       return self.model.Nzmf*self.model.dec_stride*nb_total_features
                  
+   def get_n_eoo_features_out(self):
+      return self.model.Nseoo
+                 
    def get_n_floats_out(self):
       return self.n_floats_out
                  

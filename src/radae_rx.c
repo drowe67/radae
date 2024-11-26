@@ -27,7 +27,9 @@ int main(int argc, char *argv[])
     int n_rx_in = rade_nin_max(r);
     RADE_COMP rx_in[n_rx_in];
     int nin = rade_nin(r);
-
+    int n_eoo_features_out = rade_n_eoo_features_out(r);
+    FILE *feoo = fopen("eoo.f32","wb"); assert(feoo != NULL);
+    
 #ifdef _WIN32
     // Note: freopen() returns NULL if filename is NULL, so
     // we have to use setmode() to make it a binary stream instead.
@@ -37,14 +39,18 @@ int main(int argc, char *argv[])
 
     while((size_t)nin == fread(rx_in, sizeof(RADE_COMP), nin, stdin)) {
         int n_out = rade_rx(r,features_out,rx_in);
-        if (n_out) {
+        if (n_out == n_features_out) {
             fwrite(features_out, sizeof(float), n_features_out, stdout);
             fflush(stdout);
+        }
+        if (n_out == n_eoo_features_out) {
+             fwrite(features_out, sizeof(float), n_eoo_features_out, feoo);
         }
         nin = rade_nin(r);
     }
 
     rade_close(r);
     rade_finalize();
+    fclose(feoo);
     return 0;
 }
