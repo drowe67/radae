@@ -443,18 +443,14 @@ class receiver_one():
          z_hat[:,:,::2] = rx_sym.real
          z_hat[:,:,1::2] = rx_sym.imag
       else:
-         #print(Ns,rx_sym_pilots.shape, file=sys.stderr)
-         # Simpler EQ as average of pilots, as LS set up for PDDDDP, rather than out PEDDDE
+         # Simpler (but lower performance) EQ as average of pilots, as LS set up for PDDDDP, rather than out PEDDDE
          for c in range(self.Nc):
             phase_offset = torch.angle(rx_sym_pilots[0,0,0,c]/self.P[c] +
                            rx_sym_pilots[0,0,1,c]/self.Pend[c] +
                            rx_sym_pilots[0,0,Ns,c]/self.Pend[c])
-            #print(phase_offset.shape, file=sys.stderr)
             rx_sym_pilots[:,:,:Ns+1,c] *= torch.exp(-1j*phase_offset)
          rx_sym = torch.reshape(rx_sym_pilots[:,:,2:Ns,:],(1,(Ns-2)*self.Nc))
-         #quit()
          z_hat = torch.zeros(1,(Ns-2)*self.Nc*2)
-         #print(rx_sym.shape, z_hat.shape, file=sys.stderr)
 
          z_hat[:,::2] = rx_sym.real
          z_hat[:,1::2] = rx_sym.imag

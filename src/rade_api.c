@@ -438,8 +438,10 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
   memcpy(r->rx_in, rx_in, sizeof(RADE_COMP)*(r->nin));
   pValue = PyObject_CallObject(r->pMeth_radae_rx, r->pArgs_radae_rx);
   check_error(pValue, "return value", "from do_rx_radae");
-  long valid_out = PyLong_AsLong(pValue);
-
+  long ret = PyLong_AsLong(pValue);
+  int valid_out = ret & 0x1;
+  int endofover = ret & 0x2;
+  fprintf(stderr, "%ld %d %d\n", ret, valid_out, endofover);
   if (valid_out) {
     if (r->flags & RADE_USE_C_DECODER) {
       // sanity check: need integer number of latent vecs
@@ -482,6 +484,9 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
     }
   }
 
+  if (endofover)
+      memcpy(features_out, r->floats_out, sizeof(float)*(r->n_eoo_features_out));
+
   // sample nin so we have an updated copy
   r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");
 
@@ -490,8 +495,9 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
 
   if (valid_out)
     return r->n_features_out;
-  else
-    return 0;
+  if (endofover)
+    return r->n_eoo_features_out;
+  return 0;
 }
 
 int rade_sync(struct rade *r) {

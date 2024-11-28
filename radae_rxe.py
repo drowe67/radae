@@ -228,16 +228,7 @@ class radae_rx:
 
             # run through RADAE receiver DSP
             z_hat = receiver.receiver_one(rx, endofover)
-            if not endofover:
-               valid_output = True
-            else:
-               if self.eoo_data_test:
-                  n_bits = torch.numel(z_hat)
-                  assert n_bits == model.Nseoo*model.bps
-                  n_errors = sum(z_hat[0,:]*model.eoo_bits < 0)
-                  print(f"EOO data n_bits: {n_bits} n_errors: {n_errors}", file=sys.stderr)
-                  z_hat = z_hat.cpu().detach().numpy().flatten()
-                  z_hat.tofile("z_hat_eoo.f32")
+            valid_output = not endofover
                
          if v == 2 or (v == 1 and (self.state == "search" or self.state == "candidate" or prev_state == "candidate")):
             print(f"{self.mf:3d} state: {self.state:10s} valid: {candidate:d} {endofover:d} {self.valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ", end='', file=sys.stderr)
@@ -317,7 +308,21 @@ class radae_rx:
             else:
                np.copyto(floats_out, z_hat.cpu().detach().numpy().flatten().astype('float32'))
 
-         return valid_output
+         if endofover:
+            n_bits = torch.numel(z_hat)
+            assert n_bits == model.Nseoo*model.bps
+            if self.eoo_data_test:
+               n_errors = sum(z_hat[0,:]*model.eoo_bits < 0)
+               print(f"EOO data n_bits: {n_bits} n_errors: {n_errors}", file=sys.stderr)
+            z_hat = z_hat.cpu().detach().numpy().flatten()
+            np.copyto(floats_out,np.concatenate([z_hat,np.zeros(len(floats_out)-len(z_hat))]))
+   
+         # possible return cases
+         # valid_output | endofover | Description
+         #      0            0        Nothing returned
+         #      1            0        valid speech output (either z_hat or features, depending on bypass_dec)
+         #      0            1        EOO data output               
+         return valid_output | endofover<<1
 
 if __name__ == '__main__':
    parser = argparse.ArgumentParser(description='RADAE streaming receiver, IQ.f32 on stdin to features.f32 on stdout')
@@ -343,6 +348,6 @@ if __name__ == '__main__':
       if len(buffer) != rx.get_nin()*struct.calcsize("ff"):
          break
       buffer_complex = np.frombuffer(buffer,np.csingle)
-      valid_output = rx.do_radae_rx(buffer_complex, floats_out)
-      if valid_output and args.use_stdout:
+      ret = rx.do_radae_rx(buffer_complex, floats_out)
+      if (ret & 1) and args.use_stdout:
          sys.stdout.buffer.write(floats_out)

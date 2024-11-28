@@ -501,7 +501,7 @@ class RADAE(nn.Module):
 
         tx_before_channel = None
         rx = None
-        self.final_phase = 0
+        self.final_phase = torch.tensor(1,dtype=torch.complex64)
         if self.rate_Fs:
             num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*self.M
  
