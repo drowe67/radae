@@ -556,10 +556,8 @@ add_test(NAME c_decoder_aux_mpp
 
 add_test(NAME radae_eoo_data_py
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
-                       --EbNodB 10 --freq_offset 13 \
-                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
-                       --prepend_noise 1 --append_noise 1 --end_of_over --auxdata --correct_freq_offset; \
+                       ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
+                       cat features_in.f32 | python3 radae_txe.py --eoo_data_test > rx.f32; \
                        cat rx.f32 | python3 radae_rxe.py -v 2 --eoo_data_test > /dev/null")
                        set_tests_properties(radae_eoo_data_py PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 

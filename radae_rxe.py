@@ -347,8 +347,10 @@ if __name__ == '__main__':
       if (ret & 1) and args.use_stdout:
          sys.stdout.buffer.write(floats_out)
       if (ret & 2) and args.eoo_data_test:
-         n_bits = rx.model.Nseoo*rx.model.bps
-         tx_bits = rx.model.eoo_bits.cpu().detach().numpy().flatten()
+         # same RNG as tx
+         g = torch.Generator().manual_seed(1)
+         tx_bits = torch.sign(torch.rand(rx.model.Nseoo*rx.model.bps,generator=g)-0.5).detach().numpy()
+         n_bits = len(tx_bits)
          n_errors = sum(floats_out[:n_bits]*tx_bits < 0)
          ber = n_errors/n_bits
          print(f"EOO data n_bits: {n_bits} n_errors: {n_errors} BER: {ber:5.2f}", file=sys.stderr)

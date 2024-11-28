@@ -220,22 +220,6 @@ class RADAE(nn.Module):
 
         # experimental EOO data symbols (quick and dirty supplimentary txt channel)
         self.Nseoo = (Ns-1)*Nc  # number of EOO data symbols
-        # use a customer RNG to avoid upsetting some other rather delicate ctests (TODO fix this sensitvity later)
-        g = torch.Generator().manual_seed(1)
-        eoo_bits = torch.sign(torch.rand(self.Nseoo*bps,generator=g)-0.5)
-        self.eoo_bits = eoo_bits
-        eoo_syms = eoo_bits[::2] + 1j*eoo_bits[1::2]
-        eoo_syms = torch.reshape(eoo_syms,(1,Ns-1,Nc))
-        
-        eoo_tx = torch.matmul(eoo_syms,self.Winv)
-        if self.Ncp:
-            eoo_tx_cp = torch.zeros((1,Ns-1,self.M+Ncp),dtype=torch.complex64)
-            eoo_tx_cp[:,:,Ncp:] = eoo_tx
-            eoo_tx_cp[:,:,:Ncp] = eoo_tx_cp[:,:,-Ncp:]
-            eoo_tx = torch.reshape(eoo_tx_cp,(1,(Ns-1)*(self.M+Ncp)))*self.pilot_gain
-            if self.bottleneck == 3:
-                eoo_tx = torch.tanh(torch.abs(eoo_tx)) * torch.exp(1j*torch.angle(eoo_tx))
-            self.eoo[0,2*(M+Ncp):Nmf] = eoo_tx
 
         print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}", file=sys.stderr)
 
@@ -454,6 +438,22 @@ class RADAE(nn.Module):
         SNR_est = Ct/(torch.dot(torch.conj(p),p) - Ct)
         return SNR_est.real
     
+    def set_eoo_bits(self, eoo_bits):
+        Ns = self.Ns; Ncp = self.Ncp; M = self.M; Nc = self.Nc; Nmf = int((Ns+1)*(M+Ncp))
+
+        eoo_syms = eoo_bits[::2] + 1j*eoo_bits[1::2]
+        eoo_syms = torch.reshape(eoo_syms,(1,Ns-1,Nc))
+        
+        eoo_tx = torch.matmul(eoo_syms,self.Winv)
+        if self.Ncp:
+            eoo_tx_cp = torch.zeros((1,Ns-1,self.M+Ncp),dtype=torch.complex64)
+            eoo_tx_cp[:,:,Ncp:] = eoo_tx
+            eoo_tx_cp[:,:,:Ncp] = eoo_tx_cp[:,:,-Ncp:]
+            eoo_tx = torch.reshape(eoo_tx_cp,(1,(Ns-1)*(self.M+Ncp)))*self.pilot_gain
+            if self.bottleneck == 3:
+                eoo_tx = torch.tanh(torch.abs(eoo_tx)) * torch.exp(1j*torch.angle(eoo_tx))
+            self.eoo[0,2*(M+Ncp):Nmf] = eoo_tx
+
     def forward(self, features, H, G=None):
         
         (num_batches, num_ten_ms_timesteps, num_features) = features.shape
