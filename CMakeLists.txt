@@ -561,6 +561,15 @@ add_test(NAME radae_eoo_data_py
                        cat rx.f32 | python3 radae_rxe.py -v 2 --eoo_data_test > /dev/null")
                        set_tests_properties(radae_eoo_data_py PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# C tx. C rx. Note Python radae_txe.py just generates eoo_tx.f32 for C radae_tx
+add_test(NAME radae_eoo_data_c
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
+                       cat features_in.f32 | python3 radae_txe.py --eoo_data_test > /dev/null; \
+                       cat features_in.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_tx > rx.f32; \
+                       cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx > /dev/null; \
+                       python3 eoo_ber.py eoo_tx.f32 eoo_rx.f32")
+                       set_tests_properties(radae_eoo_data_c PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # BBFM -----------------------------------------------------------------------------------------------
 

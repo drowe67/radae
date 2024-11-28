@@ -101,7 +101,9 @@ class radae_tx:
    def get_Neoo_bits(self):
       return self.model.Nseoo*self.model.bps
    def set_eoo_bits(self,eoo_bits):
-      self.model.set_eoo_bits(torch.tensor(tx_bits, dtype=torch.float32))
+      print("setting bits!", file=sys.stderr)
+      print(eoo_bits[0:8],file=sys.stderr)
+      self.model.set_eoo_bits(torch.tensor(eoo_bits, dtype=torch.float32))
 
    def do_radae_tx(self,buffer_f32,tx_out):
       model = self.model
@@ -155,8 +157,9 @@ if __name__ == '__main__':
    if args.eoo_data_test:
       # create a RNG with same sequence for BER testing with separate tx and rx
       seed = 65647; rng = np.random.default_rng(seed)
-      tx_bits = np.sign(rng.random(tx.get_Neoo_bits())-0.5)
+      tx_bits = np.sign(rng.random(tx.get_Neoo_bits())-0.5, dtype=np.float32)
       tx.set_eoo_bits(tx_bits)
+      tx_bits.tofile("eoo_tx.f32")
       
    tx_out = np.zeros(tx.Nmf,dtype=np.csingle)
    while True:

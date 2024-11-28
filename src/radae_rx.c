@@ -12,7 +12,7 @@
 int main(int argc, char *argv[])
 {
     rade_initialize();
-    int flags = RADE_USE_C_DECODER | RADE_VERBOSE_0;
+    int flags = RADE_USE_C_DECODER; // | RADE_VERBOSE_0;
     /* special test mode that induces a frequency offset error to test UW false sync detection */
     if (argc == 2) {
         if (atoi(argv[1]) == 1) {
@@ -27,8 +27,8 @@ int main(int argc, char *argv[])
     int n_rx_in = rade_nin_max(r);
     RADE_COMP rx_in[n_rx_in];
     int nin = rade_nin(r);
-    int n_eoo_features_out = rade_n_eoo_features_out(r);
-    FILE *feoo = fopen("eoo.f32","wb"); assert(feoo != NULL);
+    int n_eoo_bits = rade_n_eoo_bits(r);
+    FILE *feoo = fopen("eoo_rx.f32","wb"); assert(feoo != NULL);
     
 #ifdef _WIN32
     // Note: freopen() returns NULL if filename is NULL, so
@@ -43,8 +43,8 @@ int main(int argc, char *argv[])
             fwrite(features_out, sizeof(float), n_features_out, stdout);
             fflush(stdout);
         }
-        if (n_out == n_eoo_features_out) {
-             fwrite(features_out, sizeof(float), n_eoo_features_out, feoo);
+        if (n_out == n_eoo_bits) {
+             fwrite(features_out, sizeof(float), n_eoo_bits, feoo);
         }
         nin = rade_nin(r);
     }
