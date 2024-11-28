@@ -272,8 +272,6 @@ if __name__ == '__main__':
             lin_phase = torch.cumsum(omega,dim=1)
             lin_phase = torch.exp(1j*lin_phase)
             eoo = eoo*lin_phase*model.final_phase
-            print(model.final_phase)
-            print(lin_phase)
             eoo = eoo + sigma*torch.randn_like(eoo)
             rx = torch.concatenate([rx,eoo],dim=1)
          if args.prepend_noise > 0.0:

@@ -220,9 +220,9 @@ class RADAE(nn.Module):
 
         # experimental EOO data symbols (quick and dirty supplimentary txt channel)
         self.Nseoo = (Ns-1)*Nc  # number of EOO data symbols
-        # use a customer RNG to avoid upsetting some otehr rather delicate ctests (TODO fix this sensitvity later)
-        self.g = torch.Generator().manual_seed(1)
-        eoo_bits = torch.sign(torch.rand(self.Nseoo*bps,generator=self.g)-0.5)
+        # use a customer RNG to avoid upsetting some other rather delicate ctests (TODO fix this sensitvity later)
+        g = torch.Generator().manual_seed(1)
+        eoo_bits = torch.sign(torch.rand(self.Nseoo*bps,generator=g)-0.5)
         self.eoo_bits = eoo_bits
         eoo_syms = eoo_bits[::2] + 1j*eoo_bits[1::2]
         eoo_syms = torch.reshape(eoo_syms,(1,Ns-1,Nc))

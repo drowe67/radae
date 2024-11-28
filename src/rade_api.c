@@ -441,7 +441,7 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
   long ret = PyLong_AsLong(pValue);
   int valid_out = ret & 0x1;
   int endofover = ret & 0x2;
-  fprintf(stderr, "%ld %d %d\n", ret, valid_out, endofover);
+  
   if (valid_out) {
     if (r->flags & RADE_USE_C_DECODER) {
       // sanity check: need integer number of latent vecs
