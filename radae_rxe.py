@@ -309,11 +309,6 @@ class radae_rx:
                np.copyto(floats_out, z_hat.cpu().detach().numpy().flatten().astype('float32'))
 
          if endofover:
-            n_bits = torch.numel(z_hat)
-            assert n_bits == model.Nseoo*model.bps
-            if self.eoo_data_test:
-               n_errors = sum(z_hat[0,:]*model.eoo_bits < 0)
-               print(f"EOO data n_bits: {n_bits} n_errors: {n_errors}", file=sys.stderr)
             z_hat = z_hat.cpu().detach().numpy().flatten()
             np.copyto(floats_out,np.concatenate([z_hat,np.zeros(len(floats_out)-len(z_hat))]))
    
@@ -351,3 +346,11 @@ if __name__ == '__main__':
       ret = rx.do_radae_rx(buffer_complex, floats_out)
       if (ret & 1) and args.use_stdout:
          sys.stdout.buffer.write(floats_out)
+      if (ret & 2) and args.eoo_data_test:
+         n_bits = rx.model.Nseoo*rx.model.bps
+         tx_bits = rx.model.eoo_bits.cpu().detach().numpy().flatten()
+         n_errors = sum(floats_out[:n_bits]*tx_bits < 0)
+         ber = n_errors/n_bits
+         print(f"EOO data n_bits: {n_bits} n_errors: {n_errors} BER: {ber:5.2f}", file=sys.stderr)
+         if ber < 0.05:
+            print("PASS", file=sys.stderr)

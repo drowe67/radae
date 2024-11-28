@@ -240,7 +240,7 @@ if __name__ == '__main__':
       n_errors = int(torch.sum(x < 0))
       n_bits = int(torch.numel(x))
       BER = n_errors/n_bits
-      print(f"loss: {loss:5.3f} BER: {BER:5.3f}")
+      print(f"loss: {loss:5.3f} Auxdata BER: {BER:5.3f}")
    else:
       print(f"loss: {loss:5.3f}")
    if args.loss_test > 0.0:

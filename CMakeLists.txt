@@ -294,7 +294,7 @@ add_test(NAME radae_rx_basic
                        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --EbNodB 10 --freq_offset 11 --prepend_noise 1 --append_noise 1 --end_of_over --auxdata \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
-                       cat rx.f32 | PYTHONPATH='../' python3 radae_rxe.py -v 2 --eoo_data_test > features_rxs_out.f32; \
+                       cat rx.f32 | PYTHONPATH='../' python3 radae_rxe.py -v 2 > features_rxs_out.f32; \
                        python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_rx_basic PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
@@ -551,6 +551,18 @@ add_test(NAME c_decoder_aux_mpp
                        cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx 1 > features_c.f32; \
                        python3 loss.py features_in.f32 features_c.f32 --loss 0.3 --clip_start 300")
                        set_tests_properties(c_decoder_aux_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# EOO data -------------------------------------------------------------------------------------------
+
+add_test(NAME radae_eoo_data_py
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --EbNodB 10 --freq_offset 13 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
+                       --prepend_noise 1 --append_noise 1 --end_of_over --auxdata --correct_freq_offset; \
+                       cat rx.f32 | python3 radae_rxe.py -v 2 --eoo_data_test > /dev/null")
+                       set_tests_properties(radae_eoo_data_py PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 
 # BBFM -----------------------------------------------------------------------------------------------
 
