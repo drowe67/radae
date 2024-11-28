@@ -97,7 +97,11 @@ class radae_tx:
    def get_Nmf(self):
       return self.Nmf
    def get_Neoo(self):
-      return  self.Neoo
+      return self.Neoo
+   def get_Neoo_bits(self):
+      return self.model.Nseoo*self.model.bps
+   def set_eoo_bits(self,eoo_bits):
+      self.model.set_eoo_bits(torch.tensor(tx_bits, dtype=torch.float32))
 
    def do_radae_tx(self,buffer_f32,tx_out):
       model = self.model
@@ -149,10 +153,10 @@ if __name__ == '__main__':
    tx = radae_tx(model_name=args.model_name, auxdata=args.auxdata, txbpf_en=args.txbpf, bypass_enc=args.bypass_enc)
    
    if args.eoo_data_test:
-      # use a custom  RNG to avoid upsetting some other rather delicate ctests (TODO fix this sensitvity later)
-      g = torch.Generator().manual_seed(1)
-      tx_bits = torch.sign(torch.rand(tx.model.Nseoo*tx.model.bps,generator=g)-0.5)
-      tx.model.set_eoo_bits(tx_bits)
+      # create a RNG with same sequence for BER testing with separate tx and rx
+      seed = 65647; rng = np.random.default_rng(seed)
+      tx_bits = np.sign(rng.random(tx.get_Neoo_bits())-0.5)
+      tx.set_eoo_bits(tx_bits)
       
    tx_out = np.zeros(tx.Nmf,dtype=np.csingle)
    while True:

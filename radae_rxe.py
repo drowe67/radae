@@ -161,6 +161,9 @@ class radae_rx:
 
    def sum_uw_errors(self,new_uw_errors):
       self.uw_errors += new_uw_errors
+      
+   def get_Neoo_bits(self):
+      return self.model.Nseoo*self.model.bps
 
    def do_radae_rx(self, buffer_complex, floats_out):
       acq = self.acq
@@ -347,9 +350,9 @@ if __name__ == '__main__':
       if (ret & 1) and args.use_stdout:
          sys.stdout.buffer.write(floats_out)
       if (ret & 2) and args.eoo_data_test:
-         # same RNG as tx
-         g = torch.Generator().manual_seed(1)
-         tx_bits = torch.sign(torch.rand(rx.model.Nseoo*rx.model.bps,generator=g)-0.5).detach().numpy()
+         # create a RNG with same sequence for BER testing with separate tx and rx
+         seed = 65647; rng = np.random.default_rng(seed)
+         tx_bits = np.sign(rng.random(rx.get_Neoo_bits())-0.5)
          n_bits = len(tx_bits)
          n_errors = sum(floats_out[:n_bits]*tx_bits < 0)
          ber = n_errors/n_bits
