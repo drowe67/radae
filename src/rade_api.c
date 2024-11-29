@@ -457,7 +457,7 @@ int rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]) {
   return r->Neoo;
 }
 
-int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
+int rade_rx(struct rade *r, float features_out[], int *has_eoo_out, float eoo_out[], RADE_COMP rx_in[]) {
   PyObject *pValue;
   assert(r != NULL);
   assert(features_out != NULL);
@@ -515,8 +515,11 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
     }
   }
 
-  if (endofover)
-      memcpy(features_out, r->floats_out, sizeof(float)*(r->n_eoo_bits));
+  *has_eoo_out = 0;
+  if (endofover) {
+    memcpy(eoo_out, r->floats_out, sizeof(float)*(r->n_eoo_bits));
+    *has_eoo_out = 1;
+  }
 
   // sample nin so we have an updated copy
   r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");
@@ -526,9 +529,8 @@ int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]) {
 
   if (valid_out)
     return r->n_features_out;
-  if (endofover)
-    return r->n_eoo_bits;
-  return 0;
+  else
+    return 0;
 }
 
 int rade_sync(struct rade *r) {

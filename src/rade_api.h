@@ -115,9 +115,9 @@ RADE_EXPORT int rade_nin(struct rade *r);
 
 // returns non-zero if features_out[] contains valid output. The number
 // returned is the number of samples written to features_out[].  If the
-// number returned is equal to rade_n_eoo_bits(), features_out[]
-// contains End of Over soft decision bits rather that vocoder features
-RADE_EXPORT int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]);
+// has_eoo_out is set, eoo_out[] contains End of Over soft decision bits
+// from QPSK symbols in ..IQIQI... order
+RADE_EXPORT int rade_rx(struct rade *r, float features_out[], int *has_eoo_out, float eoo_out[], RADE_COMP rx_in[]);
 
 // returns non-zero if Rx is currently in sync
 RADE_EXPORT int rade_sync(struct rade *r);
