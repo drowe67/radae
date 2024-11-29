@@ -102,7 +102,8 @@ RADE_EXPORT int rade_n_eoo_bits(struct rade *r);
 // returns number of RADE_COMP samples written to tx_out[]
 RADE_EXPORT int rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]);
 
-// Set the rade_n_eoo_bits() bits to be sent in the EOO frame
+// Set the rade_n_eoo_bits() bits to be sent in the EOO frame, which are
+// in +/- 1 float form (note NOT 1 or 0)
 RADE_EXPORT void rade_tx_set_eoo_bits(struct rade *r, float eoo_bits[]);
 
 // call this for the final frame at the end of over

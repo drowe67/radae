@@ -554,6 +554,7 @@ add_test(NAME c_decoder_aux_mpp
 
 # EOO data -------------------------------------------------------------------------------------------
 
+# Pythion Tx & Rx, no noise
 add_test(NAME radae_eoo_data_py
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
@@ -561,7 +562,7 @@ add_test(NAME radae_eoo_data_py
                        cat rx.f32 | python3 radae_rxe.py -v 2 --eoo_data_test > /dev/null")
                        set_tests_properties(radae_eoo_data_py PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# C tx. C rx. Note Python radae_txe.py just generates eoo_tx.f32 for C radae_tx
+# C tx & rx, no noise. Note Python radae_txe.py just generates eoo_tx.f32 for C radae_tx
 add_test(NAME radae_eoo_data_c
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
@@ -570,6 +571,21 @@ add_test(NAME radae_eoo_data_c
                        cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx > /dev/null; \
                        python3 eoo_ber.py eoo_tx.f32 eoo_rx.f32")
                        set_tests_properties(radae_eoo_data_c PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# C tx & rx, over a multipath channel, we set up 5 "overs", each with an EOO chunk of data.  Just one of them needs
+# to have a BER < 5% for a PASS.  About 6dB SNR
+add_test(NAME radae_eoo_data_mpp
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh; \
+                       ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
+                       cat features_in.f32 | python3 radae_txe.py --eoo_data_test > /dev/null; \
+                       cat features_in.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_tx > tx.f32; \
+                       cat tx.f32 tx.f32 tx.f32 tx.f32 tx.f32 > tx_2.f32;
+                       cat tx_2.f32 | python3 f32toint16.py --real --scale 8192 > tx.raw; \
+                       ${CODEC2_DEV_BUILD_DIR}/src/ch tx.raw rx.raw --No -24 --mpp --fading_dir .; \
+                       cat rx.raw | python3 int16tof32.py --zeropad > rx.f32; \
+                       cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx > /dev/null; \
+                       python3 eoo_ber.py eoo_tx.f32 eoo_rx.f32")
+                       set_tests_properties(radae_eoo_data_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # BBFM -----------------------------------------------------------------------------------------------
 
