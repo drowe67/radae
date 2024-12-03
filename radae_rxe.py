@@ -256,7 +256,8 @@ class radae_rx:
                      self.uw_errors = 0
                   self.valid_count = self.Nmf_unsync
                   ffine_range = np.arange(self.fmax-10,self.fmax+10,0.25)
-                  tfine_range = np.arange(self.tmax-1,self.tmax+2)
+                  tfine_range = np.arange(max(0,self.tmax-1),self.tmax+2)
+                  print(len(rx_buf),self.tmax,tfine_range,  file=sys.stderr)
                   self.tmax,self.fmax = acq.refine(rx_buf, self.tmax, self.fmax, tfine_range, ffine_range)
                   # testing: only insert freq offset error on first sync
                   self.fmax += self.foff_err
