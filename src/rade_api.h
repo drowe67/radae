@@ -96,10 +96,15 @@ RADE_EXPORT int rade_n_tx_out(struct rade *r);
 RADE_EXPORT int rade_n_tx_eoo_out(struct rade *r);
 RADE_EXPORT int rade_nin_max(struct rade *r);
 RADE_EXPORT int rade_n_features_in_out(struct rade *r);
+RADE_EXPORT int rade_n_eoo_bits(struct rade *r);
 
 // note vocoder is not encapsulated in API in this version
 // returns number of RADE_COMP samples written to tx_out[]
 RADE_EXPORT int rade_tx(struct rade *r, RADE_COMP tx_out[], float features_in[]);
+
+// Set the rade_n_eoo_bits() bits to be sent in the EOO frame, which are
+// in +/- 1 float form (note NOT 1 or 0)
+RADE_EXPORT void rade_tx_set_eoo_bits(struct rade *r, float eoo_bits[]);
 
 // call this for the final frame at the end of over
 // returns the number of RADE_COMP samples written to tx_eoo_out[] 
@@ -109,8 +114,10 @@ RADE_EXPORT int rade_tx_eoo(struct rade *r, RADE_COMP tx_eoo_out[]);
 RADE_EXPORT int rade_nin(struct rade *r);
 
 // returns non-zero if features_out[] contains valid output. The number
-// returned is the number of samples written to features_out[]
-RADE_EXPORT int rade_rx(struct rade *r, float features_out[], RADE_COMP rx_in[]);
+// returned is the number of samples written to features_out[].  If the
+// has_eoo_out is set, eoo_out[] contains End of Over soft decision bits
+// from QPSK symbols in ..IQIQI... order
+RADE_EXPORT int rade_rx(struct rade *r, float features_out[], int *has_eoo_out, float eoo_out[], RADE_COMP rx_in[]);
 
 // returns non-zero if Rx is currently in sync
 RADE_EXPORT int rade_sync(struct rade *r);

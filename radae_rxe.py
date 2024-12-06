@@ -54,7 +54,8 @@ uw_error_thresh = 7 # P(reject|correct) = 1 -  binocdf(8,24,0.1) = 4.5E-4
                     # P(accept|false)   = binocdf(8,24,0.5)      = 3.2E-3
 
 class radae_rx:
-   def __init__(self, model_name, latent_dim = 80, auxdata = True, bottleneck = 3, bpf_en=True, v=2, disable_unsync=False, foff_err=0, bypass_dec=False):
+   def __init__(self, model_name, latent_dim = 80, auxdata = True, bottleneck = 3, bpf_en=True, v=2, 
+                disable_unsync=False, foff_err=0, bypass_dec=False, eoo_data_test=False):
 
       self.latent_dim = latent_dim
       self.auxdata = auxdata
@@ -64,6 +65,7 @@ class radae_rx:
       self.disable_unsync = disable_unsync
       self.foff_err = foff_err
       self.bypass_dec = bypass_dec
+      self.eoo_data_test = eoo_data_test
 
       print(f"bypass_dec: {bypass_dec} foff_err: {foff_err:f}", file=sys.stderr)
 
@@ -85,7 +87,7 @@ class radae_rx:
       assert self.model.coarse_mag
    
       self.receiver = receiver_one(model.latent_dim,model.Fs,model.M,model.Ncp,model.Wfwd,model.Nc,
-                              model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain,
+                              model.Ns,model.w,model.P,model.Pend,model.bottleneck,model.pilot_gain,
                               model.time_offset,model.coarse_mag)
 
       M = model.M
@@ -115,7 +117,7 @@ class radae_rx:
          # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
          model.core_decoder_statefull_load_state_dict()
 
-      # number of input floats per processing frame
+      # number of output floats per processing frame
       if not self.bypass_dec:
          self.n_floats_out = model.Nzmf*model.enc_stride*nb_total_features
       else:
@@ -142,6 +144,9 @@ class radae_rx:
    def get_n_features_out(self):
       return self.model.Nzmf*self.model.dec_stride*nb_total_features
                  
+   def get_n_eoo_features_out(self):
+      return self.model.Nseoo
+                 
    def get_n_floats_out(self):
       return self.n_floats_out
                  
@@ -156,6 +161,9 @@ class radae_rx:
 
    def sum_uw_errors(self,new_uw_errors):
       self.uw_errors += new_uw_errors
+      
+   def get_Neoo_bits(self):
+      return self.model.Nseoo*self.model.bps
 
    def do_radae_rx(self, buffer_complex, floats_out):
       acq = self.acq
@@ -212,21 +220,19 @@ class radae_rx:
                   uw_fail = True
                self.uw_errors = 0
 
-            if not endofover:
-               # correct frequency offset, note we preserve state of phase
-               # TODO do we need preserve state of phase?  We're passing entire vector and there isn't any memory (I think)
-               w = 2*np.pi*self.fmax/Fs
-               rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
-               for n in range(Nmf+M+Ncp):
-                  self.rx_phase = self.rx_phase*np.exp(-1j*w)
-                  rx_phase_vec[n] = self.rx_phase
-               rx1 = rx_buf[self.tmax-Ncp:self.tmax-Ncp+Nmf+M+Ncp]
-               rx = torch.tensor(rx1*rx_phase_vec, dtype=torch.complex64)
+            # correct frequency offset, note we preserve state of phase (TODO: I don't think we need to)
+            w = 2*np.pi*self.fmax/Fs
+            rx_phase_vec = np.zeros(Nmf+M+Ncp,np.csingle)
+            for n in range(Nmf+M+Ncp):
+               self.rx_phase = self.rx_phase*np.exp(-1j*w)
+               rx_phase_vec[n] = self.rx_phase
+            rx1 = rx_buf[self.tmax-Ncp:self.tmax-Ncp+Nmf+M+Ncp]
+            rx = torch.tensor(rx1*rx_phase_vec, dtype=torch.complex64)
 
-               # run through RADAE receiver DSP
-               z_hat = receiver.receiver_one(rx)
-               valid_output = True
-            
+            # run through RADAE receiver DSP
+            z_hat = receiver.receiver_one(rx, endofover)
+            valid_output = not endofover
+               
          if v == 2 or (v == 1 and (self.state == "search" or self.state == "candidate" or prev_state == "candidate")):
             print(f"{self.mf:3d} state: {self.state:10s} valid: {candidate:d} {endofover:d} {self.valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ", end='', file=sys.stderr)
             print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {self.tmax:4d} fmax: {self.fmax:6.2f}", end='', file=sys.stderr)
@@ -305,7 +311,16 @@ class radae_rx:
             else:
                np.copyto(floats_out, z_hat.cpu().detach().numpy().flatten().astype('float32'))
 
-         return valid_output
+         if endofover:
+            z_hat = z_hat.cpu().detach().numpy().flatten()
+            np.copyto(floats_out,np.concatenate([z_hat,np.zeros(len(floats_out)-len(z_hat))]))
+   
+         # possible return cases
+         # valid_output | endofover | Description
+         #      0            0        Nothing returned
+         #      1            0        valid speech output (either z_hat or features, depending on bypass_dec)
+         #      0            1        EOO data output               
+         return valid_output | endofover<<1
 
 if __name__ == '__main__':
    parser = argparse.ArgumentParser(description='RADAE streaming receiver, IQ.f32 on stdin to features.f32 on stdout')
@@ -316,11 +331,13 @@ if __name__ == '__main__':
    parser.add_argument('--no_stdout', action='store_false', dest='use_stdout', help='disable the use of stdout (e.g. with python3 -m cProfile)')
    parser.add_argument('--foff_err', type=float, default=0.0, help='Artifical freq offset error after first sync to test false sync (default 0.0)')
    parser.add_argument('--bypass_dec', action='store_true', help='Bypass core decoder, write z_hat to stdout')
+   parser.add_argument('--eoo_data_test', action='store_true', help='experimental EOO data test - count bit errors')
    parser.set_defaults(auxdata=True)
    parser.set_defaults(use_stdout=True)
    args = parser.parse_args()
 
-   rx = radae_rx(args.model_name,auxdata=args.auxdata,v=args.v,disable_unsync=args.disable_unsync,foff_err=args.foff_err, bypass_dec=args.bypass_dec)
+   rx = radae_rx(args.model_name,auxdata=args.auxdata,v=args.v,disable_unsync=args.disable_unsync,foff_err=args.foff_err, 
+                 bypass_dec=args.bypass_dec,eoo_data_test=args.eoo_data_test)
 
    # allocate storage for output features
    floats_out = np.zeros(rx.get_n_floats_out(),dtype=np.float32)
@@ -329,6 +346,16 @@ if __name__ == '__main__':
       if len(buffer) != rx.get_nin()*struct.calcsize("ff"):
          break
       buffer_complex = np.frombuffer(buffer,np.csingle)
-      valid_output = rx.do_radae_rx(buffer_complex, floats_out)
-      if valid_output and args.use_stdout:
+      ret = rx.do_radae_rx(buffer_complex, floats_out)
+      if (ret & 1) and args.use_stdout:
          sys.stdout.buffer.write(floats_out)
+      if (ret & 2) and args.eoo_data_test:
+         # create a RNG with same sequence for BER testing with separate tx and rx
+         seed = 65647; rng = np.random.default_rng(seed)
+         tx_bits = np.sign(rng.random(rx.get_Neoo_bits())-0.5)
+         n_bits = len(tx_bits)
+         n_errors = sum(floats_out[:n_bits]*tx_bits < 0)
+         ber = n_errors/n_bits
+         print(f"EOO data n_bits: {n_bits} n_errors: {n_errors} BER: {ber:5.2f}", file=sys.stderr)
+         if ber < 0.05:
+            print("PASS", file=sys.stderr)
