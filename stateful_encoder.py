@@ -1,7 +1,7 @@
 """
 
-   Compares stateful decoder (that operates one frame at a time) to 
-   vanilla decoder.
+   Compares stateful encoder (that operates one frame at a time) to 
+   vanilla encoder.  Also used for testing C port of encoder.
 
 /*
    Redistribution and use in source and binary forms, with or without
@@ -44,6 +44,7 @@ parser.add_argument('features', type=str, help='path to input feature file in .f
 parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
 parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss to arg, print PASS/FAIL')
+parser.add_argument('--read_latent', type=str, help='path to optional input latent file z.f32, e.g. for C encoder testing')
 args = parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
@@ -55,7 +56,7 @@ num_used_features = 20
 
 # load model from a checkpoint file
 model = RADAE(num_features, latent_dim, 100.0)
-checkpoint = torch.load(args.model_name, map_location='cpu')
+checkpoint = torch.load(args.model_name, map_location='cpu', weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 # Stateful encoder wasn't present during training, so we need to load weights from existing encoder
 model.core_encoder_statefull_load_state_dict()
@@ -76,13 +77,18 @@ if __name__ == '__main__':
 
    # vanilla encoder that doesn't preserve state
    z = model.core_encoder(features)
-   
-   # encoder that preserves state, test by processing 12 feature vecs on each call 
-   z_statefull = torch.empty(1,0,model.latent_dim)
-   step = 3
-   for i in range(0,features.shape[1],model.enc_stride*step):
-      z_one = model.core_encoder_statefull(features[:,i:i+model.enc_stride*step,:])
-      z_statefull = torch.cat([z_statefull, z_one],dim=1) 
+   print(z.shape)
+
+   if args.read_latent:
+      z_in = np.reshape(np.fromfile(args.read_latent, dtype=np.float32), (1, -1, args.latent_dim))
+      z_statefull = torch.tensor(z_in[:,:nb_features_rounded//4,:])
+   else:
+      # Python encoder that preserves state, test by processing 12 feature vecs on each call 
+      z_statefull = torch.empty(1,0,model.latent_dim)
+      step = 3
+      for i in range(0,features.shape[1],model.enc_stride*step):
+         z_one = model.core_encoder_statefull(features[:,i:i+model.enc_stride*step,:])
+         z_statefull = torch.cat([z_statefull, z_one],dim=1) 
    
    # test with vanilla decoder
    features_hat = model.core_decoder(z)

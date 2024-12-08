@@ -11,7 +11,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
     if length(z_fn)
       z=load_f32(z_fn,1);
       s=z(1:2:end)+j*z(2:2:end);
-      figure(1); clf; plot(s,'.'); title('Scatter');
+      figure(2); clf; plot(s,'.'); title('Scatter');
       mx = max(abs(z))*1.2; axis([-mx mx -mx mx])
       if length(png_fn)
         print("-dpng",sprintf("%s_scatter.png",png_fn));
@@ -19,7 +19,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
       if length(epslatex)
         print_eps(sprintf("%s_scatter.eps",epslatex),"-S250,250");
       end
-      figure(2); clf;
+      figure(3); clf;
       [nn cc] = hist3([real(s) imag(s)],[25 25]);
       mesh(cc{1},cc{2},nn); title('Scatter 3D');   
       if length(png_fn)
@@ -28,7 +28,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
       if length(epslatex)
         print_eps(sprintf("%s_scatter_3d.eps",epslatex),"-S300,300");
       end
-      figure(3); clf; hist(abs(s));
+      figure(4); clf; hist(abs(s));
     end
     
     if length(rx_fn)
@@ -45,14 +45,14 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
           ind = find(abs(rx) > 1);
           rx(ind) = exp(j*angle(rx(ind)));
         end
-        figure(4); clf; plot(rx); title('rate Fs Scatter (IQ)'); mx = max(abs(rx))*1.5; axis([-mx mx -mx mx]);
-        figure(5); clf; plot(real(rx)); xlabel('Time (samples)'); ylabel('rx');
-        figure(6); clf; plot_specgram(rx, Fs=8000, 0, 3000);
+        figure(5); clf; plot(rx); title('rate Fs Scatter (IQ)'); mx = max(abs(rx))*1.5; axis([-mx mx -mx mx]);
+        figure(6); clf; plot(real(rx)); xlabel('Time (samples)'); ylabel('rx');
+        figure(7); clf; plot_specgram(rx, Fs=8000, 0, 3000);
         
         % Spectrum plot
-        figure(7); clf; 
         Fs = 8000; y = pwelch(rx,[],[],1024,Fs); y_dB = 10*log10(y);
         mx = max(y_dB); mx = ceil(mx/10)*10
+        figure(8); clf; 
         plot((0:length(y)-1)*Fs/length(y),y_dB-mx);
         axis([0 3000 -40 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
         if length(epslatex)
@@ -378,7 +378,6 @@ function test_rayleigh(epslatex="")
   end
 end
 
-<<<<<<< HEAD
 function y = relu(x)
   y = x;
   y(find(x<0)) = 0;
@@ -441,7 +440,6 @@ function test_phase_est
   plot(theta, phi, "r-;phi;")
   hold off
 endfunction
-=======
 function compare_pitch_corr(wav_fn,feat1_fn,feat2_fn,png_feat_fn="")
   Fs=16000;
   s=load_raw(wav_fn);
@@ -485,4 +483,3 @@ function plot_sample_spec(wav_fn,png_spec_fn="")
     print("-dpng",png_spec_fn,"-S800,600");
   end
 end
->>>>>>> main

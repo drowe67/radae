@@ -45,25 +45,28 @@ nb_total_features = 36
 num_used_features = 20
 
 class radae_tx:
-   def __init__(self, model_name, latent_dim=80, auxdata=True, bottleneck=3, txbpf_en=False):
+   def __init__(self, model_name, latent_dim=80, auxdata=True, bottleneck=3, txbpf_en=False, bypass_enc=False):
 
       self.latent_dim = latent_dim
       self.auxdata = auxdata
       self.bottleneck = bottleneck
       self.txbpf_en = txbpf_en
+      self.bypass_enc = bypass_enc
+      print(f"model_name: {model_name} bypass_enc: {bypass_enc}", file=sys.stderr)
 
       self.num_features = 20
       if auxdata:
          self. num_features += 1
 
-      # load model from a checkpoint file
       self.model = RADAE(self.num_features, latent_dim, EbNodB=100, rate_Fs=True, 
                   pilots=True, pilot_eq=True, eq_mean6 = False, cyclic_prefix=0.004,
                   coarse_mag=True,time_offset=-16, bottleneck=bottleneck)
       model = self.model
-      checkpoint = torch.load(model_name, map_location='cpu')
-      model.load_state_dict(checkpoint['state_dict'], strict=False)
-      model.core_encoder_statefull_load_state_dict()
+      if not self.bypass_enc:
+         # load model from a checkpoint file
+         checkpoint = torch.load(model_name, map_location='cpu', weights_only=True)
+         model.load_state_dict(checkpoint['state_dict'], strict=False)
+         model.core_encoder_statefull_load_state_dict()
       model.eval()
 
       self.transmitter = transmitter_one(model.latent_dim,model.enc_stride,model.Nzmf,model.Fs,model.M,model.Ncp,
@@ -77,15 +80,20 @@ class radae_tx:
          print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
          self.txbpf = complex_bpf(Ntap, model.Fs, bandwidth,centre)
 
-      # number of input floats per processing frame (TOOD refactor to more sensible variable names)
-      self.nb_floats = model.Nzmf*model.enc_stride*nb_total_features
+      # number of input floats per processing frame
+      if not self.bypass_enc:
+         self.n_floats_in = model.Nzmf*model.enc_stride*nb_total_features
+      else:
+         self.n_floats_in = model.Nzmf*self.latent_dim
       # number of output csingles per processing frame
       self.Nmf = int((model.Ns+1)*(model.M+model.Ncp))
       # number of output csingles for EOO frame
       self.Neoo = int((model.Ns+2)*(model.M+model.Ncp))
 
-   def get_nb_floats(self):
-      return self.nb_floats
+   def get_n_features_in(self):
+      return self.model.Nzmf*self.model.enc_stride*nb_total_features
+   def get_n_floats_in(self):
+      return self.n_floats_in
    def get_Nmf(self):
       return self.Nmf
    def get_Neoo(self):
@@ -93,19 +101,24 @@ class radae_tx:
 
    def do_radae_tx(self,buffer_f32,tx_out):
       model = self.model
+      num_timesteps_at_rate_Rs = model.num_timesteps_at_rate_Rs(model.Nzmf*model.enc_stride)
 
       with torch.inference_mode():
-         features = torch.reshape(torch.tensor(buffer_f32),(1,model.Nzmf*model.enc_stride, nb_total_features))
-         features = features[:,:,:num_used_features]
-         if self.auxdata:
-            aux_symb =  -torch.ones((1,features.shape[1],1))
-            symb_repeat = 4
-            for i in range(1,symb_repeat):
-               aux_symb[0,i::symb_repeat,:] = aux_symb[0,::symb_repeat,:]
-            features = torch.concatenate([features, aux_symb],axis=2)
-         #print(features.shape, file=sys.stderr)
-         num_timesteps_at_rate_Rs = model.num_timesteps_at_rate_Rs(model.Nzmf*model.enc_stride)
-         z = model.core_encoder_statefull(features)
+         if not self.bypass_enc:
+            features = torch.reshape(torch.tensor(buffer_f32),(1,model.Nzmf*model.enc_stride, nb_total_features))
+            features = features[:,:,:num_used_features]
+            if self.auxdata:
+               aux_symb =  -torch.ones((1,features.shape[1],1))
+               symb_repeat = 4
+               for i in range(1,symb_repeat):
+                  aux_symb[0,i::symb_repeat,:] = aux_symb[0,::symb_repeat,:]
+               features = torch.concatenate([features, aux_symb],axis=2)
+            #print(features.shape, file=sys.stderr)
+            z = model.core_encoder_statefull(features)
+         else:
+            #print("Using external core encoder", file=sys.stderr)
+            z = torch.reshape(torch.tensor(buffer_f32),(1,model.Nzmf,self.latent_dim))      
+         #print(z.shape, file=sys.stderr)
          tx = self.transmitter.transmitter_one(z,num_timesteps_at_rate_Rs)
          tx = tx.cpu().detach().numpy().flatten().astype('csingle')
          if self.txbpf_en:
@@ -125,18 +138,19 @@ class radae_tx:
       np.copyto(tx_out,eoo)
 
 if __name__ == '__main__':
-   parser = argparse.ArgumentParser(description='RADAE streaming trannsmnitter, features.f32 on stdit, IQ.f32 on output')
+   parser = argparse.ArgumentParser(description='RADAE streaming transmitter, features.f32 on stdin, IQ.f32 on output')
    parser.add_argument('--model_name', type=str, help='path to model in .pth format', default="model19_check3/checkpoints/checkpoint_epoch_100.pth")
    parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injection of auxillary data symbols')
    parser.add_argument('--txbpf', action='store_true', help='enable Tx BPF')
+   parser.add_argument('--bypass_enc', action='store_true', help='Bypass core encoder, read z from stdin')
    parser.set_defaults(auxdata=True)
    args = parser.parse_args()
-   tx = radae_tx(model_name=args.model_name, auxdata=args.auxdata, txbpf_en=args.txbpf)
+   tx = radae_tx(model_name=args.model_name, auxdata=args.auxdata, txbpf_en=args.txbpf, bypass_enc=args.bypass_enc)
 
    tx_out = np.zeros(tx.Nmf,dtype=np.csingle)
    while True:
-      buffer = sys.stdin.buffer.read(tx.nb_floats*struct.calcsize("f"))
-      if len(buffer) != tx.nb_floats*struct.calcsize("f"):
+      buffer = sys.stdin.buffer.read(tx.n_floats_in*struct.calcsize("f"))
+      if len(buffer) != tx.n_floats_in*struct.calcsize("f"):
          break
       buffer_f32 = np.frombuffer(buffer,np.single)
       tx.do_radae_tx(buffer_f32,tx_out)

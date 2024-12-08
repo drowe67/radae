@@ -12,7 +12,7 @@ int main(void)
 {
     rade_initialize();
 
-    struct rade *r = rade_open("dummy");
+    struct rade *r = rade_open("dummy", RADE_USE_C_ENCODER);
     assert(r != NULL);
     int n_features_in = rade_n_features_in_out(r);
     float features_in[n_features_in];

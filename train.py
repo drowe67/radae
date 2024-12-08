@@ -127,7 +127,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo,
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
-    checkpoint = torch.load(args.initial_checkpoint, map_location='cpu')
+    checkpoint = torch.load(args.initial_checkpoint, map_location='cpu', weights_only=True)
     model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 checkpoint['state_dict']    = model.state_dict()
