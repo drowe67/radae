@@ -389,10 +389,15 @@ function plot_SNR_CNR(epslatex="")
         [textfontsize linewidth] = set_fonts();
     end
     figure(1); clf; hold on;
-    fd=5000; fm=3000; 
+    fd=2500; fm=3000; 
     beta= fd/fm;
-    Gfm=10*log10(3*(beta^2)*(beta+1))
+    Gfm=10*log10(3*(beta^2)*(beta+1));
     BWfm = 2*(fd+fm);
+    CNR_thresh = 12; NF=5;
+    Rx_thresh = CNR_thresh + 10*log10(BWfm) + NF - 174;
+    SNR_thresh = Gfm + CNR_thresh;
+    printf("fd: %6.0f fm: %6.0f Beta: %f Gfm: %5.2f dB BWfm: %7.0f\n", fd, fm, beta, Gfm, BWfm);
+    printf("At CNR=%5.2f dB threshold, NF=%4.2f dB Rx: %7.2f dBm, SNR=%5.2f \n", CNR_thresh, NF, Rx_thresh, SNR_thresh);
 
     % vanilla implementation of curve
     CNRdB=0:20;
@@ -410,8 +415,9 @@ function plot_SNR_CNR(epslatex="")
 
     plot(CNRdB,SNRdB,'g;FM;'); 
     plot(CNRdB,SNRdB_relu,'r+;FM relu;'); 
-    SSBdB = CNRdB + 10*log10(BWfm) - 10*log10(fm);
-    plot(CNRdB,SSBdB,'b;SSB;'); 
+    CNodB = CNRdB + 10*log10(BWfm);
+    SNR_ssb_dB = CNodB - 10*log10(fm);
+    plot(CNRdB,SNR_ssb_dB,'b;SSB;'); 
     axis([min(CNRdB) max(CNRdB) 10 30]);
     hold off; grid('minor'); xlabel('CNR (dB)'); ylabel('SNR (dB)'); legend('boxoff'); legend('location','northwest');
     if length(epslatex)
