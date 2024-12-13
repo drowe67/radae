@@ -1,43 +1,16 @@
 # coding: utf-8
 
-# # Installing Whisper
-# 
-# The commands below will install the Python packages needed to use Whisper models and evaluate the transcription results.
-
-# In[1]:
-
-
-#get_ipython().system(' pip install git+https://github.com/openai/whisper.git')
-#get_ipython().system(' pip install jiwer')
-
-
-# # Loading the LibriSpeech dataset
-# 
-# The following will load the test-clean split of the LibriSpeech corpus using torchaudio.
-
-# In[2]:
-
+# derived from: https://github.com/openai/whisper/blob/main/notebooks/LibriSpeech.ipynb
 
 import os,argparse
 import numpy as np
-
-#try:
-#    import tensorflow  # required in Colab to avoid protobuf compatibility issues
-#except ImportError:
-#    pass
-
 import torch
 import pandas as pd
 import whisper
 import torchaudio
-
 from tqdm.notebook import tqdm
 
-
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
-
-# In[3]:
 
 
 class LibriSpeech(torch.utils.data.Dataset):
@@ -66,38 +39,24 @@ class LibriSpeech(torch.utils.data.Dataset):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--test_name', default="test-clean", type=str, help='Librispeech test name')
+parser.add_argument('test_name', type=str, help='Librispeech dataset name (e.g. test-clean)')
+parser.add_argument('-n', type=str, help='Number of dataset sntries to use (default all of them)')
 args = parser.parse_args()
 
-print("start");
 dataset = LibriSpeech(args.test_name)
-print("dataset")
+if args.n:
+    dataset = torch.utils.data.Subset(dataset,list(range(0,int(args.n))))
+print("dataset length:", dataset.__len__())
+
 loader = torch.utils.data.DataLoader(dataset, batch_size=16)
-print("loader")
-
-# # Running inference on the dataset using a base Whisper model
-# 
-# The following will take a few minutes to transcribe all utterances in the dataset.
-
-# In[5]:
-
-
 model = whisper.load_model("base.en")
 print(
     f"Model is {'multilingual' if model.is_multilingual else 'English-only'} "
     f"and has {sum(np.prod(p.shape) for p in model.parameters()):,} parameters."
 )
 
-
-# In[6]:
-
-
 # predict without timestamps for short-form transcription
 options = whisper.DecodingOptions(language="en", without_timestamps=True)
-
-
-# In[7]:
-
 
 hypotheses = []
 references = []
@@ -107,37 +66,21 @@ for mels, texts in loader:
     hypotheses.extend([result.text for result in results])
     references.extend(texts)
 
-
-# In[8]:
-
-
 data = pd.DataFrame(dict(hypothesis=hypotheses, reference=references))
-data
 
 
 # # Calculating the word error rate
 # 
 # Now, we use our English normalizer implementation to standardize the transcription and calculate the WER.
 
-# In[9]:
-
-
 import jiwer
 from whisper.normalizers import EnglishTextNormalizer
 
 normalizer = EnglishTextNormalizer()
 
-
-# In[10]:
-
-
 data["hypothesis_clean"] = [normalizer(text) for text in data["hypothesis"]]
 data["reference_clean"] = [normalizer(text) for text in data["reference"]]
 print(data)
-
-
-# In[11]:
-
 
 wer = jiwer.wer(list(data["reference_clean"]), list(data["hypothesis_clean"]))
 
