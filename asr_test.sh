@@ -29,6 +29,7 @@ n_samples=0
 No=-100
 setpoint_rms=2048
 comp_gain=6
+mode="rade_inf"
 
 POSITIONAL=()
 while [[ $# -gt 0 ]]
@@ -89,7 +90,7 @@ function process {
     n=$(echo "$flac" | wc -l)
     printf "Processing %d samples in dataset\n" $n
 
-    in=t.raw
+    in=in.raw
     comp=comp.raw
     ch_log=ch_log.txt
     snr_log=snr_log.txt
@@ -98,22 +99,35 @@ function process {
     do
         d=$(dirname $f)
         mkdir -p ${dest}/${d}
-        sox ${source}/${f} -t .s16 -r 8000 ${in}
-        # AGC and Hilbert compression
-        set_rms ${in} $setpoint_rms
-        analog_compressor  ${in} ${comp} ${comp_gain}
-        papr=$(measure_cpapr ${comp})
-        ch ${comp} - --No ${No}  2>${ch_log} | sox -t .s16 -r 8000 -c 1 - -r 16000 ${dest}/${f}
-        snr=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
-        snr=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
-        echo $snr >> ${snr_log}
-        echo ${dest}/${f} ${snr} ${papr}
+        if [ $mode == "ssb" ]; then
+          sox ${source}/${f} -t .s16 -r 8000 ${in}
+          # AGC and Hilbert compression
+          set_rms ${in} $setpoint_rms
+          analog_compressor  ${in} ${comp} ${comp_gain}
+          papr=$(measure_cpapr ${comp})
+          ch ${comp} - --No ${No}  2>${ch_log} | sox -t .s16 -r 8000 -c 1 - -r 16000 ${dest}/${f}
+          snr=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
+          echo $snr >> ${snr_log}
+          echo ${dest}/${f} ${snr} ${papr}
+#          python3 <<EOF
+#import numpy as np
+#s=np.loadtxt("snr_log.txt")
+#print(f"mean SNR: {np.mean(s):5.2f}")
+#EOF        
+        fi
+        if [ $mode == "rade_inf" ]; then
+          # todo some sort of ALC
+          # TODO add channel noise. calibrate for C/No (read C/No)
+          sox ${source}/${f} -t .s16 ${in}
+          ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth ${in} out.wav \
+          --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata
+          sox out.wav ${dest}/${f}   
+          echo ${dest}/${f}     
+        fi
+        # TODO use rade_enc/dec - will we need to sync/unsync every time?
+
     done
-    python3 <<EOF
-import numpy as np
-s=np.loadtxt("snr_log.txt")
-print(f"mean SNR: {np.mean(s):5.2f}")
-EOF
+
 
 }
 
