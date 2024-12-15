@@ -80,6 +80,15 @@ function cp_translation_files {
     done
 }
 
+function mean_text_file {
+    file_name=#1
+    python3 <<EOF
+    import numpy as np
+    s=np.loadtxt(${file_name})
+    print(f"{np.mean(s):5.2f}")
+EOF
+}
+
 # process audio files and place in new dataset directory
 function process {
     pushd $source; flac=$(find . -name '*.flac'); popd
@@ -95,38 +104,64 @@ function process {
     ch_log=ch_log.txt
     snr_log=snr_log.txt
     rm -f ${snr_log}
-    for f in $flac
-    do
-        d=$(dirname $f)
-        mkdir -p ${dest}/${d}
-        if [ $mode == "ssb" ]; then
-          sox ${source}/${f} -t .s16 -r 8000 ${in}
-          # AGC and Hilbert compression
-          set_rms ${in} $setpoint_rms
-          analog_compressor  ${in} ${comp} ${comp_gain}
-          papr=$(measure_cpapr ${comp})
-          ch ${comp} - --No ${No}  2>${ch_log} | sox -t .s16 -r 8000 -c 1 - -r 16000 ${dest}/${f}
-          snr=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
-          echo $snr >> ${snr_log}
-          echo ${dest}/${f} ${snr} ${papr}
-#          python3 <<EOF
-#import numpy as np
-#s=np.loadtxt("snr_log.txt")
-#print(f"mean SNR: {np.mean(s):5.2f}")
-#EOF        
-        fi
-        if [ $mode == "rade_inf" ]; then
-          # todo some sort of ALC
-          # TODO add channel noise. calibrate for C/No (read C/No)
-          sox ${source}/${f} -t .s16 ${in}
-          ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth ${in} out.wav \
-          --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata
-          sox out.wav ${dest}/${f}   
-          echo ${dest}/${f}     
-        fi
-        # TODO use rade_enc/dec - will we need to sync/unsync every time?
 
-    done
+    if [ $mode == "ssb" ]; then
+    
+        for f in $flac
+        do
+            d=$(dirname $f)
+            mkdir -p ${dest}/${d}
+            sox ${source}/${f} -t .s16 -r 8000 ${in}
+            # AGC and Hilbert compression
+            set_rms ${in} $setpoint_rms
+            analog_compressor  ${in} ${comp} ${comp_gain}
+            papr=$(measure_cpapr ${comp})
+            ch ${comp} - --No ${No}  2>${ch_log} | sox -t .s16 -r 8000 -c 1 - -r 16000 ${dest}/${f}
+            snr=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
+            echo $snr >> ${snr_log}
+            echo ${dest}/${f} ${snr} ${papr}
+            print_mean_text_file ${snr_log}
+        done
+    fi        
+    
+    if [ $mode == "rade_inf" ]; then
+        # find length of each file
+        duration_log=""
+        flac_full=""
+        pushd $source;
+        for f in $flac
+        do
+          duration_log+=$(sox --info -D ${f})
+          duration_log+=" "
+          flac_full+=${source}/${f}
+          flac_full+=" "
+        done
+        popd; 
+        
+        # cat samples into one long input file
+        sox $flac_full -t .s16 ${in}
+
+        # process all samples as one file to save time
+        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth ${in} out.wav \
+        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata
+
+        # extract individual output files
+        duration_array=( ${duration_log} )
+        i=0
+        st=0
+        for f in $flac
+        do
+          dur=${duration_array[i]}
+          printf "%4d %s %5.2f %5.2f\n" $i $f $st $dur
+          ((i++))
+          if [ $i -eq ${#duration_array[@]} ]; then
+            sox out.wav ${dest}/${f} trim $st
+          else
+            sox out.wav ${dest}/${f} trim $st $dur
+          fi
+          st=$(python3 -c "print($st + $dur)")
+        done
+    fi
 
 
 }
