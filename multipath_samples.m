@@ -61,12 +61,14 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="")
       LCR_meas = LC/Nseconds
       subplot(211); hold on; stem(LC_log,sqrt(P)*ones(length(LC_log))); hold off; axis([0 Nsecplot*Rs 0 3]);
     end
-    printf("H file size is Nseconds*Rs*Nc*(4 bytes/sample) = %d*%d*%d*4 = %d bytes\n", Nseconds,Rs,Nc,Nseconds*Rs*Nc*4)
-    f=fopen(H_fn,"wb");
-    [r c] = size(H);
-    Hflat = reshape(H', 1, r*c);
-    fwrite(f, Hflat, 'float32');
-    fclose(f);
+    if length(H_fn)
+      printf("H file size is Nseconds*Rs*Nc*(4 bytes/sample) = %d*%d*%d*4 = %d bytes\n", Nseconds,Rs,Nc,Nseconds*Rs*Nc*4)
+      f=fopen(H_fn,"wb");
+      [r c] = size(H);
+      Hflat = reshape(H', 1, r*c);
+      fwrite(f, Hflat, 'float32');
+      fclose(f);
+    end
 
     if length(G_fn)
         % G matrix cols are G1 G2, rows timesteps, with hf_gain the first row,
