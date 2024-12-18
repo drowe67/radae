@@ -497,8 +497,8 @@ function plot_wer(ssb_awgn_fn,rade_awgn_fn, ssb_mpp_fn="",rade_mpp_fn="")
   hold on;
   plot(rade_awgn(:,2),rade_awgn(:,3),'g+-;RADE AWGN;');
   if length(ssb_mpp_fn)
-    plot(ssb_mpp(:,2),ssb_mpp(:,3),'bo-;SSB MPP;');
-    plot(rade_mpp(:,2),rade_mpp(:,3),'go-;RADE MPP;');
+    plot(ssb_mpp(:,2),ssb_mpp(:,3),'bo--;SSB MPP;');
+    plot(rade_mpp(:,2),rade_mpp(:,3),'go--;RADE MPP;');
   end
   hold off;
   axis([30,60,0,60]); grid; ylabel('WER %'); xlabel("C/No (dB)");
@@ -508,8 +508,8 @@ function plot_wer(ssb_awgn_fn,rade_awgn_fn, ssb_mpp_fn="",rade_mpp_fn="")
   hold on;
   plot(rade_awgn(:,1),rade_awgn(:,3),'g+-;RADE AWGN;');
   if length(ssb_mpp_fn)
-    plot(ssb_mpp(:,1),ssb_mpp(:,3),'bo-;SSB MPP;');
-    plot(rade_mpp(:,1),rade_mpp(:,3),'go-;RADE MPP;');
+    plot(ssb_mpp(:,1),ssb_mpp(:,3),'bo--;SSB MPP;');
+    plot(rade_mpp(:,1),rade_mpp(:,3),'go--;RADE MPP;');
   end
   hold off;
   axis([-5,20,0,60]); grid; ylabel('WER %'); xlabel("SNR3k (dB)");

@@ -177,7 +177,7 @@ function process {
         # find length of each file
         duration_log=""
         flac_full=""
-        pushd $source;
+        pushd $source > /dev/null;
         for f in $flac
         do
           duration_log+=$(sox --info -D ${f})
@@ -185,7 +185,7 @@ function process {
           flac_full+=${source}/${f}
           flac_full+=" "
         done
-        popd; 
+        popd > /dev/null; 
         
         # cat samples into one long input file
         sox $flac_full -t .s16 ${in}
@@ -221,7 +221,7 @@ function process {
         done
     fi
 
-    python3 asr_wer.py test-other -n $n_samples | tee > $asr_log
+    python3 asr_wer.py test-other -n $n_samples --model turbo | tee > $asr_log
     wer=$(tail -n1 $asr_log | tr -s ' ' | cut -d' ' -f2)
     printf "%-4s %5.2f %5.2f %5.2f\n" $mode $SNR_mean $CNo_mean $wer | tee -a $results
 }
