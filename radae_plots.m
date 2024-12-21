@@ -514,7 +514,7 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   plot(xmax-5,c(2),'ro;FARGAN;')
   plot(xmax-5,c(3),'k+;4kHz;')
   hold off;
-  axis([xmin,xmax,0,40]); grid; ylabel('WER %'); xlabel("C/No (dB)");
+  axis([xmin,xmax,0,40]); grid; ylabel('WER \%'); xlabel("C/No (dB)");
 
   # WER v SNR plot
   figure(2); clf;
@@ -528,13 +528,13 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   plot(xmax-5,c(2),'ro;FARGAN;')
   plot(xmax-5,c(3),'k+;4kHz;')
   hold off;
-  axis([xmin,xmax,0,40]); grid; ylabel('WER %'); xlabel("SNR3k (dB)");
+  axis([xmin,xmax,0,40]); grid; ylabel('WER \%'); xlabel("SNR3k (dB)");
 
 
   if length(png_fn)
     print("-dpng",png_fn,"-S800,600");
   end
   if length(epslatex)
-      print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
+      print_eps_restore(epslatex,"-S275,300",textfontsize,linewidth);
   end  
 end
