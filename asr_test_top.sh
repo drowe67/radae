@@ -3,7 +3,7 @@
 #
 # Top level ASR test script for AWGN and MPP channels
 set -x
-results_file=241219_asr
+results_file=241221_asr
 n=500
 
 function ssb {
@@ -27,6 +27,15 @@ function rade {
     cat ${results_file} | grep rade | sed -e "s/rade//" > tmp.txt
     mv tmp.txt ${results_file}
 }
+
+# run the controls
+controls_file=${results_file}_controls.txt
+rm -f ${controls_file}
+./asr_test.sh clean -n $n --results ${controls_file}
+./asr_test.sh fargan -n $n --results ${controls_file}
+./asr_test.sh 4kHz -n $n --results ${controls_file}
+./asr_test.sh ssb -n $n --results ${controls_file}
+./asr_test.sh rade -n $n --results ${controls_file}
 
 ssb  ${results_file}_awgn_ssb.txt  "-100 -38 -35 -32 -29 -26 -23 -20 -17"
 rade ${results_file}_awgn_rade.txt "100 15 10 5 2.5 0 -2.5"

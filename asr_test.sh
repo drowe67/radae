@@ -36,6 +36,7 @@ comp_gain=6
 results=asr_results.txt
 inference_args=""
 ch_args=""
+sil=0.5
 
 POSITIONAL=()
 while [[ $# -gt 0 ]]
@@ -142,6 +143,7 @@ function process {
     rm -f ${snr_log}
     CNo_log=CNo_log.txt
     rm -f ${CNo_log}
+    sox -n -r 16000 -c 1 /tmp/silence.wav trim 0.0 ${sil}
 
     if [ $mode == "ssb" ] || [ $mode == "4kHz" ]; then
         
@@ -195,8 +197,6 @@ function process {
         popd > /dev/null; 
         
         # cat samples into one long input file, insert 500ms at end of sample to allow for processing at output
-        sil=0.5
-        sox -n -r 16000 -c 1 /tmp/silence.wav trim 0.0 ${sil}
         sox $flac_full -t .s16 ${in}
 
         # process all samples as one file to save time
@@ -250,9 +250,9 @@ function process {
     python3 asr_wer.py test-other -n $n_samples --model turbo | tee > $asr_log
     wer=$(tail -n1 $asr_log | tr -s ' ' | cut -d' ' -f2)
     if [ $mode == "ssb" ] || [ $mode == "rade" ]; then
-      printf "%-4s %5.2f %5.2f %5.2f\n" $mode $SNR_mean $CNo_mean $wer | tee -a $results
+      printf "%-6s %5.2f %5.2f %5.2f\n" $mode $SNR_mean $CNo_mean $wer | tee -a $results
     else
-      printf "%-4s %5.2f\n" $mode $wer | tee -a $results
+      printf "%-6s %5.2f\n" $mode $wer | tee -a $results
     fi
 }
 

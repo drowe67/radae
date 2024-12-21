@@ -490,12 +490,14 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   rade_awgn_fn = sprintf("%s_asr_awgn_rade.txt",prefix_fn);
   ssb_mpp_fn = sprintf("%s_asr_mpp_ssb.txt",prefix_fn);
   rade_mpp_fn = sprintf("%s_asr_mpp_rade.txt",prefix_fn);
-  
+  controls_fn = sprintf("%s_asr_c.txt",prefix_fn);
+
   ssb_awgn = load(ssb_awgn_fn);
   rade_awgn = load(rade_awgn_fn);
   ssb_mpp = load(ssb_mpp_fn);
   rade_mpp = load(rade_mpp_fn);
-
+  c = load(controls_fn);
+  
   if length(epslatex)
     [textfontsize linewidth] = set_fonts();
   end
@@ -508,9 +510,9 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   plot(ssb_mpp(:,2),ssb_mpp(:,3),'bo--;SSB MPP;');
   plot(rade_mpp(:,2),rade_mpp(:,3),'go--;RADE MPP;');
   xmin=30; xmax=60;
-  plot([xmin xmax],[2.83 2.83],'r--;FARGAN;')
-  plot([xmin xmax],[3.11 3.11],'k-.;4kHz;')
-  plot([xmin xmax],[1.39 1.39],'c-;clean;')
+  plot(xmax-5,c(1),'cx;clean;')
+  plot(xmax-5,c(2),'ro;FARGAN;')
+  plot(xmax-5,c(3),'k+;4kHz;')
   hold off;
   axis([xmin,xmax,0,40]); grid; ylabel('WER %'); xlabel("C/No (dB)");
 
@@ -522,9 +524,9 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   plot(ssb_mpp(:,1),ssb_mpp(:,3),'bo--;SSB MPP;');
   plot(rade_mpp(:,1),rade_mpp(:,3),'go--;RADE MPP;');
   xmin=-5; xmax=20;
-  plot([xmin xmax],[2.83 2.83],'r--;FARGAN;')
-  plot([xmin xmax],[3.11 3.11],'k-.;4kHz;')
-  plot([xmin xmax],[1.39 1.39],'c-;clean;')
+  plot(xmax-5,c(1),'cx;clean;')
+  plot(xmax-5,c(2),'ro;FARGAN;')
+  plot(xmax-5,c(3),'k+;4kHz;')
   hold off;
   axis([xmin,xmax,0,40]); grid; ylabel('WER %'); xlabel("SNR3k (dB)");
 
