@@ -16,7 +16,7 @@ function print_help {
     echo
     echo "Automated Speech Recognition (ASR) dataset processing for Radio Autoencoder testing"
     echo
-    echo "  usage ./asr_test.sh ssb|rade [test option below]"
+    echo "  usage ./asr_test.sh ssb|rade|fargan|4kHz [test option below]"
     echo "  usage ./ota_test.sh ssb --No -30"
     echo "  usage ./ota_test.sh rade --EbNodB 10"
     echo
@@ -143,37 +143,45 @@ function process {
     CNo_log=CNo_log.txt
     rm -f ${CNo_log}
 
-    if [ $mode == "ssb" ]; then
+    if [ $mode == "ssb" ] || [ $mode == "4kHz" ]; then
         
         fading_adv=0
         for f in $flac
         do
             d=$(dirname $f)
             mkdir -p ${dest}/${d}
-            sox ${source}/${f} -t .s16 -r 8000 ${in}
-            # AGC and Hilbert compression
-            set_rms ${in} $setpoint_rms
-            analog_compressor  ${in} ${comp} ${comp_gain} 2>/dev/null
-            ch ${comp} - --No ${No} ${ch_args} --fading_adv ${fading_adv} 2>${ch_log} | sox -t .s16 -r 8000 -c 1 - -r 16000 ${dest}/${f}
-            grep "Fading file finished" $ch_log
-            if [ $? -eq 0 ]; then
-                echo "Error - fading file too short after" $fading_adv " seconds"
-                exit 1
-            fi
-            snr=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
-            CNo=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f5)
-            echo $snr >> ${snr_log}
-            echo $CNo >> ${CNo_log}
 
-            # advance through fading simulation file
-            dur=$(sox --info -D ${source}/${f})
-            fading_adv=$(python3 -c "print(${fading_adv} + ${dur})")
+            if [ $mode == "ssb" ]; then
+                sox ${source}/${f} -t .s16 -r 8000 ${in}
+                # AGC and Hilbert compression
+                set_rms ${in} $setpoint_rms
+                analog_compressor  ${in} ${comp} ${comp_gain} 2>/dev/null
+                ch ${comp} - --No ${No} ${ch_args} --fading_adv ${fading_adv} 2>${ch_log} | sox -t .s16 -r 8000 -c 1 - -r 16000 ${dest}/${f}
+                grep "Fading file finished" $ch_log
+                if [ $? -eq 0 ]; then
+                    echo "Error - fading file too short after" $fading_adv " seconds"
+                    exit 1
+                fi
+                snr=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
+                CNo=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f5)
+                echo $snr >> ${snr_log}
+                echo $CNo >> ${CNo_log}
+
+                # advance through fading simulation file
+                dur=$(sox --info -D ${source}/${f})
+                fading_adv=$(python3 -c "print(${fading_adv} + ${dur})")
+            else
+              # $mode == "4kHz" (4kHz bandwidth, representing ideal Fs=8kHz vocoder)
+              sox ${source}/${f} -r 8000 -t .s16 -c 1 - | sox -r 8000 -t .s16 -c 1 - -r 16000 ${dest}/${f}
+            fi
         done
-        SNR_mean=$(print_mean_text_file ${snr_log})
-        CNo_mean=$(print_mean_text_file ${CNo_log})
+        if [ $mode == "ssb" ]; then
+          SNR_mean=$(print_mean_text_file ${snr_log})
+          CNo_mean=$(print_mean_text_file ${CNo_log})
+        fi
     fi
     
-    if [ $mode == "rade" ]; then
+    if [ $mode == "rade" ] || [ $mode == "fargan" ]; then
         # find length of each file
         duration_log=""
         flac_full=""
@@ -182,26 +190,34 @@ function process {
         do
           duration_log+=$(sox --info -D ${f})
           duration_log+=" "
-          flac_full+=${source}/${f}
-          flac_full+=" "
+          flac_full+="${source}/${f} /tmp/silence.wav "
         done
         popd > /dev/null; 
         
-        # cat samples into one long input file
+        # cat samples into one long input file, insert 500ms at end of sample to allow for processing at output
+        sil=0.5
+        sox -n -r 16000 -c 1 /tmp/silence.wav trim 0.0 ${sil}
         sox $flac_full -t .s16 ${in}
 
         # process all samples as one file to save time
-        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth ${in} out.wav \
-        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata  --time_offset -16 \
-        --EbNodB $EbNodB ${inference_args} | tee ${rade_log}
-        grep "Multipath Doppler spread file too short" $rade_log
-        if [ $? -eq 0 ]; then
-            echo "Error - fading file too short"
-            exit 1
-        fi
 
-        SNR_mean=$(cat $rade_log | grep "Measured" | tr -s ' ' | cut -d' ' -f4)
-        CNo_mean=$(cat $rade_log | grep "Measured" | tr -s ' ' | cut -d' ' -f3)
+        if [ $mode == "rade" ]; then
+            ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth ${in} out.wav \
+            --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata  --time_offset -16 \
+            --EbNodB $EbNodB ${inference_args} | tee ${rade_log}
+            grep "Multipath Doppler spread file too short" $rade_log
+            if [ $? -eq 0 ]; then
+                echo "Error - fading file too short"
+                exit 1
+            fi
+
+            SNR_mean=$(cat $rade_log | grep "Measured" | tr -s ' ' | cut -d' ' -f4)
+            CNo_mean=$(cat $rade_log | grep "Measured" | tr -s ' ' | cut -d' ' -f3)
+        else
+            # $mode == "fargan"
+            ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth ${in} out.wav --auxdata --passthru
+            #sox -t .s16 -r 16000 -c 1 ${in} out.wav
+        fi
 
         # extract individual output files
         duration_array=( ${duration_log} )
@@ -210,6 +226,7 @@ function process {
         for f in $flac
         do
           dur=${duration_array[i]}
+          dur=$(python3 -c "print($dur + ${sil})")
           #printf "%4d %s %5.2f %5.2f\n" $i $f $st $dur
           ((i++))
           if [ $i -eq ${#duration_array[@]} ]; then
@@ -221,9 +238,22 @@ function process {
         done
     fi
 
+    # test mode that just copies files
+    if [ $mode == "clean" ]; then
+        for f in $flac
+        do
+          cp ${source}/${f} ${dest}/${f}
+        done
+        
+    fi
+
     python3 asr_wer.py test-other -n $n_samples --model turbo | tee > $asr_log
     wer=$(tail -n1 $asr_log | tr -s ' ' | cut -d' ' -f2)
-    printf "%-4s %5.2f %5.2f %5.2f\n" $mode $SNR_mean $CNo_mean $wer | tee -a $results
+    if [ $mode == "ssb" ] || [ $mode == "rade" ]; then
+      printf "%-4s %5.2f %5.2f %5.2f\n" $mode $SNR_mean $CNo_mean $wer | tee -a $results
+    else
+      printf "%-4s %5.2f\n" $mode $wer | tee -a $results
+    fi
 }
 
 cp_translation_files

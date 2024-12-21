@@ -4,7 +4,7 @@
 # Top level ASR test script for AWGN and MPP channels
 set -x
 results_file=241219_asr
-n=100
+n=500
 
 function ssb {
     local results_file=$1
@@ -28,10 +28,7 @@ function rade {
     mv tmp.txt ${results_file}
 }
 
-#ssb  ${results_file}_awgn_ssb.txt  "-100 -39"
-#ssb  ${results_file}_mpp_ssb.txt   "-100 -44" "--g_file g_mpp.f32"
-
-ssb  ${results_file}_awgn_ssb.txt  "-100 -39 -36 -33 -30 -25 -20"
+ssb  ${results_file}_awgn_ssb.txt  "-100 -38 -35 -32 -29 -26 -23 -20 -17"
 rade ${results_file}_awgn_rade.txt "100 15 10 5 2.5 0 -2.5"
-ssb  ${results_file}_mpp_ssb.txt   "-100 -44 -41 -39 -36 -33 -30" "--g_file g_mpp.f32"
+ssb  ${results_file}_mpp_ssb.txt   "-100 -44 -39 -36 -33 -30 -27" "--g_file g_mpp.f32"
 rade ${results_file}_mpp_rade.txt  "100 15 10 5 2.5 0" "--g_file g_mpp.f32"
