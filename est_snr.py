@@ -1,7 +1,7 @@
 """
 /*
   Prototyping code to test estimation of SNR from off air RADAE signals, 
-  see radio_ae.pdf "SNR Estimation" section.
+  using pilot statistics.
   
   Copyright (c) 2024 by David Rowe */
 
@@ -42,60 +42,61 @@ from radae import RADAE
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
 device = torch.device("cpu")
 
-def snr_est_test(model, target_SNR):
+def snr_est_test(model, target_EsNo):
 
-   M = model.M
-   p_cp = np.array(model.p_cp)                              # sequence of pilot samples including CP
-   time_offset = -16
-   p = p_cp[model.Ncp+time_offset:time_offset]              # subset of M samples
-   
+   Nc = model.Nc
+   P = np.array(model.pilot_gain*model.P) 
    # channel simulation   
-   phase = np.random.rand(1)*2*np.pi                        # random channel phase
-   mag = 1 + np.random.rand(1)*99                           # random channel gain of 1..100
-   g = mag*np.exp(1j*phase)                                 # channel gain/phase
-   tx = p*g
+   mag = 1 + np.random.rand(1)*99
+   g = 1
+   tx_sym = P*g
  
-   S = np.dot(tx,np.conj(tx))                               # signal power/M samples
-   N = S/target_SNR                                         # noise power/M samples
+   Es = np.dot(tx_sym,np.conj(tx_sym))/Nc
+   No = Es/target_EsNo
 
    # sequence of noise samples
-   sigma = np.sqrt(N/M)/(2**0.5)                            # noise std dev per sample
-   n = sigma*(np.random.normal(size=M) + 1j*np.random.normal(size=M))
-   r = g*p + n
-   
-   N_actual = np.sum(np.conj(n)*n)
-   SNR_actual = S/N_actual                                  # will vary slightly from target
+   sigma = np.sqrt(No)/(2**0.5)   
+   n = sigma*(np.random.normal(size=Nc) + 1j*np.random.normal(size=Nc))
+   rx_sym = g*P + n
 
-   SNR_est = model.est_snr(torch.tensor(r, dtype=torch.complex64), time_offset)
+   No_actual = np.sum(np.conj(n)*n)/Nc
+   EsNo_actual = Es/No_actual
 
-   return SNR_actual.real, SNR_est.real
+   Ct_sq = np.abs(np.dot(np.conj(rx_sym),P))**2/np.dot(np.conj(rx_sym),rx_sym)
+   EsNo_est = Ct_sq/(np.dot(np.conj(P),P) - Ct_sq)
+
+   return EsNo_actual.real, EsNo_est.real
 
 # Bring up a RADAE model just to generate the pilot sequence p 
-latent_dim = 40
+latent_dim = 80
 num_features = 20
 num_used_features = 20
-model = RADAE(num_features, latent_dim, EbNodB=100, rate_Fs=True, pilots=True, cyclic_prefix=0.004)
+model = RADAE(num_features, latent_dim, EbNodB=100, rate_Fs=True, pilots=True, cyclic_prefix=0.004, bottleneck=3)
 
-"""
- TODO 
- 1. Consider sweeping over time shifted p to see effect of mis-alignment
- 2. Consider running on time shifted p to match timing offset and avoid ISI
-"""
+def single():
+   aEsNodB = 10
+   EsNo_actual, EsNo_est = snr_est_test(model, 10**(aEsNodB/10))
+   print(f"SNR_actual: {10*np.log10(EsNo_actual):5.2f} dB SNR_est: {10*np.log10(EsNo_est):5.2f} dB")
 
-SNRdB = []
-SNR_estdB = []
 
-for i in range(25):
-   for aSNRdB in np.arange(-10,20):
-      SNR_actual, SNR_est = snr_est_test(model, 10**(aSNRdB/10))
-      SNRdB.append(aSNRdB)
-      SNR_estdB.append(10*np.log10(SNR_est))
+def sweep():
+   SNRdB = []
+   SNR_estdB = []
 
-plt.figure(1)
-plt.plot(SNRdB, SNR_estdB,'b+')
-plt.grid()
-plt.show()
+   for i in range(25):
+      for aSNRdB in np.arange(-5,15):
+         SNR_actual, SNR_est = snr_est_test(model, 10**(aSNRdB/10))
+         SNRdB.append(aSNRdB)
+         SNR_estdB.append(10*np.log10(SNR_est))
 
-# save test file of test points for Latex plotting in Octave radae_plots.m:est_snr_plot()
-test_points = np.transpose(np.array((SNRdB,SNR_estdB)))
-np.savetxt('est_snr.txt',test_points,delimiter='\t')
+   plt.figure(1)
+   plt.plot(SNRdB, SNR_estdB,'b+')
+   plt.grid()
+   plt.show()
+
+   # save test file of test points for Latex plotting in Octave radae_plots.m:est_snr_plot()
+   test_points = np.transpose(np.array((SNRdB,SNR_estdB)))
+   np.savetxt('est_snr.txt',test_points,delimiter='\t')
+
+#single()
+sweep()
