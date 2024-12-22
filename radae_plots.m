@@ -530,7 +530,6 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   hold off;
   axis([xmin,xmax,0,40]); grid; ylabel('WER \%'); xlabel("SNR3k (dB)");
 
-
   if length(png_fn)
     print("-dpng",png_fn,"-S800,600");
   end

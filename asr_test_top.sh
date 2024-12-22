@@ -36,6 +36,8 @@ rm -f ${controls_file}
 ./asr_test.sh 4kHz -n $n --results ${controls_file}
 ./asr_test.sh ssb -n $n --results ${controls_file}
 ./asr_test.sh rade -n $n --results ${controls_file}
+# strip off all but last column for Octave plotting
+cat ${controls_file} | awk '{print $NF}' > ${results_file}_c.txt
 
 ssb  ${results_file}_awgn_ssb.txt  "-100 -38 -35 -32 -29 -26 -23 -20 -17"
 rade ${results_file}_awgn_rade.txt "100 15 10 5 2.5 0 -2.5"
