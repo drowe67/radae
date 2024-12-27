@@ -916,6 +916,53 @@ Further work:
 \item For the purpose of stored file experiments it is acceptable to send a separate signals (e.g. a carrier or set of known symbols) a few seconds before or after the test signal.
 \end{itemize}
 
+\section{SNR Estimator Attempt 2}
+
+The goal is to estimate SNR over a fading channel over a T second window.  Note this is not the expected value of the SNR, as $T$ may be small compared to the fading period. At the receiver, the power of each carrier is time varying, but noise power (and spectral density) constant.  We would like to use the pilots to estimate SNR for the time window. The signal power $S$ over the time window is given by:
+\begin{equation}
+\begin{split}
+S &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |P_c^n|^2 \\
+P_c^n &= h_c^nP_c
+\end{split}
+\end{equation}
+where $P_c^n$ is the received freq domain pilot sample of carrier $c$ at time step $n$, $N_w=T/T_f$ is the number of pilot vectors in the time window, $P_c$ is the real valued transmitted pilot for carrier $c$, and $h_c^n$ is complex fading channel coefficient for carrier $c$ at time $n$.  Given $|P_c|=g$ it can be shown that:
+\begin{equation}
+\begin{split}
+S &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c}|h_c^nP_c|^2 \\
+S &= gN_c\sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c}|h_c^n|^2
+\end{split}
+\end{equation}
+
+At the receiver was have the pilots symbols with additive noise:
+\begin{equation}
+\hat{P}_c^n = h_c^nP_c + \mathcal{N}(0,\sigma^2)
+\end{equation}
+where $\mathcal{N}(0,\sigma^2)$ is a complex Gaussian noise sample with power equally distributed between the real and imaginary parts. $\hat{P}_c^n $ has power:
+\begin{equation}
+\begin{split}
+S_1 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} \left(|h_c^nP_c|^2 + 2Re\{h_c^nP_c\mathcal{N}(0,\sigma^2)\} + |\mathcal{N}(0,\sigma^2)|^2\right) \\
+    &\approx \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |h_c^nP_c|^2 + \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |\mathcal{N}(0,\sigma^2)|^2 \\
+    &= S + N
+\end{split}
+\end{equation} 
+The approximation is due to the second term having an expected value of zero and therefore being small compared to the first and third term.  At the receiver we use least squares phase estimation and correction to obtain the phase corrected pilots:
+\begin{equation}
+\hat{R}_c^n = |h_c^n|P_c e^{j\mathcal{N}(0,\alpha)} + \mathcal{N}(0,\sigma^2)
+\end{equation}
+where $\mathcal{N}(0,\alpha)$ is a small, random, zero mean phase error. Note $\hat{R}_c^n$ resemble BPSK symbols on the real axis with additive complex noise. Consider the power of the imaginary component, and using a similar approximation to above: 
+\begin{equation}
+\begin{split}
+S_2 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{\hat{R}_c^n\}|^2 \\
+    &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{h_c^nP_ce^{j\mathcal{N}(0,\alpha)}\} + Im\{\mathcal{N}(0,\sigma^2)\}|^2 \\
+    &\approx \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{\mathcal{N}(0,\sigma^2)\}|^2 \\
+    &= N/2
+\end{split}
+\end{equation}
+We can therefore obtain an approximation of the (linear) signal to noise ratio as:
+\begin{equation}
+\frac{S}{N} = \frac{S_1}{2S_2} - 1
+\end{equation}
+
 \section{Acquisition}
 
 In a practical PTT voice system a transmitter will start and stop transmissions at a time unknown to the remote receiver.  When a received signal is present, it will have unknown timing and frequency offsets. An acquisition system is required to determine if a valid signal is present, and to determine estimates of the frequency and timing offsets.  It must also determine when transmission ceases, to prevent decoding when no signal is present.
