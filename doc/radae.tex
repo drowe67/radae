@@ -918,14 +918,14 @@ Further work:
 
 \section{SNR Estimator Attempt 2}
 
-The goal is to estimate SNR over a fading channel over a T second window.  Note this is not the expected value of the SNR, as $T$ may be small compared to the fading period. At the receiver, the power of each carrier is time varying, but noise power (and spectral density) constant.  We would like to use the pilots to estimate SNR for the time window. The signal power $S$ over the time window is given by:
+The goal is to estimate SNR over a multipath channel over a T second window.  Note this is not the expected value of the SNR, as $T$ may be small compared to the fading period. At the receiver, the power of each OFDM carrier is time varying, but noise power (and spectral density) constant.  We would like to use the pilots to estimate SNR for the time window. At the receiver, the signal power $S$ over the time window is given by:
 \begin{equation}
 \begin{split}
 S &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |P_c^n|^2 \\
 P_c^n &= h_c^nP_c
 \end{split}
 \end{equation}
-where $P_c^n$ is the received freq domain pilot sample of carrier $c$ at time step $n$, $N_w=T/T_f$ is the number of pilot vectors in the time window, $P_c$ is the real valued transmitted pilot for carrier $c$, and $h_c^n$ is complex fading channel coefficient for carrier $c$ at time $n$.  Given $|P_c|=g$ it can be shown that:
+where $P_c^n$ is the received freq domain pilot of carrier $c$ at time step $n$, $N_w=T/T_f$ is the number of pilot vectors in the time window, $P_c$ is the real valued transmitted pilot for carrier $c$, and $h_c^n$ is complex fading channel coefficient for carrier $c$ at time $n$.  Given $|P_c|=g$ it can be shown that:
 \begin{equation}
 \begin{split}
 S &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c}|h_c^nP_c|^2 \\
@@ -933,15 +933,17 @@ S &= gN_c\sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c}|h_c^n|^2
 \end{split}
 \end{equation}
 
-At the receiver was have the pilots symbols with additive noise:
+In practice, at the receiver we have the received pilots symbols with additive noise:
 \begin{equation}
 \hat{P}_c^n = h_c^nP_c + \mathcal{N}(0,\sigma^2)
 \end{equation}
 where $\mathcal{N}(0,\sigma^2)$ is a complex Gaussian noise sample with power equally distributed between the real and imaginary parts. $\hat{P}_c^n $ has power:
 \begin{equation}
+\label{eq:snr2_signal_noise}
 \begin{split}
 S_1 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} \left(|h_c^nP_c|^2 + 2Re\{h_c^nP_c\mathcal{N}(0,\sigma^2)\} + |\mathcal{N}(0,\sigma^2)|^2\right) \\
     &\approx \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |h_c^nP_c|^2 + \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |\mathcal{N}(0,\sigma^2)|^2 \\
+    &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |h_c^nP_c|^2 + N_w N_c |\mathcal{N}(0,\sigma^2)|^2 \\
     &= S + N
 \end{split}
 \end{equation} 
@@ -949,8 +951,9 @@ The approximation is due to the second term having an expected value of zero and
 \begin{equation}
 \hat{R}_c^n = |h_c^n|P_c e^{j\mathcal{N}(0,\alpha)} + \mathcal{N}(0,\sigma^2)
 \end{equation}
-where $\mathcal{N}(0,\alpha)$ is a small, random, zero mean phase error. Note $\hat{R}_c^n$ resemble BPSK symbols on the real axis with additive complex noise. Consider the power of the imaginary component, and using a similar approximation to above: 
+where $\mathcal{N}(0,\alpha)$ is a small, random, zero mean phase error. We note that given the pilots $P_c$ are real, a scatter diagram plot of $\hat{R}_c^n$ resembles BPSK symbols on the real axis with additive complex noise. The magnitude of the fading $|h_c^n|$ will cause the symbols to move along the real axis. The imaginary component is not affected by fading, only the channel noise. Consider the power of the imaginary component, and applying a similar approximation to above: 
 \begin{equation}
+\label{eq:snr2_noise}
 \begin{split}
 S_2 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{\hat{R}_c^n\}|^2 \\
     &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{h_c^nP_ce^{j\mathcal{N}(0,\alpha)}\} + Im\{\mathcal{N}(0,\sigma^2)\}|^2 \\
@@ -958,7 +961,7 @@ S_2 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{\hat{R}_c^n\}|^2 \\
     &= N/2
 \end{split}
 \end{equation}
-We can therefore obtain an approximation of the (linear) signal to noise ratio as:
+Using (\ref{eq:snr2_signal_noise}) and (\ref{eq:snr2_noise}) we can obtain an approximation of the (linear) signal to noise ratio as:
 \begin{equation}
 \frac{S}{N} = \frac{S_1}{2S_2} - 1
 \end{equation}
