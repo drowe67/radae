@@ -941,6 +941,7 @@ where $\mathcal{N}(0,\sigma^2)$ is a complex Gaussian noise sample with power eq
 \begin{equation}
 \label{eq:snr2_signal_noise}
 \begin{split}
+S_1 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |\hat{P}_c^n|^2 \\
 S_1 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} \left(|h_c^nP_c|^2 + 2Re\{h_c^nP_c\mathcal{N}(0,\sigma^2)\} + |\mathcal{N}(0,\sigma^2)|^2\right) \\
     &\approx \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |h_c^nP_c|^2 + \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |\mathcal{N}(0,\sigma^2)|^2 \\
     &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |h_c^nP_c|^2 + N_w N_c |\mathcal{N}(0,\sigma^2)|^2 \\
@@ -956,7 +957,7 @@ where $\mathcal{N}(0,\alpha)$ is a small, random, zero mean phase error. We note
 \label{eq:snr2_noise}
 \begin{split}
 S_2 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{\hat{R}_c^n\}|^2 \\
-    &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{h_c^nP_ce^{j\mathcal{N}(0,\alpha)}\} + Im\{\mathcal{N}(0,\sigma^2)\}|^2 \\
+    &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{|h_c^n|P_ce^{j\mathcal{N}(0,\alpha)}\} + Im\{\mathcal{N}(0,\sigma^2)\}|^2 \\
     &\approx \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{\mathcal{N}(0,\sigma^2)\}|^2 \\
     &= N/2
 \end{split}

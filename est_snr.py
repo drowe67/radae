@@ -42,28 +42,52 @@ from radae import RADAE
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
 device = torch.device("cpu")
 
-def snr_est_test(model, target_EsNo, h):
+def snr_est_test(model, snr_target, h, Nw):
 
    Nc = model.Nc
-   P = np.array(model.pilot_gain*model.P) 
-   tx_sym = P
- 
-   Es = np.dot(tx_sym,np.conj(tx_sym))/Nc
-   No = Es/target_EsNo
+   Pc = np.array(model.pilot_gain*model.P)
+   print(np.sum(Pc))
+
+   # matrix of transmitted pilots for time window
+   # time steps across rows, carrioer across cols
+   Pcn = np.zeros((Nw,Nc), dtype=np.complex64)
+   for n in np.arange(Nw):
+      Pcn[n,:]= Pc
 
    # sequence of noise samples
+   Es = np.dot(Pc,np.conj(Pc))/Nc               # energy per symbol
+   No = Es/snr_target                           # noise per symbol
    sigma = np.sqrt(No)/(2**0.5)   
-   n = sigma*(np.random.normal(size=Nc) + 1j*np.random.normal(size=Nc))
-   rx_sym = tx_sym*h + n
-   #print(P[0],h[0],rx_sym.shape,rx_sym[0])
+   n = sigma*(np.random.normal(size=(Nw,Nc)) + 1j*np.random.normal(size=(Nw,Nc)))
+   
+   # matrix of received pilots plus noise samples
+   Pcn_hat = h*Pcn + n
 
-   No_actual = np.sum(np.conj(n)*n)/Nc
-   EsNo_actual = Es/No_actual
+   # phase corrected received pilots
+   Rcn_hat = np.abs(h)*Pcn + n
 
-   Ct_sq = np.abs(np.dot(np.conj(rx_sym),P))**2/np.dot(np.conj(rx_sym),rx_sym)
-   EsNo_est = Ct_sq/(np.dot(np.conj(P),P) - Ct_sq)
+   # remove pilot modulation to map to one point
+   Z=Rcn_hat/Pcn
 
-   return EsNo_actual.real, EsNo_est.real, rx_sym
+   # calculate SNR est
+   S1 = np.abs(np.sum(Z))
+   S2 = np.sum(Z.imag*np.conj(Z.imag))
+   print(np.sum(Z))
+   print(f"S1: {S1:f} S2: {S2}")
+   
+   snr_est = S1/(2*S2)
+ 
+   # actual snr as check, should be same as snr_target
+   snr_check = np.sum(Pcn*np.conj(Pcn))/np.sum(n*np.conj(n))
+   print(f"S: {np.sum(Pcn*np.conj(Pcn)).real:f} N: {np.sum(n*np.conj(n)).real}")
+   print(f"snr:target {snr_target:5.2f} snr_check: {snr_check.real:5.2f} snr_est: {snr_est:5.2f}")
+   plt.figure(1)
+   plt.plot(Rcn_hat.real, Rcn_hat.imag,'b+')
+   plt.plot(Z.real, Z.imag,'r+')
+   plt.show()
+   quit()
+
+   return snr_est,snr_check
 
 # Bring up a RADAE model
 latent_dim = 80
@@ -72,30 +96,36 @@ num_used_features = 20
 model = RADAE(num_features, latent_dim, EbNodB=100, rate_Fs=True, pilots=True, cyclic_prefix=0.004, bottleneck=3)
 
 # single timestep test
-def single(aEsNodB,h):
-   EsNo_actual, EsNo_est, rx_sym = snr_est_test(model, 10**(aEsNodB/10), h)
-   print(f"EsNodB_actual: {10*np.log10(EsNo_actual):5.2f} EsNodB_est: {10*np.log10(EsNo_est):5.2f}")
+def single(snrdB, h, Nw):
+   snr_est, snr_check = snr_est_test(model, 10**(snrdB/10), h, Nw)
+   #print(f"snrdB: {snrdB:5.2f} snrdB_check: {10*np.log10(snr_check):5.2f} snrdB_est: {10*np.log10(snr_est):5.2f}")
+   print(f"snrdB: {snrdB:5.2f} snrdB_check: {10*np.log10(snr_check):5.2f}")
 
 # run over a sequence of timesteps
-def sequence(Ntimesteps, aEsNodB, h):
+def sequence(Ntimesteps, EsNodB, h):
    rx_sym = np.zeros((Ntimesteps,model.Nc),dtype=np.csingle)
 
-   print(np.mean(h**2))
-   sum_EsNodB = 0
-   sum_EsNodB_est = 0
+   print(np.mean(h[:Ntimesteps,:]**2))
+   #sum_EsNodB = 0
+   #sum_EsNodB_est = 0
+   sum_Ct_sq = 0
 
    for i in range(Ntimesteps):
-      EsNo_actual, EsNo_est, arx_sym = snr_est_test(model, 10**(aEsNodB/10), h[i,:])
+      Ct_sq, arx_sym = snr_est_test(model, 10**(EsNodB/10), h[i,:])
       #print(f"EsNodB_actual: {10*np.log10(EsNo_actual):5.2f} EsNodB_est: {10*np.log10(EsNo_est):5.2f}")
-      sum_EsNodB += 10*np.log10(EsNo_actual)
-      sum_EsNodB_est += 10*np.log10(EsNo_est)
+      #sum_EsNodB += 10*np.log10(EsNo_actual)
+      #sum_EsNodB_est += 10*np.log10(EsNo_est)
+      sum_Ct_sq += Ct_sq.real
       rx_sym[i,:] = arx_sym
    
-   EsNodB = sum_EsNodB/Ntimesteps
-   EsNodB_est = sum_EsNodB_est/Ntimesteps
-   print(f"EsNodB_actual: {EsNodB:5.2f} EsNodB_est: {EsNodB_est:5.2f}")
+   Ct_sq = sum_Ct_sq/Ntimesteps
+   P = np.array(model.pilot_gain*model.P) 
+   EsNo_est = Ct_sq/(np.dot(np.conj(P),P) - Ct_sq)
+   print(Ct_sq, EsNo_est)
+   EsNodB_est = 10*np.log10(EsNo_est)
+   print(f"EsNodB: {EsNodB:5.2f} EsNodB_est: {EsNodB_est:5.2f}")
  
-   return  EsNodB, EsNodB_est, rx_sym
+   return  EsNodB_est, rx_sym
 
 # sweep across SNRs
 def sweep(Ntimesteps, h):
@@ -104,7 +134,7 @@ def sweep(Ntimesteps, h):
    EsNodB_est = []
    r = range(-5,15)
    for aEsNodB in r:
-      aEsNodB, aEsNodB_est, tx_sym = sequence(Ntimesteps, aEsNodB, h)
+      aEsNodB_est, tx_sym = sequence(Ntimesteps, aEsNodB, h)
       EsNodB = np.append(EsNodB, aEsNodB)
       EsNodB_est = np.append(EsNodB_est, aEsNodB_est)
 
@@ -119,24 +149,28 @@ def sweep(Ntimesteps, h):
    np.savetxt('est_snr.txt',test_points,delimiter='\t')
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--EsNodB', type=float, default=10.0, help='EsNodB set point')
-parser.add_argument('--single', action='store_true', help='single EsNodB test')
+parser.add_argument('--snrdB', type=float, default=10.0, help='snrdB set point')
+parser.add_argument('--single', action='store_true', help='single snrdB test')
 parser.add_argument('--sequence', action='store_true', help='run over a sequence of timesteps')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath samples, rate Rs time steps by Nc carriers .f32 format')
-parser.add_argument('--Nt', type=int, default=50, help='Number of timesteps')
+parser.add_argument('-T', type=float, default=1.0, help='length of time window for estimate (default 1.0 sec)')
 args = parser.parse_args()
+
+Nw = int(args.T // model.Tmf)
 
 if len(args.h_file):
    h = np.fromfile(args.h_file,dtype=np.float32)
    h = h.reshape((-1,model.Nc))
+   # sample once every modem frame
+   h = h[:model.Ns+1:]
 else:
-   h = np.ones((args.Nt,model.Nc))
+   h = 0.5*np.ones((Nw,model.Nc))
 print(h.shape)
 
 if args.single:
-   single(args.EsNodB,h[0,:])
+   single(args.snrdB,h, Nw)
 elif args.sequence:
-   EsNodB, EsNodB_est, rx_sym = sequence(args.Nt, args.EsNodB, h)
+   snrdB_est, rx_sym = sequence(args.snrdB, h, Nw)
    #print(rx_sym.dtype, rx_sym.shape)
 
    plt.figure(1)
