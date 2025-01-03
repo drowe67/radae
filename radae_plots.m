@@ -440,6 +440,7 @@ function test_phase_est
   plot(theta, phi, "r-;phi;")
   hold off
 endfunction
+
 function compare_pitch_corr(wav_fn,feat1_fn,feat2_fn,png_feat_fn="")
   Fs=16000;
   s=load_raw(wav_fn);
@@ -482,4 +483,57 @@ function plot_sample_spec(wav_fn,png_spec_fn="")
   if length(png_spec_fn)
     print("-dpng",png_spec_fn,"-S800,600");
   end
+end
+
+function plot_wer(prefix_fn, png_fn="", epslatex="")
+  ssb_awgn_fn = sprintf("%s_asr_awgn_ssb.txt",prefix_fn);
+  rade_awgn_fn = sprintf("%s_asr_awgn_rade.txt",prefix_fn);
+  ssb_mpp_fn = sprintf("%s_asr_mpp_ssb.txt",prefix_fn);
+  rade_mpp_fn = sprintf("%s_asr_mpp_rade.txt",prefix_fn);
+  controls_fn = sprintf("%s_asr_c.txt",prefix_fn);
+
+  ssb_awgn = load(ssb_awgn_fn);
+  rade_awgn = load(rade_awgn_fn);
+  ssb_mpp = load(ssb_mpp_fn);
+  rade_mpp = load(rade_mpp_fn);
+  c = load(controls_fn);
+  
+  if length(epslatex)
+    [textfontsize linewidth] = set_fonts();
+  end
+
+  # WER v C/No plot
+  figure(1); clf;
+  plot(ssb_awgn(:,2),ssb_awgn(:,3),'b+-;SSB AWGN;');
+  hold on;
+  plot(rade_awgn(:,2),rade_awgn(:,3),'g+-;RADE AWGN;');
+  plot(ssb_mpp(:,2),ssb_mpp(:,3),'bo--;SSB MPP;');
+  plot(rade_mpp(:,2),rade_mpp(:,3),'go--;RADE MPP;');
+  xmin=30; xmax=60;
+  plot(xmax-5,c(1),'cx;clean;')
+  plot(xmax-5,c(2),'ro;FARGAN;')
+  plot(xmax-5,c(3),'k+;4kHz;')
+  hold off;
+  axis([xmin,xmax,0,40]); grid; ylabel('WER \%'); xlabel("C/No (dB)");
+
+  # WER v SNR plot
+  figure(2); clf;
+  plot(ssb_awgn(:,1),ssb_awgn(:,3),'b+-;SSB AWGN;');
+  hold on;
+  plot(rade_awgn(:,1),rade_awgn(:,3),'g+-;RADE AWGN;');
+  plot(ssb_mpp(:,1),ssb_mpp(:,3),'bo--;SSB MPP;');
+  plot(rade_mpp(:,1),rade_mpp(:,3),'go--;RADE MPP;');
+  xmin=-5; xmax=20;
+  plot(xmax-5,c(1),'cx;clean;')
+  plot(xmax-5,c(2),'ro;FARGAN;')
+  plot(xmax-5,c(3),'k+;4kHz;')
+  hold off;
+  axis([xmin,xmax,0,40]); grid; ylabel('WER \%'); xlabel("SNR3k (dB)");
+
+  if length(png_fn)
+    print("-dpng",png_fn,"-S800,600");
+  end
+  if length(epslatex)
+      print_eps_restore(epslatex,"-S275,300",textfontsize,linewidth);
+  end  
 end
