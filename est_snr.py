@@ -46,46 +46,47 @@ def snr_est_test(model, snr_target, h, Nw):
 
    Nc = model.Nc
    Pc = np.array(model.pilot_gain*model.P)
-   print(np.sum(Pc))
 
    # matrix of transmitted pilots for time window
-   # time steps across rows, carrioer across cols
+   # time steps across rows, carrier across cols
    Pcn = np.zeros((Nw,Nc), dtype=np.complex64)
    for n in np.arange(Nw):
       Pcn[n,:]= Pc
 
    # sequence of noise samples
-   Es = np.dot(Pc,np.conj(Pc))/Nc               # energy per symbol
+   Es = np.sum(Pc**2)/Nc                        # energy per symbol
    No = Es/snr_target                           # noise per symbol
    sigma = np.sqrt(No)/(2**0.5)   
    n = sigma*(np.random.normal(size=(Nw,Nc)) + 1j*np.random.normal(size=(Nw,Nc)))
-   
+   print(Es,No,sigma,np.var(n),np.var(Pcn), np.sum(np.abs(Pcn)**2))
    # matrix of received pilots plus noise samples
    Pcn_hat = h*Pcn + n
 
    # phase corrected received pilots
    Rcn_hat = np.abs(h)*Pcn + n
 
-   # remove pilot modulation to map to one point
-   Z=Rcn_hat/Pcn
+   # calculate S1 two ways to test expression
+
+   S1 = np.sum(np.abs(Pcn_hat)**2)
+   S1_first = np.sum(np.abs(h*Pcn)**2)
+   S1_second = np.sum(2*(h*Pcn*n).real)
+   #S1_second = np.sum(h*Pcn*np.conj(n) + np.conj(h*Pcn)*n)
+   S1_third = np.sum(np.abs(n)**2)
+   S1_sum = S1_first + S1_second + S1_third
+   print(f"S1_first: {S1_first:5.2f} S1_second: {S1_second:5.2f} S1_third: {S1_third:5.2f}")
+   print(f"S1: {S1:5.2f} S1_sum: {S1_sum:5.2f}")
 
    # calculate SNR est
-   S1 = np.abs(np.sum(Z))
-   S2 = np.sum(Z.imag*np.conj(Z.imag))
-   print(np.sum(Z))
-   print(f"S1: {S1:f} S2: {S2}")
+   S2 = np.sum(np.abs(Rcn_hat.imag)**2)
+   print(S1, S2)
+   #print(f"S1: {S1:f} S2: {S2:f}")
    
-   snr_est = S1/(2*S2)
+   snr_est = S1/(2*S2) - 1
  
    # actual snr as check, should be same as snr_target
-   snr_check = np.sum(Pcn*np.conj(Pcn))/np.sum(n*np.conj(n))
-   print(f"S: {np.sum(Pcn*np.conj(Pcn)).real:f} N: {np.sum(n*np.conj(n)).real}")
+   snr_check = np.sum(np.abs(h*Pcn)**2)/np.sum(np.abs(n)**2)
+   print(f"S: {np.sum(np.abs(h*Pcn)**2):f} N: {np.sum(np.abs(n)**2)}")
    print(f"snr:target {snr_target:5.2f} snr_check: {snr_check.real:5.2f} snr_est: {snr_est:5.2f}")
-   plt.figure(1)
-   plt.plot(Rcn_hat.real, Rcn_hat.imag,'b+')
-   plt.plot(Z.real, Z.imag,'r+')
-   plt.show()
-   quit()
 
    return snr_est,snr_check
 
@@ -99,7 +100,7 @@ model = RADAE(num_features, latent_dim, EbNodB=100, rate_Fs=True, pilots=True, c
 def single(snrdB, h, Nw):
    snr_est, snr_check = snr_est_test(model, 10**(snrdB/10), h, Nw)
    #print(f"snrdB: {snrdB:5.2f} snrdB_check: {10*np.log10(snr_check):5.2f} snrdB_est: {10*np.log10(snr_est):5.2f}")
-   print(f"snrdB: {snrdB:5.2f} snrdB_check: {10*np.log10(snr_check):5.2f}")
+   print(f"snrdB: {snrdB:5.2f} snrdB_check: {10*np.log10(snr_check):5.2f} snrdB_est: {10*np.log10(snr_est):5.2f}")
 
 # run over a sequence of timesteps
 def sequence(Ntimesteps, EsNodB, h):
@@ -161,8 +162,11 @@ Nw = int(args.T // model.Tmf)
 if len(args.h_file):
    h = np.fromfile(args.h_file,dtype=np.float32)
    h = h.reshape((-1,model.Nc))
+   print(h.shape)
    # sample once every modem frame
-   h = h[:model.Ns+1:]
+   h = h[::model.Ns+1,:]
+   h = h[:Nw,:]
+   print(h.shape)
 else:
    h = 0.5*np.ones((Nw,model.Nc))
 print(h.shape)
