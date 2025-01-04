@@ -36,13 +36,13 @@ import argparse
 import numpy as np
 from matplotlib import pyplot as plt
 import torch
-from radae import RADAE
+from radae import RADAE,receiver_one
 
 # make sure we don't use a GPU
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
 device = torch.device("cpu")
 
-def snr_est_test(model, snr_target, h, Nw, test_S1=False):
+def snr_est_test(model, snr_target, h, Nw, test_S1=False, genie_phase=True):
 
    Nc = model.Nc
    Pc = np.array(model.pilot_gain*model.P)
@@ -63,7 +63,16 @@ def snr_est_test(model, snr_target, h, Nw, test_S1=False):
    Pcn_hat = h*Pcn + n
 
    # phase corrected received pilots
-   Rcn_hat = np.abs(h)*Pcn + n
+   if genie_phase:
+      Rcn_hat = np.abs(h)*Pcn + n
+   else:
+      Ns = model.Ns + 1
+      rx_sym_pilots = torch.zeros((1,1,Nw*Ns,Nc), dtype=torch.complex64)
+      rx_sym_pilots[0,0,::Ns,:] = torch.tensor(Pcn_hat)
+      rx_pilots = receiver.est_pilots(rx_sym_pilots, Nw-1, Nc, Ns)
+      rx_pilots = rx_pilots.cpu().detach().numpy()
+      rx_phase = np.angle(rx_pilots)
+      Rcn_hat = Pcn_hat*np.exp(-1j*rx_phase)
 
    # calculate S1 two ways to test expression, observe second term is small
 
@@ -95,9 +104,15 @@ num_features = 20
 num_used_features = 20
 model = RADAE(num_features, latent_dim, EbNodB=100, rate_Fs=True, pilots=True, cyclic_prefix=0.004, bottleneck=3)
 
+# Bring up a receiver instance to use least squares phase est
+receiver = receiver_one(model.latent_dim,model.Fs,model.M,model.Ncp,model.Wfwd,model.Nc,
+                        model.Ns,model.w,model.P,model.bottleneck,model.pilot_gain,
+                        model.time_offset,model.coarse_mag)
+print("")
+
 # single timestep test
-def single(snrdB, h, Nw, test_S1):
-   snr_est, snr_check = snr_est_test(model, 10**(snrdB/10), h, Nw, test_S1)
+def single(snrdB, h, Nw, test_S1, genie_phase):
+   snr_est, snr_check = snr_est_test(model, 10**(snrdB/10), h, Nw, test_S1, genie_phase)
    print(f"snrdB: {snrdB:5.2f} snrdB_check: {10*np.log10(snr_check):5.2f} snrdB_est: {10*np.log10(snr_est):5.2f}")
 
 # run over a sequence of timesteps, and return mean
@@ -144,6 +159,7 @@ parser.add_argument('--h_file', type=str, default="", help='path to rate Rs mult
 parser.add_argument('-T', type=float, default=1.0, help='length of time window for estimate (default 1.0 sec)')
 parser.add_argument('--Nt', type=int, default=1, help='number of analysis time windows to average (default 1)')
 parser.add_argument('--test_S1', action='store_true', help='calculate S1 two ways to check S1 expression')
+parser.add_argument('--eq_ls', action='store_true', help='est phase from received pilots usin least square (default genie phase)')
 args = parser.parse_args()
 
 Nw = int(args.T // model.Tmf)
@@ -158,7 +174,7 @@ else:
    h = np.ones((Nw*args.Nt,model.Nc))
 
 if args.single:
-   single(args.snrdB, h, Nw, args.test_S1)
+   single(args.snrdB, h, Nw, args.test_S1, not args.eq_ls)
 elif args.sequence:
    sequence(args.Nt, args.snrdB, h, Nw)
 else:
