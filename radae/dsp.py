@@ -373,12 +373,7 @@ class receiver_one():
          A = torch.tensor([[1, torch.exp(-1j*self.w[c_mid-1]*a)], [1, torch.exp(-1j*self.w[c_mid]*a)], [1, torch.exp(-1j*self.w[c_mid+1]*a)]])
          self.Pmat[c] = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
       
-   # One frame version of do_pilot_eq() for streaming implementation
-   def do_pilot_eq_one(self, num_modem_frames, rx_sym_pilots):
-      Nc = self.Nc 
-      Ns = self.Ns + 1
-
-      # First, estimate the (complex) value of each received pilot symbol
+   def est_pilots(self, rx_sym_pilots, num_modem_frames, Nc, Ns):
       rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
       # 3-pilot least squares fit across frequency, ref: freedv_low.pdf
       for i in torch.arange(num_modem_frames+1):
@@ -394,6 +389,16 @@ class receiver_one():
                h = torch.reshape(rx_sym_pilots[0,0,Ns*i,c_mid-1:c_mid+2]/self.P[c_mid-1:c_mid+2],(3,1))
                g = torch.matmul(self.Pmat[c],h)
                rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
+
+      return rx_pilots
+   
+   # One frame version of do_pilot_eq() for streaming implementation
+   def do_pilot_eq_one(self, num_modem_frames, rx_sym_pilots):
+      Nc = self.Nc 
+      Ns = self.Ns + 1
+
+      # First, estimate the (complex) value of each received pilot symbol
+      rx_pilots = self.est_pilots(rx_sym_pilots, num_modem_frames, Nc, Ns)
 
       # Linearly interpolate between two pilots to EQ data symbol phase
       for i in torch.arange(num_modem_frames):
