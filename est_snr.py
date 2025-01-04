@@ -72,7 +72,15 @@ def snr_est_test(model, snr_target, h, Nw, test_S1=False, genie_phase=True):
       rx_pilots = receiver.est_pilots(rx_sym_pilots, Nw-1, Nc, Ns)
       rx_pilots = rx_pilots.cpu().detach().numpy()
       rx_phase = np.angle(rx_pilots)
+      #print(rx_phase.shape)
+      #print(rx_phase)
       Rcn_hat = Pcn_hat*np.exp(-1j*rx_phase)
+   if args.plots:
+      plt.figure(1)
+      plt.plot(Rcn_hat.real, Rcn_hat.imag,'b+')
+      plt.figure(2)
+      plt.plot(h.real, h.imag,'b+')
+      plt.show()
 
    # calculate S1 two ways to test expression, observe second term is small
 
@@ -160,12 +168,13 @@ parser.add_argument('-T', type=float, default=1.0, help='length of time window f
 parser.add_argument('--Nt', type=int, default=1, help='number of analysis time windows to average (default 1)')
 parser.add_argument('--test_S1', action='store_true', help='calculate S1 two ways to check S1 expression')
 parser.add_argument('--eq_ls', action='store_true', help='est phase from received pilots usin least square (default genie phase)')
+parser.add_argument('--plots', action='store_true', help='debug plots (default off)')
 args = parser.parse_args()
 
 Nw = int(args.T // model.Tmf)
 
 if len(args.h_file):
-   h = np.fromfile(args.h_file,dtype=np.float32)
+   h = np.fromfile(args.h_file,dtype=np.complex64)
    h = h.reshape((-1,model.Nc))
    # sample once every modem frame
    h = h[::model.Ns+1,:]
