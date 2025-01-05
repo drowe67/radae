@@ -67,7 +67,8 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="",H_complex=0)
     else
       bytes_per_sample = 4
     end
-    printf("H file size is Nseconds*Rs*Nc*(%d bytes/sample) = %d*%d*%d*%d = %d bytes\n", bytes_per_sample, Nseconds,Rs,Nc,Nseconds*Rs*Nc*bytes_per_sample)
+    printf("H file size is Nseconds*Rs*Nc*(%d bytes/sample) = %d*%d*%d*%d = %d bytes\n", bytes_per_sample,
+           Nseconds,Rs,Nc,bytes_per_sample, Nseconds*Rs*Nc*bytes_per_sample)
     f=fopen(H_fn,"wb");
     [r c] = size(H);
     Hflat = reshape(H', 1, r*c);
