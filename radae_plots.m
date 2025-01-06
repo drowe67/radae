@@ -257,30 +257,41 @@ function test_rate_Fs_bottleneck
   
 end
 
-% Latex plotting for SNR estimator. run est_snr.py first
+% Latex plotting for SNR estimator. run est_snr_curves.sh first
 function est_snr_plot(epslatex="")
     if length(epslatex)
         [textfontsize linewidth] = set_fonts();
     end
-    points = load("est_snr.txt");
-
-    % point for mean line
-    mean_x = [];
-    mean_y = [];
-    for snrdB=-10:20
-      x = find(points(:,1) == snrdB);
-      mean_x = [mean_x; snrdB];
-      mean_y = [mean_y; mean(points(x,2))];
-    end
-
+    awgn = load("est_snr_awgn.txt");
+    mpg = load("est_snr_mpg.txt");
+    mpp = load("est_snr_mpp.txt");
+    
     figure(1); clf;
-    plot(points(:,1), points(:,2),'b.');
+    plot(awgn(:,1), awgn(:,1),'bk-');
     hold on;
-    plot(mean_x,mean_y,'ro-');
-    hold off;
-    hold off; grid('minor'); xlabel('SNR (dB)'); ylabel('SNR Est (dB)');
+    plot(awgn(:,1), awgn(:,2),'g.');
+    [m b] = linreg(awgn(:,1), awgn(:,2),length(awgn(:,1)));
+    plot(awgn(:,1), m*awgn(:,1)+b,'b-'); hold off;
+    grid('minor'); xlabel('EsNo (dB)'); ylabel('EsNo Est (dB)');
+    axis([-5 20 -5 20]);
     if length(epslatex)
-        print_eps_restore(epslatex,"-S300,250",textfontsize,linewidth);
+        print_eps(sprintf("%sa",epslatex),"-S300,250",textfontsize,linewidth);
+    end
+   
+    figure(2); clf;
+    plot(awgn(:,1), awgn(:,1),'bk--;Ideal;');
+    hold on;
+    [m b] = linreg(awgn(:,1), awgn(:,2),length(awgn(:,1)));
+    plot(awgn(:,1), m*awgn(:,1)+b,'g-;AWGN;');
+    [m b] = linreg(mpg(:,1), mpg(:,2),length(mpg(:,1)));
+    plot(mpg(:,1),m*mpg(:,1)+b,'b-;MPG;');
+    [m b] = linreg(mpp(:,1), mpp(:,2),length(mpp(:,1)));
+    plot(mpp(:,1),m*mpp(:,1)+b,'r-;MPP;');
+    hold off;
+    axis([-5 20 -5 20]); legend('location','southeast'); legend('boxoff');
+    grid('minor'); xlabel('EsNo (dB)'); ylabel('EsNo Est (dB)');
+    if length(epslatex)
+        print_eps_restore(sprintf("%sb",epslatex),"-S300,250",textfontsize,linewidth);
     end
 endfunction
 
@@ -440,6 +451,7 @@ function test_phase_est
   plot(theta, phi, "r-;phi;")
   hold off
 endfunction
+
 function compare_pitch_corr(wav_fn,feat1_fn,feat2_fn,png_feat_fn="")
   Fs=16000;
   s=load_raw(wav_fn);

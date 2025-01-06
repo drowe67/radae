@@ -918,7 +918,7 @@ Further work:
 
 \section{SNR Estimator Attempt 2}
 
-The goal is to estimate SNR over a multipath channel over a T second window.  Note this is not the expected value of the SNR, as $T$ may be small compared to the fading period. At the receiver, the power of each OFDM carrier is time varying, but noise power (and spectral density) constant.  We would like to use the pilots to estimate SNR for the time window. At the receiver, the signal power $S$ over the time window is given by:
+The goal is to estimate SNR over a multipath channel over a T second window.  Note this is not the expected value of the SNR, as $T$ may be small compared to the fading period. At the receiver, the power of each OFDM carrier is time varying, but noise power (and spectral density) constant.  We would like to use the pilots to estimate SNR for the time window. At the receiver, let the signal power $S$ over the time window be given by:
 \begin{equation}
 \begin{split}
 S &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |P_c^n|^2 \\
@@ -948,7 +948,9 @@ S_1 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} \left(|h_c^nP_c|^2 + 2Re\{h_c^nP_c\ma
     &= S + N
 \end{split}
 \end{equation} 
-The approximation is due to the second term having an expected value of zero and therefore being small compared to the first and third term.  At the receiver we use least squares phase estimation and correction to obtain the phase corrected pilots:
+The approximation is due to the second term having an expected value of zero and therefore being small compared to the first and third term.
+
+At the receiver we use least squares phase estimation and correction to obtain the phase corrected pilots:
 \begin{equation}
 \hat{R}_c^n = |h_c^n|P_c e^{j\mathcal{N}(0,\alpha)} + \mathcal{N}(0,\sigma^2)
 \end{equation}
@@ -966,6 +968,27 @@ Using (\ref{eq:snr2_signal_noise}) and (\ref{eq:snr2_noise}) we can obtain an ap
 \begin{equation}
 \frac{S}{N} = \frac{S_1}{2S_2} - 1
 \end{equation}
+
+\begin{figure}[H]
+\caption{Scatter plot of actual versus estimated $Es/N_0$ values, RADE V1 waveform, AWGN channel. Solid blue line is linear regression straight line fit, black ideal.}
+\label{fig:est_snr2a}
+\begin{center}
+\input est_snr2a.tex
+\end{center}
+\end{figure}
+
+This algorithm was tested in the script \emph{est\_snr.py}, which supports single point testing and generating curves over evolving multiplath channels. There was some error in the $S/N$ estimates due to (\ref{eq:snr2_noise}) being sensitive to the noise in the phase estimator $\mathcal{N}(0,\alpha)$.  The algorithm works reasonably well for AWGN, MPG and MPP channels, however the error increases with faster fading.  A straight line was fitted to the estimator output for the three channels and the average used to provide a correction to this error.
+
+Figure \ref{fig:est_snr2a} shows the results for an AWGN channel, and Figure \ref{fig:est_snr2b} shows a straight line fit for the estimator over the three channels tested (in both figures the correction has been applied). The results were calculated over 60 second runs using the \emph{est\_snr\_curves.sh} script. As the algorithm works at the symbol rate $S/N=E_s/N_0$.  To obtain the SNR in a different noise bandwidth (e.g 3000Hz) a constant offset will need to be applied. Between -5 and 15dB, the estimator is within +/-1dB for all channels except MPP.
+ 
+\begin{figure}[H]
+\caption{Straight line fit to estimator output for AWGN, MPG, and MPP channels.}
+\label{fig:est_snr2b}
+\begin{center}
+\input est_snr2b.tex
+\end{center}
+\end{figure}
+
 
 \section{Acquisition}
 
