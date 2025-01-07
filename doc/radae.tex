@@ -979,7 +979,7 @@ Using (\ref{eq:snr2_signal_noise}) and (\ref{eq:snr2_noise}) we can obtain an ap
 
 This algorithm was tested in the script \emph{est\_snr.py}, which supports single point testing and generating curves over evolving multiplath channels. There was some error in the $S/N$ estimates (comnpared to a genie estimator) due to (\ref{eq:snr2_noise}) being sensitive to the noise in the phase estimator $\mathcal{N}(0,\alpha)$.  The algorithm works reasonably well for AWGN, MPG and MPP channels, however the error increases with faster fading.  A straight line was fitted to the estimator output:
 \begin{equation}
-SNR_{est} = m*SNR + c
+SNR_{est} = mSNR + c
 \end{equation}
 where $SNR$ is the genie estimate in dB for the time window $T$. To correct for the error the equation can be re-arranged:
 \begin{equation}
@@ -987,8 +987,18 @@ SNR = (SNR_{est} - c)/m
 \end{equation}
 The straight line fit is different for each channel tested.  So the mean of $m$ and $c$ for each channel was found and averaged.
 
-Figure \ref{fig:est_snr2a} shows the results for an AWGN channel, and Figure \ref{fig:est_snr2b} shows a straight line fit for the estimator over the three channels tested (in both figures the correction has been applied). The results were calculated over 60 second runs using the \emph{est\_snr\_curves.sh} script. As the algorithm works at the symbol rate $S/N=E_s/N_0$.  To obtain the SNR in a different noise bandwidth (e.g 3000Hz) a constant offset will need to be applied. Between -5 and 10dB, the estimator is within +/-1dB for all channels except MPP (1 Hz fading) which reads several dB low.
- 
+Figure \ref{fig:est_snr2a} shows the results for an AWGN channel, and Figure \ref{fig:est_snr2b} shows a straight line fit for the estimator over the three channels tested (in both figures the correction has been applied). The results were calculated over 60 second runs using the \emph{est\_snr\_curves.sh} script.
+
+As the algorithm works at the symbol rate $S/N=E_s/N_0$.  Between -5 and 10dB $E_s/N_0$, the estimator is within +/-1dB for all channels except MPP (1 Hz fading) which reads several dB low. To obtain the SNR in a different noise bandwidth (e.g 3000Hz), and using the RADE V1 waveform parameters:
+\begin{equation}
+\begin{split}
+SNR_{3k} &= 10log_{10}(E_s/N_0) + 10log_{10}(RsNc/B) + 10log_{10}((M+N_{cp})/M) \\
+         &= 10log_{10}(E_s/N_0) + 10log_{10}((50)(30)/3000) + 10log_{10}((160+32)/160) \\
+         &= 10log_{10}(E_s/N_0) - 2.22
+\end{split}
+\end{equation}
+The last term accounts for the carrier power in the cyclic prefix, which is not included in $Es$.
+
 \begin{figure}[H]
 \caption{Straight line fit to estimator output for AWGN, MPG, and MPP channels.}
 \label{fig:est_snr2b}

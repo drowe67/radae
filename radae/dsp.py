@@ -373,7 +373,7 @@ class receiver_one():
          A = torch.tensor([[1, torch.exp(-1j*self.w[c_mid-1]*a)], [1, torch.exp(-1j*self.w[c_mid]*a)], [1, torch.exp(-1j*self.w[c_mid+1]*a)]])
          self.Pmat[c] = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
 
-      self.snrdB_est = 0
+      self.snrdB_3k_est = 0
       self.m = 0.8070
       self.c = 2.513
          
@@ -409,10 +409,13 @@ class receiver_one():
          snr_est = 0.1
       snrdB_est = 10*np.log10(snr_est)
       # correction based on average of straight line fit to AWGN/MPG/MPP
-      snrdB_est = (snrdB_est - self.c)/self.match
-   
+      snrdB_est = (snrdB_est - self.c)/self.m
+      # convert to 3000Hz noise badnwidth, and account for carrier power in cyclic prefix
+      Rs = self.Fs/self.M
+      snrdB_3k_est = snrdB_est + 10*math.log10(Rs*self.Nc/3000) + 10*math.log10((self.M+self.Ncp)/self.M)
+
       # moving average smoothing, roughly 1 second time constant
-      self.snrdB_est = 0.9*self.snrdB_est + 0.1*snrdB_est
+      self.snrdB_3k_est = 0.9*self.snrdB_3k_est + 0.1*snrdB_3k_est
       
    # One frame version of do_pilot_eq() for streaming implementation
    def do_pilot_eq_one(self, num_modem_frames, rx_sym_pilots):

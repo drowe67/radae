@@ -42,6 +42,7 @@ int main(int argc, char *argv[])
             fflush(stdout);
         }
         nin = rade_nin(r);
+        fprintf(stderr, "SNR3k (dB): %d\n", rade_snrdB_3k_est(r));
     }
 
     rade_close(r);
