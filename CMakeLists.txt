@@ -251,7 +251,7 @@ add_test(NAME radae_tx_basic
                        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --write_rx rx.f32 --correct_freq_offset; \
                        cat features_in.f32 | python3 radae_txe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth --txbpf > rx.f32
-                       cat rx.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 1 > features_txs_out.f32; \
+                       cat rx.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 > features_txs_out.f32; \
                        python3 loss.py features_in.f32 features_txs_out.f32 --loss_test 0.15 --acq_time_test 0.5 --clip_start 5")
                        set_tests_properties(radae_tx_basic PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
@@ -291,10 +291,10 @@ add_test(NAME rx_streaming
 # basic test of streaming rx, run rx in vanilla and streaming, compare
 add_test(NAME radae_rx_basic
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh model17/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
-                       --EbNodB 10 --freq_offset 11 \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --EbNodB 10 --freq_offset 11 --prepend_noise 1 --append_noise 1 --end_of_over --auxdata \
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
-                       cat rx.f32 | PYTHONPATH='../' python3 radae_rxe.py --model model17/checkpoints/checkpoint_epoch_100.pth -v 1 --noauxdata > features_rxs_out.f32; \
+                       cat rx.f32 | PYTHONPATH='../' python3 radae_rxe.py -v 2 > features_rxs_out.f32; \
                        python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_rx_basic PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
@@ -309,7 +309,7 @@ add_test(NAME radae_rx_awgn
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
                        --prepend_noise 1 --append_noise 3 --end_of_over --auxdata --correct_freq_offset; \
                        cat rx.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rx_out.f32; \
-                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 1.0 --clip_end 100")
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 1.0 --clip_end 300")
                        set_tests_properties(radae_rx_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # SNR=0dB MPP
@@ -488,7 +488,8 @@ add_test(NAME radae_tx_embed_c
 add_test(NAME radae_rx_embed_c
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
-                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --write_rx rx.f32 --correct_freq_offset; \
+                       --EbNodB 100 --freq_offset 0 --append_noise 1 --end_of_over --auxdata \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --write_rx rx.f32 --correct_freq_offset; \
                        cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx > features_out.f32;
                        python3 loss.py features_in.f32 features_out.f32 --loss_test 0.15 --acq_time_test 0.5")
                        set_tests_properties(radae_rx_embed_c PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
@@ -550,6 +551,41 @@ add_test(NAME c_decoder_aux_mpp
                        cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx 1 > features_c.f32; \
                        python3 loss.py features_in.f32 features_c.f32 --loss 0.3 --clip_start 300")
                        set_tests_properties(c_decoder_aux_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# EOO data -------------------------------------------------------------------------------------------
+
+# Pythion Tx & Rx, no noise
+add_test(NAME radae_eoo_data_py
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
+                       cat features_in.f32 | python3 radae_txe.py --eoo_data_test > rx.f32; \
+                       cat rx.f32 | python3 radae_rxe.py -v 2 --eoo_data_test > /dev/null")
+                       set_tests_properties(radae_eoo_data_py PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# C tx & rx, no noise. Note Python radae_txe.py just generates eoo_tx.f32 for C radae_tx
+add_test(NAME radae_eoo_data_c
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
+                       cat features_in.f32 | python3 radae_txe.py --eoo_data_test > /dev/null; \
+                       cat features_in.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_tx > rx.f32; \
+                       cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx > /dev/null; \
+                       python3 eoo_ber.py eoo_tx.f32 eoo_rx.f32")
+                       set_tests_properties(radae_eoo_data_c PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# C tx & rx, over a multipath channel, we set up 5 "overs", each with an EOO chunk of data.  Just one of them needs
+# to have a BER < 5% for a PASS.  About 6dB SNR
+add_test(NAME radae_eoo_data_mpp
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh; \
+                       ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
+                       cat features_in.f32 | python3 radae_txe.py --eoo_data_test > /dev/null; \
+                       cat features_in.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_tx > tx.f32; \
+                       cat tx.f32 tx.f32 tx.f32 tx.f32 tx.f32 > tx_2.f32;
+                       cat tx_2.f32 | python3 f32toint16.py --real --scale 8192 > tx.raw; \
+                       ${CODEC2_DEV_BUILD_DIR}/src/ch tx.raw rx.raw --No -24 --mpp --fading_dir .; \
+                       cat rx.raw | python3 int16tof32.py --zeropad > rx.f32; \
+                       cat rx.f32 | PYTHONPATH='.' ${CMAKE_CURRENT_BINARY_DIR}/src/radae_rx > /dev/null; \
+                       python3 eoo_ber.py eoo_tx.f32 eoo_rx.f32")
+                       set_tests_properties(radae_eoo_data_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # BBFM -----------------------------------------------------------------------------------------------
 

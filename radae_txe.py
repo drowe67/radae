@@ -97,7 +97,13 @@ class radae_tx:
    def get_Nmf(self):
       return self.Nmf
    def get_Neoo(self):
-      return  self.Neoo
+      return self.Neoo
+   def get_Neoo_bits(self):
+      return self.model.Nseoo*self.model.bps
+   def set_eoo_bits(self,eoo_bits):
+      print("setting bits!", file=sys.stderr)
+      print(eoo_bits[0:8],file=sys.stderr)
+      self.model.set_eoo_bits(torch.tensor(eoo_bits, dtype=torch.float32))
 
    def do_radae_tx(self,buffer_f32,tx_out):
       model = self.model
@@ -143,10 +149,18 @@ if __name__ == '__main__':
    parser.add_argument('--noauxdata', dest="auxdata", action='store_false', help='disable injection of auxillary data symbols')
    parser.add_argument('--txbpf', action='store_true', help='enable Tx BPF')
    parser.add_argument('--bypass_enc', action='store_true', help='Bypass core encoder, read z from stdin')
+   parser.add_argument('--eoo_data_test', action='store_true', help='experimental EOO data test - tx test frame')
    parser.set_defaults(auxdata=True)
    args = parser.parse_args()
    tx = radae_tx(model_name=args.model_name, auxdata=args.auxdata, txbpf_en=args.txbpf, bypass_enc=args.bypass_enc)
-
+   
+   if args.eoo_data_test:
+      # create a RNG with same sequence for BER testing with separate tx and rx
+      seed = 65647; rng = np.random.default_rng(seed)
+      tx_bits = np.sign(rng.random(tx.get_Neoo_bits())-0.5, dtype=np.float32)
+      tx.set_eoo_bits(tx_bits)
+      tx_bits.tofile("eoo_tx.f32")
+      
    tx_out = np.zeros(tx.Nmf,dtype=np.csingle)
    while True:
       buffer = sys.stdin.buffer.read(tx.n_floats_in*struct.calcsize("f"))
@@ -159,3 +173,8 @@ if __name__ == '__main__':
    eoo_out = np.zeros(tx.Neoo,dtype=np.csingle)
    tx.do_eoo(eoo_out)
    sys.stdout.buffer.write(eoo_out)
+   if args.eoo_data_test:
+      # trailing silence so Rx has enough sample to process EOO frame
+      eoo_out = np.zeros(tx.Neoo,dtype=np.csingle)
+      sys.stdout.buffer.write(eoo_out)
+   
