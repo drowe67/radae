@@ -79,7 +79,7 @@ def snr_est_test(model, snr_target, h, Nw, test_S1=False):
    else:
       Rcn_hat = Rcn_hat_est
       
-   if args.plots:
+   if args.plots2:
       plt.figure(1)
       plt.plot(Rcn_hat.real, Rcn_hat.imag,'b+')
       plt.figure(2)
@@ -111,17 +111,17 @@ def snr_est_test(model, snr_target, h, Nw, test_S1=False):
       
    # actual snr for this time window as check, for AWGN should be
    # close to snr_target, for non untity h it can be quite different
-   snr_check = np.sum(np.abs(h*Pcn)**2)/np.sum(np.abs(n)**2)
+   snr_genie = np.sum(np.abs(h*Pcn)**2)/np.sum(np.abs(n)**2)
 
-   snrdB_check = 10*np.log10(snr_check)
+   snrdB_genie = 10*np.log10(snr_genie)
    snrdB_est = 10*np.log10(snr_est)
    NdB_genie = 10*np.log10(2*S2_genie)
    NdB_est = 10*np.log10(2*S2_est)
 
    # user supplied correction factor
-   snrdB_est += args.m*snrdB_check + args.c
-   
-   return snrdB_est, snrdB_check, NdB_genie, NdB_est
+   snrdB_est = (snrdB_est - args.c)/args.m
+
+   return snrdB_genie, snrdB_est, NdB_genie, NdB_est
 
 # Bring up a RADAE model
 latent_dim = 80
@@ -137,76 +137,76 @@ print("")
 
 # single timestep test
 def single(snrdB, h, Nw, test_S1):
-   snrdB_est, snrdB_check, NdB_genie, NdB_est = snr_est_test(model, 10**(snrdB/10), h, Nw, test_S1)
-   print(f"snrdB: {snrdB:5.2f} snrdB_check: {snrdB_check:5.2f} snrdB_est: {snrdB_est:5.2f}")
+   snrdB_genie, snrdB_est, NdB_genie, NdB_est = snr_est_test(model, 10**(snrdB/10), h, Nw, test_S1)
+   print(f"setpoint snrdB: {snrdB:5.2f} snrdB_genie: {snrdB_genie:5.2f} snrdB_est: {snrdB_est:5.2f}")
 
 # run over a sequence of timesteps, and return lists of each each est
 def sequence(Ntimesteps, snrdB, h, Nw):
+   snrdB_genie_list = []
    snrdB_est_list = []
-   snrdB_check_list = []
    NdB_genie_list = []
    NdB_est_list = []
 
    for i in range(Ntimesteps):
-      snrdB_est, snrdB_check, NdB_genie, NdB_est = snr_est_test(model, 10**(snrdB/10), h[i*Nw:(i+1)*Nw,:], Nw)
+      snrdB_genie, snrdB_est, NdB_genie, NdB_est = snr_est_test(model, 10**(snrdB/10), h[i*Nw:(i+1)*Nw,:], Nw)
       
-      print(f"snrdB: {snrdB:5.2f} snrdB_check: {snrdB_check:5.2f} snrdB_est: {snrdB_est:5.2f} NdB: {NdB_genie:5.2f} {NdB_est:5.2f}")
+      print(f"setpoint snrdB: {snrdB:5.2f} snrdB_genie: {snrdB_genie:5.2f} snrdB_est: {snrdB_est:5.2f} NdB: {NdB_genie:5.2f} {NdB_est:5.2f}")
 
+      snrdB_genie_list = np.append(snrdB_genie_list, snrdB_genie)
       snrdB_est_list = np.append(snrdB_est_list, snrdB_est)
-      snrdB_check_list = np.append(snrdB_check_list, snrdB_check)
       NdB_genie_list = np.append(NdB_genie_list, NdB_genie)
       NdB_est_list = np.append(NdB_est_list, NdB_est)
    
-   return  snrdB_est_list, snrdB_check_list, NdB_genie,NdB_est
+   return snrdB_genie_list, snrdB_est_list, NdB_genie,NdB_est
 
 # sweep across SNRs
 def sweep(Ntimesteps, h, Nw):
  
-   EsNodB_check = []
+   EsNodB_genie = []
    EsNodB_est = []
    NdB_genie = []
    NdB_est = []
    
    r = range(-5,20)
    for aEsNodB in r:
-      aEsNodB_check, aEsNodB_est, aNdB_genie, aNdB_est = sequence(Ntimesteps, aEsNodB, h, Nw)
-      EsNodB_check = np.append(EsNodB_check, aEsNodB_check)
+      aEsNodB_genie, aEsNodB_est, aNdB_genie, aNdB_est = sequence(Ntimesteps, aEsNodB, h, Nw)
+      EsNodB_genie = np.append(EsNodB_genie, aEsNodB_genie)
       EsNodB_est = np.append(EsNodB_est, aEsNodB_est)
       NdB_genie = np.append(NdB_genie, aNdB_genie)
       NdB_est = np.append(NdB_est, aNdB_est)
 
-   z = np.polyfit(EsNodB_check, EsNodB_est, 1)
+   z = np.polyfit(EsNodB_genie, EsNodB_est, 1)
    print(z)
-   EsNodB_est_fit = z[0]*EsNodB_check + z[1]
+   EsNodB_est_fit = z[0]*EsNodB_genie + z[1]
    
    if args.plots:
       plt.figure(1)
-      plt.plot(EsNodB_check, EsNodB_est,'b+')
-      plt.plot(EsNodB_check, EsNodB_est_fit,'r')
+      plt.plot(EsNodB_genie, EsNodB_est,'b+')
+      plt.plot(EsNodB_genie, EsNodB_est_fit,'r')
       plt.plot(r,r)
       plt.axis([-5, 20, -5, 20])
       plt.grid()
       plt.xlabel('SNR (dB)')
       plt.ylabel('SNR est (dB)')
-
-   """
-   z = np.polyfit(NdB_genie, NdB_est, 1)
-   print(z)
-   NdB_est_fit = z[0]*NdB_genie + z[1]
-   print(len(NdB_est))
-   plt.figure(2)
-   plt.plot(NdB_genie, NdB_est,'b+')
-   plt.plot(NdB_genie,NdB_genie)
-   plt.plot(NdB_genie, NdB_est_fit,'r')
-   plt.grid()
-   plt.xlabel('N_genie (dB)')
-   plt.ylabel('N_est (dB)')
-   """
-   plt.show()
+  
+      """
+      z = np.polyfit(NdB_genie, NdB_est, 1)
+      print(z)
+      NdB_est_fit = z[0]*NdB_genie + z[1]
+      print(len(NdB_est))
+      plt.figure(2)
+      plt.plot(NdB_genie, NdB_est,'b+')
+      plt.plot(NdB_genie,NdB_genie)
+      plt.plot(NdB_genie, NdB_est_fit,'r')
+      plt.grid()
+      plt.xlabel('N_genie (dB)')
+      plt.ylabel('N_est (dB)')
+      """
+      plt.show()
 
    if args.save_text:
       # save test file of test points for Latex plotting in Octave radae_plots.m:est_snr_plot()
-      test_points = np.transpose(np.array((EsNodB_check,EsNodB_est)))
+      test_points = np.transpose(np.array((EsNodB_genie,EsNodB_est)))
       np.savetxt(args.save_text,test_points,delimiter='\t')
 
 parser = argparse.ArgumentParser()
@@ -218,10 +218,11 @@ parser.add_argument('-T', type=float, default=1.0, help='length of time window f
 parser.add_argument('--Nt', type=int, default=1, help='number of analysis time windows to test across (default 1)')
 parser.add_argument('--test_S1', action='store_true', help='calculate S1 two ways to check S1 expression')
 parser.add_argument('--eq_ls', action='store_true', help='est phase from received pilots using least square (default genie phase)')
-parser.add_argument('--plots', action='store_true', help='debug plots (default off)')
+parser.add_argument('--plots', action='store_true', help='sweep results plots (default off)')
+parser.add_argument('--plots2', action='store_true', help='debug/internal plots (default off)')
 parser.add_argument('--save_text', type=str, default="", help='path to text file to save test points')
 parser.add_argument('-c', type=float, default=0.0, help='y offset correction in dB (default 0)')
-parser.add_argument('-m', type=float, default=0.0, help='gradient correction in dB (default 0)')
+parser.add_argument('-m', type=float, default=1.0, help='gradient correction in dB (default 1.0)')
 args = parser.parse_args()
 
 Nw = int(args.T // model.Tmf)

@@ -374,6 +374,8 @@ class receiver_one():
          self.Pmat[c] = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
 
       self.snrdB_est = 0
+      self.m = 0.8070
+      self.c = 2.513
          
    def est_pilots(self, rx_sym_pilots, num_modem_frames, Nc, Ns):
       rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
@@ -406,6 +408,9 @@ class receiver_one():
       if snr_est <= 0:
          snr_est = 0.1
       snrdB_est = 10*np.log10(snr_est)
+      # correction based on average of straight line fit to AWGN/MPG/MPP
+      snrdB_est = (snrdB_est - self.c)/self.match
+   
       # moving average smoothing, roughly 1 second time constant
       self.snrdB_est = 0.9*self.snrdB_est + 0.1*snrdB_est
       
