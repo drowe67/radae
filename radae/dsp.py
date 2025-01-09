@@ -403,7 +403,7 @@ class receiver_one():
       rx_phase = torch.angle(rx_pilots[0,:])
       Rcn_hat = Pcn_hat * torch.exp(-1j*rx_phase)
       S1 = torch.sum(torch.abs(Pcn_hat)**2)
-      S2 = torch.sum(torch.abs(Rcn_hat.imag)**2)   
+      S2 = torch.sum(torch.abs(Rcn_hat.imag)**2) + 1E-12 
       snr_est = S1/(2*S2) - 1
       # remove occasional illegal values
       if snr_est <= 0:
