@@ -43,6 +43,7 @@ from torch.nn.utils.parametrizations import weight_norm
 from matplotlib import pyplot as plt
 from collections import OrderedDict
 from . import radae_base
+from . import dsp
 
 # Generate pilots using Barker codes which have good correlation properties
 def barker_pilots(Nc):
@@ -80,7 +81,8 @@ class RADAE(nn.Module):
                  time_offset = 0,
                  coarse_mag = False,
                  correct_freq_offset = False,
-                 stateful_decoder = False
+                 stateful_decoder = False,
+                 txbpf_en = False
                 ):
 
         super(RADAE, self).__init__()
@@ -110,6 +112,7 @@ class RADAE(nn.Module):
         self.coarse_mag = coarse_mag
         self.correct_freq_offset = correct_freq_offset
         self.stateful_decoder = stateful_decoder
+        self.txbpf_en = txbpf_en
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
@@ -231,6 +234,22 @@ class RADAE(nn.Module):
         self.Nc = Nc
         self.Nzmf = Nzmf
 
+        if txbpf_en:
+            Ntap=101
+            bandwidth = 1.2*(self.w[Nc-1] - self.w[0])*self.Fs/(2*torch.pi)
+            centre = (self.w[Nc-1] + self.w[0])*self.Fs/(2*torch.pi)/2
+            print(f"Tx BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
+            txbpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth,centre)
+            self.txbpf_conv = nn.Conv1d(1, 1, kernel_size=len(txbpf.h), dtype=torch.complex64)
+            self.alpha = txbpf.alpha
+            with torch.no_grad():
+                print(self.txbpf_conv.weight.shape)
+                self.txbpf_conv.weight[0,0,:] = nn.Parameter(torch.from_numpy(txbpf.h))
+                print(self.txbpf_conv.weight[0,0,:])
+                self.txbpf_conv.bias = nn.Parameter(torch.zeros(1,dtype=torch.complex64))
+                self.txbpf_conv.weight.requires_grad = False
+                self.txbpf_conv.bias.requires_grad = False
+                
     # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
     def core_decoder_statefull_load_state_dict(self):
 
@@ -588,10 +607,33 @@ class RADAE(nn.Module):
                 tx = torch.matmul(tx_sym, self.Winv)
                 # Apply time domain magnitude bottleneck
                 tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
+
+                # apply BPF
+                if self.txbpf_en:
+                    #print(tx.shape)
+                    tx = torch.reshape(tx,(num_batches, 1, num_timesteps_at_rate_Rs*self.M))
+                    #print(tx.shape)
+                    phase_vec = torch.exp(-1j*self.alpha*torch.arange(0,tx.shape[2],device=tx.device))
+                    #print(phase_vec.shape)
+                    #quit()
+                    tx = tx*phase_vec
+                    tx = torch.concat((torch.zeros((num_batches,1,50),device=tx.device),tx,torch.zeros((num_batches,1,50),device=tx.device)),dim=2)
+                    #print(tx.shape)
+                    tx = self.txbpf_conv(tx)*torch.conj(phase_vec)
+                    #tx = tx[:,0,50:50+num_timesteps_at_rate_Rs*self.M]*torch.conj(phase_vec)
+                    #print(tx.shape)
+                    #tx = tx[:,:,50:50+num_timesteps_at_rate_Rs]*self.M*torch.conj(phase_vec)
+                    #print(tx.shape)
+                    #quit()
+                    #tx = tx*phase_vec*torch.conj(phase_vec)
+                    #print(tx.shape)                   
+                    tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M))
+                    #print(tx.shape)                   
+
                 tx_before_channel = tx
                 # DFT to transform M time domain samples to Nc carriers
                 tx_sym = torch.matmul(tx, self.Wfwd)
-                
+                    
             if self.phase_offset:
                 phase = self.phase_offset*torch.ones_like(tx_sym)
                 phase = torch.exp(1j*phase)

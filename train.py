@@ -71,7 +71,7 @@ training_group.add_argument('--initial-checkpoint', type=str, help='initial chec
 training_group.add_argument('--plot_loss', action='store_true', help='plot loss versus epoch as we train')
 training_group.add_argument('--plot_EqNo', type=str, default="", help='plot loss versus Eq/No for final epoch')
 training_group.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
-
+training_group.add_argument('--txbpf', action='store_true', help='train with Tx BPF')
 args = parser.parse_args()
 
 # set visible devices
@@ -123,14 +123,15 @@ model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo,
               rate_Fs = args.rate_Fs,
               range_EbNo_start=args.range_EbNo_start, 
               freq_rand=args.freq_rand,gain_rand=args.gain_rand, bottleneck=args.bottleneck,
-              pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp)
+              pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp,
+              txbpf_en = args.txbpf)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
     checkpoint = torch.load(args.initial_checkpoint, map_location='cpu', weights_only=True)
     model.load_state_dict(checkpoint['state_dict'], strict=False)
 
-checkpoint['state_dict']    = model.state_dict()
+checkpoint['state_dict'] = model.state_dict()
 
 # dataloader
 Nc = model.Nc

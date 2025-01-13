@@ -75,6 +75,7 @@ parser.add_argument('--correct_freq_offset', action='store_true', help='correct 
 parser.add_argument('--sine_amp', type=float, default=0.0, help='single freq interferer level (default zero)')
 parser.add_argument('--sine_freq', type=float, default=1000.0, help='single freq interferer freq (default 1000Hz)')
 parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
+parser.add_argument('--txbpf', action='store_true', help='inject auxillary data symbol')
 args = parser.parse_args()
 
 if len(args.h_file):
