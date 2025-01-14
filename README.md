@@ -374,7 +374,7 @@ This section is optional - pre-trained models that run on a standard laptop CPU 
    octave:120> radae_plots; loss_EqNo_plot("loss_models",'model05_loss_EbNodB.txt','m5_Rs_mp','model07_loss_EbNodB.txt','m7_Fs_offets','model08_loss_EbNodB.txt','m8_Fs')
    ```
 
-1. (May 2024) Training dim=80 mixed rate PAPR optimised model.  Note we need the Nc=20 version of the multipath H matrix `h_nc20_train_mpp.f32` as fading is aplies at rate Rs.  Bottleneck 3 is a tanh() on the magnitude of the complex rate Fs time domain samples.  The SNR ends up about 3dB higher, as discussed in the mixed rate/noise calibration section of the Latext doc: 
+1. (May 2024) Training dim=80 mixed rate PAPR optimised model.  Note we need the Nc=20 version of the multipath H matrix `h_nc20_train_mpp.f32` as fading is aplies at rate Rs.  Bottleneck 3 is a tanh() on the magnitude of the complex rate Fs time domain samples.  The SNR ends up about 3dB higher, as discussed in the mixed rate/noise calibration section of the Latex doc: 
    ```
    python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 model19 --bottleneck 3 --h_file h_nc20_train_mpp.f32 --range_EbNo --plot_loss
    ```
@@ -421,8 +421,8 @@ A log of models trained by the author.
 | model19 | like model17 but with 25 bits/s auxdata, ep 100 loss 0.124 | Fs | - |
 | model19_check3 | model19 but loss function weighting for data symbols reduced fom 1/18 to 0.5/18, which reduced vocoder feature loss with just a small impact on BER.  Loss at various op points and channels very close to model17 | Fs | - |
 | model20 | model19_check3 but loss function weighting for pitch and corr doubled, attempt to improve rick samples.  Didn't help. |  Fs | - |
-| model21 | very based fixed EbNodB model like model02 but at 20dB at epoch 30, produced good quality speech on rick, loss 0.02, but not a practical solution |  Rs | - |
-| model22 | very based fixed EbNodB model like model02 but at 10dB at epoch 30, rick sample starting to get tonal/pitch shift artefact, in between, loss 0.045 |  Rs | - |
+| model21 | very basic fixed EbNodB model like model02 but at 20dB at epoch 30, produced good quality speech on rick, loss 0.02, but not a practical solution |  Rs | - |
+| model22 | very basic fixed EbNodB model like model02 but at 10dB at epoch 30, rick sample starting to get tonal/pitch shift artefact, in between, loss 0.045 |  Rs | - |
 
 Note the samples are generated with `evaluate.sh`, which runs inference at rate Fs. even if (e.g model 05), trained at rate Rs.
 

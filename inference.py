@@ -102,7 +102,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rat
               phase_offset=args.phase_offset, freq_offset=args.freq_offset, df_dt=args.df_dt,
               gain=args.gain, pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls,
               cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, 
-              bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset)
+              bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset, txbpf_en = args.txbpf)
 checkpoint = torch.load(args.model_name, map_location='cpu',weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()

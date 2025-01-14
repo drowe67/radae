@@ -113,7 +113,7 @@ class RADAE(nn.Module):
         self.correct_freq_offset = correct_freq_offset
         self.stateful_decoder = stateful_decoder
         self.txbpf_en = txbpf_en
-
+        
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
         self.core_decoder =  nn.DataParallel(radae_base.CoreDecoder(latent_dim, feature_dim))
@@ -242,6 +242,7 @@ class RADAE(nn.Module):
             txbpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth,centre)
             self.txbpf_conv = nn.Conv1d(1, 1, kernel_size=len(txbpf.h), dtype=torch.complex64)
             self.alpha = txbpf.alpha
+            self.txbpf_delay = int(Ntap // 2)
             with torch.no_grad():
                 print(self.txbpf_conv.weight.shape)
                 self.txbpf_conv.weight[0,0,:] = nn.Parameter(torch.from_numpy(txbpf.h))
@@ -610,25 +611,14 @@ class RADAE(nn.Module):
 
                 # apply BPF
                 if self.txbpf_en:
-                    #print(tx.shape)
                     tx = torch.reshape(tx,(num_batches, 1, num_timesteps_at_rate_Rs*self.M))
-                    #print(tx.shape)
                     phase_vec = torch.exp(-1j*self.alpha*torch.arange(0,tx.shape[2],device=tx.device))
-                    #print(phase_vec.shape)
-                    #quit()
                     tx = tx*phase_vec
-                    tx = torch.concat((torch.zeros((num_batches,1,50),device=tx.device),tx,torch.zeros((num_batches,1,50),device=tx.device)),dim=2)
-                    #print(tx.shape)
+                    tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
                     tx = self.txbpf_conv(tx)*torch.conj(phase_vec)
-                    #tx = tx[:,0,50:50+num_timesteps_at_rate_Rs*self.M]*torch.conj(phase_vec)
-                    #print(tx.shape)
-                    #tx = tx[:,:,50:50+num_timesteps_at_rate_Rs]*self.M*torch.conj(phase_vec)
-                    #print(tx.shape)
-                    #quit()
-                    #tx = tx*phase_vec*torch.conj(phase_vec)
-                    #print(tx.shape)                   
                     tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M))
-                    #print(tx.shape)                   
+                    # second clipper to remove overshoop/ringing from filter
+                    tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
 
                 tx_before_channel = tx
                 # DFT to transform M time domain samples to Nc carriers
