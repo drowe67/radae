@@ -235,7 +235,7 @@ class RADAE(nn.Module):
         self.Nzmf = Nzmf
 
         if txbpf_en:
-            Ntap=101
+            Ntap=51
             bandwidth = 1.2*(self.w[Nc-1] - self.w[0])*self.Fs/(2*torch.pi)
             centre = (self.w[Nc-1] + self.w[0])*self.Fs/(2*torch.pi)/2
             print(f"Tx BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
