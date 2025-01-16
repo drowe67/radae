@@ -607,7 +607,8 @@ class RADAE(nn.Module):
                 # IDFT to transform Nc carriers to M time domain samples
                 tx = torch.matmul(tx_sym, self.Winv)
                 # Apply time domain magnitude bottleneck
-                tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
+                # tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
+                tx = torch.exp(1j*torch.angle(tx))
 
                 # apply BPF
                 if self.txbpf_en:
@@ -618,8 +619,16 @@ class RADAE(nn.Module):
                     tx = self.txbpf_conv(tx)*torch.conj(phase_vec)
                     tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M))
                     # second clipper to remove overshoop/ringing from filter
-                    tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
+                    tx = torch.exp(1j*torch.angle(tx))
 
+                    tx = torch.reshape(tx,(num_batches, 1, num_timesteps_at_rate_Rs*self.M))
+                    phase_vec = torch.exp(-1j*self.alpha*torch.arange(0,tx.shape[2],device=tx.device))
+                    tx = tx*phase_vec
+                    tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
+                    tx = self.txbpf_conv(tx)*torch.conj(phase_vec)
+                    tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M))
+                    tx = torch.exp(1j*torch.angle(tx))
+                     
                 tx_before_channel = tx
                 # DFT to transform M time domain samples to Nc carriers
                 tx_sym = torch.matmul(tx, self.Wfwd)
