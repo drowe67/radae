@@ -159,6 +159,9 @@ class radae_rx:
    def get_sync(self):
       return self.state == "sync"
 
+   def get_snrdB_3k_est(self):
+      return int(self.receiver.snrdB_3k_est)
+
    def sum_uw_errors(self,new_uw_errors):
       self.uw_errors += new_uw_errors
       
@@ -236,6 +239,7 @@ class radae_rx:
          if v == 2 or (v == 1 and (self.state == "search" or self.state == "candidate" or prev_state == "candidate")):
             print(f"{self.mf:3d} state: {self.state:10s} valid: {candidate:d} {endofover:d} {self.valid_count:2d} Dthresh: {acq.Dthresh:8.2f} ", end='', file=sys.stderr)
             print(f"Dtmax12: {acq.Dtmax12:8.2f} {acq.Dtmax12_eoo:8.2f} tmax: {self.tmax:4d} fmax: {self.fmax:6.2f}", end='', file=sys.stderr)
+            print(f" SNRdB: {receiver.snrdB_3k_est:5.2f}", end='', file=sys.stderr)
             if auxdata and self.state == "sync":
                print(f" uw_err: {self.uw_errors:d}", file=sys.stderr)
             else:

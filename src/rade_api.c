@@ -553,3 +553,16 @@ float rade_freq_offset(struct rade *r) {
   return 0;
 }
 
+RADE_EXPORT int rade_snrdB_3k_est(struct rade *r) {
+  assert(r != NULL);
+
+  // Acquire the Python GIL (needed for multithreaded use)
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
+  int result = (int)call_getter(r->pInst_radae_rx, "get_snrdB_3k_est");
+
+  // Release Python GIL
+  PyGILState_Release(gstate);
+
+  return result;
+}

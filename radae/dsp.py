@@ -373,13 +373,12 @@ class receiver_one():
          a = local_path_delay_s*self.Fs
          A = torch.tensor([[1, torch.exp(-1j*self.w[c_mid-1]*a)], [1, torch.exp(-1j*self.w[c_mid]*a)], [1, torch.exp(-1j*self.w[c_mid+1]*a)]])
          self.Pmat[c] = torch.matmul(torch.inverse(torch.matmul(torch.transpose(A,0,1),A)),torch.transpose(A,0,1))
-      
-   # One frame version of do_pilot_eq() for streaming implementation
-   def do_pilot_eq_one(self, num_modem_frames, rx_sym_pilots):
-      Nc = self.Nc 
-      Ns = self.Ns + 1
 
-      # First, estimate the (complex) value of each received pilot symbol
+      self.snrdB_3k_est = 0
+      self.m = 0.8070
+      self.c = 2.513
+         
+   def est_pilots(self, rx_sym_pilots, num_modem_frames, Nc, Ns):
       rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
       # 3-pilot least squares fit across frequency, ref: freedv_low.pdf
       for i in torch.arange(num_modem_frames+1):
@@ -396,6 +395,38 @@ class receiver_one():
                g = torch.matmul(self.Pmat[c],h)
                rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
 
+      return rx_pilots
+
+   # update SNR estimate
+   def update_snr_est(self, rx_sym_pilots, rx_pilots):
+      Pcn_hat = rx_sym_pilots[0,0,0,:]
+      rx_phase = torch.angle(rx_pilots[0,:])
+      Rcn_hat = Pcn_hat * torch.exp(-1j*rx_phase)
+      S1 = torch.sum(torch.abs(Pcn_hat)**2)
+      S2 = torch.sum(torch.abs(Rcn_hat.imag)**2) + 1E-12 
+      snr_est = S1/(2*S2) - 1
+      # remove occasional illegal values
+      if snr_est <= 0:
+         snr_est = 0.1
+      snrdB_est = 10*np.log10(snr_est)
+      # correction based on average of straight line fit to AWGN/MPG/MPP
+      snrdB_est = (snrdB_est - self.c)/self.m
+      # convert to 3000Hz noise badnwidth, and account for carrier power in cyclic prefix
+      Rs = self.Fs/self.M
+      snrdB_3k_est = snrdB_est + 10*math.log10(Rs*self.Nc/3000) + 10*math.log10((self.M+self.Ncp)/self.M)
+
+      # moving average smoothing, roughly 1 second time constant
+      self.snrdB_3k_est = 0.9*self.snrdB_3k_est + 0.1*snrdB_3k_est
+      
+   # One frame version of do_pilot_eq() for streaming implementation
+   def do_pilot_eq_one(self, num_modem_frames, rx_sym_pilots):
+      Nc = self.Nc 
+      Ns = self.Ns + 1
+
+      # First, estimate the (complex) value of each received pilot symbol, and update SNR est
+      rx_pilots = self.est_pilots(rx_sym_pilots, num_modem_frames, Nc, Ns)
+      self.update_snr_est(rx_sym_pilots, rx_pilots)
+      
       # Linearly interpolate between two pilots to EQ data symbol phase
       for i in torch.arange(num_modem_frames):
          for c in torch.arange(0,Nc):

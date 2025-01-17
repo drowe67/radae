@@ -916,6 +916,98 @@ Further work:
 \item For the purpose of stored file experiments it is acceptable to send a separate signals (e.g. a carrier or set of known symbols) a few seconds before or after the test signal.
 \end{itemize}
 
+\section{SNR Estimator Attempt 2}
+
+The goal is to estimate SNR over a multipath channel over a T second window.  Note this is not the expected value of the SNR, as $T$ may be small compared to the fading period. At the receiver, the power of each OFDM carrier is time varying, but noise power (and spectral density) constant.  We would like to use the pilots to estimate SNR for the time window. At the receiver, let the signal power $S$ over the time window be given by:
+\begin{equation}
+\begin{split}
+S &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |P_c^n|^2 \\
+P_c^n &= h_c^nP_c
+\end{split}
+\end{equation}
+where $P_c^n$ is the received freq domain pilot of carrier $c$ at time step $n$, $N_w=T/T_f$ is the number of pilot vectors in the time window, $P_c$ is the real valued transmitted pilot for carrier $c$, and $h_c^n$ is complex fading channel coefficient for carrier $c$ at time $n$.  Given $|P_c|=g$ it can be shown that:
+\begin{equation}
+\begin{split}
+S &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c}|h_c^nP_c|^2 \\
+S &= gN_c\sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c}|h_c^n|^2
+\end{split}
+\end{equation}
+
+In practice, at the receiver we have the received pilots symbols with additive noise:
+\begin{equation}
+\hat{P}_c^n = h_c^nP_c + \mathcal{N}(0,\sigma^2)
+\end{equation}
+where $\mathcal{N}(0,\sigma^2)$ is a complex Gaussian noise sample with power equally distributed between the real and imaginary parts. $\hat{P}_c^n $ has power:
+\begin{equation}
+\label{eq:snr2_signal_noise}
+\begin{split}
+S_1 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |\hat{P}_c^n|^2 \\
+S_1 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} \left(|h_c^nP_c|^2 + 2Re\{h_c^nP_c\mathcal{N}(0,\sigma^2)\} + |\mathcal{N}(0,\sigma^2)|^2\right) \\
+    &\approx \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |h_c^nP_c|^2 + \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |\mathcal{N}(0,\sigma^2)|^2 \\
+    &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |h_c^nP_c|^2 + N_w N_c |\mathcal{N}(0,\sigma^2)|^2 \\
+    &= S + N
+\end{split}
+\end{equation} 
+The approximation is due to the second term having an expected value of zero and therefore being small compared to the first and third term.
+
+At the receiver we use least squares phase estimation and correction to obtain the phase corrected pilots:
+\begin{equation}
+\hat{R}_c^n = |h_c^n|P_c e^{j\mathcal{N}(0,\alpha)} + \mathcal{N}(0,\sigma^2)
+\end{equation}
+where $\mathcal{N}(0,\alpha)$ is a small, random, zero mean phase error. We note that given the pilots $P_c$ are real, a scatter diagram plot of $\hat{R}_c^n$ resembles BPSK symbols on the real axis with additive complex noise. The magnitude of the fading $|h_c^n|$ will cause the symbols to move along the real axis. The imaginary component is not affected by fading, only the channel noise. Consider the power of the imaginary component, and applying a similar approximation to above: 
+\begin{equation}
+\label{eq:snr2_noise}
+\begin{split}
+S_2 &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{\hat{R}_c^n\}|^2 \\
+    &= \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{|h_c^n|P_ce^{j\mathcal{N}(0,\alpha)}\} + Im\{\mathcal{N}(0,\sigma^2)\}|^2 \\
+    &\approx \sum_{n=0}^{N_w-1} \sum_{c=1}^{N_c} |Im\{\mathcal{N}(0,\sigma^2)\}|^2 \\
+    &= N/2
+\end{split}
+\end{equation}
+Using (\ref{eq:snr2_signal_noise}) and (\ref{eq:snr2_noise}) we can obtain an approximation of the (linear) signal to noise ratio as:
+\begin{equation}
+\frac{S}{N} = \frac{S_1}{2S_2} - 1
+\end{equation}
+
+\begin{figure}[H]
+\caption{Scatter plot of actual versus estimated $Es/N_0$ values, RADE V1 waveform, AWGN channel. Solid blue line is linear regression straight line fit, black ideal.}
+\label{fig:est_snr2a}
+\begin{center}
+\input est_snr2a.tex
+\end{center}
+\end{figure}
+
+This algorithm was tested in the script \emph{est\_snr.py}, which supports single point testing and generating curves over evolving multiplath channels. There was some error in the $S/N$ estimates (comnpared to a genie estimator) due to (\ref{eq:snr2_noise}) being sensitive to the noise in the phase estimator $\mathcal{N}(0,\alpha)$.  The algorithm works reasonably well for AWGN, MPG and MPP channels, however the error increases with faster fading.  A straight line was fitted to the estimator output:
+\begin{equation}
+SNR_{est} = mSNR + c
+\end{equation}
+where $SNR$ is the genie estimate in dB for the time window $T$. To correct for the error the equation can be re-arranged:
+\begin{equation}
+SNR = (SNR_{est} - c)/m
+\end{equation}
+The straight line fit is different for each channel tested.  So the mean of $m$ and $c$ for each channel was found and averaged.
+
+Figure \ref{fig:est_snr2a} shows the results for an AWGN channel, and Figure \ref{fig:est_snr2b} shows a straight line fit for the estimator over the three channels tested (in both figures the correction has been applied). The results were calculated over 60 second runs using the \emph{est\_snr\_curves.sh} script.
+
+As the algorithm works at the symbol rate $S/N=E_s/N_0$.  Between -5 and 10dB $E_s/N_0$, the estimator is within +/-1dB for all channels except MPP (1 Hz fading) which reads several dB low. To obtain the SNR in a different noise bandwidth (e.g 3000Hz), and using the RADE V1 waveform parameters:
+\begin{equation}
+\begin{split}
+SNR_{3k} &= 10log_{10}(E_s/N_0) + 10log_{10}(RsNc/B) + 10log_{10}((M+N_{cp})/M) \\
+         &= 10log_{10}(E_s/N_0) + 10log_{10}((50)(30)/3000) + 10log_{10}((160+32)/160) \\
+         &= 10log_{10}(E_s/N_0) - 2.22
+\end{split}
+\end{equation}
+The last term accounts for the carrier power in the cyclic prefix, which is not included in $Es$.
+
+\begin{figure}[H]
+\caption{Straight line fit to estimator output for AWGN, MPG, and MPP channels.}
+\label{fig:est_snr2b}
+\begin{center}
+\input est_snr2b.tex
+\end{center}
+\end{figure}
+
+
 \section{Acquisition}
 
 In a practical PTT voice system a transmitter will start and stop transmissions at a time unknown to the remote receiver.  When a received signal is present, it will have unknown timing and frequency offsets. An acquisition system is required to determine if a valid signal is present, and to determine estimates of the frequency and timing offsets.  It must also determine when transmission ceases, to prevent decoding when no signal is present.

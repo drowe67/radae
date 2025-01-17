@@ -2,7 +2,7 @@
 % create rate Rs H and rate Fs G matrices for multipath channel simulation,
 % saved as flattened .f32 files
 
-function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="")
+function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="",H_complex=0)
     pkg load signal;
     nsam = Fs*Nseconds;
     randn('seed',1);
@@ -36,12 +36,13 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="")
     M = Fs/Rs;
     omega = 2*pi*(0:Nc-1);
     d = path_delay_s;
-    H = hf_gain*abs(G1(1:M:end) + G2(1:M:end).*exp(-j*omega*d*Rs));
+    H = hf_gain*(G1(1:M:end) + G2(1:M:end).*exp(-j*omega*d*Rs));
     figure(1); clf;
     if Nc > 1 
-      mesh(H(1:10*Rs,:))
+      mesh(abs(H(1:10*Rs,:)))
     else
       # single carrier case
+      H = abs(H);
       Nsecplot=1
       subplot(211); plot(H(1:Nsecplot*Rs,:)); xlabel('Symbols'); ylabel('|H|')
       subplot(212); plot(20*log10(H(1:Nsecplot*Rs,:))); xlabel('Symbols'); ylabel('|H| (dB)')
@@ -61,10 +62,24 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="")
       LCR_meas = LC/Nseconds
       subplot(211); hold on; stem(LC_log,sqrt(P)*ones(length(LC_log))); hold off; axis([0 Nsecplot*Rs 0 3]);
     end
-    printf("H file size is Nseconds*Rs*Nc*(4 bytes/sample) = %d*%d*%d*4 = %d bytes\n", Nseconds,Rs,Nc,Nseconds*Rs*Nc*4)
+    if H_complex
+      bytes_per_sample = 8
+    else
+      bytes_per_sample = 4
+    end
+    printf("H file size is Nseconds*Rs*Nc*(%d bytes/sample) = %d*%d*%d*%d = %d bytes\n", bytes_per_sample,
+           Nseconds,Rs,Nc,bytes_per_sample, Nseconds*Rs*Nc*bytes_per_sample)
     f=fopen(H_fn,"wb");
     [r c] = size(H);
     Hflat = reshape(H', 1, r*c);
+    if H_complex
+      tmp = zeros(2*length(Hflat),1);
+      tmp(1:2:end) = real(Hflat);
+      tmp(2:2:end) = imag(Hflat);
+      Hflat = tmp;
+    else
+      Hflat = abs(Hflat);
+    end
     fwrite(f, Hflat, 'float32');
     fclose(f);
 
