@@ -49,16 +49,6 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         figure(6); clf; plot(real(rx)); xlabel('Time (samples)'); ylabel('rx');
         figure(7); clf; plot_specgram(rx, Fs=8000, 0, 3000);
         
-        % Spectrum plot
-        Fs = 8000; y = pwelch(rx,[],[],1024,Fs); y_dB = 10*log10(y);
-        mx = max(y_dB); mx = ceil(mx/10)*10
-        figure(8); clf; 
-        plot((0:length(y)-1)*Fs/length(y),y_dB-mx);
-        axis([0 3000 -60 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
-        if length(epslatex)
-          print_eps_restore(sprintf("%s_psd.eps",epslatex),"-S300,200",textfontsize,linewidth);
-        end
-
         max(abs(rx).^2)
         mean(abs(rx).^2)
         peak = max(abs(rx).^2);
@@ -68,7 +58,23 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         av = mean(abs(rx(1:160)).^2);
         PilotPAPRdB = 10*log10(peak/av);
         printf("Pav: %f PAPRdB: %5.2f PilotPAPRdB: %5.2f\n", av, PAPRdB, PilotPAPRdB);
-        bandwidth(rx)
+ 
+        fcentre = 1475;
+        bwHz = bandwidth(rx, fcentre)
+
+        % Spectrum plot
+        Fs = 8000; y = pwelch(rx,[],[],1024,Fs); y_dB = 10*log10(y);
+        mx = max(y_dB); mx = ceil(mx/10)*10
+        figure(8); clf; 
+        plot((0:length(y)-1)*Fs/length(y),y_dB-mx);
+        hold on;
+        plot([fcentre-bwHz/2 fcentre-bwHz/2 fcentre+bwHz/2 fcentre+bwHz/2 fcentre-bwHz/2 ],[-35 -5 -5 -35 -35],'r-');
+        hold off;
+        axis([0 3000 -60 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
+        if length(epslatex)
+          print_eps_restore(sprintf("%s_psd.eps",epslatex),"-S300,200",textfontsize,linewidth);
+        end
+
     end
 endfunction
 
@@ -97,7 +103,7 @@ function p = spec_power(y, centre, bandwidth)
 endfunction
 
 
-function bandwidth(rx)
+function bwHz = bandwidth(rx, fcentre)
   Nfft = 1204;
   Fs = 8000; y = pwelch(rx,[],[],Nfft,Fs); y_dB = 10*log10(y);
   figure(1);
@@ -105,13 +111,14 @@ function bandwidth(rx)
 
   % 99% power bandwidth
   total_power = sum(y);
-  centre = round(Nfft*1500/Fs);
+  centre = round(Nfft*fcentre/Fs);
   bw = 1;
   do
     bw++;
     p = spec_power(y, centre, bw);
   until p > 0.99*total_power
-  printf("bandwidth (Hz): %f power/total_power: %f\n", bw*Fs/Nfft, p/total_power);
+  bwHz =  bw*Fs/Nfft;
+  printf("bandwidth (Hz): %f power/total_power: %f\n", bwHz, p/total_power);
 
 endfunction
 
@@ -151,7 +158,10 @@ function loss_EqNo_plot(png_fn, epslatex, varargin)
 endfunction
 
 % Plots loss v C/No curves from text files dumped by train.py, pass in EqNo_file.txt,dim,leg for each curve
-function loss_CNo_plot(png_fn, Rs, B, varargin)
+function loss_CNo_plot(png_fn, epslatex, Rs, B, varargin)
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts(20);
+    end
     figure(1); clf; hold on;
     i = 1;
     while i <= length(varargin)
@@ -173,6 +183,9 @@ function loss_CNo_plot(png_fn, Rs, B, varargin)
      ylabel('loss');
     if length(png_fn)
         print("-dpng",png_fn);
+    end
+    if length(epslatex)
+        print_eps_restore(epslatex,"-S300,200",textfontsize,linewidth);
     end
 endfunction
 

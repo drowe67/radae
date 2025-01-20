@@ -6,12 +6,14 @@
 function run_model() {
     model=$1
     dim=$2
+    epoch=$3
+    shift
     shift
     shift
     python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --latent-dim ${dim} \
         --epochs 1 --lr 0.003 --lr-decay-factor 0.0001 \
         ~/Downloads/tts_speech_16k_speexdsp.f32 tmp \
-        --range_EbNo --plot_EqNo ${model} --initial-checkpoint ${model}/checkpoints/checkpoint_epoch_100.pth $@
+        --range_EbNo --plot_EqNo ${model} --initial-checkpoint ${model}/checkpoints/checkpoint_epoch_${epoch}.pth $@
 }
 
 # TODO automate here; Makefile like behaivour to generate model${model}_loss_EqNodB.txt files if they don't exist
@@ -26,27 +28,27 @@ function run_model() {
 #run_model model18 40  --bottleneck 3                     # mixed rate Rs with tanh applied to |tx|
 #run_model model17_check7 80 --range_EbNo_start -9 --bottleneck 3                # should be repeat of 17
 #run_model ~/tmp/240607_radio_ae/model17_check3 80  --bottleneck 3 --range_EbNo_start -9  # 17 with aux emebdded 25 bits/s data
+#run_model model19_check3 80 100 --bottleneck 3 --range_EbNo_start -9  --auxdata # RADE V1 model
+#run_model 250117_test 80 200 --bottleneck 3 --range_EbNo_start -9 --auxdata --txbpf # 0dB PAPR, 99% power BW < 1.5Rq, 3 stage clip/filter
 
-model_list='05 17_check7 19 19_check3'
-model_dim=(80 80 80 80 80 80)
-declare -a model_legend=("m5 1D" \
-                        "m17_check7 2D PAPR opt" \
-                        "m19 m17 + aux data 1" \
-                        "m19_check3 m17 + aux data 2" )
+model_list='model19_check3 250117_test'
+model_dim=(80 80)
+declare -a model_legend=("RADE V1" "Joint PAPR/BW")
 
 loss_EqNo=""
-loss_CNo="'loss_CNo_models',50,1"
-loss_SNR3k="'loss_SNR3k_models',50,3000"
+loss_CNo="50,1"
+loss_SNR3k="50,3000"
 i=0;
 for model in $model_list
   do
-    loss_EqNo="${loss_EqNo},'model${model}_loss_EqNodB.txt','${model_legend[i]}'"
-    CNo=",'model${model}_loss_EqNodB.txt',${model_dim[i]},'${model_legend[i]}'"
+    loss_EqNo="${loss_EqNo},'${model}_loss_EqNodB.txt','${model_legend[i]}'"
+    CNo=",'${model}_loss_EqNodB.txt',${model_dim[i]},'${model_legend[i]}'"
     loss_CNo="${loss_CNo}${CNo}"
     loss_SNR3k="${loss_SNR3k}${CNo}"
     ((i++))
   done
 echo "radae_plots; loss_EqNo_plot('loss_EqNo_models',''${loss_EqNo}); quit" | octave-cli -qf # PNG
 echo "radae_plots; loss_EqNo_plot('','loss_EqNo_models'${loss_EqNo}); quit" | octave-cli -qf # EPS
-echo "radae_plots; loss_CNo_plot(${loss_CNo}); quit" | octave-cli -qf
-echo "radae_plots; loss_CNo_plot(${loss_SNR3k}); quit" | octave-cli -qf
+echo "radae_plots; loss_CNo_plot('loss_CNo_models','',${loss_CNo}); quit" | octave-cli -qf # PNG
+echo "radae_plots; loss_CNo_plot('loss_SNR3k_models','',${loss_SNR3k}); quit" | octave-cli -qf # PNG
+echo "radae_plots; loss_CNo_plot('','radev2_loss_SNR3k_models',${loss_SNR3k}); quit" | octave-cli -qf # EPS
