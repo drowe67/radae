@@ -7,13 +7,15 @@ function run_model() {
     model=$1
     dim=$2
     epoch=$3
+    chan=$4
+    shift
     shift
     shift
     shift
     python3 ./train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --latent-dim ${dim} \
         --epochs 1 --lr 0.003 --lr-decay-factor 0.0001 \
         ~/Downloads/tts_speech_16k_speexdsp.f32 tmp \
-        --range_EbNo --plot_EqNo ${model} --initial-checkpoint ${model}/checkpoints/checkpoint_epoch_${epoch}.pth $@
+        --range_EbNo --plot_EqNo ${model}_${chan} --initial-checkpoint ${model}/checkpoints/checkpoint_epoch_${epoch}.pth $@
 }
 
 # TODO automate here; Makefile like behaivour to generate model${model}_loss_EqNodB.txt files if they don't exist
@@ -28,12 +30,14 @@ function run_model() {
 #run_model model18 40  --bottleneck 3                     # mixed rate Rs with tanh applied to |tx|
 #run_model model17_check7 80 --range_EbNo_start -9 --bottleneck 3                # should be repeat of 17
 #run_model ~/tmp/240607_radio_ae/model17_check3 80  --bottleneck 3 --range_EbNo_start -9  # 17 with aux emebdded 25 bits/s data
-#run_model model19_check3 80 100 --bottleneck 3 --range_EbNo_start -9  --auxdata # RADE V1 model
-#run_model 250117_test 80 200 --bottleneck 3 --range_EbNo_start -9 --auxdata --txbpf # 0dB PAPR, 99% power BW < 1.5Rq, 3 stage clip/filter
+#run_model model19_check3 80 100 awgn --bottleneck 3 --range_EbNo_start -9  --auxdata # RADE V1 model
+#run_model 250117_test 80 200 awgn --bottleneck 3 --range_EbNo_start -9 --auxdata --txbpf # 0dB PAPR, 99% power BW < 1.5Rq, 3 stage clip/filter
+#run_model model19_check3 80 100 mpp --bottleneck 3 --range_EbNo_start 0  --auxdata --h_file h_nc20_train_mpp.f32  # RADE V1 model
+#run_model 250117_test 80 200 mpp --bottleneck 3 --range_EbNo_start 0 --auxdata --txbpf --h_file h_nc20_train_mpp.f32  # 0dB PAPR, 99% power BW < 1.5Rq, 3 stage clip/filter
 
-model_list='model19_check3 250117_test'
-model_dim=(80 80)
-declare -a model_legend=("RADE V1" "Joint PAPR/BW")
+model_list='model19_check3_awgn 250117_test_awgn model19_check3_mpp 250117_test_mpp'
+model_dim=(80 80 80 80)
+declare -a model_legend=("RADE V1 AWGN" "Joint PAPR/BW AWGN" "RADE V1 MPP" "Joint PAPR/BW MPP")
 
 loss_EqNo=""
 loss_CNo="50,1"
