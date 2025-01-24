@@ -499,7 +499,7 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   c = load(controls_fn);
   
   if length(epslatex)
-    [textfontsize linewidth] = set_fonts();
+    [textfontsize linewidth] = set_fonts(20);
   end
 
   # WER v C/No plot
