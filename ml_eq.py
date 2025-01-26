@@ -63,15 +63,14 @@ class EQ(nn.Module):
         self.dense3 = nn.Linear(w1+self.n_data, w1)
         self.dense4 = nn.Linear(w1+self.n_data, w1)
         self.dense5 = nn.Linear(w1+self.n_data, self.n_data)
+        self.dense = nn.Linear(w1+self.n_data, self.n_data)
 
     def forward(self, pilots, data):
-        #print(pilots.shape,data.shape,torch.cat([pilots, data],-1).shape)
-        #quit()
         x = torch.relu(self.dense1(torch.cat([pilots, data],-1)))
         x = torch.relu(self.dense2(torch.cat([x, data],-1)))
         x = torch.relu(self.dense3(torch.cat([x, data],-1)))
         x = torch.relu(self.dense4(torch.cat([x, data],-1)))
-        equalised_data = torch.relu(self.dense5(torch.cat([x, data],-1)))
+        equalised_data = self.dense5(torch.cat([x, data],-1))
         return equalised_data
 
 model = EQ(2*n_pilots, 2*n_data).to(device)
@@ -93,7 +92,7 @@ for epoch in range(args.epochs):
         
         # channel simulation, apply same phase offset to all symbols in frame
         phi = torch.zeros(batch_size, tx_frame.shape[1])
-        #phi[:,] = 2*torch.pi*torch.rand(batch_size,1)
+        phi[:,] = 2*torch.pi*torch.rand(batch_size,1)
         rx_frame = tx_frame*torch.exp(1j*phi)
 
         # de-frame pilots and data, separate real and imag
@@ -133,10 +132,13 @@ for epoch in range(args.epochs):
         f'Batches per epoch: {batch + 1:3d} | ' \
         f'Loss: {sum_loss / (batch + 1):.10f}')
 
+
 """
 # Inference using trained model
 model.eval()
 model.sigma=0
+        self.bits = torch.sign(torch.rand(self.n_syms, self.bps)-0.5)
+        self.symbs = (self.bits[:,::2] + 1j*self.bits[:,1::2])/np.sqrt(2.0)
 bits_in = torch.sign(torch.rand(n_syms, np, bps)-0.5)
 with torch.no_grad():
     symbols, bits_out = model(bits_in.to(device))
@@ -149,4 +151,3 @@ plt.plot(symbols.real,symbols.imag,'+')
 plt.axis([-2,2,-2,2])
 plt.show()
 """
-
