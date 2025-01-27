@@ -10,28 +10,19 @@ import argparse,sys
 from matplotlib import pyplot as plt
 import torch.nn.functional as F
 
-class aQPSKDataset(torch.utils.data.Dataset):
-    def __init__(self, n_syms):        
-        self.bps = 2
-        self.n_syms = n_syms
-        self.bits = torch.sign(torch.rand(self.n_syms, self.bps)-0.5)
-        self.symbs = (self.bits[:,::2] + 1j*self.bits[:,1::2])/np.sqrt(2.0)
-
-    def __len__(self):
-        return self.n_syms
-
-    def __getitem__(self, index):
-        return self.symbs[index,:]
-   
 parser = argparse.ArgumentParser()
 parser.add_argument('--n_syms', type=int, default=10000, help='number of symbols to train with')
-parser.add_argument('--EsNodB', type=float, default=10, help='energy per symbol over spectral noise density in dB')
+parser.add_argument('--EbNodB', type=float, default=100, help='energy per bit over spectral noise density in dB')
 parser.add_argument('--epochs', type=int, default=10, help='number of training epochs')
 parser.add_argument('--lr', type=float, default=5E-2, help='learning rate')
+parser.add_argument('--phase_offset',  action='store_true', help='insert random phase offset')
+parser.add_argument('--bypass_eq',  action='store_true', help='bypass equaliser')
+parser.add_argument('--notrain',  action='store_false', dest='train', help='bypass training (defualt train, then inference)')
+parser.set_defaults(train=True)
 args = parser.parse_args()
 n_syms = args.n_syms
-EsNodB = args.EsNodB
 
+bps = 2
 batch_size = 4
 w1 = 32
 n_pilots = 2
@@ -47,6 +38,18 @@ device = (
 )
 print(f"Using {device} device")
 
+class aQPSKDataset(torch.utils.data.Dataset):
+    def __init__(self, n_syms):        
+        self.n_syms = n_syms
+        self.bits = torch.sign(torch.rand(self.n_syms, bps)-0.5)
+        self.symbs = (self.bits[:,::2] + 1j*self.bits[:,1::2])/np.sqrt(2.0)
+
+    def __len__(self):
+        return self.n_syms
+
+    def __getitem__(self, index):
+        return self.symbs[index,:]
+   
 # Generalised network for equalisation, we provide n_pilots and n_data symbols,
 # hopefully network will determine which pilots EQ which data symbols.  We
 # feed the data symbols into each layer so they are available at the end for
@@ -54,10 +57,12 @@ print(f"Using {device} device")
 # used in EQ process.  Give it a few layers to approximate non-linear functions
 # like trig and arg[].
 class EQ(nn.Module):
-    def __init__(self, n_pilots, n_data):
+    def __init__(self, n_pilots, n_data, EbNodB):
         super().__init__()
         self.n_pilots = n_pilots
         self.n_data = n_data
+        self.EbNodB = EbNodB
+
         self.dense1 = nn.Linear(self.n_pilots+self.n_data, w1)
         self.dense2 = nn.Linear(w1+self.n_data, w1)
         self.dense3 = nn.Linear(w1+self.n_data, w1)
@@ -84,8 +89,11 @@ class EQ(nn.Module):
         
         # channel simulation, apply same phase offset to all symbols in frame
         phi = torch.zeros(batch_size, tx_frame.shape[1], device=tx_data.device)
-        phi[:,] = 2*torch.pi*torch.rand(batch_size,1)
-        rx_frame = tx_frame*torch.exp(1j*phi)
+        if args.phase_offset:
+            phi[:,] = 2*torch.pi*torch.rand(batch_size,1)
+        EsNodB = self.EbNodB + 3
+        sigma = 10**(-EsNodB/20)
+        rx_frame = tx_frame*torch.exp(1j*phi) + sigma*torch.randn_like(tx_frame) 
 
         # de-frame pilots and data, separate real and imag
         # TODO: more efficient way to do this
@@ -99,7 +107,10 @@ class EQ(nn.Module):
         rx_data[:,1] = rx_frame[:,1].imag
 
         # run equaliser
-        rx_data_eq = self.equaliser(rx_pilots, rx_data)
+        if args.bypass_eq:
+            rx_data_eq = rx_data
+        else:
+            rx_data_eq = self.equaliser(rx_pilots, rx_data)
 
         # real version of tx_data symbol for loss function
         tx_data_real = torch.zeros((batch_size,2*n_data), device=tx_data.device)
@@ -109,48 +120,56 @@ class EQ(nn.Module):
 
         return tx_data_real,rx_data, rx_data_eq
         
-model = EQ(2*n_pilots, 2*n_data).to(device)
+model = EQ(2*n_pilots, 2*n_data, args.EbNodB).to(device)
 print(model)
 nb_params = sum(p.numel() for p in model.parameters())
 print(f" {nb_params} weights")
-loss_fn = nn.MSELoss(reduction='sum')
-optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
 
-dataset = aQPSKDataset(n_syms)
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
+if args.train:
+    loss_fn = nn.MSELoss(reduction='sum')
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
 
-# Train model
-for epoch in range(args.epochs):
-    sum_loss = 0.0
-    for batch,(tx_data) in enumerate(dataloader):
-        tx_data = tx_data.to(device)
-        tx_data_real,rx_data,rx_data_eq = model(tx_data)
-        loss = loss_fn(tx_data_real, rx_data_eq)
-        loss.backward() 
-        optimizer.step()
-        optimizer.zero_grad()
-        
-        if np.isnan(loss.item()):
-            print("NAN encountered - quitting (try reducing lr)!")
-            quit()
-        sum_loss += loss.item()
+    dataset = aQPSKDataset(n_syms)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
 
-    print(f'Epochs:{epoch + 1:5d} | ' \
-        f'Batches per epoch: {batch + 1:3d} | ' \
-        f'Loss: {sum_loss / (batch + 1):.10f}')
+    # Train model
+    for epoch in range(args.epochs):
+        sum_loss = 0.0
+        for batch,(tx_data) in enumerate(dataloader):
+            tx_data = tx_data.to(device)
+            tx_data_real,rx_data,rx_data_eq = model(tx_data)
+            loss = loss_fn(tx_data_real, rx_data_eq)
+            loss.backward() 
+            optimizer.step()
+            optimizer.zero_grad()
+            
+            if np.isnan(loss.item()):
+                print("NAN encountered - quitting (try reducing lr)!")
+                quit()
+            sum_loss += loss.item()
+
+        print(f'Epochs:{epoch + 1:5d} | ' \
+            f'Batches per epoch: {batch + 1:3d} | ' \
+            f'Loss: {sum_loss / (batch + 1):.10f}')
 
 
-# Inference using trained model
+# Inference using trained model (or non-ML sim if bypass_eq)
 n_syms_inf = 1000
 model.eval()
-bits = torch.sign(torch.rand(n_syms_inf, dataset.bps)-0.5)
+bits = torch.sign(torch.rand(n_syms_inf, bps)-0.5)
 tx_data = (bits[:,::2] + 1j*bits[:,1::2])/np.sqrt(2.0)
 with torch.no_grad():
     tx_data = tx_data.to(device)
     tx_data_real,rx_data,rx_data_eq = model(tx_data)
+tx_data_real = tx_data_real.cpu().numpy()
 rx_data = rx_data.cpu().numpy()
 rx_data_eq = rx_data_eq.cpu().numpy()
 print(rx_data_eq.shape)
+
+n_errors = np.sum(-tx_data_real.flatten()*rx_data_eq.flatten()>0)
+n_bits = n_syms_inf*bps
+BER = n_errors/n_bits
+print(f"n_bits: {n_bits:d} BER: {BER:5.3f}")
 plt.plot(rx_data[:,0],rx_data[:,1],'+')
 plt.plot(rx_data_eq[:,0],rx_data_eq[:,1],'+')
 plt.axis([-2,2,-2,2])
