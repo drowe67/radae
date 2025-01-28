@@ -18,7 +18,10 @@ parser.add_argument('--lr', type=float, default=5E-2, help='learning rate')
 parser.add_argument('--loss_phase',  action='store_true', help='')
 parser.add_argument('--phase_offset',  action='store_true', help='insert random phase offset')
 parser.add_argument('--eq', type=str, default='ml', help='equaliser ml/bypass/lin (default ml)')
-parser.add_argument('--notrain',  action='store_false', dest='train', help='bypass training (defualt train, then inference)')
+parser.add_argument('--notrain',  action='store_false', dest='train', help='bypass training (default train, then inference)')
+parser.add_argument('--save_model', type=str, default="", help='after training, save model using this filename')
+parser.add_argument('--load_model', type=str, default="", help='before inference, load model using this filename')
+parser.add_argument('--curve', type=str, default="", help='before inference, load model using this filename')
 parser.set_defaults(train=True)
 args = parser.parse_args()
 n_syms = args.n_syms
@@ -117,7 +120,7 @@ class EQ(nn.Module):
             sum = torch.sum(rx_pilots[:,::2] + 1j*rx_pilots[:,1::2],dim=1)
             phase_est = torch.angle(sum)
             x = rx_frame[:,1]*torch.exp(-1j*phase_est)   
-            print(sum.shape,phase_est.shape,x.shape)
+            #print(sum.shape,phase_est.shape,x.shape)
                    
             rx_data_eq = torch.zeros((batch_size,2*n_data), device=tx_data.device)
             rx_data_eq[:,0] = x.real
@@ -173,27 +176,49 @@ if args.train:
         print(f'Epochs:{epoch + 1:5d} | ' \
             f'Batches per epoch: {batch + 1:3d} | ' \
             f'Loss: {sum_loss / (batch + 1):.10f}')
+        
+    if len(args.save_model):
+        print(f"Saving model to: {args.save_model}")
+        torch.save(model.state_dict(), args.save_model)
 
 
 # Inference using trained model (or non-ML sim if bypass_eq)
-n_syms_inf = args.n_syms
+if len(args.load_model):
+    print(f"Loading model from: {args.load_model}")
+    model.load_state_dict(torch.load(args.load_model,weights_only=True))
 model.eval()
-bits = torch.sign(torch.rand(n_syms_inf, bps)-0.5)
-tx_data = (bits[:,::2] + 1j*bits[:,1::2])/np.sqrt(2.0)
-with torch.no_grad():
-    tx_data = tx_data.to(device)
-    tx_data_real,rx_data,rx_data_eq = model(tx_data)
-tx_data_real = tx_data_real.cpu().numpy()
-rx_data = rx_data.cpu().numpy()
-rx_data_eq = rx_data_eq.cpu().numpy()
-print(rx_data_eq.shape)
 
-n_errors = np.sum(-tx_data_real.flatten()*rx_data_eq.flatten()>0)
-n_bits = n_syms_inf*bps
-BER = n_errors/n_bits
-print(f"n_bits: {n_bits:d} n_errors: {n_errors:d} BER: {BER:5.3f}")
-plt.plot(rx_data[:,0],rx_data[:,1],'+')
-plt.plot(rx_data_eq[:,0],rx_data_eq[:,1],'+')
-plt.axis([-2,2,-2,2])
-plt.show()
+def single_point(EbNodB, n_syms):
+    bits = torch.sign(torch.rand(n_syms, bps)-0.5)
+    tx_data = (bits[:,::2] + 1j*bits[:,1::2])/np.sqrt(2.0)
+    model.EbNodB = EbNodB
+    with torch.no_grad():
+        tx_data = tx_data.to(device)
+        tx_data_real,rx_data,rx_data_eq = model(tx_data)
+    tx_data_real = tx_data_real.cpu().numpy()
+    rx_data = rx_data.cpu().numpy()
+    rx_data_eq = rx_data_eq.cpu().numpy()
+
+    n_errors = np.sum(-tx_data_real.flatten()*rx_data_eq.flatten()>0)
+    n_bits = n_syms*bps
+    BER = n_errors/n_bits
+    print(f"EbNodB: {EbNodB:5.2f} n_bits: {n_bits:d} n_errors: {n_errors:d} BER: {BER:5.3f}")
+
+    return BER, rx_data, rx_data_eq
+
+if len(args.curve):
+    EbNodB = np.array([0,1,2,3,4,5,6,7,8], dtype=np.float32)
+    n_tests = len(EbNodB)
+    curve = np.zeros((n_tests,2))
+    for i in np.arange(0,n_tests):
+        curve[i,0] = EbNodB[i]
+        curve[i,1],rx_data,rx_data_eq = single_point(EbNodB[i], args.n_syms)
+    np.savetxt(args.curve, curve)
+else:
+    # single point with scatter plot
+    ber,rx_data,rx_data_eq = single_point(args.EbNodB, args.n_syms)
+    plt.plot(rx_data[:,0],rx_data[:,1],'+')
+    plt.plot(rx_data_eq[:,0],rx_data_eq[:,1],'+')
+    plt.axis([-2,2,-2,2])
+    plt.show()
 

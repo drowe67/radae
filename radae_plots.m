@@ -514,3 +514,30 @@ function plot_sample_spec(wav_fn,png_spec_fn="")
     print("-dpng",png_spec_fn,"-S800,600");
   end
 end
+
+function plot_ber_EbNodB(lin_fn,mse_fn="",phase_fn="",epslatex="")
+  if length(epslatex)
+    [textfontsize linewidth] = set_fonts(20);
+  end
+  figure(1); clf;
+  lin=load(lin_fn);
+  semilogy(lin(:,1),lin(:,2),'bo-;lin;')
+  hold on;
+  if length(mse_fn)
+    mse=load(mse_fn);
+    semilogy(mse(:,1),mse(:,2),'g+-;mse;')
+  end
+  if length(phase_fn)
+    phase=load(phase_fn);
+    semilogy(phase(:,1),phase(:,2),'rx-;phase;')
+  end
+  EbNoLin = 10.^(lin(:,1)/10);
+  theory = 0.5*erfc(sqrt(EbNoLin));
+  semilogy(lin(:,1),theory,'bk+-;theory;')
+  hold off;
+  grid; xlabel('Eb/No (dB)'); ylabel('BER');
+  if length(epslatex)
+    print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
+  end
+
+end
