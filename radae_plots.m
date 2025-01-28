@@ -515,7 +515,7 @@ function plot_sample_spec(wav_fn,png_spec_fn="")
   end
 end
 
-function plot_ber_EbNodB(lin_fn,mse_fn="",phase_fn="",epslatex="")
+function plot_ber_EbNodB(lin_fn,mse_fn="",phase_fn="",png="", epslatex="")
   if length(epslatex)
     [textfontsize linewidth] = set_fonts(20);
   end
@@ -536,6 +536,9 @@ function plot_ber_EbNodB(lin_fn,mse_fn="",phase_fn="",epslatex="")
   semilogy(lin(:,1),theory,'bk+-;theory;')
   hold off;
   grid; xlabel('Eb/No (dB)'); ylabel('BER');
+  if length(png)
+    print("-dpng",png,"-S800,600");
+  end
   if length(epslatex)
     print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
   end

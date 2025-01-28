@@ -19,10 +19,12 @@ parser.add_argument('--loss_phase',  action='store_true', help='')
 parser.add_argument('--phase_offset',  action='store_true', help='insert random phase offset')
 parser.add_argument('--eq', type=str, default='ml', help='equaliser ml/bypass/lin (default ml)')
 parser.add_argument('--notrain',  action='store_false', dest='train', help='bypass training (default train, then inference)')
+parser.add_argument('--noplots',  action='store_false', dest='plots', help='disable plots (default plots enabled)')
 parser.add_argument('--save_model', type=str, default="", help='after training, save model using this filename')
 parser.add_argument('--load_model', type=str, default="", help='before inference, load model using this filename')
 parser.add_argument('--curve', type=str, default="", help='before inference, load model using this filename')
 parser.set_defaults(train=True)
+parser.set_defaults(plots=True)
 args = parser.parse_args()
 n_syms = args.n_syms
 
@@ -217,8 +219,9 @@ if len(args.curve):
 else:
     # single point with scatter plot
     ber,rx_data,rx_data_eq = single_point(args.EbNodB, args.n_syms)
-    plt.plot(rx_data[:,0],rx_data[:,1],'+')
-    plt.plot(rx_data_eq[:,0],rx_data_eq[:,1],'+')
-    plt.axis([-2,2,-2,2])
-    plt.show()
+    if args.plots:
+        plt.plot(rx_data[:,0],rx_data[:,1],'+')
+        plt.plot(rx_data_eq[:,0],rx_data_eq[:,1],'+')
+        plt.axis([-2,2,-2,2])
+        plt.show()
 
