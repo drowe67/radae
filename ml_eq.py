@@ -31,8 +31,6 @@ n_syms = args.n_syms
 bps = 2
 batch_size = 16
 w1 = 32
-n_pilot = 2
-n_data = 1
 
 # Get cpu, gpu or mps device for training.
 device = (
@@ -44,11 +42,34 @@ device = (
 )
 print(f"Using {device} device")
 
+class framer:
+    def __init__(self):
+        self.n_data = 0
+        self.n_pilot = 0
+    def frame(self, pilot, data):
+        return None
+    def deframe(self, pilot, data):
+        return None
+    def channel(self, EbNodB, phase_offset):
+        return None
+    
+class frame1(framer):
+    def __init__(self):
+        self.n_pilot = 2
+        self.n_data = 1
+    def frame(self, tx_data):
+        batch_size = tx_data.shape[0]
+        pilot = torch.zeros((batch_size,1),dtype=torch.complex64, device=tx_data.device)
+        pilot[:,0] = 1 + 1j*0
+        return torch.cat([pilot, tx_data, pilot],-1)
+ 
 class aQPSKDataset(torch.utils.data.Dataset):
-    def __init__(self, n_syms):        
+    def __init__(self, n_syms, n_data):        
         self.n_syms = n_syms
-        self.bits = torch.sign(torch.rand(self.n_syms, bps)-0.5)
+        self.n_data = n_data
+        self.bits = torch.sign(torch.rand(self.n_syms*self.n_data, bps)-0.5)
         self.symbs = (self.bits[:,::2] + 1j*self.bits[:,1::2])/np.sqrt(2.0)
+        self.symbs = torch.reshape(self.symbs, (n_syms,n_data))
 
     def __len__(self):
         return self.n_syms
@@ -72,11 +93,13 @@ class aQPSKDataset(torch.utils.data.Dataset):
 # Network also performs deframing, extracting just the data symbols
     
 class EQ(nn.Module):
-    def __init__(self, n_pilot, n_data, EbNodB):
+    def __init__(self, framer, EbNodB):
         super().__init__()
-        self.n_pilot = n_pilot
-        self.n_data = n_data
-        self.n_total = n_pilot + n_data
+
+        self.framer = framer
+        self.n_pilot = framer.n_pilot
+        self.n_data = framer.n_data
+        self.n_total = self.n_pilot + self.n_data
         self.EbNodB = EbNodB
 
         self.dense1 = nn.Linear(2*self.n_total, w1)
@@ -98,10 +121,7 @@ class EQ(nn.Module):
     def forward(self, tx_data):
         batch_size = tx_data.shape[0]
 
-        # create frame
-        pilot = torch.zeros((batch_size,1),dtype=torch.complex64, device=tx_data.device)
-        pilot[:,0] = 1 + 1j*0
-        tx_frame = torch.cat([pilot, tx_data, pilot],-1)
+        tx_frame = self.framer.frame(tx_data)
         
         # channel simulation, apply same phase offset to all symbols in frame
         phi = torch.zeros(batch_size, tx_frame.shape[1], device=tx_data.device)
@@ -139,7 +159,7 @@ class EQ(nn.Module):
             rx_data_eq[:,1] = x.imag
            
         # float version of tx_data symbol for loss function
-        tx_data_float = torch.zeros((batch_size,2*n_data), device=tx_data.device)
+        tx_data_float = torch.zeros((batch_size,2*self.n_data), device=tx_data.device)
         tx_data_float[:,0] = tx_data[:,0].real
         tx_data_float[:,1] = tx_data[:,0].imag
         tx_data_float = tx_data_float.to(device)
@@ -154,8 +174,7 @@ def loss_phase_mse(sym_hat, sym):
     loss = torch.sum(error**2)
     return loss
 
-model = EQ(n_pilot, n_data, args.EbNodB).to(device)
-print(model)
+model = EQ(frame1(), args.EbNodB).to(device)
 nb_params = sum(p.numel() for p in model.parameters())
 print(f" {nb_params} weights")
 
@@ -166,7 +185,7 @@ if args.train:
         loss_fn = nn.MSELoss(reduction='sum')
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
 
-    dataset = aQPSKDataset(n_syms)
+    dataset = aQPSKDataset(n_syms, model.n_data)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
 
     # Train model
