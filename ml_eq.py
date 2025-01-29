@@ -53,6 +53,7 @@ class framer:
     def channel(self, EbNodB, phase_offset):
         return None
     
+# simple PDP frame to get us started
 class frame1(framer):
     def __init__(self):
         self.n_pilot = 2
@@ -62,7 +63,17 @@ class frame1(framer):
         pilot = torch.zeros((batch_size,1),dtype=torch.complex64, device=tx_data.device)
         pilot[:,0] = 1 + 1j*0
         return torch.cat([pilot, tx_data, pilot],-1)
- 
+    def channel(self, tx_frame, EbNodB):     
+        #print(tx_frame.shape)    
+        batch_size = tx_frame.shape[0]
+        # apply same phase offset to all symbols in frame
+        phi = torch.zeros(batch_size, tx_frame.shape[1], device=tx_frame.device)
+        if args.phase_offset:
+            phi[:,] = 2*torch.pi*torch.rand(batch_size,1)
+        EsNodB = EbNodB + 3
+        sigma = 10**(-EsNodB/20)
+        return tx_frame*torch.exp(1j*phi) + sigma*torch.randn_like(tx_frame) 
+
 class aQPSKDataset(torch.utils.data.Dataset):
     def __init__(self, n_syms, n_data):        
         self.n_syms = n_syms
@@ -76,7 +87,15 @@ class aQPSKDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         return self.symbs[index,:]
-   
+
+
+# helper function to convert 2D complex tensor to (real,imag) float pairs
+def tofloat(x):
+    x_float = torch.zeros((x.shape[0],2*x.shape[1]), device=x.device)
+    x_float[:,::2] = x.real
+    x_float[:,1::2] = x.imag
+    return x_float
+
 # Generalised network for equalisation, we provide n_pilot and n_data symbols,
 # as input, and it returns n_data equalised symbols as output.  Each symbol
 # is represented by two floats (the real and imag part).
@@ -122,26 +141,14 @@ class EQ(nn.Module):
         batch_size = tx_data.shape[0]
 
         tx_frame = self.framer.frame(tx_data)
-        
-        # channel simulation, apply same phase offset to all symbols in frame
-        phi = torch.zeros(batch_size, tx_frame.shape[1], device=tx_data.device)
-        if args.phase_offset:
-            phi[:,] = 2*torch.pi*torch.rand(batch_size,1)
-        EsNodB = self.EbNodB + 3
-        sigma = 10**(-EsNodB/20)
-        rx_frame = tx_frame*torch.exp(1j*phi) + sigma*torch.randn_like(tx_frame) 
+        rx_frame = self.framer.channel(tx_frame, self.EbNodB)
 
-        # separate real and imag
-        rx_frame_float = torch.zeros((batch_size,2*self.n_total), device=tx_data.device)
-        #print(rx_frame.shape, rx_frame_float.shape)
-        rx_frame_float[:,::2] = rx_frame.real
-        rx_frame_float[:,1::2] = rx_frame.imag
-        #print(rx_frame)
-        #print(rx_frame_real)
+        # TODO make this more generic, any length of data symbols
+        tx_data_float =  tofloat(torch.reshape(tx_data[:,0],(batch_size,1)))
 
-        rx_data_float = torch.zeros((batch_size,2*self.n_data), device=tx_data.device)
-        rx_data_float[:,0] = rx_frame[:,1].real
-        rx_data_float[:,1] = rx_frame[:,1].imag
+        rx_frame_float = tofloat(rx_frame)
+        # TODO this should be part of framer, as frame specific, just used for plots I think
+        rx_data_float =  tofloat(torch.reshape(rx_frame[:,1],(batch_size,1)))
 
         # run equaliser
         if args.eq == "bypass":
@@ -149,6 +156,7 @@ class EQ(nn.Module):
         if args.eq == "ml":
             rx_data_eq = self.equaliser(rx_frame_float)
         if args.eq == "lin":
+            # TODO make this part of framer
             sum = rx_frame[:,0] + rx_frame[:,2]
             phase_est = torch.angle(sum)
             x = rx_frame[:,1]*torch.exp(-1j*phase_est)   
@@ -158,12 +166,6 @@ class EQ(nn.Module):
             rx_data_eq[:,0] = x.real
             rx_data_eq[:,1] = x.imag
            
-        # float version of tx_data symbol for loss function
-        tx_data_float = torch.zeros((batch_size,2*self.n_data), device=tx_data.device)
-        tx_data_float[:,0] = tx_data[:,0].real
-        tx_data_float[:,1] = tx_data[:,0].imag
-        tx_data_float = tx_data_float.to(device)
-
         return tx_data_float,rx_data_float,rx_data_eq
         
 # sym and sym hat in float format (real,imag pairs)
@@ -220,8 +222,9 @@ if len(args.load_model):
 model.eval()
 
 def single_point(EbNodB, n_syms):
-    bits = torch.sign(torch.rand(n_syms, bps)-0.5)
+    bits = torch.sign(torch.rand(n_syms*model.n_data, bps)-0.5)
     tx_data = (bits[:,::2] + 1j*bits[:,1::2])/np.sqrt(2.0)
+    tx_data = torch.reshape(tx_data,(n_syms,model.n_data))
     model.EbNodB = EbNodB
     with torch.no_grad():
         tx_data = tx_data.to(device)
