@@ -21,6 +21,6 @@ function frame01_curve() {
     'mleq01_ber_EbNodB.png','mleq01_ber_EbNodB.eps')" | octave -qf
 }
 
-#frame01_train
+frame01_train
 frame01_curve
 
