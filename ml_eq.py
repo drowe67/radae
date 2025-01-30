@@ -192,7 +192,7 @@ def tofloat(x):
 # Network also performs deframing, extracting just the data symbols
     
 class EQ(nn.Module):
-    def __init__(self, framer, EbNodB):
+    def __init__(self, framer, w1, EbNodB):
         super().__init__()
 
         self.framer = framer
@@ -245,11 +245,14 @@ def loss_phase_mse(sym_hat, sym):
 
 if args.framer == 1:
     aframer = frame1()
+    w1 = 32
 if args.framer == 2:
     aframer = frame2()
+    w1 = 128
 
-model = EQ(aframer, args.EbNodB).to(device)
+model = EQ(aframer, w1, args.EbNodB).to(device)
 nb_params = sum(p.numel() for p in model.parameters())
+print(model)
 print(f" {nb_params} weights")
 
 if args.train:
