@@ -45,8 +45,9 @@ print(f"Using {device} device")
 
 class framer:
     def __init__(self):
-        self.n_data = 0
-        self.n_pilot = 0
+        self.Nc = 0          # number of carriers
+        self.n_data = 0      # total number of data symbols
+        self.n_pilot = 0     # total number of pilot symbols
     def frame(self, pilot, data):
         return None
     def deframe(self, pilot, data):
@@ -57,33 +58,37 @@ class framer:
 # single carrier "PDP" frame to get us started
 class frame1(framer):
     def __init__(self):
+        self.Nc = 1 
         self.n_pilot = 2
         self.n_data = 1
 
+    # symbols arranged in frames as (batch,Nc,timesteps) (timesteps = total # symbols in frame along time axis)
     def frame(self, tx_data):
         batch_size = tx_data.shape[0]
-        pilot = torch.zeros((batch_size,1),dtype=torch.complex64, device=tx_data.device)
-        pilot[:,0] = 1 + 1j*0
-        return torch.cat([pilot, tx_data, pilot],-1)
+        tx_frame = torch.zeros((batch_size,self.Nc,self.n_pilot+self.n_data),dtype=torch.complex64, device=tx_data.device)
+        tx_frame[:,0,0] = 1
+        tx_frame[:,0,1] = tx_data[:,0]
+        tx_frame[:,0,2] = 1
+        return tx_frame
     
     def channel(self, tx_frame, EbNodB):     
         batch_size = tx_frame.shape[0]
         # apply same phase offset to all symbols in frame
-        phi = torch.zeros(batch_size, tx_frame.shape[1], device=tx_frame.device)
+        phi = torch.zeros_like(tx_frame, device=tx_frame.device)
         if args.phase_offset:
-            phi[:,] = 2*torch.pi*torch.rand(batch_size,1)
+            phi[:,0,] = 2*torch.pi*torch.rand(batch_size,1)
         EsNodB = EbNodB + 3
         sigma = 10**(-EsNodB/20)
         rx_frame = tx_frame*torch.exp(1j*phi) + sigma*torch.randn_like(tx_frame)
         # extract just data symbols after channel model
-        rx_data = torch.reshape(rx_frame[:,1],(batch_size,1))
+        rx_data = torch.reshape(rx_frame[:,0,1],(batch_size,self.n_data))
         return rx_frame, rx_data
 
     def dsp_equaliser(self, rx_frame):
         batch_size = rx_frame.shape[0]
-        sum = rx_frame[:,0] + rx_frame[:,2]
+        sum = rx_frame[:,0,0] + rx_frame[:,0,2]
         phase_est = torch.angle(sum)
-        x = rx_frame[:,1]*torch.exp(-1j*phase_est)              
+        x = rx_frame[:,0,1]*torch.exp(-1j*phase_est)              
         rx_data_eq = torch.zeros((batch_size,2*self.n_data), device=rx_frame.device)
         rx_data_eq[:,0] = x.real
         rx_data_eq[:,1] = x.imag
@@ -94,15 +99,15 @@ class frame1(framer):
 # PDDDDP
 # PDDDDP
     
-class frame1(framer):
+class frame2(framer):
     def __init__(self):
-        self.n_pilot = 2
-        self.n_data = 1
+        self.Nc = 3
+        self.n_pilot = 6
+        self.n_data = 12
 
     def frame(self, tx_data):
         batch_size = tx_data.shape[0]
-        pilot = torch.zeros((batch_size,1),dtype=torch.complex64, device=tx_data.device)
-        pilot[:,0] = 1 + 1j*0
+        tx_frame = torch.zeros((batch_size,1),dtype=torch.complex64, device=tx_data.device)
         return torch.cat([pilot, tx_data, pilot],-1)
     
     def channel(self, tx_frame, EbNodB):     
@@ -122,7 +127,7 @@ class frame1(framer):
         batch_size = rx_frame.shape[0]
         sum = rx_frame[:,0] + rx_frame[:,2]
         phase_est = torch.angle(sum)
-        x = rx_frame[:,1]*torch.exp(-1j*phase_est)              
+        x = rx_frame[:,0,1]*torch.exp(-1j*phase_est)              
         rx_data_eq = torch.zeros((batch_size,2*self.n_data), device=rx_frame.device)
         rx_data_eq[:,0] = x.real
         rx_data_eq[:,1] = x.imag
@@ -195,9 +200,9 @@ class EQ(nn.Module):
         tx_frame = self.framer.frame(tx_data)
         rx_frame, rx_data = self.framer.channel(tx_frame, self.EbNodB)
 
-        tx_data_float =  tofloat(tx_data)
-        rx_frame_float = tofloat(rx_frame)
-        rx_data_float =  tofloat(rx_data)
+        tx_data_float = tofloat(tx_data)
+        rx_frame_float = tofloat(torch.reshape(rx_frame,(rx_frame.shape[0],self.n_total)))
+        rx_data_float = tofloat(rx_data)
 
         # run equaliser
         if args.eq == "bypass":
