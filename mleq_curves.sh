@@ -11,7 +11,7 @@ function frame01_train() {
 
 function frame01_curve() {
     # run BER v Eb/No curves, including DSP lin as control
-    python3 ml_eq.py --eq lin --notrain --phase_offset --curve mleq01_ber_lin.txt
+    python3 ml_eq.py --eq dsp --notrain --phase_offset --curve mleq01_ber_lin.txt
     python3 ml_eq.py --notrain --curve mleq01_ber_mse.txt --phase_offset --load_model mleq01_mse.model
     python3 ml_eq.py --notrain --curve mleq01_ber_phase.txt --phase_offset --load_model mleq01_phase.model
 

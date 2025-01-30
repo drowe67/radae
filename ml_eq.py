@@ -17,12 +17,13 @@ parser.add_argument('--epochs', type=int, default=10, help='number of training e
 parser.add_argument('--lr', type=float, default=5E-2, help='learning rate')
 parser.add_argument('--loss_phase',  action='store_true', help='')
 parser.add_argument('--phase_offset',  action='store_true', help='insert random phase offset')
-parser.add_argument('--eq', type=str, default='ml', help='equaliser ml/bypass/lin (default ml)')
+parser.add_argument('--eq', type=str, default='ml', help='equaliser ml/bypass/dsp (default ml)')
 parser.add_argument('--notrain',  action='store_false', dest='train', help='bypass training (default train, then inference)')
 parser.add_argument('--noplots',  action='store_false', dest='plots', help='disable plots (default plots enabled)')
 parser.add_argument('--save_model', type=str, default="", help='after training, save model using this filename')
 parser.add_argument('--load_model', type=str, default="", help='before inference, load model using this filename')
 parser.add_argument('--curve', type=str, default="", help='before inference, load model using this filename')
+parser.add_argument('--framer', type=int, default=1, help='framer design')
 parser.set_defaults(train=True)
 parser.set_defaults(plots=True)
 args = parser.parse_args()
@@ -53,18 +54,19 @@ class framer:
     def channel(self, EbNodB, phase_offset):
         return None
     
-# simple PDP frame to get us started
+# single carrier "PDP" frame to get us started
 class frame1(framer):
     def __init__(self):
         self.n_pilot = 2
         self.n_data = 1
+
     def frame(self, tx_data):
         batch_size = tx_data.shape[0]
         pilot = torch.zeros((batch_size,1),dtype=torch.complex64, device=tx_data.device)
         pilot[:,0] = 1 + 1j*0
         return torch.cat([pilot, tx_data, pilot],-1)
+    
     def channel(self, tx_frame, EbNodB):     
-        #print(tx_frame.shape)    
         batch_size = tx_frame.shape[0]
         # apply same phase offset to all symbols in frame
         phi = torch.zeros(batch_size, tx_frame.shape[1], device=tx_frame.device)
@@ -72,7 +74,59 @@ class frame1(framer):
             phi[:,] = 2*torch.pi*torch.rand(batch_size,1)
         EsNodB = EbNodB + 3
         sigma = 10**(-EsNodB/20)
-        return tx_frame*torch.exp(1j*phi) + sigma*torch.randn_like(tx_frame) 
+        rx_frame = tx_frame*torch.exp(1j*phi) + sigma*torch.randn_like(tx_frame)
+        # extract just data symbols after channel model
+        rx_data = torch.reshape(rx_frame[:,1],(batch_size,1))
+        return rx_frame, rx_data
+
+    def dsp_equaliser(self, rx_frame):
+        batch_size = rx_frame.shape[0]
+        sum = rx_frame[:,0] + rx_frame[:,2]
+        phase_est = torch.angle(sum)
+        x = rx_frame[:,1]*torch.exp(-1j*phase_est)              
+        rx_data_eq = torch.zeros((batch_size,2*self.n_data), device=rx_frame.device)
+        rx_data_eq[:,0] = x.real
+        rx_data_eq[:,1] = x.imag
+        return rx_data_eq
+
+# multi-carrier:
+# PDDDDP
+# PDDDDP
+# PDDDDP
+    
+class frame1(framer):
+    def __init__(self):
+        self.n_pilot = 2
+        self.n_data = 1
+
+    def frame(self, tx_data):
+        batch_size = tx_data.shape[0]
+        pilot = torch.zeros((batch_size,1),dtype=torch.complex64, device=tx_data.device)
+        pilot[:,0] = 1 + 1j*0
+        return torch.cat([pilot, tx_data, pilot],-1)
+    
+    def channel(self, tx_frame, EbNodB):     
+        batch_size = tx_frame.shape[0]
+        # apply same phase offset to all symbols in frame
+        phi = torch.zeros(batch_size, tx_frame.shape[1], device=tx_frame.device)
+        if args.phase_offset:
+            phi[:,] = 2*torch.pi*torch.rand(batch_size,1)
+        EsNodB = EbNodB + 3
+        sigma = 10**(-EsNodB/20)
+        rx_frame = tx_frame*torch.exp(1j*phi) + sigma*torch.randn_like(tx_frame)
+        # extract just data symbols after channel model
+        rx_data = torch.reshape(rx_frame[:,1],(batch_size,1))
+        return rx_frame, rx_data
+
+    def dsp_equaliser(self, rx_frame):
+        batch_size = rx_frame.shape[0]
+        sum = rx_frame[:,0] + rx_frame[:,2]
+        phase_est = torch.angle(sum)
+        x = rx_frame[:,1]*torch.exp(-1j*phase_est)              
+        rx_data_eq = torch.zeros((batch_size,2*self.n_data), device=rx_frame.device)
+        rx_data_eq[:,0] = x.real
+        rx_data_eq[:,1] = x.imag
+        return rx_data_eq
 
 class aQPSKDataset(torch.utils.data.Dataset):
     def __init__(self, n_syms, n_data):        
@@ -138,34 +192,21 @@ class EQ(nn.Module):
 
     # tx_data is complex, return real values real,imag pairs to suit loss function
     def forward(self, tx_data):
-        batch_size = tx_data.shape[0]
-
         tx_frame = self.framer.frame(tx_data)
-        rx_frame = self.framer.channel(tx_frame, self.EbNodB)
+        rx_frame, rx_data = self.framer.channel(tx_frame, self.EbNodB)
 
-        # TODO make this more generic, any length of data symbols
-        tx_data_float =  tofloat(torch.reshape(tx_data[:,0],(batch_size,1)))
-
+        tx_data_float =  tofloat(tx_data)
         rx_frame_float = tofloat(rx_frame)
-        # TODO this should be part of framer, as frame specific, just used for plots I think
-        rx_data_float =  tofloat(torch.reshape(rx_frame[:,1],(batch_size,1)))
+        rx_data_float =  tofloat(rx_data)
 
         # run equaliser
         if args.eq == "bypass":
             rx_data_eq = rx_data_float
         if args.eq == "ml":
             rx_data_eq = self.equaliser(rx_frame_float)
-        if args.eq == "lin":
-            # TODO make this part of framer
-            sum = rx_frame[:,0] + rx_frame[:,2]
-            phase_est = torch.angle(sum)
-            x = rx_frame[:,1]*torch.exp(-1j*phase_est)   
-            #print(sum.shape,phase_est.shape,x.shape)
-                   
-            rx_data_eq = torch.zeros((batch_size,2*self.n_data), device=tx_data.device)
-            rx_data_eq[:,0] = x.real
-            rx_data_eq[:,1] = x.imag
-           
+        if args.eq == "dsp":
+            rx_data_eq = self.framer.dsp_equaliser(rx_frame)
+ 
         return tx_data_float,rx_data_float,rx_data_eq
         
 # sym and sym hat in float format (real,imag pairs)
@@ -176,7 +217,10 @@ def loss_phase_mse(sym_hat, sym):
     loss = torch.sum(error**2)
     return loss
 
-model = EQ(frame1(), args.EbNodB).to(device)
+if args.framer == 1:
+    aframer = frame1()
+
+model = EQ(aframer, args.EbNodB).to(device)
 nb_params = sum(p.numel() for p in model.parameters())
 print(f" {nb_params} weights")
 
