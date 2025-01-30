@@ -45,8 +45,8 @@ print(f"Using {device} device")
 
 class framer:
     def __init__(self):
-        self.Nc = 0          # number of carriers
-        self.n_data = 0      # total number of data symbols
+        self.Nc = 0          
+        self.n_data = 0      
         self.n_pilot = 0     # total number of pilot symbols
     def frame(self, pilot, data):
         return None
@@ -58,9 +58,9 @@ class framer:
 # single carrier "PDP" frame to get us started
 class frame1(framer):
     def __init__(self):
-        self.Nc = 1 
-        self.n_pilot = 2
-        self.n_data = 1
+        self.Nc = 1          # num carriers
+        self.n_pilot = 2     # num pilot symbols
+        self.n_data = 1      # num data symbols
 
     # symbols arranged in frames as (batch,Nc,timesteps) (timesteps = total # symbols in frame along time axis)
     def frame(self, tx_data):
@@ -101,36 +101,57 @@ class frame1(framer):
     
 class frame2(framer):
     def __init__(self):
-        self.Nc = 3
-        self.n_pilot = 6
-        self.n_data = 12
+        self.Nc = 3        # num carriers
+        self.n_pilot = 6   # num pilot symbol
+        self.n_data = 12   # num data symbols
+        self.Ns = 6        # num timesteps in frame (measured in symbols, inc pilots)
 
     def frame(self, tx_data):
         batch_size = tx_data.shape[0]
-        tx_frame = torch.zeros((batch_size,1),dtype=torch.complex64, device=tx_data.device)
-        return torch.cat([pilot, tx_data, pilot],-1)
+        tx_frame = torch.zeros((batch_size,self.Nc,self.Ns),dtype=torch.complex64, device=tx_data.device)
+        tx_frame[:,:,0] = 1
+        tx_frame[:,:,self.Ns-1] = 1
+        for c in np.arange(self.Nc):
+            #print(tx_frame[:,c,1:self.Ns-1].shape, tx_data[:,c*(self.Ns-2):(c+1)*(self.Ns-2)].shape)
+            tx_frame[:,c,1:self.Ns-1] = tx_data[:,c*(self.Ns-2):(c+1)*(self.Ns-2)]
+        #print(tx_data[0,:])
+        #print(tx_frame[0,:,])
+        #quit()
+        return tx_frame
     
     def channel(self, tx_frame, EbNodB):     
         batch_size = tx_frame.shape[0]
         # apply same phase offset to all symbols in frame
-        phi = torch.zeros(batch_size, tx_frame.shape[1], device=tx_frame.device)
+        phi = torch.zeros((batch_size, self.Nc, self.Ns), device=tx_frame.device)
         if args.phase_offset:
-            phi[:,] = 2*torch.pi*torch.rand(batch_size,1)
+            phi[:,:,:] = 2*torch.pi*torch.rand((batch_size,1,1), device=tx_frame.device)
         EsNodB = EbNodB + 3
         sigma = 10**(-EsNodB/20)
+        #print(tx_frame.shape, phi.shape)
+        #print(phi[0,:,:])
+
         rx_frame = tx_frame*torch.exp(1j*phi) + sigma*torch.randn_like(tx_frame)
-        # extract just data symbols after channel model
-        rx_data = torch.reshape(rx_frame[:,1],(batch_size,1))
+        # extract just data symbols in shape (batch,n_data) after channel model
+        rx_data = torch.zeros((batch_size, self.n_data), dtype=torch.complex64)
+        tmp = rx_frame[:,:,1:self.Ns-1]
+        #print(tmp.shape, rx_data.shape)
+        
+        rx_data = torch.reshape(tmp,(batch_size,self.n_data))
         return rx_frame, rx_data
 
     def dsp_equaliser(self, rx_frame):
         batch_size = rx_frame.shape[0]
-        sum = rx_frame[:,0] + rx_frame[:,2]
-        phase_est = torch.angle(sum)
-        x = rx_frame[:,0,1]*torch.exp(-1j*phase_est)              
+        sum = torch.sum(rx_frame[:,:,0],dim=1) + torch.sum(rx_frame[:,:,self.Ns-1],dim=1)
+        #print(sum.shape)
+        #print(sum)
+        
+        phase_est = torch.reshape(torch.angle(sum),(batch_size,1,1))
+        tmp = rx_frame*torch.exp(-1j*phase_est)
+        tmp = torch.reshape(tmp[:,:,1:self.Ns-1],(batch_size,self.n_data))
+        #print(tmp.shape)
         rx_data_eq = torch.zeros((batch_size,2*self.n_data), device=rx_frame.device)
-        rx_data_eq[:,0] = x.real
-        rx_data_eq[:,1] = x.imag
+        rx_data_eq[:,::2] = tmp.real
+        rx_data_eq[:,1::2] = tmp.imag
         return rx_data_eq
 
 class aQPSKDataset(torch.utils.data.Dataset):
@@ -224,6 +245,8 @@ def loss_phase_mse(sym_hat, sym):
 
 if args.framer == 1:
     aframer = frame1()
+if args.framer == 2:
+    aframer = frame2()
 
 model = EQ(aframer, args.EbNodB).to(device)
 nb_params = sum(p.numel() for p in model.parameters())
@@ -283,7 +306,7 @@ def single_point(EbNodB, n_syms):
     rx_data_eq = rx_data_eq.cpu().numpy()
 
     n_errors = np.sum(-tx_data_float.flatten()*rx_data_eq.flatten()>0)
-    n_bits = n_syms*bps
+    n_bits = n_syms*model.n_data*bps
     BER = n_errors/n_bits
     print(f"EbNodB: {EbNodB:5.2f} n_bits: {n_bits:d} n_errors: {n_errors:d} BER: {BER:5.3f}")
 
