@@ -24,14 +24,13 @@ parser.add_argument('--save_model', type=str, default="", help='after training, 
 parser.add_argument('--load_model', type=str, default="", help='before inference, load model using this filename')
 parser.add_argument('--curve', type=str, default="", help='before inference, load model using this filename')
 parser.add_argument('--framer', type=int, default=1, help='framer design')
+parser.add_argument('--batch_size', type=int, help="batch size, default: 32", default=32)
 parser.set_defaults(train=True)
 parser.set_defaults(plots=True)
 args = parser.parse_args()
 n_syms = args.n_syms
 
 bps = 2
-batch_size = 16
-w1 = 32
 
 # Get cpu, gpu or mps device for training.
 device = (
@@ -237,10 +236,10 @@ class EQ(nn.Module):
         
 # sym and sym hat in float format (real,imag pairs)
 def loss_phase_mse(sym_hat, sym):
-    sym = sym[:,0] + 1j*sym[:,1]
-    sym_hat = sym_hat[:,0] + 1j*sym_hat[:,1]
+    sym = sym[:,0::2] + 1j*sym[:,1::2]
+    sym_hat = sym_hat[:,0::2] + 1j*sym_hat[:,1::2]
     error = torch.angle(sym*torch.conj(sym_hat))
-    loss = torch.sum(error**2)
+    loss = torch.mean(error**2)
     return loss
 
 if args.framer == 1:
@@ -259,11 +258,12 @@ if args.train:
     if args.loss_phase:
         loss_fn = loss_phase_mse
     else:
-        loss_fn = nn.MSELoss(reduction='sum')
+        loss_fn = nn.MSELoss(reduction='mean')
+
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
 
     dataset = aQPSKDataset(n_syms, model.n_data)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size)
 
     # Train model
     for epoch in range(args.epochs):
