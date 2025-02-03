@@ -536,6 +536,7 @@ function plot_ber_EbNodB(lin_fn,mse_fn="",phase_fn="",png="", epslatex="")
   semilogy(lin(:,1),theory,'bk+-;theory;')
   hold off;
   grid; xlabel('Eb/No (dB)'); ylabel('BER');
+  axis([lin(1,1) lin(end,1) 1E-3 5E-1]);
   if length(png)
     print("-dpng",png,"-S800,600");
   end

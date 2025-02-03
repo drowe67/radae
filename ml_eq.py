@@ -1,5 +1,5 @@
 """
-ML experiment in EQs
+ML-EQ experiments using toy digital modems.
 
 """
 
@@ -15,8 +15,9 @@ parser.add_argument('--n_syms', type=int, default=10000, help='number of symbols
 parser.add_argument('--EbNodB', type=float, default=100, help='energy per bit over spectral noise density in dB')
 parser.add_argument('--epochs', type=int, default=10, help='number of training epochs')
 parser.add_argument('--lr', type=float, default=5E-2, help='learning rate')
-parser.add_argument('--loss_phase',  action='store_true', help='')
-parser.add_argument('--phase_offset',  action='store_true', help='insert random phase offset')
+parser.add_argument('--loss_phase',  action='store_true', help='use phase error as loss function (default symbol MSE)')
+parser.add_argument('--phase_offset',  action='store_true', help='insert random phase offset [-pi,pi]')
+parser.add_argument('--freq_offset',  action='store_true', help='insert freq offset uniform [-f,f] cycles/symb')
 parser.add_argument('--eq', type=str, default='ml', help='equaliser ml/bypass/dsp (default ml)')
 parser.add_argument('--notrain',  action='store_false', dest='train', help='bypass training (default train, then inference)')
 parser.add_argument('--noplots',  action='store_false', dest='plots', help='disable plots (default plots enabled)')
@@ -201,18 +202,18 @@ class EQ(nn.Module):
         self.EbNodB = EbNodB
 
         self.dense1 = nn.Linear(2*self.n_total, w1)
-        self.dense2 = nn.Linear(w1+2*self.n_total, w1)
-        self.dense3 = nn.Linear(w1+2*self.n_total, w1)
-        self.dense4 = nn.Linear(w1+2*self.n_total, w1)
-        self.dense5 = nn.Linear(w1+2*self.n_total, 2*self.n_data)
-
+        self.dense2 = nn.Linear(w1, w1)
+        self.dense3 = nn.Linear(2*w1, w1)
+        self.dense4 = nn.Linear(3*w1, w1)
+        self.dense5 = nn.Linear(4*w1, 2*self.n_data)
+        
     # note rx_frame complex values passed in as real,imag pairs
     def equaliser(self, rx_frame):
-        x = torch.relu(self.dense1(torch.cat([rx_frame],-1)))
-        x = torch.relu(self.dense2(torch.cat([x, rx_frame],-1)))
-        x = torch.relu(self.dense3(torch.cat([x, rx_frame],-1)))
-        x = torch.relu(self.dense4(torch.cat([x, rx_frame],-1)))
-        equalised_data = self.dense5(torch.cat([x, rx_frame],-1))
+        x = torch.relu(self.dense1(rx_frame))
+        x = torch.cat([x,torch.relu(self.dense2(x))],-1)
+        x = torch.cat([x,torch.relu(self.dense3(x))],-1)
+        x = torch.cat([x,torch.relu(self.dense4(x))],-1)
+        equalised_data = self.dense5(x)
         return equalised_data
 
     # tx_data is complex, return real values real,imag pairs to suit loss function
@@ -316,7 +317,7 @@ def single_point(EbNodB, n_syms):
     return BER, rx_data_float, rx_data_eq
 
 if len(args.curve):
-    EbNodB = np.array([0,1,2,3,4,5,6,7,8], dtype=np.float32)
+    EbNodB = np.array([-5,-4,-3,-2,-1,0,1,2,3,4,5,7,8], dtype=np.float32)
     n_tests = len(EbNodB)
     curve = np.zeros((n_tests,2))
     for i in np.arange(0,n_tests):

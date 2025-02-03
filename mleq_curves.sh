@@ -2,16 +2,17 @@
 # ML EQ experiments - generates sets of curves
 
 epochs=100
-n_syms=100000
+n_syms=1000000
 batch_size=128
+lr=0.1
 
 function train() {
     f=$1
     # train with mse and phase loss functions
     python3 ml_eq.py --frame ${f} --EbNodB 4 --phase_offset \
-    --lr 0.05 --n_syms ${n_syms} --epochs ${epochs} --batch_size ${batch_size} --save_model mleq0${f}_mse.model --noplots
+    --lr ${lr} --n_syms ${n_syms} --epochs ${epochs} --batch_size ${batch_size} --save_model mleq0${f}_mse.model --noplots
     python3 ml_eq.py --frame ${f} --loss_phase --EbNodB 4 --phase_offset \
-    --lr 0.05 --n_syms ${n_syms} --epochs ${epochs} --batch_size ${batch_size} --save_model mleq0${f}_phase.model --noplots
+    --lr ${lr} --n_syms ${n_syms} --epochs ${epochs} --batch_size ${batch_size} --save_model mleq0${f}_phase.model --noplots
 }
 
 function curve() {
@@ -32,6 +33,6 @@ if [ $# -ne 1 ]; then
   exit 1
 fi
 
-train $1
+#train $1
 curve $1
 
