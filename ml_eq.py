@@ -17,15 +17,16 @@ parser.add_argument('--epochs', type=int, default=10, help='number of training e
 parser.add_argument('--lr', type=float, default=5E-2, help='learning rate')
 parser.add_argument('--loss_phase',  action='store_true', help='use phase error as loss function (default symbol MSE)')
 parser.add_argument('--phase_offset',  action='store_true', help='insert random phase offset [-pi,pi]')
-parser.add_argument('--freq_offset',  action='store_true', help='insert freq offset uniform [-f,f] cycles/symb')
+parser.add_argument('--Rs',  type=float, default=50.0, help='sub-carrier symbol rate in Hz (default 50Hz)')
+parser.add_argument('--freq_offset', type=float, default=0.0, help='insert random freq offset uniformly distributed [-f,f] Hz')
 parser.add_argument('--eq', type=str, default='ml', help='equaliser ml/bypass/dsp (default ml)')
 parser.add_argument('--notrain',  action='store_false', dest='train', help='bypass training (default train, then inference)')
 parser.add_argument('--noplots',  action='store_false', dest='plots', help='disable plots (default plots enabled)')
 parser.add_argument('--save_model', type=str, default="", help='after training, save model using this filename')
 parser.add_argument('--load_model', type=str, default="", help='before inference, load model using this filename')
 parser.add_argument('--curve', type=str, default="", help='before inference, load model using this filename')
-parser.add_argument('--framer', type=int, default=1, help='framer design')
-parser.add_argument('--batch_size', type=int, help="batch size, default: 32", default=32)
+parser.add_argument('--framer', type=int, default=2, help='framer design')
+parser.add_argument('--batch_size', type=int, help="batch size, default: 128", default=128)
 parser.set_defaults(train=True)
 parser.set_defaults(plots=True)
 args = parser.parse_args()
@@ -112,23 +113,25 @@ class frame2(framer):
         tx_frame[:,:,0] = 1
         tx_frame[:,:,self.Ns-1] = 1
         for c in np.arange(self.Nc):
-            #print(tx_frame[:,c,1:self.Ns-1].shape, tx_data[:,c*(self.Ns-2):(c+1)*(self.Ns-2)].shape)
             tx_frame[:,c,1:self.Ns-1] = tx_data[:,c*(self.Ns-2):(c+1)*(self.Ns-2)]
-        #print(tx_data[0,:])
-        #print(tx_frame[0,:,])
-        #quit()
         return tx_frame
     
     def channel(self, tx_frame, EbNodB):     
         batch_size = tx_frame.shape[0]
-        # apply same phase offset to all symbols in frame
+        # apply phase and freq offset, constant for each frame, but different for each element in batch
         phi = torch.zeros((batch_size, self.Nc, self.Ns), device=tx_frame.device)
         if args.phase_offset:
             phi[:,:,:] = 2*torch.pi*torch.rand((batch_size,1,1), device=tx_frame.device)
+        if args.freq_offset:
+            freq = torch.zeros((batch_size, self.Nc, self.Ns), device=tx_frame.device)
+            freq[:,:,:] = args.freq_offset*(2*torch.rand((batch_size,1,1), device=tx_frame.device) - 1.0)
+            omega = 2*torch.pi*freq/args.Rs
+            lin_phase = torch.cumsum(omega,dim=2)
+            phi += lin_phase
+        # two bits/symbol
         EsNodB = EbNodB + 3
+        # combine sqrt and dB->lin
         sigma = 10**(-EsNodB/20)
-        #print(tx_frame.shape, phi.shape)
-        #print(phi[0,:,:])
 
         rx_frame = tx_frame*torch.exp(1j*phi) + sigma*torch.randn_like(tx_frame)
         # extract just data symbols in shape (batch,n_data) after channel model
