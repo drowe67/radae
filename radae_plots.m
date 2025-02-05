@@ -499,7 +499,7 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   c = load(controls_fn);
   
   if length(epslatex)
-    [textfontsize linewidth] = set_fonts(20);
+    [textfontsize linewidth] = set_fonts(15);
   end
 
   # WER v C/No plot
@@ -534,6 +534,6 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
     print("-dpng",png_fn,"-S800,600");
   end
   if length(epslatex)
-      print_eps_restore(epslatex,"-S275,300",textfontsize,linewidth);
+      print_eps_restore(epslatex,"-S275,200",textfontsize,linewidth);
   end  
 end
