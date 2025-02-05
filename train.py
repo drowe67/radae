@@ -50,6 +50,7 @@ parser.add_argument('--EbNodB', type=float, default=0, help='BPSK Eb/No in dB')
 parser.add_argument('--range_EbNo', action='store_true', help='Use a range of Eb/No during training')
 parser.add_argument('--range_EbNo_start', type=float, default=-6.0, help='starting value for Eb/No during training')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath file, rate Rs time steps by Nc carriers .f32 format')
+parser.add_argument('--h_complex', action='store_true', help='use complex64 format samples in h_file (default mag only float32)')
 parser.add_argument('--g_file', type=str, default="", help='path to rate Fs multipath file, ...G1G2... .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--freq_rand', action='store_true', help='random phase and freq offset for each sequence')
@@ -140,7 +141,11 @@ G_sequence_length = model.num_timesteps_at_rate_Fs(H_sequence_length)
 
 checkpoint['dataset_args'] = (feature_file, sequence_length, H_sequence_length, Nc, G_sequence_length)
 checkpoint['dataset_kwargs'] = {'enc_stride': model.enc_stride}
-dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file, g_file = args.g_file, auxdata=args.auxdata)
+if args.h_complex:
+    h_dtype = np.complex64
+else:
+    h_dtype = np.float32
+dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file, g_file = args.g_file, auxdata=args.auxdata,  h_dtype = h_dtype)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
 # optimizer

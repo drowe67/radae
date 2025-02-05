@@ -32,12 +32,14 @@ function run_model() {
 #run_model ~/tmp/240607_radio_ae/model17_check3 80  --bottleneck 3 --range_EbNo_start -9  # 17 with aux emebdded 25 bits/s data
 #run_model model19_check3 80 100 awgn --bottleneck 3 --range_EbNo_start -9  --auxdata # RADE V1 model
 #run_model 250117_test 80 200 awgn --bottleneck 3 --range_EbNo_start -9 --auxdata --txbpf # 0dB PAPR, 99% power BW < 1.5Rq, 3 stage clip/filter
-#run_model model19_check3 80 100 mpp --bottleneck 3 --range_EbNo_start 0  --auxdata --h_file h_nc20_train_mpp.f32  # RADE V1 model
+run_model model19_check3 80 100 mpp --bottleneck 3 --range_EbNo_start -6  --auxdata --h_file h_nc20_train_mpp.f32  # RADE V1 model
 #run_model 250117_test 80 200 mpp --bottleneck 3 --range_EbNo_start 0 --auxdata --txbpf --h_file h_nc20_train_mpp.f32  # 0dB PAPR, 99% power BW < 1.5Rq, 3 stage clip/filter
+#run_model 250204_test 80 200 awgn --bottleneck 3 --range_EbNo_start -9 --auxdata  # trained with complex h (pilotless)
+#run_model 250204_test 80 200 mpp --bottleneck 3 --range_EbNo_start -6 --auxdata --h_file h_nc20_train_mpp.c64 --h_complex  # trained with complex h (pilotless)
 
-model_list='model19_check3_awgn 250117_test_awgn model19_check3_mpp 250117_test_mpp'
+model_list='model19_check3_awgn 250204_test_awgn model19_check3_mpp 250204_test_mpp'
 model_dim=(80 80 80 80)
-declare -a model_legend=("RADE V1 AWGN" "Joint PAPR/BW AWGN" "RADE V1 MPP" "Joint PAPR/BW MPP")
+declare -a model_legend=("RADE V1 AWGN" "Complex h AWGN" "RADE V1 MPP" "Complex h MPP")
 
 loss_EqNo=""
 loss_CNo="50,1"
