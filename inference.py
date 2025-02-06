@@ -51,6 +51,7 @@ parser.add_argument('--passthru', action='store_true', help='copy features in to
 parser.add_argument('--mp_test', action='store_true', help='Fixed notch test multipath channel (rate Rs)')
 parser.add_argument('--ber_test', action='store_true', help='send random PSK bits through channel model, measure BER')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath samples, rate Rs time steps by Nc carriers .f32 format')
+parser.add_argument('--h_complex', action='store_true', help='use complex64 format samples in h_file (default mag only float32)')
 parser.add_argument('--g_file', type=str, default="", help='path to rate Fs Doppler spread samples, ...G1G2G1G2... .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--write_rx', type=str, default="", help='path to output file of rate Fs rx samples in ..IQIQ...f32 format')
@@ -145,7 +146,11 @@ if args.mp_test:
 
 # user supplied rate Rs multipath model, sequence of H matrices
 if args.h_file:
-   H = np.reshape(np.fromfile(args.h_file, dtype=np.float32), (1, -1, Nc))
+   if args.h_complex:
+      h_dtype = np.complex64
+   else:
+      h_dtype = np.float32
+   H = np.reshape(np.fromfile(args.h_file, dtype=h_dtype), (1, -1, Nc))
    #print(H.shape, num_timesteps_at_rate_Rs)
    if H.shape[1] < num_timesteps_at_rate_Rs:
       print("Multipath H file too short")
