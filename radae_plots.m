@@ -384,16 +384,17 @@ function y = relu(x)
 end
 
 % Plot SNR v CNR for FM demod model
-function plot_SNR_CNR(epslatex="")
+function bbfm_plot_SNR_CNR(epslatex="")
     if length(epslatex)
         [textfontsize linewidth] = set_fonts();
     end
     figure(1); clf; hold on;
     fd=2500; fm=3000; 
-    beta= fd/fm;
-    Gfm=10*log10(3*(beta^2)*(beta+1));
+    beta = fd/fm;
+    Sx = 0.5;
+    Gfm=10*log10(3*(beta^2)*Sx);
     BWfm = 2*(fd+fm);
-    CNR_thresh = 12; NF=5;
+    CNR_thresh = 8; NF=5;
     Rx_thresh = CNR_thresh + 10*log10(BWfm) + NF - 174;
     SNR_thresh = Gfm + CNR_thresh;
     printf("fd: %6.0f fm: %6.0f Beta: %f Gfm: %5.2f dB BWfm: %7.0f\n", fd, fm, beta, Gfm, BWfm);
@@ -423,6 +424,25 @@ function plot_SNR_CNR(epslatex="")
     if length(epslatex)
         print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
     end
+endfunction
+
+% test expression derived from Carslon (17)
+function bbfm_carlson()
+    fd=2500; fm=3000; 
+    beta = fd/fm;
+    Sx = 0.5;
+    Bt = 12E3;
+    CNR_dB = 0:20; CNR = 10.^(CNR_dB/10);
+    SNR1 = 3*(beta^2)*Sx*CNR;
+    num = 3*(beta^2)*Sx*CNR;
+    denom = (1+(12*beta/pi)*CNR.*exp(-fm*CNR/Bt));
+    SNR3 = num./denom;
+    SNR1_dB = 10*log10(SNR1);
+    SNR3_dB = 10*log10(SNR3);
+    figure(1); clf; hold on;
+    plot(CNR_dB,SNR1_dB,'b;SNR1;');
+    plot(CNR_dB,SNR3_dB,'r;SNR3;');
+    hold off;
 endfunction
 
 % test handling of single sample per symbol phase jumps
