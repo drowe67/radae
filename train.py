@@ -73,6 +73,8 @@ training_group.add_argument('--plot_loss', action='store_true', help='plot loss 
 training_group.add_argument('--plot_EqNo', type=str, default="", help='plot loss versus Eq/No for final epoch')
 training_group.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
 training_group.add_argument('--txbpf', action='store_true', help='train with Tx BPF')
+parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
+
 args = parser.parse_args()
 
 # set visible devices
@@ -125,7 +127,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo,
               range_EbNo_start=args.range_EbNo_start, 
               freq_rand=args.freq_rand,gain_rand=args.gain_rand, bottleneck=args.bottleneck,
               pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp,
-              txbpf_en = args.txbpf)
+              txbpf_en = args.txbpf, pilots2=args.pilots2)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")

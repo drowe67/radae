@@ -82,7 +82,8 @@ class RADAE(nn.Module):
                  coarse_mag = False,
                  correct_freq_offset = False,
                  stateful_decoder = False,
-                 txbpf_en = False
+                 txbpf_en = False,
+                 pilots2 = False
                 ):
 
         super(RADAE, self).__init__()
@@ -113,6 +114,7 @@ class RADAE(nn.Module):
         self.correct_freq_offset = correct_freq_offset
         self.stateful_decoder = stateful_decoder
         self.txbpf_en = txbpf_en
+        self.pilots2 = pilots2
         
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
@@ -482,6 +484,14 @@ class RADAE(nn.Module):
         # assuming |z| ~ 1 after training
         tx_sym = z[:,:,::2] + 1j*z[:,:,1::2]
         qpsk_shape = tx_sym.shape
+
+        # replace some elements of z with fixed pilots
+        if self.pilots2:
+            tx_sym[:,:,2::self.Ns] = 0.5*self.pilot_gain*(2**0.5)
+            #print(self.pilot_gain,self.P)
+            #print(tx_sym.shape)
+            #print(tx_sym[0,0,:])
+            #quit()
 
         # constrain magnitude of 2D complex symbols 
         if self.bottleneck == 2:
