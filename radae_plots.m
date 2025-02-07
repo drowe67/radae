@@ -386,40 +386,39 @@ end
 % Plot SNR v CNR for FM demod model
 function bbfm_plot_SNR_CNR(epslatex="")
     if length(epslatex)
-        [textfontsize linewidth] = set_fonts();
+        [textfontsize linewidth] = set_fonts(20);
     end
-    figure(1); clf; hold on;
+
     fd=2500; fm=3000; 
     beta = fd/fm;
     Sx = 0.5;
     Gfm=10*log10(3*(beta^2)*Sx);
-    BWfm = 2*(fd+fm);
+    BWfm = 9E3; % fixed by IF filter
     CNR_thresh = 8; NF=5;
     Rx_thresh = CNR_thresh + 10*log10(BWfm) + NF - 174;
     SNR_thresh = Gfm + CNR_thresh;
-    printf("fd: %6.0f fm: %6.0f Beta: %f Gfm: %5.2f dB BWfm: %7.0f\n", fd, fm, beta, Gfm, BWfm);
+    printf("fd: %6.0f fm: %6.0f Beta: %f Sx: %f  Gfm: %5.2f dB BWfm: %7.0f\n", fd, fm, beta, Sx, Gfm, BWfm);
     printf("At CNR=%5.2f dB threshold, NF=%4.2f dB Rx: %7.2f dBm, SNR=%5.2f \n", CNR_thresh, NF, Rx_thresh, SNR_thresh);
 
     % vanilla implementation of curve
     CNRdB=0:20;
     for i=1:length(CNRdB)
-      if CNRdB(i) >= 12
+      if CNRdB(i) >= 8
         SNRdB(i) = CNRdB(i) + Gfm;
       else
-        SNRdB(i) = (1+Gfm/3)*CNRdB(i) - 3*Gfm;
+        SNRdB(i) = 3*CNRdB(i) + Gfm - 16;
       end
     end
 
     % implementation using relus (suitable for PyTorch)
-    SNRdB_relu = relu(CNRdB-12) + 12 + Gfm;
-    SNRdB_relu += -relu(-(CNRdB-12))*(1+Gfm/3);
+    SNRdB_relu = relu(CNRdB-8) + Gfm + 16;
+    SNRdB_relu += -relu(-(CNRdB-8))*(1+Gfm/3);
 
+    figure(1); clf; hold on;
     plot(CNRdB,SNRdB,'g;FM;'); 
-    plot(CNRdB,SNRdB_relu,'r+;FM relu;'); 
-    CNodB = CNRdB + 10*log10(BWfm);
-    SNR_ssb_dB = CNodB - 10*log10(fm);
-    plot(CNRdB,SNR_ssb_dB,'b;SSB;'); 
-    axis([min(CNRdB) max(CNRdB) 10 30]);
+    %plot(CNRdB,SNRdB_relu,'r+;FM relu;'); 
+    %plot(CNRdB,SNR_ssb_dB,'b;SSB;'); 
+    axis([min(CNRdB) max(CNRdB) 0 20]);
     hold off; grid('minor'); xlabel('CNR (dB)'); ylabel('SNR (dB)'); legend('boxoff'); legend('location','northwest');
     if length(epslatex)
         print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
@@ -431,7 +430,7 @@ function bbfm_carlson()
     fd=2500; fm=3000; 
     beta = fd/fm;
     Sx = 0.5;
-    Bt = 12E3;
+    Bt = 9E3;
     CNR_dB = 0:20; CNR = 10.^(CNR_dB/10);
     SNR1 = 3*(beta^2)*Sx*CNR;
     num = 3*(beta^2)*Sx*CNR;
@@ -440,9 +439,9 @@ function bbfm_carlson()
     SNR1_dB = 10*log10(SNR1);
     SNR3_dB = 10*log10(SNR3);
     figure(1); clf; hold on;
-    plot(CNR_dB,SNR1_dB,'b;SNR1;');
-    plot(CNR_dB,SNR3_dB,'r;SNR3;');
-    hold off;
+    plot(CNR_dB,SNR1_dB,'b;Eq (1);');
+    plot(CNR_dB,SNR3_dB,'r;Eq (4);');
+    hold off; grid;
 endfunction
 
 % test handling of single sample per symbol phase jumps
