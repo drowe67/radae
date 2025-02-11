@@ -499,7 +499,7 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   c = load(controls_fn);
   
   if length(epslatex)
-    [textfontsize linewidth] = set_fonts(15);
+    [textfontsize linewidth] = set_fonts(20);
   end
 
   # WER v C/No plot
@@ -528,12 +528,12 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   plot(xmax-5,c(2),'ro;FARGAN;')
   plot(xmax-5,c(3),'k+;4kHz;')
   hold off;
-  axis([xmin,xmax,0,40]); grid; ylabel('WER \%'); xlabel("SNR3k (dB)");
+  axis([xmin,xmax,0,40]); grid; ylabel('WER (\%)'); xlabel("SNR3k (dB)");
 
   if length(png_fn)
     print("-dpng",png_fn,"-S800,600");
   end
   if length(epslatex)
-      print_eps_restore(epslatex,"-S275,200",textfontsize,linewidth);
+      print_eps_restore(epslatex,"-S250,200",textfontsize,linewidth);
   end  
 end
