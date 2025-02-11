@@ -533,7 +533,7 @@ class RADAE(nn.Module):
             # Constrain magnitude of complex rate Fs time domain signal, simulates Power
             # Amplifier (PA) that saturates at abs(tx) ~ 1
             if self.bottleneck == 3:
-                tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
+                tx = torch.exp(1j*torch.angle(tx))
             tx_before_channel = tx
 
             # rate Fs multipath model
