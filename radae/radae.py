@@ -83,7 +83,8 @@ class RADAE(nn.Module):
                  correct_freq_offset = False,
                  stateful_decoder = False,
                  txbpf_en = False,
-                 pilots2 = False
+                 pilots2 = False,
+                 timing_rand = False
                 ):
 
         super(RADAE, self).__init__()
@@ -115,7 +116,8 @@ class RADAE(nn.Module):
         self.stateful_decoder = stateful_decoder
         self.txbpf_en = txbpf_en
         self.pilots2 = pilots2
-        
+        self.timing_rand = timing_rand
+
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
         self.core_decoder =  nn.DataParallel(radae_base.CoreDecoder(latent_dim, feature_dim))
@@ -305,6 +307,7 @@ class RADAE(nn.Module):
    
     def move_device(self, device):
         # TODO: work out why we need this step
+        self.w = self.w.to(device)
         self.Winv = self.Winv.to(device)
         self.Wfwd = self.Wfwd.to(device)
  
@@ -487,10 +490,9 @@ class RADAE(nn.Module):
 
         # replace some elements of z with fixed pilots
         if self.pilots2:
-            tx_sym[:,:,2::self.Ns] = 0.5*self.pilot_gain*(2**0.5)
+            tx_sym[:,:,6::self.Ns] = 0.5*self.pilot_gain*(2**0.5)
             #print(self.pilot_gain,self.P)
             #print(tx_sym.shape)
-            #print(tx_sym[0,0,:])
             #quit()
 
         # constrain magnitude of 2D complex symbols 
@@ -642,7 +644,6 @@ class RADAE(nn.Module):
                     tx = tx*torch.conj(phase_vec)
                     tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M))
     
-
                 tx_before_channel = tx
                 # DFT to transform M time domain samples to Nc carriers
                 tx_sym = torch.matmul(tx, self.Wfwd)
@@ -652,7 +653,38 @@ class RADAE(nn.Module):
                 phase = torch.exp(1j*phase)
                 tx_sym = tx_sym*phase
 
-            # multipath, multiply by per-carrier channel magnitudes at each OFDM modem timestep
+            # per-sequence random [-1,1] ms time shift, which results in a linear phase shift across frequency
+            # models fine timing errors
+            if self.timing_rand:
+                d = 0.001*(1 - 2*torch.rand((num_batches,1),device=tx.device))
+                # Use vector multiply to create a shape (batch,Nc) 2D tensor
+                phase_offset = -d*torch.reshape(self.w,(1,self.Nc))*self.Fs
+                phase_offset = torch.reshape(phase_offset,(num_batches,self.Nc,1))
+            
+                # change to (batch,Nc,timestep), as all time steps get the same phase offset
+                tx_sym = tx_sym.permute(0,2,1)
+                tx_sym = tx_sym * torch.exp(1j*phase_offset)
+                tx_sym = tx_sym.permute(0,2,1)
+
+            # per sequence random [-2,2] fine frequency offset        
+            if self.freq_rand:
+                freq_offset = 4*torch.rand((num_batches,1),device=tx.device) - 2.0
+                omega = freq_offset*2*torch.pi/self.Fs
+                # shape (num_batchs,num_timsteps)
+                phase = torch.zeros((num_batches,num_timesteps_at_rate_Rs),device=tx.device)
+                # broadcast omega across timesteps
+                phase[:,] = omega
+                #print(freq_offset[:5])
+                #print(phase[:2,:5])
+                # integrate to get phase
+                phase = torch.cumsum(phase,dim=1)
+                phase = torch.reshape(phase,(num_batches,num_timesteps_at_rate_Rs,1))
+                #print(phase[:2,0:5,0])
+                #quit()
+                # same freq offset/phase for each carrier
+                tx_sym = tx_sym*torch.exp(1j*phase)
+
+            # multipath, multiply by per-carrier channel magnitudes (and optionally phase) at each OFDM modem timestep
             # preserve tx_sym variable so we can return it to measure power after multipath channel
             tx_sym = tx_sym * H
 

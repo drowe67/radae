@@ -148,9 +148,9 @@ function loss_EqNo_plot(png_fn, epslatex, varargin)
         plot(data(:,1),data(:,2),sprintf("+-;%s;",leg))
         i++;
     end
-    hold off; grid; xlabel('Eq/No (dB)'); ylabel('loss'); legend('boxoff');
+    hold off; grid('minor'); xlabel('Eq/No (dB)'); ylabel('loss'); legend('boxoff');
     mn = min(data(:,1))
-    axis([mn mn+25 0.105 0.25])
+    axis([mn mn+25 0.05 0.25])
     if length(png_fn)
         print("-dpng",png_fn);
     end
@@ -178,7 +178,7 @@ function loss_CNo_plot(png_fn, epslatex, Rs, B, varargin)
         plot(CNo,data(:,2),sprintf("+-;%s;",leg))
         i++;
     end
-    hold off; grid; 
+    hold off; grid('minor'); 
     if B==1
       xlabel('C/No (dB)');
     else

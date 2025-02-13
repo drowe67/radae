@@ -38,11 +38,12 @@ function run_model() {
 #run_model 250204_test 80 200 mpp --bottleneck 3 --range_EbNo_start -6 --auxdata --h_file h_nc20_train_mpp.c64 --h_complex  # trained with complex h (pilotless)
 #run_model 250206_test 120 100 awgn --bottleneck 3 --range_EbNo_start -9 --auxdata  # trained with complex h (pilotless)
 #run_model 250206_test 120 100 mpp --bottleneck 3 --range_EbNo_start -6 --auxdata --h_file h_nc30_mpp_test.c64 --h_complex  # trained with complex h (pilotless)
-run_model 250207_test 120 200 awgn --bottleneck 3 --range_EbNo_start -9 --auxdata  # trained with complex h (pilotless)
+#run_model 250207_test 120 200 awgn --bottleneck 3 --range_EbNo_start -9 --auxdata  # trained with complex h (pilotless)
+#run_model 250212_test 120 200 awgn --bottleneck 3 --range_EbNo_start -9 --auxdata  --pilots2 # trained with complex h (pilotless)
 
-model_list='model19_check3_awgn 250206_test_awgn 250207_test_awgn'
-model_dim=(80 120 120)
-declare -a model_legend=("RADE V1 AWGN" "250206 AWGN" "250207 AWGN")
+model_list='model19_check3_awgn 250207_test_awgn  250211_test_awgn 250212_test_awgn'
+model_dim=(80 120 80 120)
+declare -a model_legend=("RADE V1 AWGN d=80" "250207 AWGN d=120" "250211 AWGN d=80" "250212 AWGN pilots d=120")
 
 loss_EqNo=""
 loss_CNo="50,1"
