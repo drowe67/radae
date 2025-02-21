@@ -389,14 +389,15 @@ function bbfm_plot_SNR_R(epslatex="")
         [textfontsize linewidth] = set_fonts(20);
     end
 
-    fd=2500; fm=3000; A = 1; NFdB=5; NodBmHz=-174;
+    fd=2500; fm=3000; A = 1; k=1.38E-23; T=274; NFdB=5;
     beta = fd/fm;
-    Gfm=10*log10(3*(beta^2)*(A^2)/(2*fm)) - NodBmHz - NFdB;
+    x_bar = A^2/2;
+    Gfm=10*log10(3*(beta^2)*x_bar/(1E3*k*T*fm)) - NFdB;
     TdBm = 12 - Gfm;
-    printf("fd: %6.0f fm: %6.0f Beta: %f A: %f  Gfm: %5.2f dB TdBm: %5.2f\n", fd, fm, beta, A, Gfm, TdBm);
+    printf("fd: %6.0f fm: %6.0f Beta: %f A: %5.2f x_bar: %5.2f Gfm: %5.2f dB TdBm: %5.2f\n", fd, fm, beta, A, x_bar, Gfm, TdBm);
 
     % vanilla implementation of curve
-    RdBm=-125:-100;
+    RdBm=-130:-105;
     for i=1:length(RdBm)
       if RdBm(i) >= TdBm
         SNRdB(i) = RdBm(i) + Gfm;
