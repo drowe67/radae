@@ -383,43 +383,38 @@ function y = relu(x)
   y(find(x<0)) = 0;
 end
 
-% Plot SNR v CNR for FM demod model
-function bbfm_plot_SNR_CNR(epslatex="")
+% Plot SNR v R for FM demod model
+function bbfm_plot_SNR_R(epslatex="")
     if length(epslatex)
         [textfontsize linewidth] = set_fonts(20);
     end
 
-    fd=2500; fm=3000; 
+    fd=2500; fm=3000; A = 1; NFdB=5; NodBmHz=-174;
     beta = fd/fm;
-    Sx = 0.5;
-    Gfm=10*log10(3*(beta^2)*Sx);
-    BWfm = 9E3; % fixed by IF filter
-    CNR_thresh = 8; NF=5;
-    Rx_thresh = CNR_thresh + 10*log10(BWfm) + NF - 174;
-    SNR_thresh = Gfm + CNR_thresh;
-    printf("fd: %6.0f fm: %6.0f Beta: %f Sx: %f  Gfm: %5.2f dB BWfm: %7.0f\n", fd, fm, beta, Sx, Gfm, BWfm);
-    printf("At CNR=%5.2f dB threshold, NF=%4.2f dB Rx: %7.2f dBm, SNR=%5.2f \n", CNR_thresh, NF, Rx_thresh, SNR_thresh);
+    Gfm=10*log10(3*(beta^2)*(A^2)/(2*fm)) - NodBmHz - NFdB;
+    TdBm = 12 - Gfm;
+    printf("fd: %6.0f fm: %6.0f Beta: %f A: %f  Gfm: %5.2f dB TdBm: %5.2f\n", fd, fm, beta, A, Gfm, TdBm);
 
     % vanilla implementation of curve
-    CNRdB=0:20;
-    for i=1:length(CNRdB)
-      if CNRdB(i) >= 8
-        SNRdB(i) = CNRdB(i) + Gfm;
+    RdBm=-125:-100;
+    for i=1:length(RdBm)
+      if RdBm(i) >= TdBm
+        SNRdB(i) = RdBm(i) + Gfm;
       else
-        SNRdB(i) = 3*CNRdB(i) + Gfm - 16;
+        SNRdB(i) = 3*RdBm(i) + Gfm - 2*TdBm;
       end
     end
 
     % implementation using relus (suitable for PyTorch)
-    SNRdB_relu = relu(CNRdB-8) + Gfm + 16;
-    SNRdB_relu += -relu(-(CNRdB-8))*(1+Gfm/3);
+    %SNRdB_relu = relu(CNRdB-8) + Gfm + 16;
+    %SNRdB_relu += -relu(-(CNRdB-8))*(1+Gfm/3);
 
     figure(1); clf; hold on;
-    plot(CNRdB,SNRdB,'g;FM;'); 
+    plot(RdBm,SNRdB,'g+-'); 
     %plot(CNRdB,SNRdB_relu,'r+;FM relu;'); 
     %plot(CNRdB,SNR_ssb_dB,'b;SSB;'); 
-    axis([min(CNRdB) max(CNRdB) 0 20]);
-    hold off; grid('minor'); xlabel('CNR (dB)'); ylabel('SNR (dB)'); legend('boxoff'); legend('location','northwest');
+    %axis([min(RdBm) max(RdBm) 0 20]);
+    hold off; grid('minor'); xlabel('R (dBm)'); ylabel('SNR (dB)'); legend('off');
     if length(epslatex)
         print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
     end
