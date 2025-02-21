@@ -656,7 +656,7 @@ class RADAE(nn.Module):
             # per-sequence random [-1,1] ms time shift, which results in a linear phase shift across frequency
             # models fine timing errors
             if self.timing_rand:
-                d = 0.001*(1 - 2*torch.rand((num_batches,1),device=tx.device))
+                d = 0.001*(1 - 2*torch.rand((num_batches,1),device=tx_sym.device))
                 # Use vector multiply to create a shape (batch,Nc) 2D tensor
                 phase_offset = -d*torch.reshape(self.w,(1,self.Nc))*self.Fs
                 phase_offset = torch.reshape(phase_offset,(num_batches,self.Nc,1))
@@ -668,10 +668,10 @@ class RADAE(nn.Module):
 
             # per sequence random [-2,2] fine frequency offset        
             if self.freq_rand:
-                freq_offset = 4*torch.rand((num_batches,1),device=tx.device) - 2.0
+                freq_offset = 4*torch.rand((num_batches,1),device=tx_sym.device) - 2.0
                 omega = freq_offset*2*torch.pi/self.Fs
                 # shape (num_batchs,num_timsteps)
-                phase = torch.zeros((num_batches,num_timesteps_at_rate_Rs),device=tx.device)
+                phase = torch.zeros((num_batches,num_timesteps_at_rate_Rs),device=tx_sym.device)
                 # broadcast omega across timesteps
                 phase[:,] = omega
                 #print(freq_offset[:5])
