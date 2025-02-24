@@ -72,19 +72,25 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
     end
 endfunction
 
-function do_plots_bbfm(z1_fn, z2_fn="", png_fn='')
+function do_plots_bbfm(z1_fn, z2_fn='', png_fn='', epslatex='')
+    if length(epslatex)
+      [textfontsize linewidth] = set_fonts(20);
+    end
     z1=load_f32(z1_fn,1);
     figure(1); clf; 
-    stem(z1(1:40),'g');
+    stem(z1(1:80),'g');
+    axis([0 80 -1.2 1.2]);
     if length(z2_fn) 
       z2=load_f32(z2_fn,1);
       hold on;
       stem(z2(1:40),'r');
       hold off;
     end
-    title('Rx Symbols');
     if length(png_fn)
       print("-dpng",sprintf("%s.png",png_fn));
+    end
+    if length(epslatex)
+      print_eps_restore(sprintf("%s.eps",epslatex),"-S300,200",textfontsize,linewidth);
     end
 endfunction
 
