@@ -601,14 +601,14 @@ class RADAE(nn.Module):
             rx_dash = torch.clone(rx)
             
             # inference time correction of freq offset, allows us to produce a rx.f32 file
-            # with a freq offset while decoding correcting here
+            # with a freq offset while decoding correctly here
             if self.freq_offset and self.correct_freq_offset:
                 rx_dash = rx_dash*torch.conj(lin_phase)
                 
             # remove cyclic prefix
             rx_dash = torch.reshape(rx_dash,(num_batches,num_timesteps_at_rate_Rs,self.M+self.Ncp))
             rx_dash = rx_dash[:,:,Ncp+self.time_offset:Ncp+self.time_offset+self.M]
-
+            
             # DFT to transform M time domain samples to Nc carriers
             rx_sym = torch.matmul(rx_dash, self.Wfwd)
         else:

@@ -40,12 +40,13 @@ function run_model() {
 #run_model 250206_test 120 100 mpp --bottleneck 3 --range_EbNo_start -6 --auxdata --h_file h_nc30_mpp_test.c64 --h_complex  # trained with complex h (pilotless)
 #run_model 250207_test 120 200 awgn --bottleneck 3 --range_EbNo_start -9 --auxdata  # trained with complex h (pilotless)
 #run_model 250212_test 120 200 awgn --bottleneck 3 --range_EbNo_start -9 --auxdata  --pilots2 # trained with complex h (pilotless)
-run_model 250213a_test 120 200 awgn --bottleneck 2 --range_EbNo_start -6 --auxdata  # trained with complex h (pilotless)
+#run_model 250213a_test 120 200 awgn --bottleneck 2 --range_EbNo_start -6 --auxdata  # trained with complex h (pilotless)
 #run_model 250213_test 120 200 mpp --bottleneck 3 --range_EbNo_start -6 --auxdata --h_file h_nc30_mpp_test.c64 --h_complex  # trained with complex h (pilotless)
+run_model 250225_test 120 200 awgn --bottleneck 3 --range_EbNo_start -9 --auxdata  --pilots2 # trained with complex h (pilotless)
 
-model_list='model19_check3_awgn 250213_test_awgn 250213a_test_awgn'
-model_dim=(80 120 120)
-declare -a model_legend=("RADE V1 AWGN d=80" "250213 AWGN d=120 b3" "250213a AWGN d=120 b2")
+model_list='model19_check3_awgn 250225_test_awgn 250213_test_awgn 250213a_test_awgn'
+model_dim=(80 120 120 120)
+declare -a model_legend=("RADE V1 AWGN d=80" "250225 AWGN d=120 b3 p2" "250213 AWGN d=120 b3" "250213a AWGN d=120 b2")
 
 loss_EqNo=""
 loss_CNo="50,1"
