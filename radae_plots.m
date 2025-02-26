@@ -70,7 +70,7 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         hold on;
         plot([fcentre-bwHz/2 fcentre-bwHz/2 fcentre+bwHz/2 fcentre+bwHz/2 fcentre-bwHz/2 ],[-35 -5 -5 -35 -35],'r-');
         hold off;
-        axis([0 3000 -60 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
+        axis([0 3000 -40 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
         if length(epslatex)
           print_eps_restore(sprintf("%s_psd.eps",epslatex),"-S300,200",textfontsize,linewidth);
         end
