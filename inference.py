@@ -78,6 +78,7 @@ parser.add_argument('--sine_freq', type=float, default=1000.0, help='single freq
 parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
 parser.add_argument('--txbpf', action='store_true', help='inject auxillary data symbol')
 parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
+parser.add_argument('--correct_time_offset', action='store_true', help='correct phase shift caused by --time_offset (default off)')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -105,7 +106,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rat
               gain=args.gain, pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls,
               cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, 
               bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset, txbpf_en = args.txbpf,
-              pilots2=args.pilots2)
+              pilots2=args.pilots2, correct_time_offset=args.correct_time_offset)
 checkpoint = torch.load(args.model_name, map_location='cpu',weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()

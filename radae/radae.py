@@ -84,7 +84,8 @@ class RADAE(nn.Module):
                  stateful_decoder = False,
                  txbpf_en = False,
                  pilots2 = False,
-                 timing_rand = False
+                 timing_rand = False,
+                 correct_time_offset = False
                 ):
 
         super(RADAE, self).__init__()
@@ -117,6 +118,7 @@ class RADAE(nn.Module):
         self.txbpf_en = txbpf_en
         self.pilots2 = pilots2
         self.timing_rand = timing_rand
+        self.correct_time_offset = correct_time_offset
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
@@ -674,13 +676,9 @@ class RADAE(nn.Module):
                 phase = torch.zeros((num_batches,num_timesteps_at_rate_Rs),device=tx_sym.device)
                 # broadcast omega across timesteps
                 phase[:,] = omega
-                #print(freq_offset[:5])
-                #print(phase[:2,:5])
                 # integrate to get phase
                 phase = torch.cumsum(phase,dim=1)
                 phase = torch.reshape(phase,(num_batches,num_timesteps_at_rate_Rs,1))
-                #print(phase[:2,0:5,0])
-                #quit()
                 # same freq offset/phase for each carrier
                 tx_sym = tx_sym*torch.exp(1j*phase)
 
@@ -705,9 +703,22 @@ class RADAE(nn.Module):
 
             if self.pilot_eq:
                 rx_sym_pilots = self.do_pilot_eq(num_modem_frames,rx_sym_pilots)
-
+                
             rx_sym = torch.ones(num_batches, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
-            rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
+            rx_sym = torch.reshape(rx_sym_pilots[:,:,1:self.Ns+1,:],(num_batches, num_modem_frames*self.Ns, self.Nc))
+
+        # genie based phase adjustment for time shift 
+        if self.correct_time_offset:
+            print(rx_sym.shape)
+            
+            # Use vector multiply to create a shape (batch,Nc) 2D tensor
+            phase_offset = -self.time_offset*torch.reshape(self.w,(1,self.Nc))
+            phase_offset = torch.reshape(phase_offset,(num_batches,self.Nc,1))
+        
+            # change to (batch,Nc,timestep), as all time steps get the same phase offset
+            rx_sym = rx_sym.permute(0,2,1)
+            rx_sym = rx_sym * torch.exp(1j*phase_offset)
+            rx_sym = rx_sym.permute(0,2,1)
 
         # demap QPSK symbols
         rx_sym = torch.reshape(rx_sym,qpsk_shape)
