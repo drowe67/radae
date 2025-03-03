@@ -51,6 +51,7 @@ parser.add_argument('--passthru', action='store_true', help='copy features in to
 parser.add_argument('--mp_test', action='store_true', help='Fixed notch test multipath channel (rate Rs)')
 parser.add_argument('--ber_test', action='store_true', help='send random PSK bits through channel model, measure BER')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath samples, rate Rs time steps by Nc carriers .f32 format')
+parser.add_argument('--h_complex', action='store_true', help='use complex64 format samples in h_file (default mag only float32)')
 parser.add_argument('--g_file', type=str, default="", help='path to rate Fs Doppler spread samples, ...G1G2G1G2... .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--write_rx', type=str, default="", help='path to output file of rate Fs rx samples in ..IQIQ...f32 format')
@@ -75,6 +76,9 @@ parser.add_argument('--correct_freq_offset', action='store_true', help='correct 
 parser.add_argument('--sine_amp', type=float, default=0.0, help='single freq interferer level (default zero)')
 parser.add_argument('--sine_freq', type=float, default=1000.0, help='single freq interferer freq (default 1000Hz)')
 parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
+parser.add_argument('--txbpf', action='store_true', help='inject auxillary data symbol')
+parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
+parser.add_argument('--correct_time_offset', type=int, default=0, help='correct phase shift caused by --correct_time_offset in samples (default off)')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -101,7 +105,8 @@ model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rat
               phase_offset=args.phase_offset, freq_offset=args.freq_offset, df_dt=args.df_dt,
               gain=args.gain, pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls,
               cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, 
-              bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset)
+              bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset, txbpf_en = args.txbpf,
+              pilots2=args.pilots2, correct_time_offset=args.correct_time_offset)
 checkpoint = torch.load(args.model_name, map_location='cpu',weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
@@ -144,7 +149,11 @@ if args.mp_test:
 
 # user supplied rate Rs multipath model, sequence of H matrices
 if args.h_file:
-   H = np.reshape(np.fromfile(args.h_file, dtype=np.float32), (1, -1, Nc))
+   if args.h_complex:
+      h_dtype = np.complex64
+   else:
+      h_dtype = np.float32
+   H = np.reshape(np.fromfile(args.h_file, dtype=h_dtype), (1, -1, Nc))
    #print(H.shape, num_timesteps_at_rate_Rs)
    if H.shape[1] < num_timesteps_at_rate_Rs:
       print("Multipath H file too short")
