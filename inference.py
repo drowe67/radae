@@ -78,7 +78,7 @@ parser.add_argument('--sine_freq', type=float, default=1000.0, help='single freq
 parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
 parser.add_argument('--txbpf', action='store_true', help='inject auxillary data symbol')
 parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
-parser.add_argument('--correct_time_offset', action='store_true', help='correct phase shift caused by --time_offset (default off)')
+parser.add_argument('--correct_time_offset', type=int, default=0, help='correct phase shift caused by --correct_time_offset in samples (default off)')
 args = parser.parse_args()
 
 if len(args.h_file):

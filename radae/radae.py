@@ -709,10 +709,9 @@ class RADAE(nn.Module):
 
         # genie based phase adjustment for time shift 
         if self.correct_time_offset:
-            print(rx_sym.shape)
-            
+            print(self.correct_time_offset)
             # Use vector multiply to create a shape (batch,Nc) 2D tensor
-            phase_offset = -self.time_offset*torch.reshape(self.w,(1,self.Nc))
+            phase_offset = -self.correct_time_offset*torch.reshape(self.w,(1,self.Nc))
             phase_offset = torch.reshape(phase_offset,(num_batches,self.Nc,1))
         
             # change to (batch,Nc,timestep), as all time steps get the same phase offset
