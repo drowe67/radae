@@ -43,10 +43,27 @@ function run_model() {
 #run_model 250213a_test 120 200 awgn --bottleneck 2 --range_EbNo_start -6 --auxdata  # trained with complex h (pilotless)
 #run_model 250213_test 120 200 mpp --bottleneck 3 --range_EbNo_start -6 --auxdata --h_file h_nc30_mpp_test.c64 --h_complex  # trained with complex h (pilotless)
 #run_model 250225_test 120 200 awgn --bottleneck 3 --range_EbNo_start -9 --auxdata  --pilots2 # trained with complex h (pilotless)
+#run_model 250227a_test 40 200 awgn --bottleneck 3 --range_EbNo_start -6 # Nc=10 
+#run_model 250227a_test 40 200 mpp --bottleneck 3 --range_EbNo_start 0 --h_file h_nc10_mpp_test.c64 --h_complex # Nc=10 
 
-model_list='model19_check3_awgn 250213_test_awgn 250213a_test_awgn 250225_test_awgn'
-model_dim=(80 120 120 120)
-declare -a model_legend=("RADE V1 AWGN d=80" "250213 AWGN d=120 b3" "250213a AWGN d=120 b2" "250225 AWGN d=120 b3 p2")
+plot="250227a"
+
+if [ $plot == "250227a" ]; then
+  model_list='model19_check3_awgn model19_check3_mpp 250213_test_awgn 250227a_test_awgn 250227a_test_mpp'
+  model_dim=(80 80 120 40 40 )
+  declare -a model_legend=("RADE V1 AWGN d=80" "RADE V1 MPP d=80" "250213 AWGN d=120 b3" "250217a AWGN d=40 b3" "250217a MPP d=40 b3")
+fi
+
+if [ $plot == "250227b" ]; then
+  run_model 250227b_test 40 200 awgn --bottleneck 3 --range_EbNo_start -6 # Nc=10 
+  run_model 250227b_test 40 200 mpp --bottleneck 3 --range_EbNo_start 0 --h_file h_nc10_mpp_test.c64 --h_complex # Nc=10 
+
+  model_list='250227a_test_awgn 250227a_test_mpp 250227b_test_awgn 250227b_test_mpp'
+  model_dim=(40 40 40 40 )
+  declare -a model_legend=("250217a AWGN d=40 b3" "250217a MPP d=40 b3" "250217b AWGN d=40 b3" "250217b MPP d=40 b3")
+fi
+
+# Generate the plots in PNG and EPS form, file names have suffix of ${plot}
 
 loss_EqNo=""
 loss_CNo="50,1"
@@ -60,8 +77,10 @@ for model in $model_list
     loss_SNR3k="${loss_SNR3k}${CNo}"
     ((i++))
   done
-echo "radae_plots; loss_EqNo_plot('loss_EqNo_models',''${loss_EqNo}); quit" | octave-cli -qf # PNG
-echo "radae_plots; loss_EqNo_plot('','loss_EqNo_models'${loss_EqNo}); quit" | octave-cli -qf # EPS
-echo "radae_plots; loss_CNo_plot('loss_CNo_models','',${loss_CNo}); quit" | octave-cli -qf # PNG
-echo "radae_plots; loss_CNo_plot('loss_SNR3k_models','',${loss_SNR3k}); quit" | octave-cli -qf # PNG
-echo "radae_plots; loss_CNo_plot('','250226_loss_SNR3k_models',${loss_SNR3k}); quit" | octave-cli -qf # EPS
+echo "radae_plots; loss_EqNo_plot('${plot}_loss_EqNo_models',''${loss_EqNo}); quit" | octave-cli -qf   # PNG
+echo "radae_plots; loss_EqNo_plot('','${plot}_loss_EqNo_models'${loss_EqNo}); quit" | octave-cli -qf   # EPS
+echo "radae_plots; loss_CNo_plot('${plot}_loss_CNo_models','',${loss_CNo}); quit" | octave-cli -qf     # PNG
+echo "radae_plots; loss_CNo_plot('${plot}_loss_SNR3k_models','',${loss_SNR3k}); quit" | octave-cli -qf # PNG
+echo "radae_plots; loss_CNo_plot('','${plot}_loss_SNR3k_models',${loss_SNR3k}); quit" | octave-cli -qf # EPS
+
+
