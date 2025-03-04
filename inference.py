@@ -79,6 +79,7 @@ parser.add_argument('--auxdata', action='store_true', help='inject auxillary dat
 parser.add_argument('--txbpf', action='store_true', help='inject auxillary data symbol')
 parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
 parser.add_argument('--correct_time_offset', type=int, default=0, help='correct phase shift caused by --correct_time_offset in samples (default off)')
+parser.add_argument('--tanh_clipper', action='store_true', help='use tanh magnitude clippier (default hard clipper)')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -106,7 +107,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rat
               gain=args.gain, pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls,
               cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, 
               bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset, txbpf_en = args.txbpf,
-              pilots2=args.pilots2, correct_time_offset=args.correct_time_offset)
+              pilots2=args.pilots2, correct_time_offset=args.correct_time_offset, tanh_clipper=args.tanh_clipper)
 checkpoint = torch.load(args.model_name, map_location='cpu',weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()

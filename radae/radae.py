@@ -85,7 +85,8 @@ class RADAE(nn.Module):
                  txbpf_en = False,
                  pilots2 = False,
                  timing_rand = False,
-                 correct_time_offset = False
+                 correct_time_offset = False,
+                 tanh_clipper = False
                 ):
 
         super(RADAE, self).__init__()
@@ -119,6 +120,7 @@ class RADAE(nn.Module):
         self.pilots2 = pilots2
         self.timing_rand = timing_rand
         self.correct_time_offset = correct_time_offset
+        self.tanh_clipper = tanh_clipper
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
@@ -209,7 +211,7 @@ class RADAE(nn.Module):
 
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
         self.Ncp = int(cyclic_prefix*self.Fs)
-        
+
         # set up End Of Over sequence
         # Normal frame ...PDDDDP... 
         # EOO frame    ...PE000E... 
@@ -537,7 +539,10 @@ class RADAE(nn.Module):
             # Constrain magnitude of complex rate Fs time domain signal, simulates Power
             # Amplifier (PA) that saturates at abs(tx) ~ 1
             if self.bottleneck == 3:
-                tx = torch.exp(1j*torch.angle(tx))
+                if self.tanh_clipper:
+                    tx = torch.tanh(torch.abs(tx))*torch.exp(1j*torch.angle(tx))
+                else:
+                    tx = torch.exp(1j*torch.angle(tx))
             tx_before_channel = tx
 
             # rate Fs multipath model
@@ -709,7 +714,7 @@ class RADAE(nn.Module):
 
         # genie based phase adjustment for time shift 
         if self.correct_time_offset:
-            print(self.correct_time_offset)
+            #print(self.correct_time_offset)
             # Use vector multiply to create a shape (batch,Nc) 2D tensor
             phase_offset = -self.correct_time_offset*torch.reshape(self.w,(1,self.Nc))
             phase_offset = torch.reshape(phase_offset,(num_batches,self.Nc,1))
