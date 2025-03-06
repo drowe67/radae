@@ -48,7 +48,10 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         figure(5); clf; plot(rx); title('rate Fs Scatter (IQ)'); mx = max(abs(rx))*1.5; axis([-mx mx -mx mx]);
         figure(6); clf; plot(real(rx)); xlabel('Time (samples)'); ylabel('rx');
         figure(7); clf; plot_specgram(rx, Fs=8000, 0, 3000);
-        
+        if length(epslatex)
+          print_eps(sprintf("%s_specgram.eps",epslatex),"-S300,300");
+        end
+      
         max(abs(rx).^2)
         mean(abs(rx).^2)
         peak = max(abs(rx).^2);
@@ -225,11 +228,12 @@ function loss_SNR3k_plot(pnsr=0,png_fn, epslatex, varargin)
     ylabel('loss');
     mn = floor(mn);
     axis([-5 20 0.05 0.35])
+    legend('boxoff');
     if length(png_fn)
         print("-dpng",png_fn);
     end
     if length(epslatex)
-        print_eps_restore(epslatex,"-S300,200",textfontsize,linewidth);
+        print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
     end
 endfunction
 

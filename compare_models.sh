@@ -46,7 +46,7 @@ function run_model() {
 #run_model 250227a_test 40 200 awgn --bottleneck 3 --range_EbNo_start -6 # Nc=10 
 #run_model 250227a_test 40 200 mpp --bottleneck 3 --range_EbNo_start 0 --h_file h_nc10_mpp_test.c64 --h_complex # Nc=10 
 
-plot="250227a"
+plot="250227b"
 
 if [ $plot == "250227a" ]; then
   model_list='model19_check3_awgn model19_check3_mpp 250213_test_awgn 250227a_test_awgn 250227a_test_mpp'
