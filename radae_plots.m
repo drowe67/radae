@@ -389,6 +389,10 @@ function y = relu(x)
   y(find(x<0)) = 0;
 end
 
+function y = heaviside(x)
+ y = x>0;
+end
+
 % Plot SNR v R for FM demod model
 function bbfm_plot_SNR_R(epslatex="")
     if length(epslatex)
@@ -412,16 +416,15 @@ function bbfm_plot_SNR_R(epslatex="")
       end
     end
 
-    % implementation using relus (suitable for PyTorch)
-    %SNRdB_relu = relu(CNRdB-8) + Gfm + 16;
-    %SNRdB_relu += -relu(-(CNRdB-8))*(1+Gfm/3);
-
+    % implementation using common ML toolkit non-linearity rather than if/then for efficiency in training
+    SNRdB_heaviside = (RdBm+Gfm).*heaviside(RdBm-TdBm) + (3*RdBm+Gfm-2*TdBm).*heaviside(-RdBm+TdBm);
+  
     figure(1); clf; hold on;
-    plot(RdBm,SNRdB,'g+-'); 
-    %plot(CNRdB,SNRdB_relu,'r+;FM relu;'); 
-    %plot(CNRdB,SNR_ssb_dB,'b;SSB;'); 
-    %axis([min(RdBm) max(RdBm) 0 20]);
-    hold off; grid('minor'); xlabel('R (dBm)'); ylabel('SNR (dB)'); legend('off');
+    plot(RdBm,SNRdB,'g+-');
+    if length(epslatex) == 0
+      hold on; plot(RdBm,SNRdB_heaviside,'bx'); hold off;
+    end
+    grid('minor'); xlabel('R (dBm)'); ylabel('SNR (dB)'); legend('off');
     if length(epslatex)
         print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
     end
