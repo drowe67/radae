@@ -43,9 +43,9 @@ class BBFM(nn.Module):
     def __init__(self,
                  feature_dim,
                  latent_dim,
-                 CNRdB,
-                 fd_Hz=5000,
-                 fm_Hz=3000,
+                 RdBm,
+                 fd_Hz=1800,
+                 fm_Hz=2880,
                  stateful_decoder = False
                 ):
 
@@ -53,7 +53,7 @@ class BBFM(nn.Module):
 
         self.feature_dim = feature_dim
         self.latent_dim  = latent_dim
-        self.CNRdB = CNRdB
+        self.RdBm = RdBm
         self.fd_Hz = fd_Hz
         self.fm_Hz = fm_Hz
         self.stateful_decoder = stateful_decoder
@@ -75,11 +75,14 @@ class BBFM(nn.Module):
         self.Rz = 1/self.Tz
         self.Rb =  latent_dim/self.Tz                  # payload data BPSK symbol rate (symbols/s or Hz)
 
-        self.beta = self.fd_Hz/self.fm_Hz              # deviation
-        self.BWfm = 2*(self.fd_Hz + self.fm_Hz)        # BW estimate using Carsons rule
-        self.Gfm = 10*m.log10(3*(self.beta**2)*(self.beta+1))
-
-        print(f"Rb: {self.Rb:5.2f} Deviation: {self.fd_Hz}Hz Max Modn freq: {self.fm_Hz}Hz Beta: {self.beta:3.2f}", file=sys.stderr)
+        x_bar = 1                                      # average power of modulating symbols wrt peak deviation          
+        k = 1.38E-23; T=274; NFdB = 5
+        self.beta = self.fd_Hz/self.fm_Hz
+        self.Gfm = 10*m.log10(3*(self.beta**2)*x_bar/(1E3*k*T*self.fm_Hz)) - NFdB
+        self.TdBm = 12 - self.Gfm
+ 
+        print(f"Rb: {self.Rb:5.2f} Deviation: {self.fd_Hz} Hz  Max Modn freq: {self.fm_Hz} Hz Beta: {self.beta:3.2f}", file=sys.stderr)
+        print(f"x_bar: {x_bar:5.2f} Gfm: {self.Gfm:5.2f} dB TdB: {self.TdBm:5.2f} dB  RdBm: {self.RdBm:5.2f}", file=sys.stderr)
 
     # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
     def core_decoder_statefull_load_state_dict(self):
@@ -171,13 +174,14 @@ class BBFM(nn.Module):
         z_shape = z.shape
         z_hat = torch.reshape(z,(num_batches,num_timesteps_at_rate_Rs,1))
         
-        # determine FM demod SNR using piecewise approximation implemented with relus to be torch-friendly
-        # note SNR is a vector, 1 sample for symbol as SNR evolves with H
-        CNRdB = 20*torch.log10(H) + self.CNRdB
-        print(H.shape,CNRdB.shape)
-        SNRdB_relu = torch.relu(CNRdB-12) + 12 + self.Gfm
-        SNRdB_relu += -torch.relu(-(CNRdB-12))*(1 + self.Gfm/3)
-        SNR = 10**(SNRdB_relu/10)
+        # determine FM demod SNR using piecewise approximation expressed as sum of
+        # heaviside step functions for efficient implementation during training.
+        # Note SNR is a vector, 1 sample per symbol as SNR evolves with H
+        values = torch.zeros(1, device=H.device) 
+        RdBm = 20*torch.log10(H) + self.RdBm
+        SNRdB = (RdBm+self.Gfm)*torch.heaviside(RdBm-self.TdBm, values) \
+              + (3*RdBm+self.Gfm-2*self.TdBm)*torch.heaviside(-RdBm+self.TdBm, values)
+        SNR = 10**(SNRdB/10)
 
         # note sigma is a vector, noise power evolves across each symbol with H
         sigma = 1/(SNR**0.5)
@@ -185,7 +189,6 @@ class BBFM(nn.Module):
         z_hat = torch.clamp(z_hat + n, min=-1.0,max=1.0)
                         
         z_hat = torch.reshape(z_hat,z_shape)
-        #print(z.shape, z_hat.shape)
         
         features_hat = self.core_decoder(z_hat)
         
@@ -193,5 +196,6 @@ class BBFM(nn.Module):
             "features_hat" : features_hat,
             "z_hat"  : z_hat,
             "sigma"  : sigma,
-            "CNRdB"  : CNRdB
-        }
+            "SNRdB"  : SNRdB,
+            "RdBm"   : RdBm
+       }

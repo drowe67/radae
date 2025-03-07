@@ -49,7 +49,7 @@ parser.add_argument('features', type=str, help='path to feature file in .f32 for
 parser.add_argument('output', type=str, help='path to output folder')
 parser.add_argument('--cuda-visible-devices', type=str, help="comma separates list of cuda visible device indices, default: ''", default="")
 parser.add_argument('--latent-dim', type=int, help="number of symbols produced by encoder, default: 80", default=80)
-parser.add_argument('--CNRdB', type=float, default=0, help='FM demod input CNR in dB')
+parser.add_argument('--RdBm', type=float, default=-120.0, help='Receive level set point in dBm (default -120)')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath file, rate Rs time steps by 1 carriers .f32 format')
 
 training_group = parser.add_argument_group(title="training parameters")
@@ -61,8 +61,6 @@ training_group.add_argument('--lr-decay-factor', type=float, help='learning rate
 
 training_group.add_argument('--initial-checkpoint', type=str, help='initial checkpoint to start training from, default: None', default=None)
 training_group.add_argument('--plot_loss', action='store_true', help='plot loss versus epoch as we train')
-training_group.add_argument('--plot_EqNo', type=str, default="", help='plot loss versus Eq/No for final epoch')
-training_group.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
 
 args = parser.parse_args()
 
@@ -103,15 +101,13 @@ print(f"Using {device} device")
 latent_dim = args.latent_dim
 
 num_features = 20
-if args.auxdata:
-    num_features += 1
 
 # training data
 feature_file = args.features
 
 # model
-checkpoint['model_args'] = (num_features, latent_dim, args.CNRdB)
-model = BBFM(num_features, latent_dim, args.CNRdB)
+checkpoint['model_args'] = (num_features, latent_dim, args.RdBm)
+model = BBFM(num_features, latent_dim, args.RdBm)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
