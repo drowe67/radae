@@ -1,0 +1,84 @@
+\documentclass{beamer}
+\usetheme{CambridgeUS}
+
+% Features are a spectrogram, turns out with modern ML speech synthesisers you can reconstruct speech from that.
+% Advances in speech synthesis, step change in quality.
+% Training is like taking a few hundred hours of spectrograms, corrupting it with the HF channel, then telling the network to try and reproduce the original.
+% Started out as system to encode speech for voice over the internet.  Jean-Marc developed a PoC prototype, I wrapped a modem around it, trained for HF channels. Story of development, use of AREG KiwiSDRs to test system - real science.  Need to move away from anecdotal reports.
+% Rapid prototyping, small code example.
+% PAPR advantage, greater average power output
+
+% Three takeaways
+% 10 contents slides + intro is 20 minutes
+% Do a practice run
+
+% Title page details: 
+\title[RADE]{RADE - Machine Learning for Speech over HF Radio}
+\author[]{David Rowe VK5DGR}
+\institute[freedv.org]{freedv.org \and Supported by a grant from Amateur Radio Digital Communications}
+\date[]{\today}
+
+\begin{document}
+% Title page frame
+\begin{frame}
+    \titlepage
+\end{frame}
+
+% Outline frame
+\begin{frame}{Outline}
+    \tableofcontents
+\end{frame}
+
+\section{Introduction}
+
+\begin{frame}{What is RADE}
+\begin{description}
+    \item[RADE] Radio Auto-encoder
+\end{description}
+A way of using machine learning (AI) to send speech over HF radio. 
+\end{frame}
+
+\begin{frame}{FreeDV project}
+\begin{itemize}
+    \item Open source HF digital voice for amateur radio
+    \item Since 2023, funded by ARDC grant
+    \item Managed by 6 Person Project Leadership Team
+    \item Financial sponsor is the Software Freedom Conservancy
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Machine Learning and Classical DSP}
+
+\begin{itemize}
+    \item Design
+    \item Training
+\end{itemize}
+
+% could use diode or AM radio example
+% simple example of network
+% extend to unknown black box
+% when we don't know what exact function of box is, but have a pretty good idea of what we want it to do
+% step changes in the qualitry of many agorithms including speec coding
+
+\end{frame}
+
+\section{RADE Design}
+
+\section{RADE In Practice}
+\begin{frame}{Samples}
+\end{frame} 
+\begin{frame}{How to Get RADE}
+Download the FreeDV GUI application and connect to your SSB radio:
+\begin{description}
+    \item[Download] freedv.org
+    \item[Help] freedv.org
+\end{description}\end{frame} 
+\begin{frame}{Who's Using RADE}
+\begin{description}
+    \item[QSO Finder] freedv.org
+    \item[PSK reporter] freedv.org
+\end{description}
+\end{frame} 
+
+
+\end{document}
