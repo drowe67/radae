@@ -1,20 +1,13 @@
 \documentclass{beamer}
 \usetheme{CambridgeUS}
 
-% Features are a spectrogram, turns out with modern ML speech synthesisers you can reconstruct speech from that.
-% Advances in speech synthesis, step change in quality.
-% Training is like taking a few hundred hours of spectrograms, corrupting it with the HF channel, then telling the network to try and reproduce the original.
-% Started out as system to encode speech for voice over the internet.  Jean-Marc developed a PoC prototype, I wrapped a modem around it, trained for HF channels. Story of development, use of AREG KiwiSDRs to test system - real science.  Need to move away from anecdotal reports.
-% Rapid prototyping, small code example.
-% PAPR advantage, greater average power output
-
-% Three takeaways
+% Allocate a doc number
+% PAPR advantage, greater average power output.  This might be too much to explain.
 % 10 contents slides + intro is 20 minutes
 % Do a practice run
 
 % Title page details: 
 \title[RADE]{RADE - Machine Learning for Speech over HF Radio}
-\author[]{David Rowe VK5DGR}
 \institute[freedv.org]{freedv.org \and Supported by a grant from Amateur Radio Digital Communications}
 \date[]{\today}
 
@@ -31,54 +24,114 @@
 
 \section{Introduction}
 
-\begin{frame}{What is RADE}
+\begin{frame}
 \begin{description}
     \item[RADE] Radio Auto-encoder
 \end{description}
-A way of using machine learning (AI) to send speech over HF radio. 
+\begin{itemize}
+   \item A way of using machine learning (AI) to send speech over HF radio 
+   \item Combines traditional DSP and modern ML to encode and decode speech
+   \item Connect a PC running RADE to your SSB radio
+   \item 8 kHz audio bandwidth, high quality speech
+   \item Works at low and high SNRs, handles multipath fading
+\end{itemize}
 \end{frame}
 
-\begin{frame}{FreeDV project}
+\begin{frame}
+	TODO: link to blog post for demo
+	TODO: Can sample be embedded in a Beamer presentation?
+\end{frame}
+
+\begin{frame}
+RADE is an outcome of the FreeDV Project ...
 \begin{itemize}
     \item Open source HF digital voice for amateur radio
-    \item Since 2023, funded by ARDC grant
-    \item Managed by 6 Person Project Leadership Team
+    \item Since 2023, funded by an ARDC grant
+    \item 6 Person Project Leadership Team
     \item Financial sponsor is the Software Freedom Conservancy
+    \item Project Goal: a voice mode competitive with SSB at high and low SNRs
 \end{itemize}
 \end{frame}
 
-\begin{frame}{Machine Learning and Classical DSP}
+\section{Design Versus Training}
 
+\begin{frame}
 \begin{itemize}
-    \item Design
-    \item Training
+	\item Previously, we would design a system
+	\item Figure out all the steps
+	\item With ML the emphasis is on training a neural network
+	\item Consider an AM radio example
+	% TODO: block diagram of AM radio tuner, detector, filter
+	\item Lets build the detector using machine learning
 \end{itemize}
+\end{frame}
 
-% could use diode or AM radio example
-% simple example of network
-% extend to unknown black box
-% when we don't know what exact function of box is, but have a pretty good idea of what we want it to do
-% step changes in the qualitry of many agorithms including speec coding
+\begin{frame}
+\begin{itemize}
+	\item Start with an untrained neural network
+	\item Collect some training material
+	\item Many examples of input and desired output
+	\item Train the network so it matches desired output
+\end{itemize}
+\end{frame}
 
+\begin{frame}
+	TODO: slide with plots of network input and output
+\end{frame}
+
+\begin{frame}
+\begin{itemize}
+	\item Sometimes we don't know the best way to design something
+	\item Real world problems are complex, prefect designs don't exist
+	\item But we do have a good idea of what success looks (sounds) like
+	\item So we just treat the system it as a black box
+	\item Show it examples of what we would like to see - and train
+	\item ML has provided step changes in the quality of many algorithms
+	\item Including speech synthesis and compression
+\end{itemize}
 \end{frame}
 
 \section{RADE Design}
 
+\begin{frame}
+\begin{itemize}
+	\item Jean-Marc Valin (and team) - compressing speech for Internet applications
+    \item Idea: could it could be applied to noisy signal over radio channels?
+    \item Jean-Marc developed a quick proof of concept
+    \item We wrapped a modem around it to develop RADE
+    \item Hams (and AREG SDRs) helped us crowd source the testing
+    \item Mooneer Salem integrated RADE with the FreeDV GUI application
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+	TODO: Block diagram of RADE versus classical DSP
+\end{frame}
+
+\begin{frame}
+\begin{itemize}
+	\item Example of features - waterfall (aka spectrogram)
+	\item Encoder takes waterfall and produces symbols we send over channel
+	\item Decoder takes symbols and produces waterfall
+	\item Which are fed to a ML synthesiser for high quality speech
+	\item Trained with 200 hours of speech, corrupted by noise and the HF channel
+	\item Classical DSP modem wrapped around that for synchronisation
+\end{itemize}
+\end{frame}
+
 \section{RADE In Practice}
-\begin{frame}{Samples}
-\end{frame} 
-\begin{frame}{How to Get RADE}
+
+\begin{frame}
 Download the FreeDV GUI application and connect to your SSB radio:
 \begin{description}
-    \item[Download] freedv.org
-    \item[Help] freedv.org
-\end{description}\end{frame} 
-\begin{frame}{Who's Using RADE}
-\begin{description}
-    \item[QSO Finder] freedv.org
-    \item[PSK reporter] freedv.org
+    \item[Download] freedv.org 
+    \item[Help] freedv.org - mailing list, QSO finder, Discord
+    \item[QSO Finder] qso.freedv.org
 \end{description}
 \end{frame} 
 
+\begin{frame}
+   TODO: QSO reporter and PSK report slides
+\end{frame}
 
 \end{document}
