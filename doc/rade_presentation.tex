@@ -1,17 +1,32 @@
+% FreeDV-039 RADE presentation
+% RADE presentation slides, intended for club level Ham presentation
+
 \documentclass{beamer}
+
+\usepackage{tikz}
+\usetikzlibrary{calc,arrows,shapes,positioning,automata}
+\usepackage{tkz-euclide}
+
 \usetheme{CambridgeUS}
 
-% Allocate a doc number
-% PAPR advantage, greater average power output.  This might be too much to explain.
-% 10 contents slides + intro is 20 minutes
-% Do a practice run
-
-% Title page details: 
 \title[RADE]{RADE - Machine Learning for Speech over HF Radio}
 \institute[freedv.org]{freedv.org \and Supported by a grant from Amateur Radio Digital Communications}
 \date[]{\today}
 
 \begin{document}
+
+% Tikz code used to support block diagrams
+% credit: https://tex.stackexchange.com/questions/175969/block-diagrams-using-tikz
+
+\tikzset{
+block/.style = {draw, fill=white, rectangle, minimum height=3em, minimum width=3em},
+tmp/.style  = {coordinate}, 
+circ/.style= {draw, fill=white, circle, node distance=1cm, minimum size=0.6cm},
+input/.style = {coordinate},
+output/.style= {coordinate},
+pinstyle/.style = {pin edge={to-,thin,black}}
+}
+
 % Title page frame
 \begin{frame}
     \titlepage
@@ -29,7 +44,7 @@
     \item[RADE] Radio Auto-encoder
 \end{description}
 \begin{itemize}
-   \item A way of using machine learning (AI) to send speech over HF radio 
+   \item Applying machine learning (ML) to send speech over HF radio 
    \item Combines traditional DSP and modern ML to encode and decode speech
    \item Connect a PC running RADE to your SSB radio
    \item 8 kHz audio bandwidth, high quality speech
@@ -38,8 +53,8 @@
 \end{frame}
 
 \begin{frame}
-	TODO: link to blog post for demo
-	TODO: Can sample be embedded in a Beamer presentation?
+One of our crowd sourced examples, Texas to Australia, 25W, SNR 4 dB, deep fading
+\href{http://freedv.org/davids-freedv-update-september-2024/}{\beamergotobutton{Link}}
 \end{frame}
 
 \begin{frame}
@@ -47,7 +62,7 @@ RADE is an outcome of the FreeDV Project ...
 \begin{itemize}
     \item Open source HF digital voice for amateur radio
     \item Since 2023, funded by an ARDC grant
-    \item 6 Person Project Leadership Team
+    \item 6 person Project Leadership Team
     \item Financial sponsor is the Software Freedom Conservancy
     \item Project Goal: a voice mode competitive with SSB at high and low SNRs
 \end{itemize}
@@ -56,14 +71,31 @@ RADE is an outcome of the FreeDV Project ...
 \section{Design Versus Training}
 
 \begin{frame}
+
 \begin{itemize}
 	\item Previously, we would design a system
 	\item Figure out all the steps
 	\item With ML the emphasis is on training a neural network
-	\item Consider an AM radio example
-	% TODO: block diagram of AM radio tuner, detector, filter
-	\item Lets build the detector using machine learning
+	\item Consider an AM receiver example
+	\item Lets build the Detector using machine learning
 \end{itemize}
+
+\begin{tikzpicture}[auto, node distance=3cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
+
+% AM receiver block diagram
+
+\node [input] (rinput) {};
+\node [block, below of=rinput, node distance=1.25cm,text width=2cm] (bpf) {Band Pass Filter};
+\node [block, right of=bpf] (detector) {(Diode) Detector};
+\node [block, right of=detector] (lpf) {Low Pass Filter};
+\node [output, below of=lpf, node distance=1.25cm,text width=2cm] (routput) {};
+
+\draw [->] node[above,text width=2cm] {Input RF} (rinput) -- (bpf);
+\draw [->] (bpf) -- (detector);
+\draw [->] (detector) -- (lpf);
+\draw [->] (lpf) -- (routput) node[below,text width=1.5cm] {Output Speech};
+\end{tikzpicture}
+
 \end{frame}
 
 \begin{frame}
@@ -84,7 +116,7 @@ RADE is an outcome of the FreeDV Project ...
 	\item Sometimes we don't know the best way to design something
 	\item Real world problems are complex, prefect designs don't exist
 	\item But we do have a good idea of what success looks (sounds) like
-	\item So we just treat the system it as a black box
+	\item So we just treat the system as a black box
 	\item Show it examples of what we would like to see - and train
 	\item ML has provided step changes in the quality of many algorithms
 	\item Including speech synthesis and compression
@@ -105,7 +137,56 @@ RADE is an outcome of the FreeDV Project ...
 \end{frame}
 
 \begin{frame}
-	TODO: Block diagram of RADE versus classical DSP
+\begin{tikzpicture}[auto, node distance=3cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
+
+% Classical DSP System
+
+\node [input] (rinput1) {};
+\node [block, below of=rinput1, node distance=1.25cm,text width=2cm] (feature_ext) {Feature Extraction};
+\node [block, right of=feature_ext] (quant) {Quantisation};
+\node [block, right of=quant] (fec_enc) {FEC Encode};
+\node [block, right of=fec_enc] (mod1) {Modulator};
+\node [block, below of=mod1, node distance=2cm] (channel1) {Radio Channel};
+\node [block, below of=channel1, node distance=2cm] (demod1) {Demodulator};
+\node [block, left of=demod1] (fec_dec) {FEC Decode};
+\node [block, left of=fec_dec] (dequant) {De-Quant};
+\node [block, left of=dequant] (synth) {Speech Synth};
+\node [output, below of=synth, node distance=1.25cm,text width=2cm] (routput1) {};
+
+\draw [->] node[above,text width=2cm] {Input Speech} (rinput1) -- (feature_ext);
+\draw [->] (feature_ext) -- (quant);
+\draw [->] (quant) -- (fec_enc);
+\draw [->] (fec_enc) -- (mod1);
+\draw [->] (mod1) -- (channel1);
+\draw [->] (channel1) -- (demod1);
+\draw [->] (demod1) -- (fec_dec);
+\draw [->] (fec_dec) -- (dequant);
+\draw [->] (dequant) -- (synth);
+\draw [->] (synth) -- (routput1) node[below,text width=1.5cm] {Output Speech};
+\end{tikzpicture}
+\end{frame}
+
+\begin{frame}
+\begin{tikzpicture}[auto, node distance=3cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
+
+% RADE System
+
+\node [input] (rinput) {};
+\node [block, below of=rinput, node distance=1.25cm,text width=2cm] (feature_ext) {Feature Extraction};
+\node [block, right of=feature_ext] (rade_enc) {\emph{RADE} Encoder};
+\node [block, below of=rade_enc,node distance=2cm] (channel) {Radio Channel};
+\node [block, below of=channel,node distance=2cm] (rade_dec) {\emph{RADE} Decoder};
+\node [block, left of=rade_dec] (fargan) {Speech Synth};
+\node [output, below of=fargan,node distance=1.25cm] (routput) {};
+
+\draw [->] (rinput) node[above,text width=2cm] {Input Speech} -- (feature_ext);
+\draw [->] (feature_ext) -- (rade_enc);
+\draw [->] (rade_enc) -- (channel);
+\draw [->] (channel) -- (rade_dec);
+\draw [->] (rade_dec) -- (fargan);
+\draw [->] (fargan) -- (routput) node[below,text width=1.5cm] {Output Speech};
+
+\end{tikzpicture}
 \end{frame}
 
 \begin{frame}
@@ -119,19 +200,15 @@ RADE is an outcome of the FreeDV Project ...
 \end{itemize}
 \end{frame}
 
-\section{RADE In Practice}
+\section{Using RADE}
 
 \begin{frame}
-Download the FreeDV GUI application and connect to your SSB radio:
 \begin{description}
     \item[Download] freedv.org 
-    \item[Help] freedv.org - mailing list, QSO finder, Discord
-    \item[QSO Finder] qso.freedv.org
+    \item[Help] freedv.org - mailing list, QSO finder chat, Discord chat
+    \item[QSO Finder] qso.freedv.org \href{http://qso.freedv.org}{\beamergotobutton{Link}}
+    \item[PSK Reporter] \href{https://pskreporter.info/pskmap?preset&callsign=ZZZZZ&what=all&mode=FREEDV&timerange=86400&mapCenter=17.5,-8,2.6}{\beamergotobutton{Link}}    
 \end{description}
 \end{frame} 
-
-\begin{frame}
-   TODO: QSO reporter and PSK report slides
-\end{frame}
 
 \end{document}
