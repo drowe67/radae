@@ -16,7 +16,7 @@ function print_help {
     echo
     echo "Automated Speech Recognition (ASR) dataset processing for Radio Autoencoder testing"
     echo
-    echo "  usage ./asr_test.sh ssb|rade|fargan|4kHz [test option below]"
+    echo "  usage ./asr_test.sh ssb|rade|700D|fargan|4kHz [test option below]"
     echo "  usage ./ota_test.sh ssb --No -30"
     echo "  usage ./ota_test.sh rade --EbNodB 10"
     echo
@@ -128,7 +128,7 @@ END
 function process {
     pushd $source > /dev/null; flac=$(find . -name '*.flac'); popd > /dev/null
     if [ $n_samples -ne 0 ]; then
-        flac=$(echo "$flac" | head -n $n_samples)
+        flac=$(echo "$flac" | shuf --random-source=<(yes 42) | head -n $n_samples)
     fi
 
     n=$(echo "$flac" | wc -l)
@@ -183,6 +183,42 @@ function process {
         fi
     fi
     
+    if [ $mode == "700D" ]; then
+        
+        fading_adv=0
+        for f in $flac
+        do
+            d=$(dirname $f)
+            mkdir -p ${dest}/${d}
+
+            # silence either side of sample to allow time for acquisition and latency
+            sox /tmp/silence.wav /tmp/silence.wav ${source}/${f} /tmp/silence.wav -t .s16 -r 8000 ${in}
+
+            # trim start to remove acquisition noise
+            freedv_tx 700D ${in} - | \
+            ch - - --No ${No} ${ch_args} --fading_adv ${fading_adv} 2>${ch_log} | \
+            freedv_rx 700D - out.raw 2>/dev/null
+            cat out.raw | sox -t .s16 -r 8000 -c 1 - -r 16000 ${dest}/${f} trim 0.5
+            # error check
+            grep "Fading file finished" $ch_log
+            if [ $? -eq 0 ]; then
+                echo "Error - fading file too short after" $fading_adv " seconds"
+                exit 1
+            fi
+            snr=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
+            CNo=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f5)
+            echo $snr >> ${snr_log}
+            echo $CNo >> ${CNo_log}
+
+            # advance through fading simulation file
+            dur=$(sox --info -D ${source}/${f})
+            fading_adv=$(python3 -c "print(${fading_adv} + ${dur})")
+
+        done
+        SNR_mean=$(print_mean_text_file ${snr_log})
+        CNo_mean=$(print_mean_text_file ${CNo_log})
+    fi
+
     if [ $mode == "rade" ] || [ $mode == "fargan" ]; then
         # find length of each file
         duration_log=""
@@ -249,7 +285,7 @@ function process {
 
     python3 asr_wer.py test-other -n $n_samples --model turbo | tee > $asr_log
     wer=$(tail -n1 $asr_log | tr -s ' ' | cut -d' ' -f2)
-    if [ $mode == "ssb" ] || [ $mode == "rade" ]; then
+    if [ $mode == "ssb" ] || [ $mode == "rade" ] || [ $mode == "700D" ]; then
       printf "%-6s %5.2f %5.2f %5.2f\n" $mode $SNR_mean $CNo_mean $wer | tee -a $results
     else
       printf "%-6s %5.2f\n" $mode $wer | tee -a $results

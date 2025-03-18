@@ -488,14 +488,18 @@ end
 function plot_wer(prefix_fn, png_fn="", epslatex="")
   ssb_awgn_fn = sprintf("%s_asr_awgn_ssb.txt",prefix_fn);
   rade_awgn_fn = sprintf("%s_asr_awgn_rade.txt",prefix_fn);
+  freedv_700D_awgn_fn = sprintf("%s_asr_awgn_700D.txt",prefix_fn);
   ssb_mpp_fn = sprintf("%s_asr_mpp_ssb.txt",prefix_fn);
   rade_mpp_fn = sprintf("%s_asr_mpp_rade.txt",prefix_fn);
+  freedv_700D_mpp_fn = sprintf("%s_asr_mpp_700D.txt",prefix_fn);
   controls_fn = sprintf("%s_asr_c.txt",prefix_fn);
 
   ssb_awgn = load(ssb_awgn_fn);
   rade_awgn = load(rade_awgn_fn);
+  freedv_700D_awgn = load(freedv_700D_awgn_fn);
   ssb_mpp = load(ssb_mpp_fn);
   rade_mpp = load(rade_mpp_fn);
+  freedv_700D_mpp = load(freedv_700D_mpp_fn);
   c = load(controls_fn);
   
   if length(epslatex)
@@ -507,11 +511,13 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   plot(ssb_awgn(:,2),ssb_awgn(:,3),'b+-;SSB AWGN;');
   hold on;
   plot(rade_awgn(:,2),rade_awgn(:,3),'g+-;RADE AWGN;');
+  plot(freedv_700D_awgn(:,2),freedv_700D_awgn(:,3),'r+-;700D AWGN;');
   plot(ssb_mpp(:,2),ssb_mpp(:,3),'bo--;SSB MPP;');
   plot(rade_mpp(:,2),rade_mpp(:,3),'go--;RADE MPP;');
+  plot(freedv_700D_mpp(:,2),freedv_700D_mpp(:,3),'ro--;700D MPP;');
   xmin=30; xmax=60;
   plot(xmax-5,c(1),'cx;clean;')
-  plot(xmax-5,c(2),'ro;FARGAN;')
+  plot(xmax-5,c(2),'mo;FARGAN;')
   plot(xmax-5,c(3),'k+;4kHz;')
   hold off;
   axis([xmin,xmax,0,40]); grid; ylabel('WER \%'); xlabel("C/No (dB)");
@@ -520,20 +526,22 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   figure(2); clf;
   plot(ssb_awgn(:,1),ssb_awgn(:,3),'b+-;SSB AWGN;');
   hold on;
-  plot(rade_awgn(:,1),rade_awgn(:,3),'g+-;RADE AWGN;');
+  plot(rade_awgn(:,1),rade_awgn(:,3),'r+-;RADE AWGN;');
+  plot(freedv_700D_awgn(:,1),freedv_700D_awgn(:,3),'g+-;700D AWGN;');
   plot(ssb_mpp(:,1),ssb_mpp(:,3),'bo--;SSB MPP;');
-  plot(rade_mpp(:,1),rade_mpp(:,3),'go--;RADE MPP;');
+  plot(rade_mpp(:,1),rade_mpp(:,3),'ro--;RADE MPP;');
+  plot(freedv_700D_mpp(:,1),freedv_700D_mpp(:,3),'go--;700D MPP;');
   xmin=-5; xmax=20;
+  plot(xmax-5,c(2),'mo;FARGAN;')
   plot(xmax-5,c(1),'cx;clean;')
-  plot(xmax-5,c(2),'ro;FARGAN;')
-  plot(xmax-5,c(3),'k+;4kHz;')
   hold off;
   axis([xmin,xmax,0,40]); grid; ylabel('WER (\%)'); xlabel("SNR3k (dB)");
+  legend('boxoff'); legend("left");
 
   if length(png_fn)
     print("-dpng",png_fn,"-S800,600");
   end
   if length(epslatex)
-      print_eps_restore(epslatex,"-S250,200",textfontsize,linewidth);
+      print_eps_restore(epslatex,"-S250,250",textfontsize,linewidth);
   end  
 end
