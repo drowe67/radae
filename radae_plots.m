@@ -182,6 +182,29 @@ function loss_CNo_plot(png_fn, Rs, B, varargin)
     end
 endfunction
 
+% Plots loss v R curves from text files dumped by train_bbfm.py, pass in pairs from *loss_RdBm.txt,legend
+function loss_RdBm_plot(png_fn, epslatex, varargin)
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts();
+    end
+    figure(1); clf; hold on;
+    i = 1;
+    while i <= length(varargin)
+        fn = varargin{i};
+        data = load(fn);
+        i++; leg = varargin{i}; leg = strrep (leg, "_", "-")
+        plot(data(:,1),data(:,2),sprintf("+-;%s;",leg))
+        i++;
+    end
+    hold off; grid; xlabel('R (dBm)'); ylabel('loss'); legend('boxoff');
+    if length(png_fn)
+        print("-dpng",png_fn);
+    end
+    if length(epslatex)
+        print_eps_restore(epslatex,"-S350,300",textfontsize,linewidth);
+    end
+endfunction
+
 % usage:
 %   radae_plots; ofdm_sync_plots("","ofdm_sync.txt","go-;genie;","ofdm_sync_pilot_eq.txt","r+-;mean6;","ofdm_sync_pilot_eq_f2.txt","bx-;mean6 2 Hz;","ofdm_sync_pilot_eq_g0.1.txt","gx-;mean6 gain 0.1;","ofdm_sync_pilot_eq_ls.txt","ro-;LS;","ofdm_sync_pilot_eq_ls_f2.txt","bo-;LS 2 Hz;")
 

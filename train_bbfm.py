@@ -49,7 +49,7 @@ parser.add_argument('features', type=str, help='path to feature file in .f32 for
 parser.add_argument('output', type=str, help='path to output folder')
 parser.add_argument('--cuda-visible-devices', type=str, help="comma separates list of cuda visible device indices, default: ''", default="")
 parser.add_argument('--latent-dim', type=int, help="number of symbols produced by encoder, default: 80", default=80)
-parser.add_argument('--RdBm', type=float, default=-120.0, help='Receive level set point in dBm (default -120)')
+parser.add_argument('--RdBm', type=float, default=-100.0, help='Receive level set point in dBm (default -120)')
 parser.add_argument('--range_RdBm',  action='store_true', help='Sweep receive level during training')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath file, rate Rs time steps by 1 carriers .f32 format')
 
