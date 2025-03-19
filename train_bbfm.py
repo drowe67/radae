@@ -62,6 +62,7 @@ training_group.add_argument('--lr-decay-factor', type=float, help='learning rate
 
 training_group.add_argument('--initial-checkpoint', type=str, help='initial checkpoint to start training from, default: None', default=None)
 training_group.add_argument('--plot_loss', action='store_true', help='plot loss versus epoch as we train')
+training_group.add_argument('--plot_R', type=str, default="", help='plot loss versus RdBm for final epoch, arg is suffix')
 
 args = parser.parse_args()
 
@@ -139,11 +140,72 @@ if __name__ == '__main__':
     # push model to device
     model.to(device)
 
+    # -----------------------------------------------------------------------------------------------
+    # run through dataset once with current model but training disabled, to gather loss v R stats
+    # -----------------------------------------------------------------------------------------------
+    if len(args.plot_R):
+        # TODO: move this to a function
+        print("Measuring loss v RdBm over training set with training disabled")
+        model.eval()
+        R_loss = np.zeros((dataloader.__len__()*batch_size,2))
+        running_total_loss      = 0
+        previous_total_loss     = 0
+        current_loss            = 0.
+
+        with torch.no_grad():
+            with tqdm.tqdm(dataloader, unit='batch') as tepoch:
+                for i, (features,H,G) in enumerate(tepoch):
+                    features = features.to(device)
+                    H = H.to(device)
+                    output = model(features,H)
+                    loss_by_batch = distortion_loss(features[..., :20], output["features_hat"][..., :20])
+                    total_loss = torch.mean(loss_by_batch)
+                    
+                    # collect running stats, R and loss for each sequence in batch
+                    R_loss[i*batch_size:(i+1)*batch_size,0] = output["RdBm"].cpu().detach().numpy()
+                    R_loss[i*batch_size:(i+1)*batch_size,1] = loss_by_batch.cpu().detach().numpy()                       
+
+                    running_total_loss += float(total_loss.detach().cpu())
+                    
+                    if (i + 1) % log_interval == 0:
+                        current_loss = (running_total_loss - previous_total_loss) / log_interval
+                        tepoch.set_postfix(
+                            current_loss=current_loss,
+                            total_loss=running_total_loss / (i + 1),
+                        )
+                        previous_total_loss = running_total_loss
+
+        # Plot loss against EqNodB for final epoch, using log of loss and Eq/No for
+        # each sequence.  We group losses into 1dB R bins, kind of like a histogram.
+        R_min = int(np.ceil(np.min(R_loss[:,0])))
+        R_max = int(np.ceil(np.max(R_loss[:,0])))
+        R_mean_loss = np.zeros((R_max-R_min,2))
+        # group the losses from training into 1dB wide bins, and find mean for that bin
+        r = np.arange(R_min,R_max)
+        for i in np.arange(len(r)):
+            R = r[i]
+            x = np.where(np.abs(R_loss[:,0] - R) < 0.5)
+            R_mean_loss[i,0] = R
+            R_mean_loss[i,1] = np.mean(R_loss[x,1])
+        plt.figure(2)
+        plt.plot(R_mean_loss[:,0],R_mean_loss[:,1],'b+-')
+        plt.grid()
+        plt.xlabel('R (dBm)')
+        plt.ylabel('Loss')
+        plt.show(block=False)
+        plt.savefig(args.plot_R + '_loss_RdBm.png')
+
+        np.savetxt(args.plot_R + '_loss_RdBm' + '.txt', R_mean_loss)
+        quit()
+
+    # ---------------------------------------------------------------------------------------------
+    # Regular training loop
+    # ---------------------------------------------------------------------------------------------
+
     if args.plot_loss:
         plt.figure(1)
         loss_epoch=np.zeros((args.epochs+1))
     
-    # Main training loop
     for epoch in range(1, epochs + 1):
 
         print(f"training epoch {epoch}...",file=sys.stderr)

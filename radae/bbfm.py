@@ -181,6 +181,7 @@ class BBFM(nn.Module):
             RdBm = self.RdBm - 20*torch.rand(num_batches,1,1,device=features.device)
         else:        
             RdBm = self.RdBm*torch.ones(num_batches,1,1,device=features.device)        
+        RdBm_ = RdBm.reshape(num_batches)
 
         # determine FM demod SNR using piecewise approximation expressed as sum of
         # heaviside step functions for efficient implementation during training.
@@ -205,5 +206,5 @@ class BBFM(nn.Module):
             "z_hat"  : z_hat,
             "sigma"  : sigma,
             "SNRdB"  : SNRdB,
-            "RdBm"   : RdBm
+            "RdBm"   : RdBm_
        }
