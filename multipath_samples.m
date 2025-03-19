@@ -55,11 +55,15 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="")
         p2 = H(n+1,1).^2;
         if p1 < P && p2 > P
           LC++;
-          LC_log = [LC_log n];
+          if n < Nsecplot*Rs
+            % prevent repeated memory allocations for large samples, just enough to plot
+            LC_log = [LC_log n];
+          end
         end
       end
       LCR_meas = LC/Nseconds
-      subplot(211); hold on; stem(LC_log,sqrt(P)*ones(length(LC_log))); hold off; axis([0 Nsecplot*Rs 0 3]);
+      # Plot zero crossings on top of |H|
+      subplot(211); hold on; stem(LC_log,sqrt(P)*ones(length(LC_log)),'r'); hold off; axis([0 Nsecplot*Rs 0 3]);
     end
     printf("H file size is Nseconds*Rs*Nc*(4 bytes/sample) = %d*%d*%d*4 = %d bytes\n", Nseconds,Rs,Nc,Nseconds*Rs*Nc*4)
     f=fopen(H_fn,"wb");

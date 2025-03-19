@@ -46,7 +46,8 @@ class BBFM(nn.Module):
                  RdBm,
                  fd_Hz=1800,
                  fm_Hz=2880,
-                 stateful_decoder = False
+                 stateful_decoder = False,
+                 range_RdBm = False
                 ):
 
         super(BBFM, self).__init__()
@@ -57,6 +58,7 @@ class BBFM(nn.Module):
         self.fd_Hz = fd_Hz
         self.fm_Hz = fm_Hz
         self.stateful_decoder = stateful_decoder
+        self.range_RdBm = range_RdBm
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=1))
@@ -174,15 +176,21 @@ class BBFM(nn.Module):
         z_shape = z.shape
         z_hat = torch.reshape(z,(num_batches,num_timesteps_at_rate_Rs,1))
         
+        # training time option to use a range of R, one value per batch
+        if self.range_RdBm:
+            RdBm = self.RdBm - 20*torch.rand(num_batches,1,1,device=features.device)
+        else:        
+            RdBm = self.RdBm*torch.ones(num_batches,1,1,device=features.device)        
+
         # determine FM demod SNR using piecewise approximation expressed as sum of
         # heaviside step functions for efficient implementation during training.
+        # (avoids a for loop with per-sample if-then-else)
         # Note SNR is a vector, 1 sample per symbol as SNR evolves with H
         values = torch.zeros(1, device=H.device) 
-        RdBm = 20*torch.log10(H) + self.RdBm
+        RdBm = 20*torch.log10(H) + RdBm
         SNRdB = (RdBm+self.Gfm)*torch.heaviside(RdBm-self.TdBm, values) \
               + (3*RdBm+self.Gfm-2*self.TdBm)*torch.heaviside(-RdBm+self.TdBm, values)
         SNR = 10**(SNRdB/10)
-
         # note sigma is a vector, noise power evolves across each symbol with H
         sigma = 1/(SNR**0.5)
         n = sigma*torch.randn_like(z_hat)
