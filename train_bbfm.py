@@ -162,7 +162,7 @@ if __name__ == '__main__':
                     total_loss = torch.mean(loss_by_batch)
                     
                     # collect running stats, R and loss for each sequence in batch
-                    R_loss[i*batch_size:(i+1)*batch_size,0] = output["RdBm"].cpu().detach().numpy()
+                    R_loss[i*batch_size:(i+1)*batch_size,0] = output["RdBm_"].cpu().detach().numpy()
                     R_loss[i*batch_size:(i+1)*batch_size,1] = loss_by_batch.cpu().detach().numpy()                       
 
                     running_total_loss += float(total_loss.detach().cpu())

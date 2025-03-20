@@ -206,5 +206,6 @@ class BBFM(nn.Module):
             "z_hat"  : z_hat,
             "sigma"  : sigma,
             "SNRdB"  : SNRdB,
-            "RdBm"   : RdBm_
+            "RdBm_"   : RdBm_, # setpoint R for entire sequence
+            "RdBm"   : RdBm    # per sample R after fading added
        }
