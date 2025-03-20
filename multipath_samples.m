@@ -56,11 +56,15 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="",H_complex=0)
         p2 = H(n+1,1).^2;
         if p1 < P && p2 > P
           LC++;
-          LC_log = [LC_log n];
+          if n < Nsecplot*Rs
+            % prevent repeated memory allocations for large samples, just enough to plot
+            LC_log = [LC_log n];
+          end
         end
       end
       LCR_meas = LC/Nseconds
-      subplot(211); hold on; stem(LC_log,sqrt(P)*ones(length(LC_log))); hold off; axis([0 Nsecplot*Rs 0 3]);
+      # Plot zero crossings on top of |H|
+      subplot(211); hold on; stem(LC_log,sqrt(P)*ones(length(LC_log)),'r'); hold off; axis([0 Nsecplot*Rs 0 3]);
     end
     if H_complex
       bytes_per_sample = 8
