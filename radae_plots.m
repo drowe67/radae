@@ -74,6 +74,9 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         plot([fcentre-bwHz/2 fcentre-bwHz/2 fcentre+bwHz/2 fcentre+bwHz/2 fcentre-bwHz/2 ],[-35 -5 -5 -35 -35],'r-');
         hold off;
         axis([0 3000 -40 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
+        if length(png_fn)
+          print("-dpng",sprintf("%s_psd.png",png_fn));
+        end
         if length(epslatex)
           print_eps_restore(sprintf("%s_psd.eps",epslatex),"-S300,200",textfontsize,linewidth);
         end
