@@ -21,15 +21,17 @@ function run_model() {
 #run_model model_bbfm_01 80 100 awgn
 #run_model 250319_bbfm 80 100 awgn
 #run_model 250319_bbfm_lmr60 80 100 awgn
-run_model model_bbfm_01 80 100 lmr60 --h_file h_lmr60_train.f32
+#run_model model_bbfm_01 80 100 lmr60 --h_file h_lmr60_train.f32
 #run_model 250319_bbfm 80 100 lmr60 --h_file h_lmr60_train.f32
 #run_model 250319_bbfm_lmr60 80 100 lmr60 --h_file h_lmr60_train.f32
+#run_model 250319_bbfm_lmr60 80 100 lmr30 --h_file h_lmr30_train.f32
+run_model 250319_bbfm_lmr60 80 100 lmr120 --h_file h_lmr120_train.f32
 
-plot="250319"
+plot="250402"
 
-if [ $plot == "250319" ]; then
-  model_list='model_bbfm_01_awgn 250319_bbfm_awgn 250319_bbfm_lmr60_awgn model_bbfm_01_lmr60 250319_bbfm_lmr60 250319_bbfm_lmr60_lmr60'
-  declare -a model_legend=("model_bbfm_01 AWGN" "250319_bbfm AWGN" "250319_bbfm_lmr60 AWGN" "model_bbfm_01 lmr60" "250319_bbfm lmr60" "250319_bbfm_lmr60 lmr60")
+if [ $plot == "250402" ]; then
+  model_list='model_bbfm_01_awgn 250319_bbfm_awgn 250319_bbfm_lmr60_awgn 250319_bbfm_lmr60_lmr60 250319_bbfm_lmr60_lmr30 250319_bbfm_lmr60_lmr120'
+  declare -a model_legend=("model_bbfm_01 AWGN" "250319_bbfm AWGN" "250319_bbfm_lmr60 AWGN" "250319_bbfm_lmr60 lmr60" "250319_bbfm_lmr60 lmr30" "250319_bbfm_lmr60 lmr120")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}

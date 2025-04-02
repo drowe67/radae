@@ -14,9 +14,14 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="")
         dopplerSpreadHz = 1.0; path_delay_s = 2E-3;
     elseif strcmp(ch,"mpd")
         dopplerSpreadHz = 2.0; path_delay_s = 4E-3;
-    elseif strcmp(ch,"lmr60")
-        % 60 km/hr, 450 MHz
-        fd = 450E6*(60*1E3/3600/3E8)
+    elseif strncmp(ch,"lmr",3)
+        % extract speed in km/hr from last few digits
+        v_km_hr = str2num(substr(ch,4,length(ch)-3))
+        % convert to m/s
+        v =  v_km_hr*1E3/3600
+        % freq in Hz
+        f = 450E6
+        fd = f*(v/3E8)
         dopplerSpreadHz = 2*fd;
         path_delay_s = 200E-6
     else

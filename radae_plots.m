@@ -193,7 +193,7 @@ function loss_RdBm_plot(png_fn, epslatex, varargin)
         fn = varargin{i};
         data = load(fn);
         i++; leg = varargin{i}; leg = strrep (leg, "_", "-")
-        plot(data(:,1),data(:,2),sprintf("+-;%s;",leg))
+        semilogy(data(:,1),data(:,2),sprintf("+-;%s;",leg))
         i++;
     end
     hold off; grid; xlabel('R (dBm)'); ylabel('loss'); legend('boxoff');
