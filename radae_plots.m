@@ -449,7 +449,7 @@ function bbfm_plot_SNR_R(epslatex="")
     end
     grid('minor'); xlabel('R (dBm)'); ylabel('SNR (dB)'); legend('off');
     if length(epslatex)
-        print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
+        print_eps_restore(epslatex,"-S300,200",textfontsize,linewidth);
     end
 endfunction
 
