@@ -185,7 +185,7 @@ endfunction
 % Plots loss v R curves from text files dumped by train_bbfm.py, pass in pairs from *loss_RdBm.txt,legend
 function loss_RdBm_plot(png_fn, epslatex, varargin)
     if length(epslatex)
-        [textfontsize linewidth] = set_fonts();
+        [textfontsize linewidth] = set_fonts(20);
     end
     figure(1); clf; hold on;
     i = 1;
@@ -193,7 +193,7 @@ function loss_RdBm_plot(png_fn, epslatex, varargin)
         fn = varargin{i};
         data = load(fn);
         i++; leg = varargin{i}; leg = strrep (leg, "_", "-")
-        semilogy(data(:,1),data(:,2),sprintf("+-;%s;",leg))
+        plot(data(:,1),data(:,2),sprintf("+-;%s;",leg))
         i++;
     end
     hold off; grid; xlabel('R (dBm)'); ylabel('loss'); legend('boxoff');
@@ -201,7 +201,7 @@ function loss_RdBm_plot(png_fn, epslatex, varargin)
         print("-dpng",png_fn);
     end
     if length(epslatex)
-        print_eps_restore(epslatex,"-S350,300",textfontsize,linewidth);
+        print_eps_restore(epslatex,"-S300,200",textfontsize,linewidth);
     end
 endfunction
 
