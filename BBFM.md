@@ -4,22 +4,35 @@ A version of the Radio Autoencoder (RADE) designed for the baseband FM channel p
 
 # BBFM ML encoder/decoder
 
-1. First pass training command line:
-    ```
-    python3 ./train_bbfm.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 --plot_loss ~/Downloads/tts_speech_16k_speexdsp.f32 model_bbfm_01 --range_EbNo --range_EbNo_start 6 --plot_loss
-    ```
+Quickstart - ignore the first two steps (training), and use pre-trained `250319_bbfm_lmr60` model.
 
-1. Inference (runs encoder and decoder, and outputs symbols `z_hat.f32`):
-    ```
-    ./inference_bbfm.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav - --write_latent z_hat.f32
-    ```
+1. Generate 10 hours of fading samples for training:
+   ```
+   octave:67> multipath_samples("lmr60",8000, 2000, 1, 10*60*60, "h_lmr60_train.f32")
+   ```
+   Note 10 hours << 205 hours in the speech training dataset.  The same fading data is therefore repeated 205/10 times in each training epoch. I think 10 hours or so might be the max I can generate due to memory limitations in the current Octave code (TBC). It should be enough, based on argument for dataset length with similar models used for HF fading (ITU-R F.1487) which suggests a test length of 3000*(1/Doppler Spread Hz), which for 60 km/hr is 3000/25 = 120 seconds.
+
+1. Training with fading (multipath):
+   ```
+   python3 ./train_bbfm.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 --plot_loss ~/Downloads/tts_speech_16k_speexdsp.f32 250319_bbfm_lmr60 --RdBm -100 --plot_loss --range_RdBm --h_file h_lmr60_train.f32
+   ```
+
+1. Inference (runs encoder and decoder, plays result to sound card, and outputs symbols `z_hat.f32`):
+   ```
+   ./bbfm_inference.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav - --write_latent z_hat.f32
+   ```
+1. Inference (-120dBm, fading, per sample Rx levels written to r.f32 for plotting):
+   ```
+   octave:67> multipath_samples("lmr60", 8000, 2000, 1, 60, "h_lmr60.f32")
+   ./bbfm_inference.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav - --h_file h_lmr60.f32 --RdBm -120 --write_RdBm r.f32
+   ```
 1. Stand alone decoder, outputs speech from `z_hat.f32` to sound card:
     ```
-    ./rx_bbfm.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth z_hat.f32 -
+    ./bbfm_rx.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth z_hat.f32 -
     ```
 1. Or save speech out to a wave file:
     ```
-    ./rx_bbfm.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth z_hat.f32 t.wav
+    ./bbfm_rx.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth z_hat.f32 t.wav
     ```
 
 1. Plot sequence of received symbols:
@@ -27,7 +40,7 @@ A version of the Radio Autoencoder (RADE) designed for the baseband FM channel p
     octave:4> radae_plots; do_plots_bbfm('z_hat.f32')
     ```
 
-# Fading channel simulation
+# Faded (multipath) channel simulation
 
 HF channel sim (two path Rayleigh) is pretty close to TIA-102.CAAA-E 1.6.33 Faded Channel Simulator. The measured level crossing rate (LCR) seems to meet req (f), for v=60 km/hr, f = 450 MHz, and P=1 when measured over a 10 second sample. We've used Rs=2000 symb/s here, so x-axis of plot is 1 second in time.
 
@@ -43,6 +56,11 @@ Pav = 1.0366
 P = 1
 LCR_theory = 23.457
 LCR_meas = 24.400
+```
+
+You can also generate fading samples with other speeds, e.g. 10 seconds of 120 km/hr:
+```
+octave:93> multipath_samples("lmr120", 8000, 2000, 1, 10, "h_lmr120_train.f32")
 ```
 
 # Single Carrier PSK Modem
