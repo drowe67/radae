@@ -35,6 +35,11 @@ Quickstart - ignore the first two steps (training), and use pre-trained `250319_
     ./bbfm_rx.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth z_hat.f32 t.wav
     ```
 
+1. Streaming decoder, reads a stream of z_hat float[80] vectors and synthesises decoded speech:
+   ```
+   cat z_hat.f32 | python3 bbfm_rx_stream.py 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth | build/src/lpcnet_demo -fargan-synthesis - - | aplay -f S16_LE -r 16000
+   ```
+
 1. Plot sequence of received symbols:
     ```
     octave:4> radae_plots; do_plots_bbfm('z_hat.f32')

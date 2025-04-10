@@ -139,7 +139,6 @@ class BBFM(nn.Module):
     # stand alone receiver, takes received symbols z and returns features f
     def receiver(self, z_hat):
         if self.stateful_decoder:
-            print("stateful!", file=sys.stderr)
             features_hat = torch.empty(1,0,self.feature_dim)
             for i in range(z_hat.shape[1]):
                 features_hat = torch.cat([features_hat, self.core_decoder_statefull(z_hat[:,i:i+1,:])],dim=1)

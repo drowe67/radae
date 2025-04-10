@@ -1,5 +1,7 @@
 """
-  BBFM stand alone Rx, takes baseband symbols and outputs features.
+  BBFM stand alone streaming Rx:
+    float z_hat[80] on stdin
+    float features[36] on stdout
 
 /* Copyright (c) 2024 David Rowe */
    
@@ -29,29 +31,20 @@
 */
 """
 
-import os
-import argparse
-
+import os,sys, struct, argparse
 import numpy as np
 import torch
-
-from radae import BBFM, distortion_loss
+from radae import BBFM
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument('model_name', type=str, help='path to model in .pth format')
-parser.add_argument('z_hat', type=str, help='path to input symbol (latent vectors) file in .f32 format')
-parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
-parser.add_argument('--cuda-visible-devices', type=str, help="set to 0 to run using GPU rather than CPU", default="")
-parser.add_argument('--stateful', action='store_true', help='Use stateful decoder')
 args = parser.parse_args()
 
-# set visible devices
-os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_visible_devices
-
-# device
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+# make sure we don't use a GPU
+os.environ['CUDA_VISIBLE_DEVICES'] = ""
+device = torch.device("cpu")
 
 latent_dim = args.latent_dim
 
@@ -61,24 +54,22 @@ num_features = 20
 num_used_features = 20
 
 # load model from a checkpoint file
-model = BBFM(num_features, latent_dim, RdBm=-100, stateful_decoder=args.stateful)
+model = BBFM(num_features, latent_dim, RdBm=-100, stateful_decoder=True)
 checkpoint = torch.load(args.model_name, map_location='cpu', weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
-if args.stateful:
-   model.core_decoder_statefull_load_state_dict()
-
-# dataloader
-z_hat = np.reshape(np.fromfile(args.z_hat, dtype=np.float32), (1, -1, args.latent_dim))
-z_hat = torch.tensor(z_hat)
-print(f"Processing: {z_hat.shape[1]} modem frames")
+model.core_decoder_statefull_load_state_dict()
 
 if __name__ == '__main__':
 
-   # push model to device and run test
-   model.to(device)
-   z_hat = z_hat.to(device)
-   features_hat = model.receiver(z_hat)
-   features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
-   features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
-   features_hat.tofile(args.features_hat)
+    while True:
+        buffer = sys.stdin.buffer.read(args.latent_dim*struct.calcsize("f"))
+        if len(buffer) != args.latent_dim*struct.calcsize("f"):
+            break
+        z_hat = np.reshape(np.frombuffer(buffer,np.float32),(1,1,args.latent_dim))
+        z_hat = torch.tensor(z_hat)
+        z_hat = z_hat.to(device)
+        features_hat = model.receiver(z_hat)
+        features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:16]], dim=-1)
+        features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
+        sys.stdout.buffer.write(features_hat)
