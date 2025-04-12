@@ -15,8 +15,8 @@ function build_input_file_from_librispeech() {
     exit 1 
   fi
   flac=$(find ${source} -name '*.flac')
-  # randomise selection of files so we don't get themn all from one speaker,
-  # --raandom-source makes it the same repeatbale random sequence so we get the 
+  # randomise selection of files so we don't get them all from one speaker,
+  # --random-source makes it the same repeatable random sequence so we get the 
   # same results on each run
   flac=$(echo "$flac" | shuf --random-source=<(yes 42) | head -n $n_samples)
   n=$(echo "$flac" | wc -l)
@@ -32,17 +32,19 @@ function run_model() {
   dim=$2
   epoch=$3
   chan=$4
+  freq_offset=$5
+  shift
   shift
   shift
   shift
   shift
   EbNodB_list='-3 0 3 6 9 12 15 18 21'
-  results=${model}_${chan}_loss_SNR3k.txt
+  results=${model}_${chan}_${freq_offset}Hz_loss_SNR3k.txt
   rm -f $results
   for aEbNodB in $EbNodB_list
     do
       log=$(./inference.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${input_file} /dev/null --bottleneck 3 --rate_Fs \
-            --latent-dim ${dim} $@ --EbNodB ${aEbNodB})
+            --latent-dim ${dim} $@ --EbNodB ${aEbNodB} --freq_offset ${freq_offset}) 
       SNR3k=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f4)
       PAPR=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f5)
       loss=$(echo "$log" | grep "loss:" | tr -s ' ' | cut -d' ' -f2)
@@ -54,8 +56,10 @@ function run_model() {
 n_samples=80
 input_file="wav/librispeech.wav"
 build_input_file_from_librispeech ${n_samples} ${input_file}
-plot="250227b_inf"
 
+plot="250412_inf"
+
+# compare RADE V1 to 250227b
 if [ $plot == "250227b_inf" ]; then
   #run_model model19_check3 80 100 awgn --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
   #run_model model19_check3 80 100 mpp --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --g_file g_mpp.f32
@@ -64,6 +68,21 @@ if [ $plot == "250227b_inf" ]; then
 
   model_list='model19_check3_awgn model19_check3_mpp 250227b_test_awgn 250227b_test_mpp'
   declare -a model_legend=("model19_check3 AWGN Nc=30" "model19_check3 MPP Nc=30" "250227b_test AWGN Nc=10" "250227b_test MPP Nc=10")
+fi
+
+# comparsion of models trained with and without --freq_rand and --auxdata, 0 Hz freq offset
+if [ $plot == "250412_inf" ]; then
+  #run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
+  #run_model 2504227b_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32
+  #run_model 250411 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata
+  #run_model 250411 40 200 awgn 1 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata
+  #run_model 250411 40 200 awgn 2 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata
+  #run_model 250411 40 200 awgn 3 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata
+  #run_model 250411b 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32
+  #run_model 250412 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata
+
+  model_list='model19_check3_awgn_0Hz 250227b_test_awgn_0Hz 250411_awgn_0Hz 250411b_awgn_0Hz 250412_awgn_0Hz'
+  declare -a model_legend=("model19_check3" "250227b_test" "250411 --freq_rand --auxdata" "250411b --freq_rand" "250412 repeat of 250227b")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
