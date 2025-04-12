@@ -183,6 +183,8 @@ if __name__ == '__main__':
                     H = H.to(device)
                     G = G.to(device)
                     output = model(features,H,G)
+                    # note just first 20 voice features used for loss curves - ignoring auxdata if present
+                    # allows meaningful comparisons with/without auxdata
                     loss_by_batch = distortion_loss(features[..., :20], output["features_hat"][..., :20])
                     total_loss = torch.mean(loss_by_batch)
                     
