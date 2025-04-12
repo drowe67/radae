@@ -676,7 +676,7 @@ class RADAE(nn.Module):
             # per sequence random [-2,2] fine frequency offset        
             if self.freq_rand:
                 freq_offset = 4*torch.rand((num_batches,1),device=tx_sym.device) - 2.0
-                omega = freq_offset*2*torch.pi/self.Fs
+                omega = freq_offset*2*torch.pi/self.Rs
                 # shape (num_batchs,num_timsteps)
                 phase = torch.zeros((num_batches,num_timesteps_at_rate_Rs),device=tx_sym.device)
                 # broadcast omega across timesteps
