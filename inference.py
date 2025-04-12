@@ -243,7 +243,7 @@ if __name__ == '__main__':
    features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
    features_hat.tofile(args.features_hat)
 
-   loss = distortion_loss(features,output['features_hat']).cpu().detach().numpy()[0]
+   loss = distortion_loss(features[..., :20],output['features_hat'][..., :20]).cpu().detach().numpy()[0]
    if args.auxdata:
       x = features[..., 20:21]*output["features_hat"][..., 20:21]
       x = torch.flatten(x)
