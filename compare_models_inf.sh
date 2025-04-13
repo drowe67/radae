@@ -40,6 +40,14 @@ function run_model() {
   shift
   EbNodB_list='-3 0 3 6 9 12 15 18 21'
   results=${model}_${chan}_${freq_offset}Hz_loss_SNR3k.txt
+  
+  # return if results file already exists
+  if [ $rebuild -eq 0 ]; then
+    if [ -f $results ]; then
+      return
+    fi
+  fi
+  
   rm -f $results
   for aEbNodB in $EbNodB_list
     do
@@ -52,12 +60,57 @@ function run_model() {
     done
 }
 
-# input file about 10 minutes long
+function print_help {
+    echo
+    echo " Compare models by plotting loss v SNR/PSNR curves from time domain inference"
+    echo
+    echo "  usage ./compare_models_inf.sh [-n NumberSpeechSamples] [-p plotName] [-r]"
+    echo
+    echo "    -n NumberSpeechSamples    Use a low number (e.g. 10) when testing plots"
+    echo "    -p                        Name of plot (see source)"
+    echo "    -r                        Rebuild results files even if they already exists (e.g. if -n has changed)"
+    echo
+    exit
+}
+
+# default is about 10 minutes long
 n_samples=80
 input_file="wav/librispeech.wav"
+plot="250413_inf"
+rebuild=0
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
+case $key in
+    -n)
+        n_samples="$2"	
+        shift
+        shift
+    ;;
+    -p)
+        plot="$2"	
+        shift
+        shift
+    ;;
+    -r)
+        rebuild=1	
+        shift
+    ;;
+    -h)
+        print_help	
+    ;;
+    *)
+    POSITIONAL+=("$1") # save it in an array for later
+    shift
+    ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
 build_input_file_from_librispeech ${n_samples} ${input_file}
 
-plot="250412_inf"
 
 # compare RADE V1 to 250227b
 if [ $plot == "250227b_inf" ]; then
@@ -83,6 +136,30 @@ if [ $plot == "250412_inf" ]; then
 
   model_list='model19_check3_awgn_0Hz 250227b_test_awgn_0Hz 250411_awgn_0Hz 250411b_awgn_0Hz 250412_awgn_0Hz'
   declare -a model_legend=("model19_check3" "250227b_test" "250411 --freq_rand --auxdata" "250411b --freq_rand" "250412 repeat of 250227b")
+fi
+
+# compare RADE V1 to 250411 which can handle +/-2 Hz, although all curves tested here at 0 Hz offset
+if [ $plot == "250413_inf" ]; then
+  run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
+  run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --g_file g_mpp.f32
+  run_model 250411 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
+  run_model 250411 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --g_file g_mpp.f32 --auxdata 
+
+  model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250411_awgn_0Hz 250411_mpp_0Hz'
+  declare -a model_legend=("model19_check3 AWGN Nc=30" "model19_check3 MPP Nc=30" "250411 AWGN Nc=10" "250411 MPP Nc=10")
+fi
+
+# 250411 at different freq offsets
+if [ $plot == "250413a_inf" ]; then
+  run_model 250411 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
+  run_model 250411 40 200 awgn 2 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
+  run_model 250411 40 200 awgn -2 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
+  run_model 250411 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --g_file g_mpp.f32 --auxdata 
+  run_model 250411 40 200 mpp 2 --cp 0.004 --time_offset -16 --correct_time_offset -32 --g_file g_mpp.f32 --auxdata 
+  run_model 250411 40 200 mpp -2 --cp 0.004 --time_offset -16 --correct_time_offset -32 --g_file g_mpp.f32 --auxdata 
+
+  model_list='250411_awgn_0Hz 250411_awgn_2Hz 250411_awgn_-2Hz 250411_mpp_0Hz 250411_mpp_2Hz 250411_mpp_-2Hz'
+  declare -a model_legend=("250411 AWGN 0 Hz" "250411 AWGN 2 Hz" "250411 AWGN -2 Hz" "250411 MPP 0 Hz" "250411 MPP 2 Hz" "250411 MPP -2 Hz")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
