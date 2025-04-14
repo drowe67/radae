@@ -44,6 +44,7 @@ parser.add_argument('model_name', type=str, help='path to model in .pth format')
 parser.add_argument('features', type=str, help='path to input feature file in .f32 format')
 parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
+parser.add_argument('--frames_per_step', type=int, help="number of feat vecs per encoder/decoder vec, default: 4", default=4)
 parser.add_argument('--cuda-visible-devices', type=str, help="set to 0 to run using GPU rather than CPU", default="")
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
 parser.add_argument('--EbNodB', type=float, default=100, help='BPSK Eb/No in dB')
@@ -107,7 +108,8 @@ model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rat
               gain=args.gain, pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls,
               cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, 
               bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset, txbpf_en = args.txbpf,
-              pilots2=args.pilots2, correct_time_offset=args.correct_time_offset, tanh_clipper=args.tanh_clipper)
+              pilots2=args.pilots2, correct_time_offset=args.correct_time_offset, tanh_clipper=args.tanh_clipper,
+              frames_per_step=args.frames_per_step)
 checkpoint = torch.load(args.model_name, map_location='cpu',weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
@@ -119,13 +121,7 @@ nb_features_rounded = model.num_10ms_times_steps_rounded_to_modem_frames(feature
 features = features_in[:,:nb_features_rounded,:]
 features = features[:, :, :num_used_features]
 if args.auxdata:
-   #aux_symb =  1.0 - 2.0*(np.random.rand(1,features.shape[1],1) > 0.5)
    aux_symb =  -np.ones((1,features.shape[1],1),dtype=np.float32)
-   symb_repeat = 4
-   for i in range(1,symb_repeat):
-      aux_symb[0,i::symb_repeat,:] = aux_symb[0,::symb_repeat,:]
-   #print(features.dtype, aux_symb.dtype)
-   #quit()
    features = np.concatenate([features, aux_symb],axis=2)
 features = torch.tensor(features)
 print(f"Processing: {nb_features_rounded} feature vectors")

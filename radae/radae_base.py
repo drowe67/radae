@@ -155,9 +155,8 @@ class GLU(nn.Module):
 
 #Encoder takes input features and computes symbols to be transmitted
 class CoreEncoder(nn.Module):
-    FRAMES_PER_STEP = 4
 
-    def __init__(self, feature_dim, output_dim, bottleneck = 1):
+    def __init__(self, feature_dim, output_dim, bottleneck = 1, frames_per_step=4):
 
         super(CoreEncoder, self).__init__()
 
@@ -165,9 +164,10 @@ class CoreEncoder(nn.Module):
         self.feature_dim        = feature_dim
         self.output_dim         = output_dim
         self.bottleneck         = bottleneck
-        
+        self.frames_per_step   = frames_per_step
+
         # derived parameters
-        self.input_dim = self.FRAMES_PER_STEP * self.feature_dim
+        self.input_dim = self. frames_per_step * self.feature_dim
 
         # Layers are organized like a DenseNet
         self.dense_1 = nn.Linear(self.input_dim, 64)
@@ -196,7 +196,7 @@ class CoreEncoder(nn.Module):
         # Groups FRAMES_PER_STEP frames together in one bunch -- equivalent
         # to a learned transform of size FRAMES_PER_STEP across time. Outputs
         # fewer vectors than the input has because of that
-        x = torch.reshape(features, (features.size(0), features.size(1) // self.FRAMES_PER_STEP, self.FRAMES_PER_STEP * features.size(2)))
+        x = torch.reshape(features, (features.size(0), features.size(1) // self.frames_per_step, self.frames_per_step * features.size(2)))
 
         # run encoding layer stack
         x = n(torch.tanh(self.dense_1(x)))
@@ -221,9 +221,8 @@ class CoreEncoder(nn.Module):
 
 # Stateful version of Encoder
 class CoreEncoderStatefull(nn.Module):
-    FRAMES_PER_STEP = 4
 
-    def __init__(self, feature_dim, output_dim, bottleneck = 1):
+    def __init__(self, feature_dim, output_dim, bottleneck = 1, frames_per_step = 4):
 
         super(CoreEncoderStatefull, self).__init__()
 
@@ -231,9 +230,10 @@ class CoreEncoderStatefull(nn.Module):
         self.feature_dim        = feature_dim
         self.output_dim         = output_dim
         self.bottleneck         = bottleneck
-        
+        self.frames_per_step   = frames_per_step
+       
         # derived parameters
-        self.input_dim = self.FRAMES_PER_STEP * self.feature_dim
+        self.input_dim = self.frames_per_step * self.feature_dim
 
         # Layers are organized like a DenseNet
         self.dense_1 = nn.Linear(self.input_dim, 64)
@@ -262,7 +262,7 @@ class CoreEncoderStatefull(nn.Module):
         # Groups FRAMES_PER_STEP frames together in one bunch -- equivalent
         # to a learned transform of size FRAMES_PER_STEP across time. Outputs
         # fewer vectors than the input has because of that
-        x = torch.reshape(features, (features.size(0), features.size(1) // self.FRAMES_PER_STEP, self.FRAMES_PER_STEP * features.size(2)))
+        x = torch.reshape(features, (features.size(0), features.size(1) // self.frames_per_step, self.frames_per_step * features.size(2)))
 
         # run encoding layer stack
         x = n(torch.tanh(self.dense_1(x)))
@@ -290,9 +290,7 @@ class CoreEncoderStatefull(nn.Module):
 #Decode symbols to reconstruct the vocoder features
 class CoreDecoder(nn.Module):
 
-    FRAMES_PER_STEP = 4
-
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, frames_per_step = 4):
         """ core decoder for RADAE
 
             Computes features from latents, initial state, and quantization index
@@ -305,6 +303,7 @@ class CoreDecoder(nn.Module):
         self.input_dim  = input_dim
         self.output_dim = output_dim
         self.input_size = self.input_dim
+        self.frames_per_step = frames_per_step
 
         # Layers are organized like a DenseNet
         self.dense_1    = nn.Linear(self.input_size, 96)
@@ -318,7 +317,7 @@ class CoreDecoder(nn.Module):
         self.conv4 = MyConv(576, 32)
         self.gru5 = nn.GRU(608, 96, batch_first=True)
         self.conv5 = MyConv(704, 32)
-        self.output  = nn.Linear(736, self.FRAMES_PER_STEP * self.output_dim)
+        self.output  = nn.Linear(736, self.frames_per_step * self.output_dim)
         self.glu1 = GLU(96)
         self.glu2 = GLU(96)
         self.glu3 = GLU(96)
@@ -349,7 +348,7 @@ class CoreDecoder(nn.Module):
         # output layer and reshaping. We produce FRAMES_PER_STEP vocoder feature
         # vectors for every decoded vector of symbols
         x10 = self.output(x)
-        features = torch.reshape(x10, (x10.size(0), x10.size(1) * self.FRAMES_PER_STEP, x10.size(2) // self.FRAMES_PER_STEP))
+        features = torch.reshape(x10, (x10.size(0), x10.size(1) * self.frames_per_step, x10.size(2) // self.frames_per_step))
 
         return features
 
@@ -357,9 +356,7 @@ class CoreDecoder(nn.Module):
 # as short as one z vector, and maintains it's own internal state
 class CoreDecoderStatefull(nn.Module):
 
-    FRAMES_PER_STEP = 4
-
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, frames_per_step = 4):
         """ core decoder for RADAE
 
             Computes features from latent z
@@ -372,6 +369,7 @@ class CoreDecoderStatefull(nn.Module):
         self.input_dim  = input_dim
         self.output_dim = output_dim
         self.input_size = self.input_dim
+        self.frames_per_step = frames_per_step
 
         # Layers are organized like a DenseNet
         self.dense_1    = nn.Linear(self.input_size, 96)
@@ -385,7 +383,7 @@ class CoreDecoderStatefull(nn.Module):
         self.conv4 = Conv1DStatefull(576, 32)
         self.gru5 = GRUStatefull(608, 96, batch_first=True)
         self.conv5 = Conv1DStatefull(704, 32)
-        self.output  = nn.Linear(736, self.FRAMES_PER_STEP * self.output_dim)
+        self.output  = nn.Linear(736, self.frames_per_step * self.output_dim)
         self.glu1 = GLU(96)
         self.glu2 = GLU(96)
         self.glu3 = GLU(96)
@@ -412,7 +410,7 @@ class CoreDecoderStatefull(nn.Module):
         x = torch.cat([x, n(self.conv5(x))], -1)
         x = self.output(x)
 
-        features = torch.reshape(x,(1,z.shape[1]*self.FRAMES_PER_STEP,self.output_dim))
+        features = torch.reshape(x,(1,z.shape[1]*self.frames_per_step,self.output_dim))
         return features
 
     def reset(self):
