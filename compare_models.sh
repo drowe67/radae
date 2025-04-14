@@ -46,7 +46,7 @@ function run_model() {
 #run_model 250227a_test 40 200 awgn --bottleneck 3 --range_EbNo_start -6 # Nc=10 
 #run_model 250227a_test 40 200 mpp --bottleneck 3 --range_EbNo_start 0 --h_file h_nc10_mpp_test.c64 --h_complex # Nc=10 
 
-plot="250227b"
+plot="250414"
 
 if [ $plot == "250227a" ]; then
   model_list='model19_check3_awgn model19_check3_mpp 250213_test_awgn 250227a_test_awgn 250227a_test_mpp'
@@ -61,6 +61,15 @@ if [ $plot == "250227b" ]; then
   model_list='250227a_test_awgn 250227a_test_mpp 250227b_test_awgn 250227b_test_mpp'
   model_dim=(40 40 40 40 )
   declare -a model_legend=("250217a AWGN d=40 b3" "250217a MPP d=40 b3" "250217b AWGN d=40 b3" "250217b MPP d=40 b3")
+fi
+
+if [ $plot == "250414" ]; then
+  run_model 250411 40 200 awgn --bottleneck 3 --auxdata --range_EbNo_start -6 # Nc=10 
+  run_model 250413_test 20 200 awgn --bottleneck 3 --auxdata --range_EbNo_start -3 --frames_per_step 2 # Nc=10 
+
+  model_list='250411_awgn 250413_test_awgn'
+  model_dim=(40 20)
+  declare -a model_legend=("250411 AWGN d=40" "250413 AWGN d=20 frame step 2")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}

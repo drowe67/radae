@@ -162,6 +162,17 @@ if [ $plot == "250413a_inf" ]; then
   declare -a model_legend=("250411 AWGN 0 Hz" "250411 AWGN 2 Hz" "250411 AWGN -2 Hz" "250411 MPP 0 Hz" "250411 MPP 2 Hz" "250411 MPP -2 Hz")
 fi
 
+# Basic test of frame step 2 models 
+if [ $plot == "250414_inf" ]; then
+  # run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
+  # run_model 250411 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
+  # run_model 250413_test 20 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 
+  run_model 250414a_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 
+
+  model_list='model19_check3_awgn_0Hz 250411_awgn_0Hz 250413_test_awgn_0Hz 250414a_test_awgn_0Hz'
+  declare -a model_legend=("model19_check3 AWGN Nc=30" "250411 AWGN Nc=10" "250413_test AWGN Nc=10 frame step 2" "250414a_test AWGN Nc=20 frame step 2")
+fi
+
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
 vargs=""
 i=0
