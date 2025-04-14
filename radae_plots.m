@@ -532,8 +532,10 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   plot(rade_mpp(:,1),rade_mpp(:,3),'ro--;RADE MPP;');
   plot(freedv_700D_mpp(:,1),freedv_700D_mpp(:,3),'go--;700D MPP;');
   xmin=-5; xmax=20;
-  plot(xmax-5,c(2),'mo;FARGAN;')
-  plot(xmax-5,c(1),'cx;clean;')
+  # plot(xmax-5,c(2),'mo;FARGAN;')
+  # plot(xmax-5,c(1),'cx;clean;')
+  plot([xmin xmax],[c(2) c(2)],'m-;FARGAN;')
+  plot([xmin xmax],[c(1) c(1)],'c-;clean;')
   hold off;
   axis([xmin,xmax,0,40]); grid; ylabel('WER (\%)'); xlabel("SNR3k (dB)");
   legend('boxoff'); legend("left");
