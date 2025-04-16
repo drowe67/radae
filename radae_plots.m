@@ -516,29 +516,37 @@ function test_phase_est
   hold off
 endfunction
 
-function compare_pitch_corr(wav_fn,feat1_fn,feat2_fn,png_feat_fn="")
-  Fs=16000;
+function compare_features(wav_fn, rx_fn, f_fn,f_hat_fn,f=19,png_feat_fn="")
+  Fs=16000; secs=5;
   s=load_raw(wav_fn);
-  feat1=load_f32(feat1_fn,36);
-  feat2=load_f32(feat2_fn,36);
+  feat1=load_f32(f_fn,36);
+  feat2=load_f32(f_hat_fn,36);
+  rx=load_f32(rx_fn,1); 
+  rx=rx(1:2:end)+j*rx(2:2:end); 
 
-  % plot a few features over first 5 seconds
+  % plot speech, rx signal, feature over first 5 seconds
 
-  x_wav=(1:Fs*5);
+  x_wav=(1:Fs*secs);
   x=1:min(500,length(feat2));
+  
   figure(1); clf;
+  
   subplot(311);
   plot(s(x_wav),'g'); 
   axis([0 max(x_wav) -3E4 3E4]);
+  
   subplot(312);
-  plot(x,feat1(x,19),'g;fargan;');
-  hold on;  plot(x,feat2(x,19),'r;radae;'); hold off;
-  ylabel('Pitch'); axis([0 max(x) -1 1]);
+  plot(x,feat1(x,f),'g;f;');
+  hold on;  plot(x,feat2(x,f),'r;f\_hat;'); hold off;
+  ylabel(sprintf("feature %d",f)); 
+  % axis([0 max(abs) -1 1]);
+  
   subplot(313);
-  plot(x,feat1(x,20),'g;fargan;');
-  hold on; plot(x,feat2(x,20),'r;radae;'); hold off;
-  ylabel('Corr'); xlabel('10ms frames');
-  axis([0 max(x) -0.6 0.6])
+  Fs2=8000;
+  x_wav_8k=(1:Fs2*secs)+Fs2;
+  length(x_wav_8k)
+  plot_specgram(rx(x_wav_8k), Fs=8000, 0, 3000);
+
   if length(png_feat_fn)
     print("-dpng",png_feat_fn,"-S1200,800");
   end
