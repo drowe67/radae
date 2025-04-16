@@ -162,7 +162,7 @@ if [ $plot == "250413a_inf" ]; then
   declare -a model_legend=("250411 AWGN 0 Hz" "250411 AWGN 2 Hz" "250411 AWGN -2 Hz" "250411 MPP 0 Hz" "250411 MPP 2 Hz" "250411 MPP -2 Hz")
 fi
 
-# Basic test of frame step 2 models 
+# Basic test of frame step 2 models - oops: trained 250414a_test, 250415_test, 250415a_test with h_nc10 file, so invalid
 if [ $plot == "250414_inf" ]; then
   run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
   run_model 250411 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
@@ -172,8 +172,8 @@ if [ $plot == "250414_inf" ]; then
   run_model 250415a_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 
 
   model_list='model19_check3_awgn_0Hz 250411_awgn_0Hz 250413_test_awgn_0Hz 250414a_test_awgn_0Hz 250415_test_awgn_0Hz 250415a_test_awgn_0Hz'
-  declare -a model_legend=("model19_check3 AWGN Nc=30" "250411 AWGN Nc=10" "250413_test AWGN Nc=10 frame step 2" \
-                           "250414a_test AWGN Nc=20 frame step 2" "250415_test AWGN Nc=20 frame step 2" "250415a_test AWGN Nc=20 frame step 2")
+  declare -a model_legend=("model19_check3 AWGN fs=4 d=80 Nc=30" "250411 AWGN fs=4 d=40 Nc=10" "250413_test AWGN fs=2 d=20 Nc=10" \
+                           "250414a_test AWGN fs=2 d=40 Nc=20 start=0dB" "250415_test fs=2 d=40 Nc=20 start=-3dB" "250415a_test AWGN fs=2 d=40 Nc=20 start=-6dB")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
