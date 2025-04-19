@@ -70,6 +70,14 @@ else(NOT CMAKE_CROSSCOMPILING)
     endif(WIN32)
 endif(NOT CMAKE_CROSSCOMPILING)
 
+# OpenBSD's libpython requires libintl but its path is not provided
+# by pkg-config. This is workaround.
+if(${CMAKE_SYSTEM_NAME} STREQUAL "OpenBSD")
+    find_package(Intl REQUIRED)
+    get_filename_component(INTL_LIBDIR ${Intl_LIBRARY} DIRECTORY)
+    link_directories(${INTL_LIBDIR})
+endif()
+
 add_subdirectory(src)
 
 # Ctests ----------------------------------------------------------------------
