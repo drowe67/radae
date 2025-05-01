@@ -21,12 +21,15 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
       end
       figure(3); clf;
       [nn cc] = hist3([real(s) imag(s)],[25 25]);
-      mesh(cc{1},cc{2},nn); title('Scatter 3D');   
+      size(nn)
+      max(nn(:))
+      mesh(cc{1},cc{2},nn/max(nn(:)));
+      xlabel('Real'); ylabel('Imag'); zlabel('Count');
       if length(png_fn)
-        print("-dpng",sprintf("%s_scatter_3d.png",png_fn));
+        print("-dpng",sprintf("%s_hist_2d.png",png_fn));
       end
       if length(epslatex)
-        print_eps(sprintf("%s_scatter_3d.eps",epslatex),"-S300,300");
+        print_eps(sprintf("%s_hist_2d.eps",epslatex),"-S250,250");
       end
       figure(4); clf; hist(abs(s));
     end

@@ -162,18 +162,68 @@ if [ $plot == "250413a_inf" ]; then
   declare -a model_legend=("250411 AWGN 0 Hz" "250411 AWGN 2 Hz" "250411 AWGN -2 Hz" "250411 MPP 0 Hz" "250411 MPP 2 Hz" "250411 MPP -2 Hz")
 fi
 
-# Basic test of frame step 2 models - oops: trained 250414a_test, 250415_test, 250415a_test with h_nc10 file, so invalid
-if [ $plot == "250414_inf" ]; then
+# Basic AWGN test of frame step 2 models
+if [ $plot == "250416_inf" ]; then
   run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
   run_model 250411 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
   run_model 250413_test 20 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 
-  run_model 250414a_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 
-  run_model 250415_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 
-  run_model 250415a_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 
+  run_model 250416_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 
 
-  model_list='model19_check3_awgn_0Hz 250411_awgn_0Hz 250413_test_awgn_0Hz 250414a_test_awgn_0Hz 250415_test_awgn_0Hz 250415a_test_awgn_0Hz'
+  model_list='model19_check3_awgn_0Hz 250411_awgn_0Hz 250413_test_awgn_0Hz 250416_test_awgn_0Hz'
   declare -a model_legend=("model19_check3 AWGN fs=4 d=80 Nc=30" "250411 AWGN fs=4 d=40 Nc=10" "250413_test AWGN fs=2 d=20 Nc=10" \
-                           "250414a_test AWGN fs=2 d=40 Nc=20 start=0dB" "250415_test fs=2 d=40 Nc=20 start=-3dB" "250415a_test AWGN fs=2 d=40 Nc=20 start=-6dB")
+                           "250416_test AWGN fs=2 d=40 Nc=20 start=-3dB")
+fi
+
+# compare RADE V1 to 250415, poor MPP results as expected as not trained correctly.
+if [ $plot == "250416b_inf" ]; then
+  run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
+  run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --g_file g_mpp.f32
+  run_model 250415_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 
+  run_model 250415_test 40 200 mpp  0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 --g_file g_mpp.f32 
+
+  model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250415_test_awgn_0Hz 250415_test_mpp_0Hz'
+  declare -a model_legend=("model19_check3 AWGN  fs=4 d=80 Nc=30" "model19_check3 MPP  fs=4 d=80 Nc=30" "250415 AWGN fs=2 d=40 Nc=20" "250415 MPP fs=2 d=40 Nc=20")
+fi
+
+# compare RADE V1 to framestep 2 250416, MPP results a bit worse than RADE V1 at high SNR.  Perhaps this is a result of the lower frame step
+if [ $plot == "250416a_inf" ]; then
+  run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
+  run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --g_file g_mpp.f32
+  run_model 250416_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 
+  run_model 250416a_test 80 200 awgn  0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 8
+  run_model 250416_test 40 200 mpp  0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 --g_file g_mpp.f32 
+  run_model 250416a_test 80 200 mpp  0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 8 --g_file g_mpp.f32 
+
+  model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250416_test_awgn_0Hz 250416_test_mpp_0Hz 250416a_test_awgn_0Hz 250416a_test_mpp_0Hz'
+  declare -a model_legend=("model19_check3 AWGN fs=4 d=80 Nc=30" "model19_check3 MPP fs=4 d=80 Nc=30" "250416 AWGN fs=2 d=40 Nc=20" \
+                           "250416 MPP fs=2 d=40 Nc=20" "250416a AWGN fs=8 d=80 Nc=10" "250416a MPP fs=8 d=80 Nc=10" )
+fi
+
+# compare RADE V1 to framestep 2,d=20,Nc=10 250413
+if [ $plot == "250417_inf" ]; then
+  run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
+  run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --g_file g_mpp.f32
+  run_model 250413_test 20 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 
+  run_model 250413_test 20 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --frames_per_step 2 --g_file g_mpp.f32
+
+  model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250413_test_awgn_0Hz 250413_test_mpp_0Hz'
+  declare -a model_legend=("model19_check3 AWGN fs=4 d=80 Nc=30" "model19_check3 MPP fs=4 d=80 Nc=30" \
+                           "250413 AWGN fs=2 d=20 Nc=10" "250413 MPP fs=2 d=20 Nc=10" )
+fi
+
+# compare RADE V1 to framestep 4,d=10,Nc=10 250417 (240411 repeat with frame step arg)
+if [ $plot == "250417a_inf" ]; then
+  run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
+  run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --g_file g_mpp.f32
+  run_model 250417_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
+  run_model 250417_test 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --g_file g_mpp.f32
+  run_model 250417a_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
+  run_model 250417a_test 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --g_file g_mpp.f32
+
+  model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250417_test_awgn_0Hz 250417_test_mpp_0Hz 250417a_test_awgn_0Hz 250417a_test_mpp_0Hz'
+  declare -a model_legend=("model19_check3 AWGN fs=4 d=80 Nc=30" "model19_check3 MPP fs=4 d=80 Nc=30" \
+                           "250417 AWGN fs=4 d=40 Nc=10" "250417 MPP fs=4 d=40 Nc=10" \
+                           "250417a AWGN fs=4 d=40 Nc=10" "250417a MPP fs=4 d=40 Nc=10")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
