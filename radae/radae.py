@@ -80,7 +80,8 @@ class RADAE(nn.Module):
                  time_offset = 0,
                  coarse_mag = False,
                  correct_freq_offset = False,
-                 stateful_decoder = False
+                 stateful_decoder = False,
+                 print_frame = False
                 ):
 
         super(RADAE, self).__init__()
@@ -110,6 +111,7 @@ class RADAE(nn.Module):
         self.coarse_mag = coarse_mag
         self.correct_freq_offset = correct_freq_offset
         self.stateful_decoder = stateful_decoder
+        self.print_frame = print_frame
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
@@ -455,8 +457,12 @@ class RADAE(nn.Module):
 
         # run encoder, outputs sequence of latents that each describe 40ms of speech
         z = self.core_encoder(features)
+        
         if self.ber_test:
             z = torch.sign(torch.rand_like(z)-0.5)
+        if self.print_frame:
+            # replace z with element indexes
+            z[:,:,:] = torch.arange(0,self.latent_dim, dtype=torch.float32)
         
         # map z to QPSK symbols, note Es = var(tx_sym) = 2 var(z) = 2 
         # assuming |z| ~ 1 after training
@@ -469,7 +475,7 @@ class RADAE(nn.Module):
             
         # reshape into sequence of OFDM modem frames
         tx_sym = torch.reshape(tx_sym,(num_batches,num_timesteps_at_rate_Rs,self.Nc))
-   
+    
         # optionally insert pilot symbols, at the start of each modem frame
         if self.pilots:
             num_modem_frames = num_timesteps_at_rate_Rs // self.Ns
@@ -479,6 +485,17 @@ class RADAE(nn.Module):
             tx_sym_pilots[:,:,0,:] = self.pilot_gain*self.P
             num_timesteps_at_rate_Rs = num_timesteps_at_rate_Rs + num_modem_frames
             tx_sym = torch.reshape(tx_sym_pilots,(num_batches, num_timesteps_at_rate_Rs, self.Nc))
+
+        # optionally print modem frame
+        if self.print_frame:
+            Ns = self.Ns
+            if self.pilots:
+                Ns += 1
+            for c in range(self.Nc):
+                for t in range(Ns):
+                    print(f"{tx_sym[0,t,c]:5.0f}\t", end='', file=sys.stderr)
+                print(file=sys.stderr)
+            quit()
 
         tx_before_channel = None
         rx = None
