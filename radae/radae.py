@@ -136,10 +136,11 @@ class RADAE(nn.Module):
         # wide in frequency and Ns symbols in duration 
         bps = 2                                         # BPSK symbols per QPSK symbol
 
+        # TODO: need a better way to set this up that is backwards compatable with RADE V1
         if self.pilots:
-            Ts = 0.03                                   # OFDM QPSK symbol period (without pilots or CP)
+            Ts = 0.04                                  # OFDM QPSK symbol period
         else:
-            Ts = 0.02
+            Ts = 0.04
         Rs = 1/Ts                                       # OFDM QPSK symbol rate
         Nzmf = 3                                        # number of latent vectors in a modem frame
         Nsmf = Nzmf*self.latent_dim // bps              # total number of QPSK symbols in a modem frame across all carriers
@@ -220,7 +221,7 @@ class RADAE(nn.Module):
                 eoo = torch.tanh(torch.abs(eoo)) * torch.exp(1j*torch.angle(eoo))
             self.eoo = eoo
         
-        print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}", file=sys.stderr)
+        print(f"d: {latent_dim:3d} Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}", file=sys.stderr)
 
         self.Tmf = Tmf
         self.bps = bps
@@ -491,6 +492,7 @@ class RADAE(nn.Module):
             Ns = self.Ns
             if self.pilots:
                 Ns += 1
+            print(file=sys.stderr)
             for c in range(self.Nc):
                 for t in range(Ns):
                     print(f"{tx_sym[0,t,c]:5.0f}\t", end='', file=sys.stderr)
