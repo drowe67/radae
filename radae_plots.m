@@ -176,6 +176,45 @@ function loss_CNo_plot(png_fn, Rs, B, varargin)
     end
 endfunction
 
+% Plots loss v SNR3k curves from text files dumped by inference.py, see compare_models_inf.py
+% pnsr flag optionally includes PAPR
+function loss_SNR3k_plot(pnsr=0,png_fn, epslatex, varargin)
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts(20);
+    end
+    figure(1); clf; hold on;
+    i = 1;
+    mn = 100;
+    while i <= length(varargin)
+        fn = varargin{i};
+        data = load(fn);
+        i++; leg = varargin{i}; leg = strrep (leg, "_", " ");
+        SNR3k = data(:,1);
+        if pnsr
+          SNR3k += data(:,3);
+        end
+        mn = min([mn; SNR3k]);
+        plot(SNR3k,data(:,2),sprintf("+-;%s;",leg))
+        i++;
+    end
+    hold off; grid('minor');
+    if pnsr
+      xlabel('PNR (dB)');
+    else
+      xlabel('SNR (dB)');
+    end
+    ylabel('loss');
+    mn = floor(mn);
+    axis([-5 20 0.05 0.35])
+    legend('boxoff');
+    if length(png_fn)
+        print("-dpng",png_fn);
+    end
+    if length(epslatex)
+        print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
+    end
+endfunction
+
 % usage:
 %   radae_plots; ofdm_sync_plots("","ofdm_sync.txt","go-;genie;","ofdm_sync_pilot_eq.txt","r+-;mean6;","ofdm_sync_pilot_eq_f2.txt","bx-;mean6 2 Hz;","ofdm_sync_pilot_eq_g0.1.txt","gx-;mean6 gain 0.1;","ofdm_sync_pilot_eq_ls.txt","ro-;LS;","ofdm_sync_pilot_eq_ls_f2.txt","bo-;LS 2 Hz;")
 
