@@ -136,11 +136,11 @@ class RADAE(nn.Module):
         # wide in frequency and Ns symbols in duration 
         bps = 2                                         # BPSK symbols per QPSK symbol
 
-        # TODO: need a better way to set this up that is backwards compatable with RADE V1
+        # TODO: consider a better way to set this up, e.g. so we can handle candidate2/3 without code changes (if useful in future)
         if self.pilots:
-            Ts = 0.04                                  # OFDM QPSK symbol period
+            Ts = 0.03                                  # OFDM QPSK symbol period
         else:
-            Ts = 0.04
+            Ts = 0.02
         Rs = 1/Ts                                       # OFDM QPSK symbol rate
         Nzmf = 3                                        # number of latent vectors in a modem frame
         Nsmf = Nzmf*self.latent_dim // bps              # total number of QPSK symbols in a modem frame across all carriers
