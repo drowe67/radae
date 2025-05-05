@@ -46,7 +46,8 @@ class BBFM(nn.Module):
                  CNRdB,
                  fd_Hz=5000,
                  fm_Hz=3000,
-                 stateful_decoder = False
+                 stateful_decoder = False,
+                 frames_per_step = 4
                 ):
 
         super(BBFM, self).__init__()
@@ -59,13 +60,13 @@ class BBFM(nn.Module):
         self.stateful_decoder = stateful_decoder
 
         # TODO: nn.DataParallel() shouldn't be needed
-        self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=1))
-        self.core_decoder =  nn.DataParallel(radae_base.CoreDecoder(latent_dim, feature_dim))
-        self.core_encoder_statefull =  nn.DataParallel(radae_base.CoreEncoderStatefull(feature_dim, latent_dim, bottleneck=1))
-        self.core_decoder_statefull =  nn.DataParallel(radae_base.CoreDecoderStatefull(latent_dim, feature_dim))
+        self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=1, frames_per_step=frames_per_step))
+        self.core_decoder =  nn.DataParallel(radae_base.CoreDecoder(latent_dim, feature_dim, frames_per_step=frames_per_step))
+        self.core_encoder_statefull =  nn.DataParallel(radae_base.CoreEncoderStatefull(feature_dim, latent_dim, bottleneck=1, frames_per_step=frames_per_step))
+        self.core_decoder_statefull =  nn.DataParallel(radae_base.CoreDecoderStatefull(latent_dim, feature_dim, frames_per_step=frames_per_step))
 
-        self.enc_stride = radae_base.CoreEncoder.FRAMES_PER_STEP
-        self.dec_stride = radae_base.CoreDecoder.FRAMES_PER_STEP
+        self.enc_stride = frames_per_step
+        self.dec_stride = frames_per_step
 
         if self.dec_stride % self.enc_stride != 0:
             raise ValueError(f"get_decoder_chunks_generic: encoder stride does not divide decoder stride")
