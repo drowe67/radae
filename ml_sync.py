@@ -1,0 +1,104 @@
+"""
+ML frame sync experiment.
+
+Train a binary classification model to indentify the start of an OFDM frame.
+Due to packing into OFDM frames there are two alignment possibilities.
+
+Create z_hat training data using a RADE encoder:
+
+  ./inference.sh 250506/checkpoints/checkpoint_epoch_200.pth wav/all.wav /dev/null --bottleneck 3 --write_latent zall_250506.f32 --rate_Fs --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata
+
+Train frame sync detector:
+
+  python3 ml_sync.py zall_250506.f32
+"""
+
+import torch
+from torch import nn
+import numpy as np
+import argparse
+
+class Dataset(torch.utils.data.Dataset):
+    def __init__(self,
+                z_hat_file,
+                latent_dim=80):
+
+        self.latent_dim = latent_dim
+        # training set of correctly aligned z_hat vectors
+        self.z_hat = np.fromfile(z_hat_file, dtype=np.float32)
+        self.num_vecs = 2*(self.z_hat.shape[0] // latent_dim) - 1
+
+    def __len__(self):
+        return self.num_vecs
+
+    def __getitem__(self, index):
+        half_frame = self.latent_dim//2
+        features = self.z_hat[index*half_frame:index*half_frame+self.latent_dim]
+        y = np.array([(index+1) % 2], dtype=np.float32)
+        return features, y
+   
+parser = argparse.ArgumentParser()
+parser.add_argument('z_hat_file', type=str, help='file of z vectors in .f32')
+parser.add_argument('--latent_dim', type=int, default=80, help='dimension of z vectors')
+parser.add_argument('--batch_size', type=int, default=32, help='batch size for training')
+parser.add_argument('--epochs', type=int, default=10, help='number of training epochs')
+parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+parser.add_argument('--save_model', type=str, default="", help='filename of model to save')
+args = parser.parse_args()
+latent_dim = args.latent_dim
+
+#device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+device = torch.device("cpu")
+print(f"Using {device} device")
+ 
+dataset = Dataset(args.z_hat_file)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size)
+
+class FrameSyncNet(nn.Module):
+    def __init__(self, input_dim):
+        w1 = 32
+        super().__init__()
+        self.linear_stack = nn.Sequential(
+            nn.Linear(input_dim, w1),
+            nn.ReLU(),
+            nn.Linear(w1, w1),
+            nn.ReLU(),
+            nn.Linear(w1, 1),
+            nn.Sigmoid()
+       )
+
+    def forward(self, x):
+        y = self.linear_stack(x)
+        return y
+    
+model = FrameSyncNet(latent_dim).to(device)
+print(model)
+num_weights = sum(p.numel() for p in model.parameters())
+print(f"weights: {num_weights}")
+
+loss_fn = nn.BCELoss()  # binary cross entropy
+optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+for epoch in range(args.epochs):
+    sum_loss = 0.0
+    sum_acc = 0.0
+    for batch,(f,y) in enumerate(dataloader):
+        f = f.to(device)
+        y = y.to(device)
+        y_hat = model(f)
+        loss = loss_fn(y_hat,y)
+        loss.backward() 
+        optimizer.step()
+        optimizer.zero_grad()
+        if np.isnan(loss.item()):
+            print("NAN encountered - quitting (try reducing lr)!")
+            quit()
+        sum_loss += loss.item()
+        sum_acc += (y_hat.round() == y).float().mean()
+
+    print(f'Epoch: {epoch + 1:5d} Batches: {batch + 1:3d} Loss: {sum_loss / (batch + 1):.10f} acc: {sum_acc / (batch + 1):.10f}')
+
+if len(args.save_model):
+    print(f"Saving model to: {args.save_model}")
+    torch.save(model.state_dict(), args.save_model)
+
