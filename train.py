@@ -61,6 +61,7 @@ parser.add_argument('--pilots', action='store_true', help='insert pilot symbols'
 parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ data symbols using classical DSP')
 parser.add_argument('--eq_ls', action='store_true', help='Use per carrier least squares EQ (default mean6)')
 parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0)')
+parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
 
 training_group = parser.add_argument_group(title="training parameters")
 training_group.add_argument('--batch-size', type=int, help="batch size, default: 32", default=32)
@@ -159,6 +160,10 @@ optimizer = torch.optim.Adam(params, lr=lr, betas=adam_betas, eps=adam_eps)
 # learning rate scheduler
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda x : 1 / (1 + lr_decay_factor * x))
 
+# optionally output z_hat from channel (e.g. for training other networks)
+if (args.write_latent):
+    f_z_hat = open(args.write_latent,"wb")
+
 if __name__ == '__main__':
 
     # push model to device
@@ -206,6 +211,11 @@ if __name__ == '__main__':
 
                     running_total_loss += float(total_loss.detach().cpu())
                     
+                    # optionally write real valued latent vectors for 
+                    if len(args.write_latent):
+                        z_hat = output["z_hat"].cpu().detach().numpy().flatten().astype('float32')
+                        z_hat.tofile(f_z_hat)
+
                     if (i + 1) % log_interval == 0:
                         current_loss = (running_total_loss - previous_total_loss) / log_interval
                         tepoch.set_postfix(
@@ -213,6 +223,9 @@ if __name__ == '__main__':
                             total_loss=running_total_loss / (i + 1),
                         )
                         previous_total_loss = running_total_loss
+
+        if len(args.write_latent):
+            f_z_hat.close()
 
         # Plot loss against EqNodB for final epoch, using log of loss and Eq/No for
         # each sequence.  We group losses into 1dB Eq/No bins, kind of like a histogram.
