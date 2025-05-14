@@ -345,6 +345,14 @@ struct rade *rade_open(char model_file[], int flags) {
   // Acquire the Python GIL (needed for multithreaded use)
   PyGILState_STATE gstate = PyGILState_Ensure();
 
+  // Did you know that Python 3.10+ has a garbage collector?
+  // That isn't good for real-time audio, so disable it while
+  // RADE is running.
+#if (PY_MAJOR_VERSION > 3) || (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 10)
+  int prevGcState = PyGC_Disable();
+  fprintf(stderr, "Python garbage collector disabled (previous state %d)\n", prevGcState);
+#endif // (PY_MAJOR_VERSION > 3) || (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 10)
+
   // TODO: implement me
   fprintf(stderr, "model file: %s\n", model_file);
 
