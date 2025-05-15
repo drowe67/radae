@@ -72,7 +72,8 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="",H_complex=0)
               Nseconds,Rs,Nc,bytes_per_sample, Nseconds*Rs*Nc*bytes_per_sample)
       f=fopen(H_fn,"wb");
       [r c] = size(H);
-      Hflat = reshape(H', 1, r*c);
+      % non conjugation transpose first to get row major order in reshape 
+      Hflat = reshape(H.', 1, r*c);
       if H_complex
         tmp = zeros(2*length(Hflat),1);
         tmp(1:2:end) = real(Hflat);
