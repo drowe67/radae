@@ -79,7 +79,7 @@ parser.add_argument('--sine_freq', type=float, default=1000.0, help='single freq
 parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
 parser.add_argument('--txbpf', action='store_true', help='inject auxillary data symbol')
 parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
-parser.add_argument('--correct_time_offset', type=int, default=0, help='correct phase shift caused by --correct_time_offset in samples (default off)')
+parser.add_argument('--correct_time_offset', type=int, default=0, help='introduces a delay (or advance if -ve) in samples, applied in freq domain (default 0)')
 parser.add_argument('--tanh_clipper', action='store_true', help='use tanh magnitude clippier (default hard clipper)')
 args = parser.parse_args()
 
@@ -151,7 +151,6 @@ if args.h_file:
    else:
       h_dtype = np.float32
    H = np.reshape(np.fromfile(args.h_file, dtype=h_dtype), (1, -1, Nc))
-   #print(H.shape, num_timesteps_at_rate_Rs)
    if H.shape[1] < num_timesteps_at_rate_Rs:
       print("Multipath H file too short")
       quit()
