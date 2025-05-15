@@ -622,3 +622,10 @@ add_test(NAME bbfm_sc_bpf_loss
                        python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
                        set_tests_properties(bbfm_sc_bpf_loss PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# BBFM streaming rx
+add_test(NAME bbfm_stream
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./bbfm_inference.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null --write_latent z_hat.f32; \
+                       cat z_hat.f32 | python3 bbfm_rx_stream.py 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth > features_rx_stream.f32; \
+                       python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_stream.f32 --compare")
+                       set_tests_properties(bbfm_stream PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
