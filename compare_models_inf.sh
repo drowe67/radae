@@ -229,7 +229,7 @@ if [ $plot == "250417a_inf" ]; then
                            "250417a AWGN fs=4 d=40 Nc=10" "250417a MPP fs=4 d=40 Nc=10")
 fi
 
-# compare RADE V1 to fs=4,Nc=10 250417 to fs=4, Nc=20 250506 (SE 0) & 250506 (SE -3)
+# compare RADE V1 to fs=4,Nc=10 250417 to fs=4, Nc=20 250506 (SE 0) & 250506a (SE -3)
 if [ $plot == "250506_inf" ]; then
   run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
   run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --g_file g_mpp.f32
@@ -245,6 +245,23 @@ if [ $plot == "250506_inf" ]; then
                            "250417 AWGN fs=4 d=40 Nc=10 SE 0" "250417 MPP d=40 Nc=10 SE 0" \
                            "250506a AWGN d=80 Nc=20 SE -3" "250506a MPP d=80 Nc=20 SE -3" \
                            "250506 AWGN d=80 Nc=20 SE 0" "250506 MPP d=80 Nc=20 SE 0")
+fi
+
+if [ $plot == "250508_inf" ]; then
+  run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
+  run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --g_file g_mpp.f32
+  run_model 250417a_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
+  run_model 250417a_test 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --g_file g_mpp.f32
+  run_model 250417_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
+  run_model 250417_test 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --g_file g_mpp.f32
+  run_model 250508_test 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata 
+  run_model 250508_test 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata --g_file g_mpp.f32
+
+  model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250417_test_awgn_0Hz 250417_test_mpp_0Hz 250417a_test_awgn_0Hz 250417a_test_mpp_0Hz 250508_test_awgn_0Hz 250508_test_mpp_0Hz'
+  declare -a model_legend=("model19_check3 AWGN fs=4 d=80 Nc=30" "model19_check3 MPP d=80 Nc=30" \
+                           "250417 AWGN fs=4 d=40 Nc=10 SE 0" "250417 MPP d=40 Nc=10 SE 0" \
+                           "250417a AWGN fs=4 d=40 Nc=10 SE 3" "250417a MPP d=40 Nc=10 SE 3" \
+                           "250508 AWGN fs=4 d=40 Nc=10 SE 6" "250508 MPP d=40 Nc=10 SE 6")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
