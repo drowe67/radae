@@ -89,12 +89,12 @@ Analog FM simulation using same linearised FM model as we use for ML training/si
 1. AWGN sim, save output to wave file:
    ```
    ./bbfm_analog.sh wav/brian_g8sez.wav brian_g8sez_analog_100dBm_awgn.wav
-  ```
+   ```
 
 1. Fading sim using LMR 60 km/hr model, save output to wave file:
    ```
    ./bbfm_analog.sh wav/brian_g8sez.wav brian_g8sez_analog_100dBm_lmr60.wav --h_file h_lmr60_Fs_8000Hz.f32
-  ```
+   ```
 
 # Single Carrier PSK Modem
 
