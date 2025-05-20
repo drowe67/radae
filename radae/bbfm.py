@@ -192,6 +192,8 @@ class BBFM(nn.Module):
               + (3*RdBm+self.Gfm-2*self.TdBm)*torch.heaviside(-RdBm+self.TdBm, values)
         SNR = 10**(SNRdB/10)
         # note sigma is a vector, noise power evolves across each symbol with H
+        # TODO: should be A/sqrt(SNR); correct small error due to noise bandwidth f_m used 
+        # for SNR expression v R_s for noise generation below
         sigma = 1/(SNR**0.5)
         n = sigma*torch.randn_like(z_hat)
         z_hat = torch.clamp(z_hat + n, min=-1.0,max=1.0)

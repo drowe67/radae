@@ -68,6 +68,34 @@ You can also generate fading samples with other speeds, e.g. 10 seconds of 120 k
 octave:93> multipath_samples("lmr120", 8000, 2000, 1, 10, "h_lmr120_train.f32")
 ```
 
+# Analog FM simulation
+
+Analog FM simulation using same linearised FM model as we use for ML training/simulation:
+
+1. Generate some Fs=8kHz LMR 60 samples in Octave:
+   ```
+   multipath_samples("lmr60",8000, 8000, 1, 60, "h_lmr60_Fs_8000Hz.f32")
+   ```
+1. AWGN sim, play output to sound card (default RdBm = -100dBm)
+   ```
+   ./bbfm_analog.sh wav/brian_g8sez.wav -
+   ```
+
+1. AWGN sim, play output to sound card, lower RdBm
+   ```
+   ./bbfm_analog.sh wav/brian_g8sez.wav - --RdBm -110
+   ```
+
+1. AWGN sim, save output to wave file:
+   ```
+   ./bbfm_analog.sh wav/brian_g8sez.wav brian_g8sez_analog_100dBm_awgn.wav
+  ```
+
+1. Fading sim using LMR 60 km/hr model, save output to wave file:
+   ```
+   ./bbfm_analog.sh wav/brian_g8sez.wav brian_g8sez_analog_100dBm_lmr60.wav --h_file h_lmr60_Fs_8000Hz.f32
+  ```
+
 # Single Carrier PSK Modem
 
 A single carrier PSK modem "back end" that connects the ML symbols to the radio.  This particular modem is written in Python, and can work with DC coupled and passband BBFM radios. It uses classical DSP, rather than ML.  Unlike the HF RADE waveform which used OFDM, this modem is single carrier.
