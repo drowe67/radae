@@ -2,15 +2,27 @@
 ML frame sync experiment.
 
 Train a binary classification model to indentify the start of an OFDM frame.
-Due to packing into OFDM frames there are two alignment possibilities.
+Due to mapping into OFDM frames there are two alignment possibilities.
 
-Create z_hat training data using a RADE encoder:
+Create z_hat training data using a RADE encoder. Uses train.py, but with an existing model in
+"plot loss" mode, ie. running through the training datasets without any additional training. 
+Applies a bunch of channel impairments.
+  
+  python3 train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 200 --lr 0.003 \
+    --lr-decay-factor 0.0001 ~/Downloads/tts_speech_16k_speexdsp.f32 tmp --bottleneck 3 \
+    --h_file h_nc20_mpp_train.c64 --h_complex --range_EbNo --range_EbNo_start 0 --plot_loss \
+    --auxdata --timing_rand --freq_rand --plot_EqNo 250506 \
+    --initial-checkpoint 250506/checkpoints/checkpoint_epoch_200.pth --write_latent z_train_250506.f32
 
-  ./inference.sh 250506/checkpoints/checkpoint_epoch_200.pth wav/all.wav /dev/null --bottleneck 3 --write_latent zall_250506.f32 --rate_Fs --cp 0.004 --time_offset -16 --correct_time_offset -32 --auxdata
+Train frame sync detector using first 1E6 vectors and write model file
 
-Train frame sync detector:
+  python3 ml_sync.py z_train_250506.f32 --batch_size 512 --count 1000000 --epochs 20 --save_model 250508_ml_sync
+  
+Test in inference mode outside of training dataset (second 1E6 vectors), write classification values to 
+y_hat.f32 for plotting:
 
-  python3 ml_sync.py zall_250506.f32
+  python3 ml_sync.py z_train_250506.f32 --count 100000 --start 1000000 --inference 250508_ml_sync --write_y_hat y_hat.f32
+
 """
 
 import torch
