@@ -3,6 +3,13 @@
    .f32 time domain samples as input, autocorrelation vectors on output
    for use as features in training a ML network.
    
+   Example:
+
+     ./inference.sh 250506/checkpoints/checkpoint_epoch_200.pth wav/all.wav /dev/null --bottleneck 3
+      --rate_Fs --auxdata --EbNodB 100 --cp 0.004 --write_rx rx.f32
+
+     python3 autocorr.py rx.f32 Ry.f32 delta.f32 -128 32
+
 /* Copyright (c) 2025 David Rowe */
    
 /*
@@ -41,10 +48,10 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('y', type=str, help='path to input file of rate Fs rx samples in ..IQIQ...f32 format')
 parser.add_argument('Ry', type=str, help='path to autocorrelation output feature file dim (Ncp+M) .f32 format')
-parser.add_argument('delta', type=str, help='path to delta output file dim .f32 format')
+parser.add_argument('delta', type=str, help='path to fine timing ground truth (delta) output file dim .f32 format')
 parser.add_argument('tau', type=int, help='autocorrelation lag (e.g. M or 2(Ncp+M))')
 parser.add_argument('N', type=int, help='number of samples to correlate over (e.g. Ncp or M)')
-parser.add_argument('-Q', type=int, default=10, help='number of past symbols to correlate over (default 10)')
+parser.add_argument('--sequence_length', type=int, default=50, help='sequence length - number of consectutive symbols with same fine timing (default 100)')
 parser.add_argument('-M', type=int, default=128, help='length of symbol in samples without cyclic prefix (default 128)')
 parser.add_argument('-Ncp', type=int, default=32, help='length of cyclic prefix in samples (default 32)')
 args = parser.parse_args()
@@ -52,32 +59,33 @@ M = args.M
 Ncp = args.Ncp
 tau = args.tau
 N = args.N
-Q = args.Q
+sequence_length = args.sequence_length
 
 y = np.fromfile(args.y, dtype=np.complex64)
-Nsyms = len(y) // (Ncp+M)
-print(Nsyms)
+Nseq = len(y) // (Ncp+M) - sequence_length - 1
+print(f"Nseq: {Nseq:d}")
 
 Ry = np.zeros(Ncp+M,dtype=np.float32)
 f_Ry = open(args.Ry,"wb")
 f_delta = open(args.delta,"wb")
 
-for s in np.arange(args.Q+1,Nsyms-1):
+for seq in np.arange(Nseq):
 
-   # random timing offset
+   # random timing offset for sequence
    delta = int(np.random.random()*(Ncp+M))
    
-   for delta_hat in np.arange(Ncp+M):
-      Ry[delta_hat] = 0.0
-      for q in np.arange(Q):
-         st = (s-q)*(Ncp+M) - delta + delta_hat
+   for s in np.arange(sequence_length):
+      for delta_hat in np.arange(Ncp+M):
+         # note overlapping sequences with different delta for data augmentation
+         st = (seq+s+1)*(Ncp+M) - delta + delta_hat
          y1 = y[st-tau:st-tau+N]
          y2 = y[st:st+N]
          num = np.abs(np.dot(y1, np.conj(y2)))
          den = np.abs((np.dot(y1, np.conj(y1)) + np.dot(y2, np.conj(y2))))
-         Ry[delta_hat] += num/den
-   Ry.tofile(f_Ry)
-   np.array([delta], dtype=np.float32).tofile(f_delta)
+         Ry[delta_hat] = num/den
+      Ry.tofile(f_Ry)
+      np.array([delta], dtype=np.float32).tofile(f_delta)
+   print(seq)
 
 f_Ry.close()
 f_delta.close()
