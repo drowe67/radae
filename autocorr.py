@@ -41,6 +41,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('y', type=str, help='path to input file of rate Fs rx samples in ..IQIQ...f32 format')
 parser.add_argument('Ry', type=str, help='path to autocorrelation output feature file dim (Ncp+M) .f32 format')
+parser.add_argument('delta', type=str, help='path to delta output file dim .f32 format')
 parser.add_argument('tau', type=int, help='autocorrelation lag (e.g. M or 2(Ncp+M))')
 parser.add_argument('N', type=int, help='number of samples to correlate over (e.g. Ncp or M)')
 parser.add_argument('-Q', type=int, default=10, help='number of past symbols to correlate over (default 10)')
@@ -59,18 +60,24 @@ print(Nsyms)
 
 Ry = np.zeros(Ncp+M,dtype=np.float32)
 f_Ry = open(args.Ry,"wb")
+f_delta = open(args.delta,"wb")
 
 for s in np.arange(args.Q+1,Nsyms-1):
-    
+
+   # random timing offset
+   delta = int(np.random.random()*(Ncp+M))
+   
    for delta_hat in np.arange(Ncp+M):
       Ry[delta_hat] = 0.0
       for q in np.arange(Q):
-         st = (s-q)*(Ncp+M) + delta_hat
+         st = (s-q)*(Ncp+M) - delta + delta_hat
          y1 = y[st-tau:st-tau+N]
          y2 = y[st:st+N]
-         #print(Nsyms,s,q,y1.shape, y2.shape)
-         tmp = np.abs(np.dot(y1, np.conj(y2)))
-         Ry[delta_hat] += tmp
+         num = np.abs(np.dot(y1, np.conj(y2)))
+         den = np.abs((np.dot(y1, np.conj(y1)) + np.dot(y2, np.conj(y2))))
+         Ry[delta_hat] += num/den
    Ry.tofile(f_Ry)
+   np.array([delta], dtype=np.float32).tofile(f_delta)
 
 f_Ry.close()
+f_delta.close()
