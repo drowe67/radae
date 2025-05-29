@@ -44,6 +44,7 @@ parser.add_argument('z_hat', type=str, help='path to input symbol (latent vector
 parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
 parser.add_argument('--cuda-visible-devices', type=str, help="set to 0 to run using GPU rather than CPU", default="")
+parser.add_argument('--stateful', action='store_true', help='Use stateful decoder')
 args = parser.parse_args()
 
 # set visible devices
@@ -60,17 +61,17 @@ num_features = 20
 num_used_features = 20
 
 # load model from a checkpoint file
-model = BBFM(num_features, latent_dim, CNRdB=100)
+model = BBFM(num_features, latent_dim, RdBm=-100, stateful_decoder=args.stateful)
 checkpoint = torch.load(args.model_name, map_location='cpu', weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
+if args.stateful:
+   model.core_decoder_statefull_load_state_dict()
 
 # dataloader
 z_hat = np.reshape(np.fromfile(args.z_hat, dtype=np.float32), (1, -1, args.latent_dim))
-nb_frames_rounded = model.num_10ms_times_steps_rounded_to_modem_frames(z_hat.shape[1])
-z_hat = z_hat[:,:nb_frames_rounded,:]
 z_hat = torch.tensor(z_hat)
-print(f"Processing: {nb_frames_rounded} modem frames")
+print(f"Processing: {z_hat.shape[1]} modem frames")
 
 if __name__ == '__main__':
 
