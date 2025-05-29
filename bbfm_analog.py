@@ -40,6 +40,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--RdBm', type=float, default=-100, help='Receive level set point in dBm')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Fs fading channel magnitude samples, rate Fs time steps by Nc=1 carriers .f32 format')
+parser.add_argument('-v', action='store_true', help='Verbose debug info')
 args = parser.parse_args()
 RdBm = args.RdBm
 
@@ -48,8 +49,9 @@ if len(args.h_file):
     H = np.fromfile(args.h_file, dtype=np.float32)
 
 # TODO work out A and x_bar for speech. How do we map 32767 max or int16 to A?
-A = 1
-x_bar = 1
+Am = 16384  # peak input int16 level, corresponds to max deviation f_d 
+A = 1       # normalised peak input level assumed in SNR expression
+x_bar = 0.5 # for sine wave with peak A=1
 
 k = 1.38E-23; T=274; NFdB = 5
 Fs = 8000
@@ -61,6 +63,13 @@ TdBm = 12 - Gfm
 
 print(f"Fs: {Fs:5.2f} Deviation: {fd_Hz} Hz  Max Modn freq: {fm_Hz} Hz Beta: {beta:3.2f}", file=sys.stderr)
 print(f"x_bar: {x_bar:5.2f} Gfm: {Gfm:5.2f} dB TdB: {TdBm:5.2f} dB  RdBm: {RdBm:5.2f}", file=sys.stderr)
+
+# average noise and signal power
+n2_sum = 0.0
+x2_sum = 0.0
+n_sum = 0
+n_clipped = 0
+sigma = 0.0
 
 i = int(0)
 while True:
@@ -82,23 +91,37 @@ while True:
     else:
       SNRdB = 3*RdBm_dash + Gfm - 2*TdBm
 
-    # Work out sigma of the noise generator.  Eq (11) is the SNR in noise bandwidth f_m Hz.  We want to
-    # simulate at Fs Hz. The noise generator spreads noise uniformly across Fs/2 Hz.  After generation
-    # of the noise at any sample rate, the power in f_m Hz should be the same as given by (11).  This
-    # can be achieved by keeping the noise density constant across sample rate changes.  
+    # Work out sigma of the noise generator.  Eq (11) is the SNR in noise bandwidth f_m Hz.
+    # We want to simulate at Fs Hz. The noise generator spreads noise uniformly across Fs/2 Hz.
+    # After generation of the noise at any sample rate, the power in f_m Hz should be the same
+    # as given by (11).  This can be achieved by keeping the noise density constant across sample
+    # rate changes.  
     SNR = 10**(SNRdB/10)   # Linear SNR in fm Hz
-    N_fm = A**2/SNR        # Noise power in fm Hz
+    N_fm = x_bar/SNR       # Noise power in fm Hz
     No   = N_fm/fm_Hz      # noise density, we want to preserve this with change in sample rate
-    N_Fs2 = No*Fs/2        # total noise power in Fs/2 Hz (TODO: should this be Fs or Fs/2?)
-    sigma = N_Fs2**0.5
-    sigma *= 32767         # map A=1 to int16 peak
-    #print(SNRdB,SNR,sigma, file=sys.stderr)
-    #quit()
+    N_Fs2 = No*Fs/2        # total noise power in Fs/2 Hz
+    sigma = N_Fs2 **0.5
+    sigma *= Am            # map A=1 to int16 peak
+    if args.v:
+        print(f"SNRdB: {SNRdB:5.2f}", file=sys.stderr)
     n = sigma*np.random.randn()
-    
+
+    n2_sum += n*n
+    x2_sum += x*x
+    n_sum += 1
     x += n
-    x = min(32767.0,x)
-    x = max(-32776.0,x)
+    if x > 32767.0:
+        x = 32767.0
+        n_clipped += 1
+    if x < -32776.0:
+        x = -32776.0
+        n_clipped += 1
 
     x = np.float32(x).astype(np.int16)
     sys.stdout.buffer.write(x) 
+
+SNRdB_ = 10.0*m.log10(x2_sum/n2_sum)
+x_bar_ = x2_sum[0]/(n_sum*Am*Am)
+percent_clipped = 100 * n_clipped/n_sum
+print(f"SNRdB setpoint: {RdBm+Gfm:5.2f} SNRdB_ measured: {SNRdB_:5.2f} SNRdB_ - SNRdB: {SNRdB_-SNRdB:5.2f}", file=sys.stderr)
+print(f"x_bar measured: {x_bar_:5.2f} %clipped {percent_clipped:5.2f} sigma: {sigma:5.2f}", file=sys.stderr)
