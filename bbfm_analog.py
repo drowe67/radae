@@ -76,8 +76,8 @@ while True:
     buffer = sys.stdin.buffer.read(struct.calcsize("h"))
     if len(buffer) != struct.calcsize("h"):
       break
-    x = np.frombuffer(buffer,np.int16).astype(np.float32)
-    
+    x = np.frombuffer(buffer,np.int16).astype(np.float32)[0]
+
     RdBm_dash = RdBm
     if args.h_file:
       RdBm_dash = 20*m.log10(H[i]) + RdBm_dash
@@ -121,7 +121,7 @@ while True:
     sys.stdout.buffer.write(x) 
 
 SNRdB_ = 10.0*m.log10(x2_sum/n2_sum)
-x_bar_ = x2_sum[0]/(n_sum*Am*Am)
+x_bar_ = x2_sum/(n_sum*Am*Am)
 percent_clipped = 100 * n_clipped/n_sum
 print(f"SNRdB setpoint: {RdBm+Gfm:5.2f} SNRdB_ measured: {SNRdB_:5.2f} SNRdB_ - SNRdB: {SNRdB_-SNRdB:5.2f}", file=sys.stderr)
 print(f"x_bar measured: {x_bar_:5.2f} %clipped {percent_clipped:5.2f} sigma: {sigma:5.2f}", file=sys.stderr)
