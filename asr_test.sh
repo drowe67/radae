@@ -36,7 +36,7 @@ No=-100
 EbNodB=100
 RdBm=-100
 setpoint_rms=2048
-setpoint_rms_fm=2048
+setpoint_rms_fm=4096
 comp_gain=6
 results=asr_results.txt
 inference_args=""
@@ -150,7 +150,7 @@ function process {
     ch_log=ch_log.txt
     rade_log=rade_log.txt
     snr_log=snr_log.txt
-    Rdbm_log=RdBm_log.txt
+    RdBm_log=RdBm_log.txt
     asr_log=asr.txt
     rm -f ${snr_log}
     rm -f ${RdBm_log}
@@ -307,8 +307,8 @@ function process {
             sox ${source}/${f} -t .s16 -r 8000 ${in}
             # AGC
             set_rms ${in} $setpoint_rms_fm
-            sox -t .s16 -r 8000 -c 1 ${in} ${in}.wav
-            ./bbfm_analog.sh ${in}.wav out.wav --RdBm $RdBm
+            sox -t .s16 -r 8000 -c 1 ${in} in.wav
+            ./bbfm_analog.sh in.wav out.wav --RdBm $RdBm
             sox out.wav -r 16000 -c 1 ${dest}/${f}
             echo $RdBm >> ${RdBm_log}
             echo $CNo >> ${CNo_log}
