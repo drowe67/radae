@@ -232,7 +232,7 @@ function process {
         CNo_mean=$(print_mean_text_file ${CNo_log})
     fi
 
-    if [ $mode == "rade" ] || [ $mode == "fargan" ]; then
+    if [ $mode == "rade" ] || [ $mode == "fargan" ] || [ $mode == "bbfm" ]; then
         # find length of each file
         duration_log=""
         flac_full=""
@@ -262,10 +262,14 @@ function process {
 
             SNR_mean=$(cat $rade_log | grep "Measured" | tr -s ' ' | cut -d' ' -f4)
             CNo_mean=$(cat $rade_log | grep "Measured" | tr -s ' ' | cut -d' ' -f3)
-        else
-            # $mode == "fargan"
+        fi
+
+        if [ $mode == "fargan" ]; then
             ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth ${in} out.wav --auxdata --passthru
-            #sox -t .s16 -r 16000 -c 1 ${in} out.wav
+        fi
+
+        if [ $mode == "bbfm" ]; then
+            ./bbfm_inference.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth ${in} out.wav --RdBm $RdBm
         fi
 
         # extract individual output files
