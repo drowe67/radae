@@ -53,7 +53,8 @@ parser.add_argument('tau', type=int, help='autocorrelation lag (e.g. M or 2(Ncp+
 parser.add_argument('N', type=int, help='number of samples to correlate over (e.g. Ncp or M)')
 parser.add_argument('--sequence_length', type=int, default=50, help='sequence length - number of consectutive symbols with same fine timing (default 100)')
 parser.add_argument('-M', type=int, default=128, help='length of symbol in samples without cyclic prefix (default 128)')
-parser.add_argument('-Ncp', type=int, default=32, help='length of cyclic prefix in samples (default 32)')
+parser.add_argument('--Ncp', type=int, default=32, help='length of cyclic prefix in samples (default 32)')
+parser.add_argument('--Nseq', type=int, default=0, help='extract just first Nseq sequences (default extract all)')
 args = parser.parse_args()
 M = args.M
 Ncp = args.Ncp
@@ -62,7 +63,10 @@ N = args.N
 sequence_length = args.sequence_length
 
 y = np.fromfile(args.y, dtype=np.complex64)
-Nseq = len(y) // (Ncp+M) - sequence_length - 1
+if args.Nseq == 0:
+   Nseq = len(y) // (Ncp+M) - sequence_length - 1
+else:
+   Nseq = args.Nseq
 print(f"Nseq: {Nseq:d}")
 
 Ry = np.zeros(Ncp+M,dtype=np.float32)
@@ -76,7 +80,7 @@ for seq in np.arange(Nseq):
    
    for s in np.arange(sequence_length):
       for delta_hat in np.arange(Ncp+M):
-         # note overlapping sequences with different delta for data augmentation
+         # note overlapping sequences for data augmentation
          st = (seq+s+1)*(Ncp+M) - delta + delta_hat
          y1 = y[st-tau:st-tau+N]
          y2 = y[st:st+N]
