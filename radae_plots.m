@@ -536,3 +536,35 @@ function plot_sample_spec(wav_fn,png_spec_fn="")
     print("-dpng",png_spec_fn,"-S800,600");
   end
 end
+
+function plot_wer_bbfm(prefix_fn, png_fn="", epslatex="")
+  fm_awgn_fn = sprintf("%s_asr_awgn_fm.txt",prefix_fn);
+  bbfm_awgn_fn = sprintf("%s_asr_awgn_bbfm.txt",prefix_fn);
+  controls_fn = sprintf("%s_asr_c.txt",prefix_fn);
+
+  fm_awgn = load(fm_awgn_fn);
+  bbfm_awgn = load(bbfm_awgn_fn);
+  c = load(controls_fn);
+
+  if length(epslatex)
+    [textfontsize linewidth] = set_fonts(20);
+  end
+
+  # WER v RdBm plot
+  figure(1); clf;
+  plot(fm_awgn(:,1),fm_awgn(:,2),'b+-;FM AWGN;');
+  hold on;
+  plot(bbfm_awgn(:,1),bbfm_awgn(:,2),'g+-;RADE AWGN;');
+  xmax=-100; xmin=-130; 
+  plot([xmin xmax],[c(2) c(2)],'m-;FARGAN;')
+  plot([xmin xmax],[c(1) c(1)],'c-;clean;')
+  hold off;
+  axis([xmin,xmax,0,40]); grid; ylabel('WER \%'); xlabel("R (dBm)");
+
+  if length(png_fn)
+    print("-dpng",png_fn,"-S800,600");
+  end
+  if length(epslatex)
+    print_eps_restore(epslatex,"-S250,250",textfontsize,linewidth);
+  end  
+end

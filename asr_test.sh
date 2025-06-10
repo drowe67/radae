@@ -320,21 +320,22 @@ function process {
             # advance through fading simulation file
             dur=$(sox --info -D ${source}/${f})
             fading_adv=$(python3 -c "print(${fading_adv} + ${dur})")
-
         done
-        if [ $mode == "ssb" ]; then
-          SNR_mean=$(print_mean_text_file ${snr_log})
-          CNo_mean=$(print_mean_text_file ${CNo_log})
-        fi
+
     fi
 
     python3 asr_wer.py test-other -n $n_samples --model turbo | tee > $asr_log
     wer=$(tail -n1 $asr_log | tr -s ' ' | cut -d' ' -f2)
     if [ $mode == "ssb" ] || [ $mode == "rade" ] || [ $mode == "700D" ]; then
       printf "%-6s %5.2f %5.2f %5.2f\n" $mode $SNR_mean $CNo_mean $wer | tee -a $results
-    else
+    fi
+    if [ $mode == "clean" ] || [ $mode == "fargan" ] || [ $mode == "4kHz" ]; then
       printf "%-6s %5.2f\n" $mode $wer | tee -a $results
     fi
+    if [ $mode == "fm" ] || [ $mode == "bbfm" ]; then
+      printf "%-6s %5.2f %5.2f\n" $mode $RdBm $wer | tee -a $results
+    fi
+
 }
 
 cp_translation_files
