@@ -4,30 +4,48 @@ A version of the Radio Autoencoder (RADE) designed for the baseband FM channel p
 
 # BBFM ML encoder/decoder
 
-1. First pass training command line:
-    ```
-    python3 ./train_bbfm.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 --plot_loss ~/Downloads/tts_speech_16k_speexdsp.f32 model_bbfm_01 --range_EbNo --range_EbNo_start 6 --plot_loss
-    ```
+Quickstart - ignore the first two steps (training), and use pre-trained `250319_bbfm_lmr60` model.
 
-1. Inference (runs encoder and decoder, and outputs symbols `z_hat.f32`):
-    ```
-    ./inference_bbfm.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav - --write_latent z_hat.f32
-    ```
+1. Generate 10 hours of fading samples for training:
+   ```
+   octave:67> multipath_samples("lmr60",8000, 2000, 1, 10*60*60, "h_lmr60_train.f32")
+   ```
+   Note 10 hours << 205 hours in the speech training dataset.  The same fading data is therefore repeated 205/10 times in each training epoch. I think 10 hours or so might be the max I can generate due to memory limitations in the current Octave code (TBC). It should be enough, based on argument for dataset length with similar models used for HF fading (ITU-R F.1487) which suggests a test length of 3000*(1/Doppler Spread Hz), which for 60 km/hr is 3000/25 = 120 seconds.
+
+1. Training with fading (multipath):
+   ```
+   python3 ./train_bbfm.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 100 --lr 0.003 --lr-decay-factor 0.0001 --plot_loss ~/Downloads/tts_speech_16k_speexdsp.f32 250319_bbfm_lmr60 --RdBm -100 --plot_loss --range_RdBm --h_file h_lmr60_train.f32
+   ```
+
+1. Inference (runs encoder and decoder, plays result to sound card, and outputs symbols `z_hat.f32`):
+   ```
+   ./bbfm_inference.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav - --write_latent z_hat.f32
+   ```
+1. Inference (-120dBm, fading, per sample Rx levels written to r.f32 for plotting):
+   ```
+   octave:67> multipath_samples("lmr60", 8000, 2000, 1, 60, "h_lmr60.f32")
+   ./bbfm_inference.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav - --h_file h_lmr60.f32 --RdBm -120 --write_RdBm r.f32
+   ```
 1. Stand alone decoder, outputs speech from `z_hat.f32` to sound card:
     ```
-    ./rx_bbfm.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth z_hat.f32 -
+    ./bbfm_rx.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth z_hat.f32 -
     ```
 1. Or save speech out to a wave file:
     ```
-    ./rx_bbfm.sh model_bbfm_01/checkpoints/checkpoint_epoch_100.pth z_hat.f32 t.wav
+    ./bbfm_rx.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth z_hat.f32 t.wav
     ```
+
+1. Streaming decoder, reads a stream of z_hat float[80] vectors and synthesises decoded speech:
+   ```
+   cat z_hat.f32 | python3 bbfm_rx_stream.py 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth | build/src/lpcnet_demo -fargan-synthesis - - | aplay -f S16_LE -r 16000
+   ```
 
 1. Plot sequence of received symbols:
     ```
     octave:4> radae_plots; do_plots_bbfm('z_hat.f32')
     ```
 
-# Fading channel simulation
+# Faded (multipath) channel simulation
 
 HF channel sim (two path Rayleigh) is pretty close to TIA-102.CAAA-E 1.6.33 Faded Channel Simulator. The measured level crossing rate (LCR) seems to meet req (f), for v=60 km/hr, f = 450 MHz, and P=1 when measured over a 10 second sample. We've used Rs=2000 symb/s here, so x-axis of plot is 1 second in time.
 
@@ -44,6 +62,39 @@ P = 1
 LCR_theory = 23.457
 LCR_meas = 24.400
 ```
+
+You can also generate fading samples with other speeds, e.g. 10 seconds of 120 km/hr:
+```
+octave:93> multipath_samples("lmr120", 8000, 2000, 1, 10, "h_lmr120_train.f32")
+```
+
+# Analog FM simulation
+
+Analog FM simulation using same linearised FM model as we use for ML training/simulation:
+
+1. Generate some Fs=8kHz LMR 60 samples in Octave:
+   ```
+   multipath_samples("lmr60",8000, 8000, 1, 60, "h_lmr60_Fs_8000Hz.f32")
+   ```
+1. AWGN sim, play output to sound card (default RdBm = -100dBm)
+   ```
+   ./bbfm_analog.sh wav/brian_g8sez.wav -
+   ```
+
+1. AWGN sim, play output to sound card, lower RdBm
+   ```
+   ./bbfm_analog.sh wav/brian_g8sez.wav - --RdBm -110
+   ```
+
+1. AWGN sim, save output to wave file:
+   ```
+   ./bbfm_analog.sh wav/brian_g8sez.wav brian_g8sez_analog_100dBm_awgn.wav
+   ```
+
+1. Fading sim using LMR 60 km/hr model, save output to wave file:
+   ```
+   ./bbfm_analog.sh wav/brian_g8sez.wav brian_g8sez_analog_100dBm_lmr60.wav --h_file h_lmr60_Fs_8000Hz.f32
+   ```
 
 # Single Carrier PSK Modem
 
@@ -81,3 +132,45 @@ A single carrier PSK modem "back end" that connects the ML symbols to the radio.
    ```
   This is a really good result, and likely inaudible. The `feature*.f32` files are produced as intermediate outputs from the `bbfm_inference.sh` and `bbfm_rx.sh` scripts.
 
+5. Playing samples over a USB sounds card connected to a radio, note selection of sample rate:
+   ```
+   aplay --device="plughw:CARD=Audio,DEV=0" -r 9600 -f S16_LE t1.int16
+   ```
+
+6. Feeding samples from an off air wave file captured from a Rx to demod. Note `sc_xx` tools default to a centre freq of 1500Hz
+   ```
+   sox ~/Desktop/sc-ber-003.wav -t .s16 -r 9600 -c 1 - highpass 100 | python3 sc_rx.py --plots > z_hat.f32
+   ```
+
+# ASR Tests
+
+1. Create LMR 60 sample at Fs=8000 Hz for the analog FM simulation, and Rs=2000 Hz for RADE. Assume Librispeech samples max length 10 seconds each, we want to use around 500 samples:
+   ```
+   octave:47> multipath_samples("lmr60", 8000, 8000, 1, 10*500, "h_lmr60_Fs_8000Hz.f32")
+   octave:48> multipath_samples("lmr60", 8000, 2000, 1, 10*500, "h_lmr60_Rs_2000Hz.f32")
+   ```
+
+1. Run a single RdBm analog FM ASR test with fading, using 10 samples:
+   ```
+   ./asr_test.sh fm -n 10 --RdBm -110 --h_file h_lmr60_Fs_8000Hz.f32
+   ```
+
+1. Locate simulation output files (e.g. for manual listening):
+   ```
+   find /home/david/.cache/LibriSpeech/test-other/ -name *.flac
+   ```
+
+1. Top level ASR test script to generate ASR results across a range of RdBm:
+   ```
+   ./asr_test_top.sh bbfm -n 100
+   ``` 
+   Eyeball results:
+   ```
+   ls 250610_asr*
+   cat 250610_asr_lmr60_bbfm.txt
+   ...
+   ```
+1. Plot curves, save to .png:
+   ```
+   octave:47> radae_plots; plot_wer_bbfm("250610","250610_bbfm_wer.png")
+   ```

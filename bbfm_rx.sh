@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# The usual wrapper around rx_bbfm.py
+# The usual wrapper around bbfm_rx.py
 
 OPUS=build/src
 PATH=${PATH}:${OPUS}

@@ -32,7 +32,7 @@ features_out=features_out.f32
 shift; shift; shift
 
 lpcnet_demo -features ${input_speech} ${features_in}
-python3 ./bbfm_inference.py ${model} ${features_in} ${features_out} "$@"
+python3 ./bbfm_inference.py ${model} ${features_in} ${features_out} "$@" 2> >(tee $bbfm_log >&2)
 if [ $? -ne 0 ]; then
   exit 1
 fi
