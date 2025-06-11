@@ -33,12 +33,17 @@ shift; shift;
 tmp_comp=comp.raw
 tmp_out=$(mktemp)
 tmp_fm=$(mktemp)
+log=$(mktemp)
 
 # input wav -> BPF 300-3100 -> pre-emp -> Hilbert compressor -> de-emp -> linearised BBFM sim -> BPF 300-3100 -> output wav
 
 sox ${input_speech} -t .s16 -r 8000 -c 1 - | ch - - --ssbfilt 2 | pre - - | ch - - --clip 8192 --gain 2 --ssbfilt 2 | de - $tmp_comp
-cat $tmp_comp | python3 bbfm_analog.py $@ | ch - - --ssbfilt 2 | sox -t .s16 -r 8000 -c 1 - -t .s16 -r 8000 ${tmp_out}
-
+cat $tmp_comp | python3 bbfm_analog.py $@ 2> >(tee $log >&2) | ch - - --ssbfilt 2 | sox -t .s16 -r 8000 -c 1 - -t .s16 -r 8000 ${tmp_out}
+grep "h_file too short" $log
+if [ $? -eq 0 ]; then
+    echo "Error - fading file too short"
+    exit 1
+fi
 if [ $output_speech == "-" ]; then
     aplay ${tmp_out} -f S16_LE 2>/dev/null
 elif [ $output_speech != "/dev/null" ]; then

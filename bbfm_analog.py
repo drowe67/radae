@@ -39,16 +39,12 @@ import math as m
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--RdBm', type=float, default=-100, help='Receive level set point in dBm')
-parser.add_argument('--h_file', type=str, default="", help='path to rate Fs fading channel magnitude samples, rate Fs time steps by Nc=1 carriers .f32 format')
+parser.add_argument('--h_file', type=str, default="", help='Path to rate Fs fading channel magnitude samples, rate Fs time steps by Nc=1 carriers .f32 format')
+parser.add_argument('--fading_advance', type=float, default=0, help='Where to start sampling fading samples in seconds (default 0)')
 parser.add_argument('-v', action='store_true', help='Verbose debug info')
 args = parser.parse_args()
 RdBm = args.RdBm
 
-# user supplied rate Rs multipath model, sequence of H magnitude samples
-if len(args.h_file):
-    H = np.fromfile(args.h_file, dtype=np.float32)
-
-# TODO work out A and x_bar for speech. How do we map 32767 max or int16 to A?
 Am = 16384  # peak input int16 level, corresponds to max deviation f_d 
 A = 1       # normalised peak input level assumed in SNR expression
 x_bar = 0.5 # for sine wave with peak A=1
@@ -64,6 +60,12 @@ TdBm = 12 - Gfm
 print(f"Fs: {Fs:5.2f} Deviation: {fd_Hz} Hz  Max Modn freq: {fm_Hz} Hz Beta: {beta:3.2f}", file=sys.stderr)
 print(f"x_bar: {x_bar:5.2f} Gfm: {Gfm:5.2f} dB TdB: {TdBm:5.2f} dB  RdBm: {RdBm:5.2f}", file=sys.stderr)
 
+# user supplied rate Rs multipath model, sequence of H magnitude samples
+if len(args.h_file):
+  H = np.fromfile(args.h_file, dtype=np.float32)
+  fading_index = int(args.fading_advance*Fs)
+  print(f"fading_adv: {args.fading_advance:f} offset (samples): {fading_index:d}",  file=sys.stderr)
+
 # average noise and signal power
 n2_sum = 0.0
 x2_sum = 0.0
@@ -71,7 +73,6 @@ n_sum = 0
 n_clipped = 0
 sigma = 0.0
 
-i = int(0)
 while True:
     buffer = sys.stdin.buffer.read(struct.calcsize("h"))
     if len(buffer) != struct.calcsize("h"):
@@ -80,11 +81,11 @@ while True:
 
     RdBm_dash = RdBm
     if args.h_file:
-      RdBm_dash = 20*m.log10(H[i]) + RdBm_dash
-      i += 1
-      if i > len(H):
-        print(f"h_file too short for sample!", file=sys.stderr)
-        quit()
+      if fading_index > len(H)-1:
+        print(f"ERROR; h_file too short for sample! Quitting", file=sys.stderr)
+        sys.exit(1)
+      RdBm_dash = 20*m.log10(H[fading_index]) + RdBm_dash
+      fading_index += 1
 
     if RdBm_dash > TdBm:
       SNRdB = RdBm_dash + Gfm

@@ -65,6 +65,15 @@ case $key in
         shift
         shift
     ;;
+    --h_file)
+        h_file="--h_file $2"
+        if [ ! -f $2 ]; then
+            echo "can't find $2"
+            exit 1
+        fi
+        shift
+        shift
+    ;;
     --No)
         No="$2"
         shift
@@ -269,7 +278,10 @@ function process {
         fi
 
         if [ $mode == "bbfm" ]; then
-            ./bbfm_inference.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth ${in} out.wav --RdBm $RdBm
+            ./bbfm_inference.sh 250319_bbfm_lmr60/checkpoints/checkpoint_epoch_100.pth ${in} out.wav --RdBm $RdBm $h_file
+            if [ $? -ne 0 ]; then
+                exit 1
+            fi
         fi
 
         # extract individual output files
@@ -312,7 +324,10 @@ function process {
             # AGC
             set_rms ${in} $setpoint_rms_fm
             sox -t .s16 -r 8000 -c 1 ${in} in.wav
-            ./bbfm_analog.sh in.wav out.wav --RdBm $RdBm
+            ./bbfm_analog.sh in.wav out.wav --RdBm $RdBm $h_file --fading_adv $fading_adv
+            if [ $? -eq 1 ]; then
+                exit 1
+            fi
             sox out.wav -r 16000 -c 1 ${dest}/${f}
             echo $RdBm >> ${RdBm_log}
             echo $CNo >> ${CNo_log}

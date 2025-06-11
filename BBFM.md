@@ -141,3 +141,16 @@ A single carrier PSK modem "back end" that connects the ML symbols to the radio.
    ```
    sox ~/Desktop/sc-ber-003.wav -t .s16 -r 9600 -c 1 - highpass 100 | python3 sc_rx.py --plots > z_hat.f32
    ```
+
+# ASR Tests
+
+1. Run a single RdBm analog FM ASR test with fading, using 10 samples:
+   ```
+   ./asr_test.sh fm -n 10 --RdBm -110 --h_file h_lmr60_Fs_8000Hz.f32
+   ```
+
+1. Locate simulation output files (e.g. for manual listening):
+   ```
+   find /home/david/.cache/LibriSpeech/test-other/ -name *.flac
+   ```
+

@@ -93,7 +93,7 @@ if args.h_file:
    print(H.shape, num_timesteps_at_rate_Rs)
    if H.shape[1] < num_timesteps_at_rate_Rs:
       print("Multipath H file too short")
-      quit()
+      exit(1)
    H = H[:,:num_timesteps_at_rate_Rs,:]
    H = torch.tensor(H)
 
