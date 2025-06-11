@@ -308,8 +308,7 @@ function process {
         for f in $flac
         do
           cp ${source}/${f} ${dest}/${f}
-        done
-        
+        done        
     fi
 
     if [ $mode == "fm" ]; then

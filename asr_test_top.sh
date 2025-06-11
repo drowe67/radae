@@ -110,8 +110,10 @@ function bbfm_top {
     # strip off all but last column for Octave plotting
     cat ${controls_file} | awk '{print $NF}' > ${results_file}_c.txt
 
-    #fm ${results_file}_awgn_fm.txt "-100 -110 -120 -125"
-    bbfm ${results_file}_awgn_bbfm.txt "-100 -110 -120 -125 -126 -127"
+    fm ${results_file}_awgn_fm.txt "-100 -110 -115 -120 -125"
+    #bbfm ${results_file}_awgn_bbfm.txt "-100 -110 -120 -125 -126 -127"
+    fm ${results_file}_lmr60_fm.txt "-100 -105 -110 -115 -120" "--h_file h_lmr60_Fs_8000Hz.f32"
+    bbfm ${results_file}_lmr60_bbfm.txt "-100 -110 -120 -122 -125 -126" "--h_file h_lmr60_Rs_2000Hz.f32"
 }
 
 POSITIONAL=()

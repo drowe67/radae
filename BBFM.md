@@ -144,6 +144,12 @@ A single carrier PSK modem "back end" that connects the ML symbols to the radio.
 
 # ASR Tests
 
+1. Create LMR 60 sample at Fs=8000 Hz for the analog FM simulation, and Rs=2000 Hz for RADE. Assume Librispeech samples max length 10 seconds each, we want to use around 500 samples:
+   ```
+   octave:47> multipath_samples("lmr60", 8000, 8000, 1, 10*500, "h_lmr60_Fs_8000Hz.f32")
+   octave:48> multipath_samples("lmr60", 8000, 2000, 1, 10*500, "h_lmr60_Rs_2000Hz.f32")
+   ```
+
 1. Run a single RdBm analog FM ASR test with fading, using 10 samples:
    ```
    ./asr_test.sh fm -n 10 --RdBm -110 --h_file h_lmr60_Fs_8000Hz.f32
@@ -154,3 +160,17 @@ A single carrier PSK modem "back end" that connects the ML symbols to the radio.
    find /home/david/.cache/LibriSpeech/test-other/ -name *.flac
    ```
 
+1. Top level ASR test script to generate ASR results across a range of RdBm:
+   ```
+   ./asr_test_top.sh bbfm -n 100
+   ``` 
+   Eyeball results:
+   ```
+   ls 250610_asr*
+   cat 250610_asr_lmr60_bbfm.txt
+   ...
+   ```
+1. Plot curves, save to .png:
+   ```
+   octave:47> radae_plots; plot_wer_bbfm("250610","250610_bbfm_wer.png")
+   ```

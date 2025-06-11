@@ -540,10 +540,14 @@ end
 function plot_wer_bbfm(prefix_fn, png_fn="", epslatex="")
   fm_awgn_fn = sprintf("%s_asr_awgn_fm.txt",prefix_fn);
   bbfm_awgn_fn = sprintf("%s_asr_awgn_bbfm.txt",prefix_fn);
+  fm_lmr60_fn = sprintf("%s_asr_lmr60_fm.txt",prefix_fn);
+  bbfm_lmr60_fn = sprintf("%s_asr_lmr60_bbfm.txt",prefix_fn);
   controls_fn = sprintf("%s_asr_c.txt",prefix_fn);
 
   fm_awgn = load(fm_awgn_fn);
   bbfm_awgn = load(bbfm_awgn_fn);
+  fm_lmr60 = load(fm_lmr60_fn);
+  bbfm_lmr60 = load(bbfm_lmr60_fn);
   c = load(controls_fn);
 
   if length(epslatex)
@@ -555,6 +559,8 @@ function plot_wer_bbfm(prefix_fn, png_fn="", epslatex="")
   plot(fm_awgn(:,1),fm_awgn(:,2),'b+-;FM AWGN;');
   hold on;
   plot(bbfm_awgn(:,1),bbfm_awgn(:,2),'g+-;RADE AWGN;');
+  plot(fm_lmr60(:,1),fm_lmr60(:,2),'bo--;FM LMR60;');
+  plot(bbfm_lmr60(:,1),bbfm_lmr60(:,2),'go--;RADE LMR60;');
   xmax=-100; xmin=-130; 
   plot([xmin xmax],[c(2) c(2)],'m-;FARGAN;')
   plot([xmin xmax],[c(1) c(1)],'c-;clean;')
