@@ -43,6 +43,7 @@
 import sys,struct
 import argparse
 import numpy as np
+from radae import complex_bpf
 
 parser = argparse.ArgumentParser()
 
@@ -51,16 +52,20 @@ parser.add_argument('Ry', type=str, help='path to autocorrelation output feature
 parser.add_argument('delta', type=str, help='path to fine timing ground truth (delta) output file dim .f32 format')
 parser.add_argument('tau', type=int, help='autocorrelation lag (e.g. M or 2(Ncp+M))')
 parser.add_argument('N', type=int, help='number of samples to correlate over (e.g. Ncp or M)')
+parser.add_argument('-Q', type=int, default=1, help='number of past symbols to correlate over (default 1)')
 parser.add_argument('--sequence_length', type=int, default=50, help='sequence length - number of consectutive symbols with same fine timing (default 100)')
 parser.add_argument('-M', type=int, default=128, help='length of symbol in samples without cyclic prefix (default 128)')
 parser.add_argument('--Ncp', type=int, default=32, help='length of cyclic prefix in samples (default 32)')
 parser.add_argument('--Nseq', type=int, default=0, help='extract just first Nseq sequences (default extract all)')
+parser.add_argument('--bpf', action='store_true', help='enable band pass filter (default off)')
 args = parser.parse_args()
 M = args.M
 Ncp = args.Ncp
 tau = args.tau
 N = args.N
+Q = args.Q
 sequence_length = args.sequence_length
+Fs = 8000
 
 y = np.fromfile(args.y, dtype=np.complex64)
 if args.Nseq == 0:
@@ -69,16 +74,24 @@ else:
    Nseq = args.Nseq
 print(f"Nseq: {Nseq:d}")
 
-Ry = np.zeros(Ncp+M,dtype=np.float32)
 f_Ry = open(args.Ry,"wb")
 f_delta = open(args.delta,"wb")
 
+if args.bpf:
+   Ntap=101
+   bandwidth = 1200
+   centre = 1500
+   print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}")
+   bpf = complex_bpf(Ntap, Fs, bandwidth, centre)
+   y = bpf.bpf(y)
+
 for seq in np.arange(Nseq):
 
-   # random timing offset for sequence
+   # single random timing offset for entire sequence
    delta = int(np.random.random()*(Ncp+M))
    
-   for s in np.arange(sequence_length):
+   Ry = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
+   for s in np.arange(sequence_length+Q-1):
       for delta_hat in np.arange(Ncp+M):
          # note overlapping sequences for data augmentation
          st = (seq+s+1)*(Ncp+M) - delta + delta_hat
@@ -86,10 +99,13 @@ for seq in np.arange(Nseq):
          y2 = y[st:st+N]
          num = np.abs(np.dot(y1, np.conj(y2)))
          den = np.abs((np.dot(y1, np.conj(y1)) + np.dot(y2, np.conj(y2))))
-         Ry[delta_hat] = num/den
-      Ry.tofile(f_Ry)
+         Ry[s,delta_hat] = num/den
+   # smooth over last Q symbols as timing varies slowly
+   for s in np.arange(sequence_length):
+      aRy = np.mean(Ry[s:s+Q,:],axis=0)
+      aRy.tofile(f_Ry)
       np.array([delta], dtype=np.float32).tofile(f_delta)
-   print(seq)
+   print(f"{seq:d}")
 
 f_Ry.close()
 f_delta.close()
