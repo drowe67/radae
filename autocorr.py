@@ -58,6 +58,8 @@ parser.add_argument('-M', type=int, default=128, help='length of symbol in sampl
 parser.add_argument('--Ncp', type=int, default=32, help='length of cyclic prefix in samples (default 32)')
 parser.add_argument('--Nseq', type=int, default=0, help='extract just first Nseq sequences (default extract all)')
 parser.add_argument('--bpf', action='store_true', help='enable band pass filter (default off)')
+parser.add_argument('--range_snr', action='store_true', help='Inject noise using a range of SNRs for training (default no noise)')
+parser.add_argument('--seq_hop', type=int, default=1, help='How many input symbols to jump for each training sequence (default 1)')
 args = parser.parse_args()
 M = args.M
 Ncp = args.Ncp
@@ -65,6 +67,7 @@ tau = args.tau
 N = args.N
 Q = args.Q
 sequence_length = args.sequence_length
+seq_hop = args.seq_hop
 Fs = 8000
 
 y = np.fromfile(args.y, dtype=np.complex64)
@@ -72,34 +75,56 @@ if args.Nseq == 0:
    Nseq = len(y) // (Ncp+M) - sequence_length - 1
 else:
    Nseq = args.Nseq
-print(f"Nseq: {Nseq:d}")
+# measure signal power for entire vector to ensure a good mean if fading is present
+S = (np.dot(y,np.conj(y))/len(y)).real
+#S=np.var(y)
+print(f"Nseq: {Nseq:d}, S: {S:5.2f}")
+
+# generate a unit power gaussian noise vector of the samme length
+rng = np.random.default_rng()
+n = (rng.standard_normal(size=len(y),dtype=np.float32) + 1j*rng.standard_normal(size=len(y),dtype=np.float32))/np.sqrt(2)
+print(f"std(n): {np.std(n):5.2f}")
 
 f_Ry = open(args.Ry,"wb")
 f_delta = open(args.delta,"wb")
 
+# note we BPF noise, rather than signal; + nopise for convenience, and
+# neatly avoids timne shift due to filter delay that would shift delta
 if args.bpf:
    Ntap=101
    bandwidth = 1200
    centre = 1500
    print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}")
    bpf = complex_bpf(Ntap, Fs, bandwidth, centre)
-   y = bpf.bpf(y)
+   n = bpf.bpf(n)
 
 for seq in np.arange(Nseq):
 
    # single random timing offset for entire sequence
    delta = int(np.random.random()*(Ncp+M))
-   
+
+   # chunk of input samples that we add noise to (leaving original)
+   y_ = y[seq*seq_hop*(Ncp+M):(seq*seq_hop+sequence_length+Q+1)*(Ncp+M)]
+
+   # SNR value for sequence
+   if args.range_snr:
+      SNR3kdB = -5 +  20*rng.np.random()
+      SNR3k = 10**(SNR3kdB/10)
+      sigma = ((S*Fs)/(SNR3k*3000))**0.5
+      n_ = n[seq*seq_hop*(Ncp+M):(seq*seq_hop+sequence_length+Q+1)*(Ncp+M)]
+      y_ += sigma*n_
+
    Ry = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
    for s in np.arange(sequence_length+Q-1):
       for delta_hat in np.arange(Ncp+M):
-         # note overlapping sequences for data augmentation
-         st = (seq+s+1)*(Ncp+M) - delta + delta_hat
-         y1 = y[st-tau:st-tau+N]
-         y2 = y[st:st+N]
+         st = (s+1)*(Ncp+M) - delta + delta_hat
+         #print(s,st, len(y_))
+         y1 = y_[st-tau:st-tau+N]
+         y2 = y_[st:st+N]
          num = np.abs(np.dot(y1, np.conj(y2)))
          den = np.abs((np.dot(y1, np.conj(y1)) + np.dot(y2, np.conj(y2))))
          Ry[s,delta_hat] = num/den
+
    # smooth over last Q symbols as timing varies slowly
    for s in np.arange(sequence_length):
       aRy = np.mean(Ry[s:s+Q,:],axis=0)
