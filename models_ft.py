@@ -10,7 +10,7 @@ Pitch Estimation Models and dataloaders,
 import torch
 import numpy as np
 
-class PitchDNNXcorr(torch.nn.Module):
+class ftDNNXcorr(torch.nn.Module):
 
     def __init__(self, input_dim=90, gru_dim=64, output_dim=192):
         super().__init__()
@@ -48,7 +48,7 @@ class PitchDNNXcorr(torch.nn.Module):
 
 # Dataloader
 
-class PitchDNNDataloader(torch.utils.data.Dataset):
+class ftDNNDataloader(torch.utils.data.Dataset):
       def __init__(self, features, file_pitch, xcorr_dim, sequence_length):
             self.xcorr = np.fromfile(features, dtype=np.float32).reshape(-1,xcorr_dim)
             self.ground_truth = np.fromfile(file_pitch, dtype=np.float32)

@@ -7,8 +7,8 @@ import os
 import argparse
 parser = argparse.ArgumentParser()
 
-parser.add_argument('features', type=str, help='.f32 sequences of corr vectors for training')
-parser.add_argument('delta', type=str, help='.f32 ground truth fine timing for training')
+parser.add_argument('features', type=str, help='.f32 sequences of corr vectors (Ry) for training')
+parser.add_argument('delta', type=str, help='.f32 ground truth fine timing (delta) for training')
 parser.add_argument('output_folder', type=str, help='Output directory to store the model weights and config')
 parser.add_argument('--gpu_index', type=int, help='GPU index to use if multiple GPUs',default = 0,required = False)
 parser.add_argument('--sequence_length', type=int, help='Sequence length during training',default = 50,required = False)
@@ -20,7 +20,6 @@ parser.add_argument('--epochs', type=int, help='Number of training epochs',defau
 parser.add_argument('--choice_cel', type=str, help='Choice of Cross Entropy Loss (default or robust)',choices=['default','robust'],default = 'default',required = False)
 parser.add_argument('--prefix', type=str, help="prefix for model export, default: model", default='model')
 parser.add_argument('--initial-checkpoint', type=str, help='initial checkpoint to start training from, default: None', default=None)
-parser.add_argument('--range_snr', action='store_true', help='Inject noise using a range of SNRs for training (default no noise)')
 
 args = parser.parse_args()
 
@@ -38,18 +37,18 @@ torch.manual_seed(torch_seed)
 import numpy as np
 np.random.seed(np_seed)
 import tqdm
-from models_ft import PitchDNNXcorr, PitchDNNDataloader
+from models_ft import ftDNNXcorr, ftDNNDataloader
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-ft_nn = PitchDNNXcorr(args.xcorr_dimension, args.gru_dim, args.output_dim)
+ft_nn = ftDNNXcorr(args.xcorr_dimension, args.gru_dim, args.output_dim)
 
 if type(args.initial_checkpoint) != type(None):
     checkpoint = torch.load(args.initial_checkpoint, map_location='cpu')
     ft_nn.load_state_dict(checkpoint['state_dict'], strict=False)
 
 
-dataset_training = PitchDNNDataloader(args.features,args.delta,args.output_dim,args.sequence_length)
+dataset_training = ftDNNDataloader(args.features,args.delta,args.output_dim,args.sequence_length)
 
 def loss_custom(logits,labels,choice = 'default',nmax = 192,q = 0.7):
     logits_softmax = torch.nn.Softmax(dim = 1)(logits).permute(0,2,1)
@@ -112,13 +111,13 @@ for epoch in range(num_epochs):
     accs_xi = []
     ft_nn.train()
     with tqdm.tqdm(train_dataloader) as train_epoch:
-        for i, (xi, yi) in enumerate(train_epoch):
-            yi, xi = yi.to(device, non_blocking=True), xi.to(device, non_blocking=True)
-            pi = ft_nn(xi)
-            loss = loss_custom(logits = pi,labels = yi,choice = args.choice_cel,nmax = args.output_dim)
-            acc = accuracy(logits = pi,labels = yi, nmax = args.output_dim)
+        for i, (Ry, delta) in enumerate(train_epoch):
+            delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
+            delta_hat = ft_nn(Ry)
+            loss = loss_custom(logits = delta_hat,labels = delta,choice = args.choice_cel,nmax = args.output_dim)
+            acc = accuracy(logits = delta_hat,labels = delta, nmax = args.output_dim)
             acc = acc.detach()
-            acc_xi = accuracy_xi(xi = xi,labels = yi, nmax = args.output_dim)
+            acc_xi = accuracy_xi(xi = Ry,labels = delta, nmax = args.output_dim)
             acc_xi = acc_xi.detach()
 
             model_opt.zero_grad()
@@ -138,12 +137,12 @@ for epoch in range(num_epochs):
         losses = []
         accs = []
         with tqdm.tqdm(test_dataloader) as test_epoch:
-            for i, (xi, yi) in enumerate(test_epoch):
-                yi, xi = yi.to(device, non_blocking=True), xi.to(device, non_blocking=True)
-                pi = ft_nn(xi)
+            for i, (Ry, delta) in enumerate(test_epoch):
+                delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
+                delta_hat = ft_nn(Ry)
                 
-                loss = loss_custom(logits = pi,labels = yi,choice = args.choice_cel,nmax = args.output_dim)
-                acc = accuracy(logits = pi,labels = yi,nmax = args.output_dim)
+                loss = loss_custom(logits = delta_hat,labels = delta,choice = args.choice_cel,nmax = args.output_dim)
+                acc = accuracy(logits = delta_hat,labels = delta,nmax = args.output_dim)
                 acc = acc.detach()
                 losses.append(loss.item())
                 accs.append(acc.item())
