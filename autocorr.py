@@ -6,7 +6,7 @@
    Example:
 
      ./inference.sh 250506/checkpoints/checkpoint_epoch_200.pth wav/all.wav /dev/null --bottleneck 3
-      --rate_Fs --auxdata --EbNodB 100 --cp 0.004 --write_rx rx.f32
+      --rate_Fs --auxdata --cp 0.004 --write_rx rx.f32
 
      python3 autocorr.py rx.f32 Ry.f32 delta.f32 -128 32
 
@@ -80,16 +80,16 @@ S = (np.dot(y,np.conj(y))/len(y)).real
 #S=np.var(y)
 print(f"Nseq: {Nseq:d}, S: {S:5.2f}")
 
-# generate a unit power gaussian noise vector of the samme length
+# generate a unit power complex gaussian noise vector of the samme length as y
 rng = np.random.default_rng()
 n = (rng.standard_normal(size=len(y),dtype=np.float32) + 1j*rng.standard_normal(size=len(y),dtype=np.float32))/np.sqrt(2)
-print(f"std(n): {np.std(n):5.2f}")
+print(f"var(n): {np.var(n):5.2f}")
 
 f_Ry = open(args.Ry,"wb")
 f_delta = open(args.delta,"wb")
 
-# note we BPF noise, rather than signal; + nopise for convenience, and
-# neatly avoids timne shift due to filter delay that would shift delta
+# note we BPF noise, rather than signal+noise for convenience, this
+# neatly avoids time shift due to filter delay that would shift delta
 if args.bpf:
    Ntap=101
    bandwidth = 1200
@@ -99,21 +99,24 @@ if args.bpf:
    n = bpf.bpf(n)
 
 for seq in np.arange(Nseq):
+   print(f"\r{seq:d} ", end='')
 
    # single random timing offset for entire sequence
    delta = int(np.random.random()*(Ncp+M))
 
-   # chunk of input samples that we add noise to (leaving original)
-   y_ = y[seq*seq_hop*(Ncp+M):(seq*seq_hop+sequence_length+Q+1)*(Ncp+M)]
+   # chunk of input samples that we add noise to
+   y_ = np.copy(y[seq*seq_hop*(Ncp+M):(seq*seq_hop+sequence_length+Q+1)*(Ncp+M)])
 
    # SNR value for sequence
    if args.range_snr:
-      SNR3kdB = -5 +  20*rng.np.random()
+      SNR3kdB = -5 +  20*rng.random()
       SNR3k = 10**(SNR3kdB/10)
       sigma = ((S*Fs)/(SNR3k*3000))**0.5
-      n_ = n[seq*seq_hop*(Ncp+M):(seq*seq_hop+sequence_length+Q+1)*(Ncp+M)]
-      y_ += sigma*n_
-
+      n_ = sigma*n[seq*seq_hop*(Ncp+M):(seq*seq_hop+sequence_length+Q+1)*(Ncp+M)]
+      y_ += n_
+      print(f"SNRdB: {SNR3kdB:5.2f} sigma: {sigma:5.2f} sigma_: {np.var(n_):5.2f}",end='')
+   
+   # calculate Ry for every time step in the sequence, plus Q-1 extra to support smoothing
    Ry = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
    for s in np.arange(sequence_length+Q-1):
       for delta_hat in np.arange(Ncp+M):
@@ -125,12 +128,12 @@ for seq in np.arange(Nseq):
          den = np.abs((np.dot(y1, np.conj(y1)) + np.dot(y2, np.conj(y2))))
          Ry[s,delta_hat] = num/den
 
-   # smooth over last Q symbols as timing varies slowly
+   # Now output Ry & delta for each step in sequence, smoothing Ry over last Q symbols
    for s in np.arange(sequence_length):
       aRy = np.mean(Ry[s:s+Q,:],axis=0)
       aRy.tofile(f_Ry)
       np.array([delta], dtype=np.float32).tofile(f_delta)
-   print(f"{seq:d}")
 
 f_Ry.close()
 f_delta.close()
+print(f"")
