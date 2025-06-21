@@ -57,7 +57,7 @@ parser.add_argument('--sequence_length', type=int, default=50, help='sequence le
 parser.add_argument('-M', type=int, default=128, help='length of symbol in samples without cyclic prefix (default 128)')
 parser.add_argument('--Ncp', type=int, default=32, help='length of cyclic prefix in samples (default 32)')
 parser.add_argument('--Nseq', type=int, default=0, help='extract just first Nseq sequences (default extract all)')
-parser.add_argument('--bpf', action='store_true', help='enable band pass filter (default off)')
+parser.add_argument('--bpf',  type=int, default=0, help='enable band pass filter (default off)')
 parser.add_argument('--range_snr', action='store_true', help='Inject noise using a range of SNRs for training (default no noise)')
 parser.add_argument('--seq_hop', type=int, default=1, help='How many input symbols to jump for each training sequence (default 1)')
 args = parser.parse_args()
@@ -90,9 +90,9 @@ f_delta = open(args.delta,"wb")
 
 # note we BPF noise, rather than signal+noise for convenience, this
 # neatly avoids time shift due to filter delay that would shift delta
-if args.bpf:
+if args.bpf != 0:
    Ntap=101
-   bandwidth = 1200
+   bandwidth = args.bpf
    centre = 1500
    print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}")
    bpf = complex_bpf(Ntap, Fs, bandwidth, centre)
@@ -109,7 +109,7 @@ for seq in np.arange(Nseq):
 
    # SNR value for sequence
    if args.range_snr:
-      SNR3kdB = -5 +  20*rng.random()
+      SNR3kdB = -2 +  15*rng.random()
       SNR3k = 10**(SNR3kdB/10)
       sigma = ((S*Fs)/(SNR3k*3000))**0.5
       n_ = sigma*n[seq*seq_hop*(Ncp+M):(seq*seq_hop+sequence_length+Q+1)*(Ncp+M)]

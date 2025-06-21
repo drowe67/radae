@@ -20,6 +20,9 @@ parser.add_argument('--epochs', type=int, help='Number of training epochs',defau
 parser.add_argument('--choice_cel', type=str, help='Choice of Cross Entropy Loss (default or robust)',choices=['default','robust'],default = 'default',required = False)
 parser.add_argument('--prefix', type=str, help="prefix for model export, default: model", default='model')
 parser.add_argument('--initial-checkpoint', type=str, help='initial checkpoint to start training from, default: None', default=None)
+parser.add_argument('--fte_ml', type=str, help='optional file to save fine time errors from ML')
+parser.add_argument('--fte_dsp', type=str, help='optional file to save fine time errors from clasical DSP argmax(Ry)')
+
 
 args = parser.parse_args()
 
@@ -68,7 +71,7 @@ def loss_custom(logits,labels,choice = 'default',nmax = 192,q = 0.7):
 
 # for timing estimation in OFDM we don't need to have perfect timing, so measure
 # accuracy in terms of std dev of timing est error in samples
-def accuracy(logits,labels,nmax = 192):
+def calc_ft_error(logits,labels,nmax = 192):
     logits_softmax = torch.nn.Softmax(dim = 1)(logits).permute(0,2,1)
     delta_hat = torch.argmax(logits_softmax, 2)
     # timing est is modulo nmax, e.g. for nmax=160
@@ -78,10 +81,10 @@ def accuracy(logits,labels,nmax = 192):
     delta = labels.long()
     ft_error = ((delta_hat - delta + nmax/2) % nmax) - nmax/2
     ft_error = ft_error*1.
-    return torch.std(ft_error)
+    return ft_error
 
 # peak picking of Ry as a control
-def accuracy_xi(xi,labels,nmax = 192):
+def calc_ft_error_xi(xi,labels,nmax = 192):
     delta_hat = torch.argmax(xi, 2)
     # timing est is modulo nmax, e.g. for nmax=160
     # delta delta_hat error
@@ -90,7 +93,7 @@ def accuracy_xi(xi,labels,nmax = 192):
     delta = labels.long()
     ft_error = ((delta_hat - delta + nmax/2) % nmax) - nmax/2
     ft_error = ft_error*1.
-    return torch.std(ft_error)
+    return ft_error
 
 train_dataset, test_dataset = torch.utils.data.random_split(dataset_training, [0.95,0.05], generator=torch.Generator().manual_seed(torch_seed))
 
@@ -105,6 +108,11 @@ model_opt = torch.optim.Adam(ft_nn.parameters(), lr = learning_rate)
 
 num_epochs = args.epochs
 
+if args.fte_ml:
+    f_fte_ml = open(args.fte_ml,"wb")
+if args.fte_dsp:
+    f_fte_dsp = open(args.fte_dsp,"wb")
+
 for epoch in range(num_epochs):
     losses = []
     accs = []
@@ -115,10 +123,15 @@ for epoch in range(num_epochs):
             delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
             delta_hat = ft_nn(Ry)
             loss = loss_custom(logits = delta_hat,labels = delta,choice = args.choice_cel,nmax = args.output_dim)
-            acc = accuracy(logits = delta_hat,labels = delta, nmax = args.output_dim)
-            acc = acc.detach()
-            acc_xi = accuracy_xi(xi = Ry,labels = delta, nmax = args.output_dim)
-            acc_xi = acc_xi.detach()
+            ft_error = calc_ft_error(logits = delta_hat,labels = delta, nmax = args.output_dim)
+            acc = torch.std(ft_error).detach()
+            if args.fte_ml and (epoch == num_epochs-1):
+               ft_error.cpu().detach().numpy().flatten().astype('float32').tofile(f_fte_ml)
+
+            ft_error_dsp = calc_ft_error_xi(xi = Ry,labels = delta, nmax = args.output_dim)
+            acc_xi = torch.std(ft_error_dsp).detach()
+            if args.fte_dsp and (epoch == num_epochs-1):
+               ft_error_dsp.cpu().detach().numpy().flatten().astype('float32').tofile(f_fte_dsp)
 
             model_opt.zero_grad()
             loss.backward()
@@ -132,24 +145,10 @@ for epoch in range(num_epochs):
             avg_acc_xi = np.mean(accs_xi)
             train_epoch.set_postfix({"Train Epoch" : epoch, "Train Loss":avg_loss, "acc" : avg_acc.item(),  "acc_xi" : avg_acc_xi.item()})
 
-    if epoch % 10 == 0:
-        ft_nn.eval()
-        losses = []
-        accs = []
-        with tqdm.tqdm(test_dataloader) as test_epoch:
-            for i, (Ry, delta) in enumerate(test_epoch):
-                delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
-                delta_hat = ft_nn(Ry)
-                
-                loss = loss_custom(logits = delta_hat,labels = delta,choice = args.choice_cel,nmax = args.output_dim)
-                acc = accuracy(logits = delta_hat,labels = delta,nmax = args.output_dim)
-                acc = acc.detach()
-                losses.append(loss.item())
-                accs.append(acc.item())
-                avg_loss = np.mean(losses)
-                avg_acc = np.mean(accs)
-                test_epoch.set_postfix({"Epoch" : epoch, "Test Loss":avg_loss, "Test acc" : avg_acc.item()})
-
+if args.fte_ml:
+    f_fte_ml.close()
+if args.fte_dsp:
+    f_fte_dsp.close()
 ft_nn.eval()
 
 config = dict(
