@@ -9,7 +9,6 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('features', type=str, help='.f32 sequences of corr vectors (Ry) for training')
 parser.add_argument('delta', type=str, help='.f32 ground truth fine timing (delta) for training')
-parser.add_argument('output_folder', type=str, help='Output directory to store the model weights and config')
 parser.add_argument('--gpu_index', type=int, help='GPU index to use if multiple GPUs',default = 0,required = False)
 parser.add_argument('--sequence_length', type=int, help='Sequence length during training',default = 50,required = False)
 parser.add_argument('--xcorr_dimension', type=int, help='Dimension of Input cross-correlation',default = 160,required = False)
@@ -20,15 +19,12 @@ parser.add_argument('--epochs', type=int, help='Number of training epochs',defau
 parser.add_argument('--choice_cel', type=str, help='Choice of Cross Entropy Loss (default or robust)',choices=['default','robust'],default = 'default',required = False)
 parser.add_argument('--prefix', type=str, help="prefix for model export, default: model", default='model')
 parser.add_argument('--initial-checkpoint', type=str, help='initial checkpoint to start training from, default: None', default=None)
+parser.add_argument('--save_model', type=str, default="", help='filename of model to save')
+parser.add_argument('--inference', type=str, default="", help='Inference only with filename of saved model (default training mode)')
 parser.add_argument('--fte_ml', type=str, help='optional file to save fine time errors from ML')
 parser.add_argument('--fte_dsp', type=str, help='optional file to save fine time errors from clasical DSP argmax(Ry)')
 
-
 args = parser.parse_args()
-
-# import os
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_index)
 
 # Fixing the seeds for reproducability
 import time
@@ -50,8 +46,7 @@ if type(args.initial_checkpoint) != type(None):
     checkpoint = torch.load(args.initial_checkpoint, map_location='cpu')
     ft_nn.load_state_dict(checkpoint['state_dict'], strict=False)
 
-
-dataset_training = ftDNNDataloader(args.features,args.delta,args.output_dim,args.sequence_length)
+dataset = ftDNNDataloader(args.features,args.delta,args.output_dim,args.sequence_length)
 
 def loss_custom(logits,labels,choice = 'default',nmax = 192,q = 0.7):
     logits_softmax = torch.nn.Softmax(dim = 1)(logits).permute(0,2,1)
@@ -71,7 +66,7 @@ def loss_custom(logits,labels,choice = 'default',nmax = 192,q = 0.7):
 
 # for timing estimation in OFDM we don't need to have perfect timing, so measure
 # accuracy in terms of std dev of timing est error in samples
-def calc_ft_error(logits,labels,nmax = 192):
+def calc_ft_error_ml(logits,labels,nmax = 192):
     logits_softmax = torch.nn.Softmax(dim = 1)(logits).permute(0,2,1)
     delta_hat = torch.argmax(logits_softmax, 2)
     # timing est is modulo nmax, e.g. for nmax=160
@@ -84,7 +79,7 @@ def calc_ft_error(logits,labels,nmax = 192):
     return ft_error
 
 # peak picking of Ry as a control
-def calc_ft_error_xi(xi,labels,nmax = 192):
+def calc_ft_error_dsp(xi,labels,nmax = 192):
     delta_hat = torch.argmax(xi, 2)
     # timing est is modulo nmax, e.g. for nmax=160
     # delta delta_hat error
@@ -95,79 +90,92 @@ def calc_ft_error_xi(xi,labels,nmax = 192):
     ft_error = ft_error*1.
     return ft_error
 
-train_dataset, test_dataset = torch.utils.data.random_split(dataset_training, [0.95,0.05], generator=torch.Generator().manual_seed(torch_seed))
-
 batch_size = 256
-train_dataloader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=False)
-test_dataloader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=False)
+dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=False)
 
 ft_nn = ft_nn.to(device)
-#num_params = count_parameters(ft_nn)
+print(ft_nn)
+num_weights = sum(p.numel() for p in ft_nn.parameters())
+print(f"weights: {num_weights}")
+
 learning_rate = args.learning_rate
 model_opt = torch.optim.Adam(ft_nn.parameters(), lr = learning_rate)
 
 num_epochs = args.epochs
 
-if args.fte_ml:
-    f_fte_ml = open(args.fte_ml,"wb")
-if args.fte_dsp:
-    f_fte_dsp = open(args.fte_dsp,"wb")
+if len(args.inference) == 0:
+    # training mode
+    for epoch in range(num_epochs):
+        # not we average error variances, as can't average std dev directly
+        losses = []
+        vars_ml = []
+        vars_dsp = []
+        ft_nn.train()
+        with tqdm.tqdm(dataloader) as train_epoch:
+            for i, (Ry, delta) in enumerate(train_epoch):
+                delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
+                delta_hat = ft_nn(Ry)
+                loss = loss_custom(logits = delta_hat,labels = delta,choice = args.choice_cel,nmax = args.output_dim)
+                ft_error_ml = calc_ft_error_ml(logits = delta_hat,labels = delta, nmax = args.output_dim)
+                var_ml = torch.var(ft_error_ml).detach()
 
-for epoch in range(num_epochs):
-    losses = []
-    accs = []
-    accs_xi = []
-    ft_nn.train()
-    with tqdm.tqdm(train_dataloader) as train_epoch:
-        for i, (Ry, delta) in enumerate(train_epoch):
-            delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
-            delta_hat = ft_nn(Ry)
-            loss = loss_custom(logits = delta_hat,labels = delta,choice = args.choice_cel,nmax = args.output_dim)
-            ft_error = calc_ft_error(logits = delta_hat,labels = delta, nmax = args.output_dim)
-            acc = torch.std(ft_error).detach()
-            if args.fte_ml and (epoch == num_epochs-1):
-               ft_error.cpu().detach().numpy().flatten().astype('float32').tofile(f_fte_ml)
+                ft_error_dsp = calc_ft_error_dsp(xi = Ry,labels = delta, nmax = args.output_dim)
+                var_dsp = torch.var(ft_error_dsp).detach()
 
-            ft_error_dsp = calc_ft_error_xi(xi = Ry,labels = delta, nmax = args.output_dim)
-            acc_xi = torch.std(ft_error_dsp).detach()
-            if args.fte_dsp and (epoch == num_epochs-1):
-               ft_error_dsp.cpu().detach().numpy().flatten().astype('float32').tofile(f_fte_dsp)
+                model_opt.zero_grad()
+                loss.backward()
+                model_opt.step()
 
-            model_opt.zero_grad()
-            loss.backward()
-            model_opt.step()
+                losses.append(loss.item())
+                vars_ml.append(var_ml.item())
+                vars_dsp.append(var_dsp.item())
+                avg_loss = np.mean(losses)
+                std_ml = np.mean(vars_ml)**0.5
+                std_dsp = np.mean(vars_dsp)**0.5
+                train_epoch.set_postfix({"Train Epoch" : epoch, "Train Loss":avg_loss, "std_ml" : std_ml,  "std_dsp" : std_dsp})
+    
+    if len(args.save_model):
+        print(f"Saving model to: {args.save_model}")
+        torch.save(ft_nn.state_dict(), args.save_model)
 
-            losses.append(loss.item())
-            accs.append(acc.item())
-            accs_xi.append(acc_xi.item())
-            avg_loss = np.mean(losses)
-            avg_acc = np.mean(accs)
-            avg_acc_xi = np.mean(accs_xi)
-            train_epoch.set_postfix({"Train Epoch" : epoch, "Train Loss":avg_loss, "acc" : avg_acc.item(),  "acc_xi" : avg_acc_xi.item()})
+else:
+    # inference using pre-trained model
+    print(f"Loading model from: {args.inference}")
+    ft_nn.load_state_dict(torch.load(args.inference,weights_only=True))
+    ft_nn.eval()
 
-if args.fte_ml:
-    f_fte_ml.close()
-if args.fte_dsp:
-    f_fte_dsp.close()
-ft_nn.eval()
+    if args.fte_ml:
+        f_fte_ml = open(args.fte_ml,"wb")
+    if args.fte_dsp:
+        f_fte_dsp = open(args.fte_dsp,"wb")
 
-config = dict(
-    epochs=num_epochs,
-    batch_size=batch_size,
-    learning_rate=learning_rate,
-    np_seed=np_seed,
-    torch_seed=torch_seed,
-    xcorr_dim=args.xcorr_dimension,
-    gru_dim=args.gru_dim,
-    output_dim=args.output_dim,
-    choice_cel=args.choice_cel,
-    sequence_length=args.sequence_length,
-)
+    vars_ml = []
+    vars_dsp = []
+    for i in range(dataset.__len__()):
+        Ry, delta = dataset.__getitem__(i)
+        Ry = torch.reshape(Ry,(1,Ry.shape[0],Ry.shape[1]))
+        delta = torch.reshape(delta,(1,-1))
+        delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
+        delta_hat = ft_nn(Ry)
+        ft_error_ml = calc_ft_error_ml(logits = delta_hat,labels = delta, nmax = args.output_dim)
+        var_ml = torch.var(ft_error_ml).detach().cpu()
+        vars_ml.append(var_ml)
+        if args.fte_ml:
+            ft_error_ml.cpu().detach().numpy().flatten().astype('float32').tofile(f_fte_ml)
 
-#model_save_path = os.path.join(args.output_folder, f"{args.prefix}.pth")
-#print(model_save_path)
-#checkpoint = {
-#    'state_dict': pitch_nn.state_dict(),
-#    'config': config
-#}
-#torch.save(checkpoint, model_save_path)
+        ft_error_dsp = calc_ft_error_dsp(xi = Ry,labels = delta, nmax = args.output_dim)
+        var_dsp = torch.var(ft_error_dsp).detach().cpu()
+        vars_dsp.append(var_dsp)
+        if args.fte_dsp:
+            ft_error_dsp.cpu().detach().numpy().flatten().astype('float32').tofile(f_fte_dsp)
+
+    std_ml = np.mean(vars_ml)**0.5
+    std_dsp = np.mean(vars_dsp)**0.5
+    # TODO: for some reason these std are a little different from trarining, but stds calcdulated
+    # from f_fte_ml & f_fte_dsp files are as per traing.  So some sort of bug in std calcs
+    print(f"Ntested: {dataset.__len__():d} std_ml: {std_ml:5.2f} std_dsp: {std_dsp:5.2f}")
+    if args.fte_ml:
+        f_fte_ml.close()
+    if args.fte_dsp:
+        f_fte_dsp.close()
+
