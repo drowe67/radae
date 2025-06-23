@@ -149,8 +149,8 @@ else:
     if args.fte_dsp:
         f_fte_dsp = open(args.fte_dsp,"wb")
 
-    vars_ml = []
-    vars_dsp = []
+    ft_errors_ml = []
+    ft_errors_dsp = []
     for i in range(dataset.__len__()):
         Ry, delta = dataset.__getitem__(i)
         Ry = torch.reshape(Ry,(1,Ry.shape[0],Ry.shape[1]))
@@ -158,22 +158,19 @@ else:
         delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
         delta_hat = ft_nn(Ry)
         ft_error_ml = calc_ft_error_ml(logits = delta_hat,labels = delta, nmax = args.output_dim)
-        var_ml = torch.var(ft_error_ml).detach().cpu()
-        vars_ml.append(var_ml)
+        ft_errors_ml.append(ft_error_ml.detach().cpu().flatten())
         if args.fte_ml:
             ft_error_ml.cpu().detach().numpy().flatten().astype('float32').tofile(f_fte_ml)
 
         ft_error_dsp = calc_ft_error_dsp(xi = Ry,labels = delta, nmax = args.output_dim)
-        var_dsp = torch.var(ft_error_dsp).detach().cpu()
-        vars_dsp.append(var_dsp)
+        ft_errors_dsp.append(ft_error_dsp.detach().cpu().flatten())
         if args.fte_dsp:
             ft_error_dsp.cpu().detach().numpy().flatten().astype('float32').tofile(f_fte_dsp)
 
-    std_ml = np.mean(vars_ml)**0.5
-    std_dsp = np.mean(vars_dsp)**0.5
-    # TODO: for some reason these std are a little different from trarining, but stds calcdulated
-    # from f_fte_ml & f_fte_dsp files are as per traing.  So some sort of bug in std calcs
+    std_ml = np.std(ft_errors_ml)
+    std_dsp = np.std(ft_errors_dsp)
     print(f"Ntested: {dataset.__len__():d} std_ml: {std_ml:5.2f} std_dsp: {std_dsp:5.2f}")
+    
     if args.fte_ml:
         f_fte_ml.close()
     if args.fte_dsp:
