@@ -435,6 +435,17 @@ class RADAE(nn.Module):
             rx_sym = torch.ones(1, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
             rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
 
+        if self.correct_time_offset:
+            #print(self.correct_time_offset)
+            # Use vector multiply to create a shape (batch,Nc) 2D tensor
+            phase_offset = -self.correct_time_offset*torch.reshape(self.w,(1,self.Nc))
+            phase_offset = torch.reshape(phase_offset,(1,self.Nc,1))
+        
+            # change to (batch,Nc,timestep), as all time steps get the same phase offset
+            rx_sym = rx_sym.permute(0,2,1)
+            rx_sym = rx_sym * torch.exp(1j*phase_offset)
+            rx_sym = rx_sym.permute(0,2,1)
+
         # demap QPSK symbols
         rx_sym = torch.reshape(rx_sym, (1, -1, self.latent_dim//2))
         z_hat = torch.zeros(1,rx_sym.shape[1], self.latent_dim)
