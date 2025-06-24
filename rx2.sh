@@ -5,7 +5,7 @@
 OPUS=build/src
 PATH=${PATH}:${OPUS}
 
-features_out=features_rx_out.f32
+features_out=features_rx2_out.f32
 
 if [ $# -lt 3 ]; then
     echo "usage (write output to file):"

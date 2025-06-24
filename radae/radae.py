@@ -87,7 +87,8 @@ class RADAE(nn.Module):
                  timing_rand = False,
                  correct_time_offset = False,
                  tanh_clipper = False,
-                 frames_per_step = 4
+                 frames_per_step = 4,
+                 Nzmf = 3                      # number of latent vectors in a modem frame
                 ):
 
         super(RADAE, self).__init__()
@@ -151,7 +152,6 @@ class RADAE(nn.Module):
         else:
             Ts = 0.02
         Rs = 1/Ts                                       # OFDM QPSK symbol rate
-        Nzmf = 3                                        # number of latent vectors in a modem frame
         Nsmf = Nzmf*self.latent_dim // bps              # total number of QPSK symbols in a modem frame across all carriers
         
         Ns = int(Nzmf*self.Tz / Ts)                     # duration of "modem frame" in QPSK symbols
