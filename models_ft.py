@@ -43,8 +43,9 @@ class ftDNNXcorr(torch.nn.Module):
         x = self.conv(x.unsqueeze(-1).permute(0,3,2,1)).squeeze(1)
         x,_ = self.GRU(self.downsample(x.permute(0,2,1)))
         x = self.upsample(x).permute(0,2,1)
+        logits_softmax = torch.nn.Softmax(dim = 1)(x).permute(0,2,1)
 
-        return x
+        return logits_softmax
 
 # Dataloader
 

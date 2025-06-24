@@ -61,6 +61,7 @@ parser.add_argument('--stateful',  action='store_true', help='use stateful core 
 parser.add_argument('--xcorr_dimension', type=int, help='Dimension of Input cross-correlation (fine timing)',default = 160,required = False)
 parser.add_argument('--gru_dim', type=int, help='GRU Dimension (fine timing)',default = 64,required = False)
 parser.add_argument('--output_dim', type=int, help='Output dimension (fine timing)',default = 160,required = False)
+parser.add_argument('--write_Ry', type=str, default="", help='path to autocorrelation output feature file dim (Ncp+M) .f32 format in .f32 format')
 parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
 args = parser.parse_args()
@@ -84,9 +85,12 @@ model = RADAE(num_features, latent_dim, EbNodB=100, Nzmf = 1,
 checkpoint = torch.load(args.model_name, map_location='cpu', weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 model.core_decoder_statefull_load_state_dict()
+model.eval()
 
-# Load fine timning model
+# Load fine timing model
 ft_nn = ftDNNXcorr(args.xcorr_dimension, args.gru_dim, args.output_dim)
+ft_nn.load_state_dict(torch.load(args.ft_model_name,weights_only=True,map_location=torch.device('cpu')))
+ft_nn.eval()
 
 M = model.M
 Ncp = model.Ncp
@@ -124,11 +128,33 @@ if args.plots:
    input("hit[enter] to end.")
    plt.close('all')
 
+# Generate fine timing estimates
 
-# Acquisition - 1 sample resolution timing, coarse/fine freq offset estimation
+sequence_length = len(rx)//(Ncp+M) - 2
+Q = 8
+Ry = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
+for s in np.arange(Q-1,sequence_length):
+   for delta_hat in np.arange(Ncp+M):
+      st = (s+1)*(Ncp+M) + delta_hat
+      y1 = rx[st-M:st-M+Ncp]
+      y2 = rx[st:st+Ncp]
+      num = np.abs(np.dot(y1, np.conj(y2)))
+      den = np.abs((np.dot(y1, np.conj(y1)) + np.dot(y2, np.conj(y2))))
+      Ry[s,delta_hat] = num/den
+Ry_smooth = np.zeros((sequence_length,Ncp+M),dtype=np.float32)
+for s in np.arange(sequence_length):
+   Ry_smooth[s,:] = np.mean(Ry[s:s+Q,:],axis=0)
+print(Ry_smooth.shape)
+if len(args.write_Ry):
+   Ry_smooth.flatten().tofile(args.write_Ry)
+Ry_smooth = torch.reshape(torch.tensor(Ry_smooth),(1,Ry_smooth.shape[0],Ry_smooth.shape[1]))
 
+logits_softmax = ft_nn(Ry_smooth)
+delta_hat = torch.argmax(logits_softmax, 2)
+print(delta_hat)
 
-# run receiver
+# Run receiver
+      
 rx = torch.tensor(rx, dtype=torch.complex64)
 model.to(device)
 rx = rx.to(device)

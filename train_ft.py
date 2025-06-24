@@ -48,8 +48,7 @@ if type(args.initial_checkpoint) != type(None):
 
 dataset = ftDNNDataloader(args.features,args.delta,args.output_dim,args.sequence_length)
 
-def loss_custom(logits,labels,choice = 'default',nmax = 192,q = 0.7):
-    logits_softmax = torch.nn.Softmax(dim = 1)(logits).permute(0,2,1)
+def loss_custom(logits_softmax,labels,choice = 'default',nmax = 192,q = 0.7):
     labels_one_hot = torch.nn.functional.one_hot(labels.long(),nmax)
 
     if choice == 'default':
@@ -66,9 +65,9 @@ def loss_custom(logits,labels,choice = 'default',nmax = 192,q = 0.7):
 
 # for timing estimation in OFDM we don't need to have perfect timing, so measure
 # accuracy in terms of std dev of timing est error in samples
-def calc_ft_error_ml(logits,labels,nmax = 192):
-    logits_softmax = torch.nn.Softmax(dim = 1)(logits).permute(0,2,1)
-    delta_hat = torch.argmax(logits_softmax, 2)
+def calc_ft_error_ml(delta_hat,labels,nmax = 192):
+    #logits_softmax = torch.nn.Softmax(dim = 1)(logits).permute(0,2,1)
+    #delta_hat = torch.argmax(logits_softmax, 2)
     # timing est is modulo nmax, e.g. for nmax=160
     # delta delta_hat error
     # 0     159       -1
@@ -114,9 +113,10 @@ if len(args.inference) == 0:
         with tqdm.tqdm(dataloader) as train_epoch:
             for i, (Ry, delta) in enumerate(train_epoch):
                 delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
-                delta_hat = ft_nn(Ry)
-                loss = loss_custom(logits = delta_hat,labels = delta,choice = args.choice_cel,nmax = args.output_dim)
-                ft_error_ml = calc_ft_error_ml(logits = delta_hat,labels = delta, nmax = args.output_dim)
+                logits_softmax = ft_nn(Ry)
+                loss = loss_custom(logits_softmax = logits_softmax,labels = delta,choice = args.choice_cel,nmax = args.output_dim)
+                delta_hat = torch.argmax(logits_softmax, 2)
+                ft_error_ml = calc_ft_error_ml(delta_hat = delta_hat,labels = delta, nmax = args.output_dim)
                 var_ml = torch.var(ft_error_ml).detach()
 
                 ft_error_dsp = calc_ft_error_dsp(xi = Ry,labels = delta, nmax = args.output_dim)
@@ -156,8 +156,10 @@ else:
         Ry = torch.reshape(Ry,(1,Ry.shape[0],Ry.shape[1]))
         delta = torch.reshape(delta,(1,-1))
         delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
-        delta_hat = ft_nn(Ry)
-        ft_error_ml = calc_ft_error_ml(logits = delta_hat,labels = delta, nmax = args.output_dim)
+        logits_softmax = ft_nn(Ry)
+        delta_hat = torch.argmax(logits_softmax, 2)
+        print(delta_hat)
+        ft_error_ml = calc_ft_error_ml(delta_hat = delta_hat,labels = delta, nmax = args.output_dim)
         ft_errors_ml.append(ft_error_ml.detach().cpu().flatten())
         if args.fte_ml:
             ft_error_ml.cpu().detach().numpy().flatten().astype('float32').tofile(f_fte_ml)

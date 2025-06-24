@@ -36,6 +36,9 @@ output_speech=$4
 shift; shift; shift; shift
 
 python3 ./rx2.py ${model} ${model_ft} ${input_iqf32} ${features_out} "$@"
+if [ $? -ne 0 ]; then
+  exit 1
+fi
 if [ $output_speech == "-" ]; then
     tmp=$(mktemp)
     lpcnet_demo -fargan-synthesis ${features_out} ${tmp}
