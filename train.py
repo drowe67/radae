@@ -46,10 +46,12 @@ parser.add_argument('features', type=str, help='path to feature file in .f32 for
 parser.add_argument('output', type=str, help='path to output folder')
 parser.add_argument('--cuda-visible-devices', type=str, help="comma separates list of cuda visible device indices, default: ''", default="")
 parser.add_argument('--latent-dim', type=int, help="number of symbols produced by encoder, default: 80", default=80)
+parser.add_argument('--frames_per_step', type=int, help="number of feat vecs per encoder/decoder vec, default: 4", default=4)
 parser.add_argument('--EbNodB', type=float, default=0, help='BPSK Eb/No in dB')
 parser.add_argument('--range_EbNo', action='store_true', help='Use a range of Eb/No during training')
 parser.add_argument('--range_EbNo_start', type=float, default=-6.0, help='starting value for Eb/No during training')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath file, rate Rs time steps by Nc carriers .f32 format')
+parser.add_argument('--h_complex', action='store_true', help='use complex64 format samples in h_file (default mag only float32)')
 parser.add_argument('--g_file', type=str, default="", help='path to rate Fs multipath file, ...G1G2... .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--freq_rand', action='store_true', help='random phase and freq offset for each sequence')
@@ -59,6 +61,7 @@ parser.add_argument('--pilots', action='store_true', help='insert pilot symbols'
 parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ data symbols using classical DSP')
 parser.add_argument('--eq_ls', action='store_true', help='Use per carrier least squares EQ (default mean6)')
 parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0)')
+parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
 
 training_group = parser.add_argument_group(title="training parameters")
 training_group.add_argument('--batch-size', type=int, help="batch size, default: 32", default=32)
@@ -71,6 +74,9 @@ training_group.add_argument('--initial-checkpoint', type=str, help='initial chec
 training_group.add_argument('--plot_loss', action='store_true', help='plot loss versus epoch as we train')
 training_group.add_argument('--plot_EqNo', type=str, default="", help='plot loss versus Eq/No for final epoch')
 training_group.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
+training_group.add_argument('--txbpf', action='store_true', help='train with Tx BPF')
+parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
+parser.add_argument('--timing_rand', action='store_true', help='random timeshift of [-1.+1] ms')
 
 args = parser.parse_args()
 
@@ -123,14 +129,15 @@ model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo,
               rate_Fs = args.rate_Fs,
               range_EbNo_start=args.range_EbNo_start, 
               freq_rand=args.freq_rand,gain_rand=args.gain_rand, bottleneck=args.bottleneck,
-              pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp)
+              pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp,
+              txbpf_en = args.txbpf, pilots2=args.pilots2,timing_rand=args.timing_rand,frames_per_step=args.frames_per_step)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
     checkpoint = torch.load(args.initial_checkpoint, map_location='cpu', weights_only=True)
     model.load_state_dict(checkpoint['state_dict'], strict=False)
 
-checkpoint['state_dict']    = model.state_dict()
+checkpoint['state_dict'] = model.state_dict()
 
 # dataloader
 Nc = model.Nc
@@ -139,7 +146,11 @@ G_sequence_length = model.num_timesteps_at_rate_Fs(H_sequence_length)
 
 checkpoint['dataset_args'] = (feature_file, sequence_length, H_sequence_length, Nc, G_sequence_length)
 checkpoint['dataset_kwargs'] = {'enc_stride': model.enc_stride}
-dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file, g_file = args.g_file, auxdata=args.auxdata)
+if args.h_complex:
+    h_dtype = np.complex64
+else:
+    h_dtype = np.float32
+dataset = RADAEDataset(*checkpoint['dataset_args'], h_file = args.h_file, g_file = args.g_file, auxdata=args.auxdata,  h_dtype = h_dtype)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
 # optimizer
@@ -148,6 +159,10 @@ optimizer = torch.optim.Adam(params, lr=lr, betas=adam_betas, eps=adam_eps)
 
 # learning rate scheduler
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda x : 1 / (1 + lr_decay_factor * x))
+
+# optionally output z_hat from channel (e.g. for training other networks)
+if (args.write_latent):
+    f_z_hat = open(args.write_latent,"wb")
 
 if __name__ == '__main__':
 
@@ -174,6 +189,8 @@ if __name__ == '__main__':
                     H = H.to(device)
                     G = G.to(device)
                     output = model(features,H,G)
+                    # note just first 20 voice features used for loss curves - ignoring auxdata if present
+                    # allows meaningful comparisons with/without auxdata
                     loss_by_batch = distortion_loss(features[..., :20], output["features_hat"][..., :20])
                     total_loss = torch.mean(loss_by_batch)
                     
@@ -194,6 +211,11 @@ if __name__ == '__main__':
 
                     running_total_loss += float(total_loss.detach().cpu())
                     
+                    # optionally write real valued latent vectors for 
+                    if len(args.write_latent):
+                        z_hat = output["z_hat"].cpu().detach().numpy().flatten().astype('float32')
+                        z_hat.tofile(f_z_hat)
+
                     if (i + 1) % log_interval == 0:
                         current_loss = (running_total_loss - previous_total_loss) / log_interval
                         tepoch.set_postfix(
@@ -201,6 +223,9 @@ if __name__ == '__main__':
                             total_loss=running_total_loss / (i + 1),
                         )
                         previous_total_loss = running_total_loss
+
+        if len(args.write_latent):
+            f_z_hat.close()
 
         # Plot loss against EqNodB for final epoch, using log of loss and Eq/No for
         # each sequence.  We group losses into 1dB Eq/No bins, kind of like a histogram.

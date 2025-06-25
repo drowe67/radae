@@ -44,6 +44,7 @@ parser.add_argument('model_name', type=str, help='path to model in .pth format')
 parser.add_argument('features', type=str, help='path to input feature file in .f32 format')
 parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
+parser.add_argument('--frames_per_step', type=int, help="number of feat vecs per encoder/decoder vec, default: 4", default=4)
 parser.add_argument('--cuda-visible-devices', type=str, help="set to 0 to run using GPU rather than CPU", default="")
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
 parser.add_argument('--EbNodB', type=float, default=100, help='BPSK Eb/No in dB')
@@ -51,6 +52,7 @@ parser.add_argument('--passthru', action='store_true', help='copy features in to
 parser.add_argument('--mp_test', action='store_true', help='Fixed notch test multipath channel (rate Rs)')
 parser.add_argument('--ber_test', action='store_true', help='send random PSK bits through channel model, measure BER')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs multipath samples, rate Rs time steps by Nc carriers .f32 format')
+parser.add_argument('--h_complex', action='store_true', help='use complex64 format samples in h_file (default mag only float32)')
 parser.add_argument('--g_file', type=str, default="", help='path to rate Fs Doppler spread samples, ...G1G2G1G2... .f32 format')
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--write_rx', type=str, default="", help='path to output file of rate Fs rx samples in ..IQIQ...f32 format')
@@ -75,6 +77,10 @@ parser.add_argument('--correct_freq_offset', action='store_true', help='correct 
 parser.add_argument('--sine_amp', type=float, default=0.0, help='single freq interferer level (default zero)')
 parser.add_argument('--sine_freq', type=float, default=1000.0, help='single freq interferer freq (default 1000Hz)')
 parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
+parser.add_argument('--txbpf', action='store_true', help='inject auxillary data symbol')
+parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
+parser.add_argument('--correct_time_offset', type=int, default=0, help='introduces a delay (or advance if -ve) in samples, applied in freq domain (default 0)')
+parser.add_argument('--tanh_clipper', action='store_true', help='use tanh magnitude clippier (default hard clipper)')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -101,7 +107,9 @@ model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rat
               phase_offset=args.phase_offset, freq_offset=args.freq_offset, df_dt=args.df_dt,
               gain=args.gain, pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls,
               cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, 
-              bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset)
+              bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset, txbpf_en = args.txbpf,
+              pilots2=args.pilots2, correct_time_offset=args.correct_time_offset, tanh_clipper=args.tanh_clipper,
+              frames_per_step=args.frames_per_step)
 checkpoint = torch.load(args.model_name, map_location='cpu',weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
@@ -113,13 +121,7 @@ nb_features_rounded = model.num_10ms_times_steps_rounded_to_modem_frames(feature
 features = features_in[:,:nb_features_rounded,:]
 features = features[:, :, :num_used_features]
 if args.auxdata:
-   #aux_symb =  1.0 - 2.0*(np.random.rand(1,features.shape[1],1) > 0.5)
    aux_symb =  -np.ones((1,features.shape[1],1),dtype=np.float32)
-   symb_repeat = 4
-   for i in range(1,symb_repeat):
-      aux_symb[0,i::symb_repeat,:] = aux_symb[0,::symb_repeat,:]
-   #print(features.dtype, aux_symb.dtype)
-   #quit()
    features = np.concatenate([features, aux_symb],axis=2)
 features = torch.tensor(features)
 print(f"Processing: {nb_features_rounded} feature vectors")
@@ -144,8 +146,11 @@ if args.mp_test:
 
 # user supplied rate Rs multipath model, sequence of H matrices
 if args.h_file:
-   H = np.reshape(np.fromfile(args.h_file, dtype=np.float32), (1, -1, Nc))
-   #print(H.shape, num_timesteps_at_rate_Rs)
+   if args.h_complex:
+      h_dtype = np.complex64
+   else:
+      h_dtype = np.float32
+   H = np.reshape(np.fromfile(args.h_file, dtype=h_dtype), (1, -1, Nc))
    if H.shape[1] < num_timesteps_at_rate_Rs:
       print("Multipath H file too short")
       quit()
@@ -233,7 +238,7 @@ if __name__ == '__main__':
    features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
    features_hat.tofile(args.features_hat)
 
-   loss = distortion_loss(features,output['features_hat']).cpu().detach().numpy()[0]
+   loss = distortion_loss(features[..., :20],output['features_hat'][..., :20]).cpu().detach().numpy()[0]
    if args.auxdata:
       x = features[..., 20:21]*output["features_hat"][..., 20:21]
       x = torch.flatten(x)
