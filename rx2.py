@@ -32,7 +32,7 @@
 */
 """
 
-import os
+import os,sys
 import argparse
 import numpy as np
 from matplotlib import pyplot as plt
@@ -128,7 +128,8 @@ if args.plots:
    input("hit[enter] to end.")
    plt.close('all')
 
-# Generate fine timing estimates
+# Generate fine timing estimates - as a first pass for entire sample, as we don't
+# have a stateful fine tinming estimator
 
 sequence_length = len(rx)//(Ncp+M) - 2
 Q = 8
@@ -150,8 +151,27 @@ if len(args.write_Ry):
 Ry_smooth = torch.reshape(torch.tensor(Ry_smooth),(1,Ry_smooth.shape[0],Ry_smooth.shape[1]))
 
 logits_softmax = ft_nn(Ry_smooth)
-delta_hat = torch.argmax(logits_softmax, 2)
-print(delta_hat)
+delta_hat = torch.argmax(logits_softmax, 2).cpu().detach().numpy().flatten().astype('float32')
+
+# Use average of first 1 second of FT est to obtain ideal sampling point, avoid
+# first few symbols as they appear to be start up transients. This is the location
+# of the first sample after the CP (see hf3 doc figure)
+s = round(np.mean(delta_hat[10:50]-M))
+print(f"sampling instant: {s:d}")
+# this emulates frame sync for now
+if s < -Ncp:
+   s += Ncp+M
+print(rx.shape, rx.dtype)
+len_rx = len(rx)
+# concat rx vector with zeros at either end so we can extract an integer number of symbols
+# despite fine timing offset
+rx = np.concatenate((np.zeros(Ncp+M,dtype=np.complex64),rx,np.zeros(Ncp+M,dtype=np.complex64)))
+print(rx.shape,rx.dtype)
+# extract a vector corrected for fine timing est
+rx = rx[Ncp+M+s:Ncp+M+s+len_rx]
+# dummy frame sync
+#rx = rx[(Ncp+M):]
+#sys.exit(1)
 
 # Run receiver
       

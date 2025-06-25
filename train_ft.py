@@ -158,7 +158,6 @@ else:
         delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
         logits_softmax = ft_nn(Ry)
         delta_hat = torch.argmax(logits_softmax, 2)
-        print(delta_hat)
         ft_error_ml = calc_ft_error_ml(delta_hat = delta_hat,labels = delta, nmax = args.output_dim)
         ft_errors_ml.append(ft_error_ml.detach().cpu().flatten())
         if args.fte_ml:
