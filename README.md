@@ -12,13 +12,11 @@ This repo is intended to support the authors experimental work, with just enough
 1. Inference section
 1. If you would like to transmit/receive test files over HF radios: Over the Air/Over the Cable (OTA/OTC)
 
-# Attributions and License
+# Reference and License
 
-This software was derived from RDOVAE Python source (Github xiph/opus.git opus-ng branch opus/dnn/torch/rdovae):
+D. Rowe, J.-M. Valin, [RADE: A Neural Codec for Transmitting Speech over HF Radio Channels](https://arxiv.org/abs/2505.06671), arXiv:2505.06671, 2025. 
 
-J.-M. Valin, J. Büthe, A. Mustafa, [Low-Bitrate Redundancy Coding of Speech Using a Rate-Distortion-Optimized Variational Autoencoder](https://jmvalin.ca/papers/valin_dred.pdf), *Proc. ICASSP*, arXiv:2212.04453, 2023. ([blog post](https://www.amazon.science/blog/neural-encoding-enables-more-efficient-recovery-of-lost-audio-packets))
-
-The RDOVAE derived Python source code is released under the two-clause BSD license.
+The RADE source code is released under the two-clause BSD license.
 
 # Files
 
@@ -51,7 +49,6 @@ The RDOVAE derived Python source code is released under the two-clause BSD licen
 | stateful_encoder.[py,sh] | Inference test that compares stateful to vanilla encoder |
 | radae_tx.[py,sh] | streaming RADAE encoder and helper script |
 | radae_rx.[py,sh] | streaming RADAE decoder and helper script |
-| resource_est.py | WIP estimate CPU/memory resources |
 | radae_base.py | Shared ML code between models |
 | radae/bbfm.py | Baseband FM PyTorch model |
 | train_bbfm.py | Training for BBFM model |

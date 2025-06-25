@@ -185,7 +185,7 @@ class CoreEncoder(nn.Module):
         self.z_dense = nn.Linear(864, self.output_dim)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"encoder: {nb_params} weights", file=sys.stderr)
+        #print(f"encoder: {nb_params} weights", file=sys.stderr)
 
         # initialize weights
         self.apply(init_weights)
@@ -251,7 +251,7 @@ class CoreEncoderStatefull(nn.Module):
         self.z_dense = nn.Linear(864, self.output_dim)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"encoder: {nb_params} weights", file=sys.stderr)
+        #print(f"encoder: {nb_params} weights", file=sys.stderr)
 
         # initialize weights
         self.apply(init_weights)
@@ -325,7 +325,7 @@ class CoreDecoder(nn.Module):
         self.glu5 = GLU(96)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"decoder: {nb_params} weights", file=sys.stderr)
+        #print(f"decoder: {nb_params} weights", file=sys.stderr)
         # initialize weights
         self.apply(init_weights)
 
@@ -391,7 +391,7 @@ class CoreDecoderStatefull(nn.Module):
         self.glu5 = GLU(96)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"decoder: {nb_params} weights", file=sys.stderr)
+        #print(f"decoder: {nb_params} weights", file=sys.stderr)
         # initialize weights
         self.apply(init_weights)
 
