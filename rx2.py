@@ -54,7 +54,7 @@ parser.add_argument('--bottleneck', type=int, default=3, help='1-1D rate Rs, 2-2
 parser.add_argument('--cp', type=float, default=0.004, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0.04)')
 parser.add_argument('--no_bpf', action='store_false', dest='bpf', help='disable BPF')
 parser.add_argument('--freq_offset', type=float, help='insert a frequency offset, e.g. for manual coarse freq estimation')
-parser.add_argument('--time_offset', type=int, default=-16, help='insert a sampling time offset in samples')
+parser.add_argument('--time_offset', type=int, default=-16, help='time domain sampling time offset in samples')
 parser.add_argument('--correct_time_offset', type=int, default=-16, help='introduces a delay (or advance if -ve) in samples, applied in freq domain (default 0)')
 parser.add_argument('--plots', action='store_true', help='display various plots')
 parser.add_argument('--acq_test',  action='store_true', help='Acquisition test mode')
@@ -66,6 +66,8 @@ parser.add_argument('--output_dim', type=int, help='Output dimension (fine timin
 parser.add_argument('--write_Ry', type=str, default="", help='path to autocorrelation output feature file dim (Ncp+M) .f32 format in .f32 format')
 parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
+parser.add_argument('--pad_samples', type=int, default=0, help='Pad input with samples to simulate different timing offsets in rx signal')
+parser.add_argument('--gain', type=float, default=1.0, help='manual gain control')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -107,8 +109,11 @@ Nc = model.Nc
 w = model.w.cpu().detach().numpy()
 
 # load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
-rx = np.fromfile(args.rx, dtype=np.csingle)
-print(f"samples: {len(rx):d} Nmf: {Nmf:d} modem frames: {len(rx)/Nmf}")
+rx = np.fromfile(args.rx, dtype=np.csingle)*args.gain
+# ensure an integer number of frames
+rx = np.concatenate((np.zeros(args.pad_samples, dtype=np.complex64),rx))
+rx = rx[:Nmf*(len(rx)//Nmf)]
+print(f"samples: {len(rx):d} Nmf: {Nmf:d} modem frames: {len(rx)//Nmf}")
 
 # TODO: fix contrast of spectrogram - it's not very useful
 if args.plots:
@@ -165,9 +170,6 @@ delta_hat = torch.argmax(logits_softmax, 2).cpu().detach().numpy().flatten().ast
 # of the first sample after the CP (see hf3 doc figure)
 s = round(np.mean(delta_hat[10:50]-M))
 print(f"sampling instant: {s:d}")
-# this emulates frame sync for now
-#if s < -Ncp:
-#   s += Ncp+M
 len_rx = len(rx)
 # concat rx vector with zeros at either end so we can extract an integer number of symbols
 # despite fine timing offset
