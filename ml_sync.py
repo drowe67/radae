@@ -29,6 +29,7 @@ import torch
 from torch import nn
 import numpy as np
 import argparse
+from models_sync import FrameSyncNet
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self,
@@ -68,24 +69,7 @@ latent_dim = args.latent_dim
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 print(f"Using {device} device")
- 
-class FrameSyncNet(nn.Module):
-    def __init__(self, input_dim):
-        w1 = 64
-        super().__init__()
-        self.linear_stack = nn.Sequential(
-            nn.Linear(input_dim, w1),
-            nn.ReLU(),
-            nn.Linear(w1, w1),
-            nn.ReLU(),
-            nn.Linear(w1, 1),
-            nn.Sigmoid()
-       )
-
-    def forward(self, x):
-        y = self.linear_stack(x)
-        return y
-    
+     
 model = FrameSyncNet(latent_dim).to(device)
 print(model)
 num_weights = sum(p.numel() for p in model.parameters())
@@ -93,7 +77,7 @@ print(f"weights: {num_weights}")
 
 if len(args.inference) == 0:
     # training mode
-    dataset = Dataset(args.z_hat_file, count=args.count)
+    dataset = Dataset(args.z_hat_file, count=args.count, latent_dim=latent_dim)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size)
     loss_fn = nn.BCELoss()  # binary cross entropy
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -125,7 +109,7 @@ else:
     print(f"Loading model from: {args.inference}")
     model.load_state_dict(torch.load(args.inference,weights_only=True))
     model.eval()
-    dataset = Dataset(args.z_hat_file, count=args.count+args.start)
+    dataset = Dataset(args.z_hat_file, count=args.count+args.start, latent_dim=latent_dim)
     sum_acc = 0.0
     if args.count == -1:
         count = dataset.__len__()

@@ -411,7 +411,7 @@ class RADAE(nn.Module):
         return rx_sym_pilots
     
     # rate Fs receiver
-    def receiver(self, rx):
+    def receiver(self, rx, run_decoder=True):
         Ns = self.Ns
         if self.pilots:
             Ns = Ns + 1
@@ -454,17 +454,20 @@ class RADAE(nn.Module):
         z_hat[:,:,::2] = rx_sym.real
         z_hat[:,:,1::2] = rx_sym.imag
         
-        if self.stateful_decoder:
-            print("stateful!", file=sys.stderr)
-            features_hat = torch.empty(1,0,self.feature_dim)
-            for i in range(z_hat.shape[1]):
-                features_hat = torch.cat([features_hat, self.core_decoder_statefull(z_hat[:,i:i+1,:])],dim=1)
-        else:
-            features_hat = self.core_decoder(z_hat)
-        print(features_hat.shape,z_hat.shape, file=sys.stderr)
+        if run_decoder:
+            if self.stateful_decoder:
+                print("stateful!", file=sys.stderr)
+                features_hat = torch.empty(1,0,self.feature_dim)
+                for i in range(z_hat.shape[1]):
+                    features_hat = torch.cat([features_hat, self.core_decoder_statefull(z_hat[:,i:i+1,:])],dim=1)
+            else:
+                features_hat = self.core_decoder(z_hat)
+            print(features_hat.shape,z_hat.shape, file=sys.stderr)
         
-        return features_hat,z_hat
-    
+            return features_hat,z_hat
+        else:
+            return z_hat
+           
     # Estimate SNR given a vector r of M received pilot samples
     # rate_Fs/time domain, only works on 1D vectors (i.e. can broadcast or do multiple estimates)
     # unfortunately this doesn't work for multipath channels (good results for AWGN)
