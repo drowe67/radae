@@ -344,7 +344,7 @@ class transmitter_one():
 
 # Single modem frame streaming receiver. TODO: is there a better way to pass a bunch of constants around?
 class receiver_one():
-   def __init__(self,latent_dim,Fs,M,Ncp,Wfwd,Nc,Ns,w,P,bottleneck,pilot_gain,time_offset,coarse_mag):
+   def __init__(self,latent_dim,Fs,M,Ncp,Wfwd,Nc,Ns,w,P,Pend,bottleneck,pilot_gain,time_offset,coarse_mag):
       self.latent_dim = latent_dim
       self.Fs = Fs
       self.M = M
@@ -354,6 +354,7 @@ class receiver_one():
       self.Ns = Ns
       self.w = w
       self.P = P
+      self.Pend = Pend
       self.bottleneck = bottleneck
       self.pilot_gain = pilot_gain
       self.time_offset = time_offset
@@ -402,7 +403,7 @@ class receiver_one():
       rx_phase = torch.angle(rx_pilots[0,:])
       Rcn_hat = Pcn_hat * torch.exp(-1j*rx_phase)
       S1 = torch.sum(torch.abs(Pcn_hat)**2)
-      S2 = torch.sum(torch.abs(Rcn_hat.imag)**2)   
+      S2 = torch.sum(torch.abs(Rcn_hat.imag)**2) + 1E-12 
       snr_est = S1/(2*S2) - 1
       # remove occasional illegal values
       if snr_est <= 0:
@@ -446,7 +447,7 @@ class receiver_one():
       return rx_sym_pilots
    
    #  One frame version of rate Fs receiver for streaming implementation
-   def receiver_one(self, rx):
+   def receiver_one(self, rx, endofover):
       Ns = self.Ns + 1
 
       # we expect: Pilots - data symbols - Pilots
@@ -462,20 +463,31 @@ class receiver_one():
       # DFT to transform M time domain samples to Nc carriers
       rx_sym = torch.matmul(rx_dash, self.Wfwd)
       
-      # Pilot based EQ
       rx_sym_pilots = torch.reshape(rx_sym,(1, num_modem_frames, num_timesteps_at_rate_Rs, self.Nc))
-      rx_sym_pilots = self.do_pilot_eq_one(num_modem_frames,rx_sym_pilots)
-      rx_sym = torch.ones(1, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
-      rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
+      if not endofover:
+         # Pilot based least squares EQ
+         rx_sym_pilots = self.do_pilot_eq_one(num_modem_frames,rx_sym_pilots)
+         rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
+         rx_sym = torch.reshape(rx_sym, (1, -1, self.latent_dim//2))
+         z_hat = torch.zeros(1,rx_sym.shape[1], self.latent_dim)
 
-      # demap QPSK symbols
-      rx_sym = torch.reshape(rx_sym, (1, -1, self.latent_dim//2))
-      z_hat = torch.zeros(1,rx_sym.shape[1], self.latent_dim)
+         z_hat[:,:,::2] = rx_sym.real
+         z_hat[:,:,1::2] = rx_sym.imag
+      else:
+         # Simpler (but lower performance) EQ as average of pilots, as LS set up for PDDDDP, rather than out PEDDDE
+         for c in range(self.Nc):
+            phase_offset = torch.angle(rx_sym_pilots[0,0,0,c]/self.P[c] +
+                           rx_sym_pilots[0,0,1,c]/self.Pend[c] +
+                           rx_sym_pilots[0,0,Ns,c]/self.Pend[c])
+            rx_sym_pilots[:,:,:Ns+1,c] *= torch.exp(-1j*phase_offset)
+         rx_sym = torch.reshape(rx_sym_pilots[:,:,2:Ns,:],(1,(Ns-2)*self.Nc))
+         z_hat = torch.zeros(1,(Ns-2)*self.Nc*2)
 
-      z_hat[:,:,::2] = rx_sym.real
-      z_hat[:,:,1::2] = rx_sym.imag
-      
+         z_hat[:,::2] = rx_sym.real
+         z_hat[:,1::2] = rx_sym.imag
+ 
       return z_hat
+
 
 # Generate root raised cosine (Root Nyquist) filter coefficients
 # thanks http://www.dsplog.com/db-install/wp-content/uploads/2008/05/raised_cosine_filter.m
