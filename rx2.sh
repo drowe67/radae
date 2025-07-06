@@ -5,9 +5,9 @@
 OPUS=build/src
 PATH=${PATH}:${OPUS}
 
-features_out=$(mktemp)
+features_out=features_out_rx2.f32
 
-if [ $# -lt 3 ]; then
+if [ $# -lt 4 ]; then
     echo "usage (write output to file):"
     echo "  ./rx2.sh model model_ft model_sync rx.iqf32 out.wav [optional rx.py args]"
     echo "usage (play output with aplay):"
