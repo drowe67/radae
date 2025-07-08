@@ -578,6 +578,24 @@ class RADAE(nn.Module):
                     tx = torch.tanh(torch.abs(tx))*torch.exp(1j*torch.angle(tx))
                 else:
                     tx = torch.exp(1j*torch.angle(tx))
+                if self.txbpf_en:
+                    phase_vec = torch.exp(-1j*self.alpha*torch.arange(0,tx.shape[1],device=tx.device))
+                    tx = tx*phase_vec
+
+                    tx = torch.concat((torch.zeros((num_batches,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,self.txbpf_delay),device=tx.device)),dim=1)
+                    tx = self.txbpf_conv(tx)
+                    tx = torch.exp(1j*torch.angle(tx))
+
+                    tx = torch.concat((torch.zeros((num_batches,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,self.txbpf_delay),device=tx.device)),dim=1)
+                    tx = self.txbpf_conv(tx)
+                    tx = torch.exp(1j*torch.angle(tx))
+                    
+                    tx = torch.concat((torch.zeros((num_batches,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,self.txbpf_delay),device=tx.device)),dim=1)
+                    tx = self.txbpf_conv(tx)
+                    tx = torch.exp(1j*torch.angle(tx))
+                    
+                    tx = tx*torch.conj(phase_vec)
+
             tx_before_channel = tx
 
             # rate Fs multipath model

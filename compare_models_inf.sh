@@ -264,6 +264,22 @@ if [ $plot == "250508_inf" ]; then
                            "250508 AWGN fs=4 d=40 Nc=10 SE 6" "250508 MPP d=40 Nc=10 SE 6")
 fi
 
+# 250515 is the Nc=10 SE 3 waveform we have been using for ML sync experiments, 250707 has tx BPG/clippers in loop (--txpbf), but doesn't 
+# support CP
+if [ $plot == "250708_inf" ]; then
+  run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls
+  run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --g_file g_mpp.f32
+  run_model 250515 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata 
+  run_model 250515 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --g_file g_mpp.f32
+  run_model 250707 40 200 awgn 0 --txbpf --auxdata 
+  run_model 250707 40 200 mpp 0 --txbpf --auxdata --g_file g_mpp.f32
+
+  model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250515_awgn_0Hz 250515_mpp_0Hz 250707_awgn_0Hz 250707_mpp_0Hz'
+  declare -a model_legend=("model19_check3 AWGN fs=4 d=80 Nc=30" "model19_check3 MPP d=80 Nc=30" \
+                           "250515 AWGN fs=4 d=40 Nc=10 SE 3" "250515 MPP d=40 Nc=10 SE 3" \
+                           "250707 AWGN fs=4 d=40 Nc=10 SE 3" "250707 MPP d=40 Nc=10 SE 3")
+fi
+
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
 vargs=""
 i=0
