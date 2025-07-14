@@ -299,10 +299,14 @@ if __name__ == '__main__':
                         n_errors = int(torch.sum(x < 0))
                         n_bits = int(torch.numel(x))
                         BER = n_errors/n_bits
+                        PAPRdB = float(10.0*torch.log10(torch.mean(output["PAPR"])))
+                        #print(torch.mean(output["PAPR"]),PAPRdB)
+                        #quit()
                         tepoch.set_postfix(
                             current_loss=current_loss,
                             total_loss=running_total_loss / (i + 1),
-                            BER=BER
+                            BER=BER,
+                            PAPRdB=PAPRdB
                         )
                     else:
                         tepoch.set_postfix(

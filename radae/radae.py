@@ -700,13 +700,22 @@ class RADAE(nn.Module):
                     
                     tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
                     tx = self.txbpf_conv(tx)
-                    tx = torch.exp(1j*torch.angle(tx))
+                    #tx = torch.exp(1j*torch.angle(tx))
                     
                     tx = tx*torch.conj(phase_vec)
                     tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M))
     
                 tx_before_channel = tx
-                # DFT to transform M time domain samples to Nc carriers
+
+                # find per batch PAPR
+                tx_before_channel = torch.reshape(tx_before_channel,(num_batches, num_timesteps_at_rate_Rs*self.M))
+                peak_power, indices = torch.max(torch.abs(tx_before_channel)**2,dim=1)
+                av_power = torch.mean(torch.abs(tx_before_channel)**2,dim=1)
+                PAPR = peak_power/av_power
+                #print(PAPR)
+                #print(torch.mean(PAPR))
+                #quit()
+                # DFT to transform M time domain samples to Nc freq domain samples
                 tx_sym = torch.matmul(tx, self.Wfwd)
                     
             if self.phase_offset:
@@ -800,5 +809,6 @@ class RADAE(nn.Module):
             "tx"     : tx_before_channel,
             "rx"     : rx,
             "sigma"  : sigma.cpu().numpy(),
-            "EbNodB" : EbNodB.cpu().numpy()
+            "EbNodB" : EbNodB.cpu().numpy(),
+            "PAPR"   : PAPR
        }
