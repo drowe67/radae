@@ -4,7 +4,7 @@
 1;
 pkg load statistics signal;
 
-function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
+function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='',tx_bpf=0)
     if length(epslatex)
         [textfontsize linewidth] = set_fonts(20);
     end
@@ -38,31 +38,36 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
         rx=load_f32(rx_fn,1); 
         rx=rx(1:2:end)+j*rx(2:2:end); 
         
-        tx_bpf = 0;
         if tx_bpf
           lpf=fir1(100,900/4000);
           w = 2*pi*1500/8000;
           N=length(rx);
           lo = exp(j*(0:N-1)*w)';
           rx = filter(lpf,1,rx.*lo).*conj(lo);
-          ind = find(abs(rx) > 1);
-          rx(ind) = exp(j*angle(rx(ind)));
         end
+        rms = sqrt(mean(abs(rx).^2));
         figure(5); clf; plot(rx); title('rate Fs Scatter (IQ)'); mx = max(abs(rx))*1.5; axis([-mx mx -mx mx]);
-        figure(6); clf; plot(real(rx)); xlabel('Time (samples)'); ylabel('rx');
+        hold on; theta=0:0.1:2*pi; plot(rms*cos(theta),rms*sin(theta),'g-'); hold off;
+        figure(6); clf; plot(real(rx));  xlabel('Time (samples)'); ylabel('rx');
+        hold on; plot([0 length(rx)],[rms rms],'g-'); plot([0 length(rx)],[-rms -rms],'g-'); hold off;
         figure(7); clf; plot_specgram(rx, Fs=8000, 0, 3000);
+        
+        % Spectrum plot
+        Fs = 8000; y = pwelch(rx,[],[],1024,Fs); y_dB = 10*log10(y);
+        mx = max(y_dB); mx = ceil(mx/10)*10;
+        figure(8); clf; 
+        plot((0:length(y)-1)*Fs/length(y),y_dB-mx);
+        axis([0 3000 -40 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
         if length(epslatex)
           print_eps(sprintf("%s_specgram.eps",epslatex),"-S300,300");
         end
-      
-        max(abs(rx).^2)
-        mean(abs(rx).^2)
+
         peak = max(abs(rx).^2);
         av = mean(abs(rx).^2);
         PAPRdB = 10*log10(peak/av);
-        peak = max(abs(rx(1:160)).^2);
-        av = mean(abs(rx(1:160)).^2);
-        PilotPAPRdB = 10*log10(peak/av);
+        pilotpeak = max(abs(rx(1:160)).^2);
+        pilotav = mean(abs(rx(1:160)).^2);
+        PilotPAPRdB = 10*log10(pilotpeak/pilotav);
         printf("Pav: %f PAPRdB: %5.2f PilotPAPRdB: %5.2f\n", av, PAPRdB, PilotPAPRdB);
  
         fcentre = 1475;
