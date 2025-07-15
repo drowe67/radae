@@ -282,7 +282,7 @@ if __name__ == '__main__':
                     output = model(features,H,G)
                 else:
                     output = model(features,H)
-                loss_by_batch = distortion_loss(features, output["features_hat"])
+                loss_by_batch = distortion_loss(features, output["features_hat"], output["PAPR"])
                 total_loss = torch.mean(loss_by_batch)
                 total_loss.backward()
                 optimizer.step()

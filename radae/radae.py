@@ -248,7 +248,8 @@ class RADAE(nn.Module):
 
         if txbpf_en:
             Ntap=51
-            bandwidth = 1.2*(self.w[Nc-1] - self.w[0])*self.Fs/(2*torch.pi)
+            #bandwidth = 1.2*(self.w[Nc-1] - self.w[0])*self.Fs/(2*torch.pi)
+            bandwidth = 1600
             centre = (self.w[Nc-1] + self.w[0])*self.Fs/(2*torch.pi)/2
             print(f"Tx BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
             txbpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth,centre)
@@ -256,9 +257,9 @@ class RADAE(nn.Module):
             self.alpha = txbpf.alpha
             self.txbpf_delay = int(Ntap // 2)
             with torch.no_grad():
-                print(self.txbpf_conv.weight.shape)
+                #print(self.txbpf_conv.weight.shape)
                 self.txbpf_conv.weight[0,0,:] = nn.Parameter(torch.from_numpy(txbpf.h))
-                print(self.txbpf_conv.weight[0,0,:])
+                #print(self.txbpf_conv.weight[0,0,:])
                 self.txbpf_conv.bias = nn.Parameter(torch.zeros(1,dtype=torch.complex64))
                 self.txbpf_conv.weight.requires_grad = False
                 self.txbpf_conv.bias.requires_grad = False
@@ -592,12 +593,12 @@ class RADAE(nn.Module):
                     
                     tx = torch.concat((torch.zeros((num_batches,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,self.txbpf_delay),device=tx.device)),dim=1)
                     tx = self.txbpf_conv(tx)
-                    tx = torch.exp(1j*torch.angle(tx))
+                    #tx = torch.exp(1j*torch.angle(tx))
                     
                     tx = tx*torch.conj(phase_vec)
 
             tx_before_channel = tx
-
+            PAPR = 0
             # rate Fs multipath model
             d = self.d_samples
             tx_mp = torch.zeros((num_batches,num_timesteps_at_rate_Fs))
