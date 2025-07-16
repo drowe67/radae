@@ -88,7 +88,8 @@ class RADAE(nn.Module):
                  correct_time_offset = False,
                  tanh_clipper = False,
                  frames_per_step = 4,
-                 Nzmf = 3                      # number of latent vectors in a modem frame
+                 Nzmf = 3,                      # number of latent vectors in a modem frame
+                 ssb_bpf = False
                 ):
 
         super(RADAE, self).__init__()
@@ -123,6 +124,7 @@ class RADAE(nn.Module):
         self.timing_rand = timing_rand
         self.correct_time_offset = correct_time_offset
         self.tanh_clipper = tanh_clipper
+        self.ssb_bpf = ssb_bpf
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck, frames_per_step=frames_per_step))
@@ -252,7 +254,7 @@ class RADAE(nn.Module):
             bandwidth = 1600
             centre = (self.w[Nc-1] + self.w[0])*self.Fs/(2*torch.pi)/2
             print(f"Tx BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
-            txbpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth,centre)
+            txbpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth, centre)
             self.txbpf_conv = nn.Conv1d(1, 1, kernel_size=len(txbpf.h), dtype=torch.complex64)
             self.alpha = txbpf.alpha
             self.txbpf_delay = int(Ntap // 2)
@@ -263,7 +265,25 @@ class RADAE(nn.Module):
                 self.txbpf_conv.bias = nn.Parameter(torch.zeros(1,dtype=torch.complex64))
                 self.txbpf_conv.weight.requires_grad = False
                 self.txbpf_conv.bias.requires_grad = False
-                
+
+        if ssb_bpf:
+            Ntap=101
+            bandwidth = 2700-300
+            centre = (2700+300)/2
+            print(f"SSB BPF bandwidth: {bandwidth:f} centre: {centre:f}")
+            ssb_bpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth, centre)
+            self.ssb_bpf_conv = nn.Conv1d(1, 1, kernel_size=len(ssb_bpf.h), dtype=torch.complex64)
+            self.ssb_bpf_delay = int(Ntap // 2)
+            self.ssb_filt_alpha = ssb_bpf.alpha
+            with torch.no_grad():
+                #print(self.ssb_bpf_conv.weight.shape)
+                self.ssb_bpf_conv.weight[0,0,:] = nn.Parameter(torch.from_numpy(ssb_bpf.h))
+                #print(self.ssb_bpf_conv.weight[0,0,:])
+                self.ssb_bpf_conv.bias = nn.Parameter(torch.zeros(1,dtype=torch.complex64))
+                self.ssb_bpf_conv.weight.requires_grad = False
+                self.ssb_bpf_conv.bias.requires_grad = False
+
+           
     # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
     def core_decoder_statefull_load_state_dict(self):
 
@@ -597,8 +617,18 @@ class RADAE(nn.Module):
                     
                     tx = tx*torch.conj(phase_vec)
 
+            if self.ssb_bpf:
+                #print(tx.shape)
+                phase_vec = torch.exp(-1j*self.ssb_filt_alpha*torch.arange(0,tx.shape[1],device=tx.device))
+                tx = tx*phase_vec
+                tx = torch.concat((torch.zeros((num_batches,self.ssb_bpf_delay),device=tx.device),tx,torch.zeros((num_batches,self.ssb_bpf_delay),device=tx.device)),dim=1)
+                tx = self.ssb_bpf_conv(tx)
+                tx = tx*torch.conj(phase_vec)
+                #print(tx.shape)
+
             tx_before_channel = tx
             PAPR = 0
+
             # rate Fs multipath model
             d = self.d_samples
             tx_mp = torch.zeros((num_batches,num_timesteps_at_rate_Fs))
@@ -680,6 +710,16 @@ class RADAE(nn.Module):
                 # Hybrid time & freq domain model - we need time domain to apply bottleneck
                 # IDFT to transform Nc carriers to M time domain samples
                 tx = torch.matmul(tx_sym, self.Winv)
+
+                # Optionally insert a cyclic prefix
+                Ncp = self.Ncp
+                if self.Ncp:
+                    tx_cp = torch.zeros((num_batches,num_timesteps_at_rate_Rs,self.M+Ncp),dtype=torch.complex64,device=tx.device)
+                    tx_cp[:,:,Ncp:] = tx
+                    tx_cp[:,:,:Ncp] = tx_cp[:,:,-Ncp:]
+                    tx = tx_cp
+                    num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*(self.M+Ncp)
+ 
                 # Apply time domain magnitude bottleneck - an infinite clipper
                 tx = torch.exp(1j*torch.angle(tx))
 
@@ -687,7 +727,7 @@ class RADAE(nn.Module):
                 # shifting signal to baseband an applying a real LPF of bandwidth B/2.  Three stages gives us a 99% power BW
                 # of around 1200-1400 Hz at 0 PAPR, loss appears similar to previous waveforms.
                 if self.txbpf_en:
-                    tx = torch.reshape(tx,(num_batches, 1, num_timesteps_at_rate_Rs*self.M))
+                    tx = torch.reshape(tx,(num_batches, 1, num_timesteps_at_rate_Fs))
                     phase_vec = torch.exp(-1j*self.alpha*torch.arange(0,tx.shape[2],device=tx.device))
                     tx = tx*phase_vec
 
@@ -704,21 +744,24 @@ class RADAE(nn.Module):
                     #tx = torch.exp(1j*torch.angle(tx))
                     
                     tx = tx*torch.conj(phase_vec)
-                    tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M))
+                    tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M+Ncp))
     
                 tx_before_channel = tx
 
                 # find per batch PAPR
-                tx_before_channel = torch.reshape(tx_before_channel,(num_batches, num_timesteps_at_rate_Rs*self.M))
+                tx_before_channel = torch.reshape(tx_before_channel,(num_batches, num_timesteps_at_rate_Fs))
                 peak_power, indices = torch.max(torch.abs(tx_before_channel)**2,dim=1)
                 av_power = torch.mean(torch.abs(tx_before_channel)**2,dim=1)
                 PAPR = peak_power/av_power
-                #print(PAPR)
-                #print(torch.mean(PAPR))
-                #quit()
+
+                # remove cyclic prefix
+                tx = tx[:,:,Ncp:Ncp+self.M]
+
                 # DFT to transform M time domain samples to Nc freq domain samples
                 tx_sym = torch.matmul(tx, self.Wfwd)
                     
+            # note all further impairments are applied in the freq domain ...
+                
             if self.phase_offset:
                 phase = self.phase_offset*torch.ones_like(tx_sym)
                 phase = torch.exp(1j*phase)

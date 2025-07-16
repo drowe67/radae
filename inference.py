@@ -36,7 +36,7 @@ import argparse
 import numpy as np
 import torch
 
-from radae import RADAE, distortion_loss
+from radae import RADAE, distortion_loss,complex_bpf
 
 parser = argparse.ArgumentParser()
 
@@ -77,7 +77,8 @@ parser.add_argument('--correct_freq_offset', action='store_true', help='correct 
 parser.add_argument('--sine_amp', type=float, default=0.0, help='single freq interferer level (default zero)')
 parser.add_argument('--sine_freq', type=float, default=1000.0, help='single freq interferer freq (default 1000Hz)')
 parser.add_argument('--auxdata', action='store_true', help='inject auxillary data symbol')
-parser.add_argument('--txbpf', action='store_true', help='inject auxillary data symbol')
+parser.add_argument('--txbpf', action='store_true', help='clipper/BPF styyle compressor')
+parser.add_argument('--ssb_bpf', action='store_true', help=' SSB BPF simulation')
 parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
 parser.add_argument('--correct_time_offset', type=int, default=0, help='introduces a delay (or advance if -ve) in samples, applied in freq domain (default 0)')
 parser.add_argument('--tanh_clipper', action='store_true', help='use tanh magnitude clippier (default hard clipper)')
@@ -109,7 +110,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rat
               cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, 
               bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset, txbpf_en = args.txbpf,
               pilots2=args.pilots2, correct_time_offset=args.correct_time_offset, tanh_clipper=args.tanh_clipper,
-              frames_per_step=args.frames_per_step)
+              frames_per_step=args.frames_per_step, ssb_bpf = args.ssb_bpf)
 checkpoint = torch.load(args.model_name, map_location='cpu',weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
@@ -174,6 +175,7 @@ if args.g_file:
       quit()
    G = G[:,:num_timesteps_at_rate_Fs,:]
    G = torch.tensor(G)
+
 
 if __name__ == '__main__':
 
