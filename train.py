@@ -77,6 +77,8 @@ training_group.add_argument('--auxdata', action='store_true', help='inject auxil
 training_group.add_argument('--txbpf', action='store_true', help='train with Tx BPF')
 parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
 parser.add_argument('--timing_rand', action='store_true', help='random timeshift of [-1.+1] ms')
+parser.add_argument('--tanh_clipper', action='store_true', help='use tanh magnitude clipper (default hard clipper)')
+parser.add_argument('--papr', action='store_true', help='include PPAR in loss function')
 
 args = parser.parse_args()
 
@@ -130,7 +132,8 @@ model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo,
               range_EbNo_start=args.range_EbNo_start, 
               freq_rand=args.freq_rand,gain_rand=args.gain_rand, bottleneck=args.bottleneck,
               pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp,
-              txbpf_en = args.txbpf, pilots2=args.pilots2,timing_rand=args.timing_rand,frames_per_step=args.frames_per_step)
+              txbpf_en = args.txbpf, pilots2=args.pilots2,timing_rand=args.timing_rand,
+              frames_per_step=args.frames_per_step, tanh_clipper=args.tanh_clipper)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
@@ -282,7 +285,10 @@ if __name__ == '__main__':
                     output = model(features,H,G)
                 else:
                     output = model(features,H)
-                loss_by_batch = distortion_loss(features, output["features_hat"], output["PAPR"])
+                if args.papr:
+                    loss_by_batch = distortion_loss(features, output["features_hat"], output["PAPR"])
+                else:
+                    loss_by_batch = distortion_loss(features, output["features_hat"])                   
                 total_loss = torch.mean(loss_by_batch)
                 total_loss.backward()
                 optimizer.step()

@@ -59,8 +59,8 @@ def distortion_loss(y_true, y_pred, PAPR=0):
     data_error = 0
     if y_true.size(-1) == 21:
         data_error = y_pred[..., 20:21] - y_true[..., 20:21]
-    loss = torch.mean(ceps_error ** 2 + 3. * (10/18) * torch.abs(pitch_error) * pitch_weight + (1/18) * corr_error ** 2 + (0.5/18)*data_error ** 2, dim=-1)
-    loss = torch.mean(loss, dim=-1) + PAPR/18
+    loss = torch.mean(ceps_error ** 2 + 3. * (10/18) * torch.abs(pitch_error) * pitch_weight + (1/18) * corr_error ** 2 + (0.25/18)*data_error ** 2, dim=-1)
+    loss = torch.mean(loss, dim=-1) + (0.5/18)*PAPR
 
     # reduce bias towards lower Eb/No when training over a range of Eb/No
     #loss = torch.mean(torch.sqrt(torch.mean(loss, dim=1)))

@@ -707,6 +707,7 @@ class RADAE(nn.Module):
             # Simulate channel at one sample per QPSK symbol (Fs=Rs) --------------------------------
 
             if self.bottleneck == 3:
+                num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*self.M
                 # Hybrid time & freq domain model - we need time domain to apply bottleneck
                 # IDFT to transform Nc carriers to M time domain samples
                 tx = torch.matmul(tx_sym, self.Winv)
@@ -720,8 +721,11 @@ class RADAE(nn.Module):
                     tx = tx_cp
                     num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*(self.M+Ncp)
  
-                # Apply time domain magnitude bottleneck - an infinite clipper
-                tx = torch.exp(1j*torch.angle(tx))
+                # Apply time domain magnitude bottleneck
+                if self.tanh_clipper:
+                    tx = torch.tanh(torch.abs(tx))*torch.exp(1j*torch.angle(tx))
+                else:
+                    tx = torch.exp(1j*torch.angle(tx))
 
                 # apply BPF-clip stages to obtain a reasonable 99% power bandwidth at low PAPR.  BPF is implemented by
                 # shifting signal to baseband an applying a real LPF of bandwidth B/2.  Three stages gives us a 99% power BW

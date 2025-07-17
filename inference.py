@@ -81,7 +81,7 @@ parser.add_argument('--txbpf', action='store_true', help='clipper/BPF styyle com
 parser.add_argument('--ssb_bpf', action='store_true', help=' SSB BPF simulation')
 parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
 parser.add_argument('--correct_time_offset', type=int, default=0, help='introduces a delay (or advance if -ve) in samples, applied in freq domain (default 0)')
-parser.add_argument('--tanh_clipper', action='store_true', help='use tanh magnitude clippier (default hard clipper)')
+parser.add_argument('--tanh_clipper', action='store_true', help='use tanh magnitude clipper (default hard clipper)')
 args = parser.parse_args()
 
 if len(args.h_file):
