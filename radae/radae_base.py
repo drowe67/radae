@@ -288,7 +288,7 @@ class CoreEncoderStatefull(nn.Module):
 #Decode symbols to reconstruct the vocoder features
 class CoreDecoder(nn.Module):
 
-    def __init__(self, input_dim, output_dim, frames_per_step = 4):
+    def __init__(self, input_dim, output_dim, frames_per_step = 4, variant=0):
         """ core decoder for RADAE
 
             Computes features from latents, initial state, and quantization index
@@ -302,27 +302,32 @@ class CoreDecoder(nn.Module):
         self.output_dim = output_dim
         self.input_size = self.input_dim
         self.frames_per_step = frames_per_step
+        self.variant = variant
+        w1 = 96
+        w2 = 32
 
         # Layers are organized like a DenseNet
-        self.dense_1    = nn.Linear(self.input_size, 96)
-        self.gru1 = nn.GRU(96, 96, batch_first=True)
-        self.conv1 = MyConv(192, 32)
-        self.gru2 = nn.GRU(224, 96, batch_first=True)
-        self.conv2 = MyConv(320, 32)
-        self.gru3 = nn.GRU(352, 96, batch_first=True)
-        self.conv3 = MyConv(448, 32)
-        self.gru4 = nn.GRU(480, 96, batch_first=True)
-        self.conv4 = MyConv(576, 32)
-        self.gru5 = nn.GRU(608, 96, batch_first=True)
-        self.conv5 = MyConv(704, 32)
-        self.output  = nn.Linear(736, self.frames_per_step * self.output_dim)
-        self.glu1 = GLU(96)
-        self.glu2 = GLU(96)
-        self.glu3 = GLU(96)
-        self.glu4 = GLU(96)
-        self.glu5 = GLU(96)
+        self.dense_1 = nn.Linear(self.input_size, 96)
+        self.gru1 = nn.GRU(w1, w1, batch_first=True)
+        self.conv1 = MyConv(2*w1, w2)
+        self.gru2 = nn.GRU(2*w1+w2, w1, batch_first=True)
+        self.conv2 = MyConv(3*w1+w2, w2)
+        self.gru3 = nn.GRU(3*w1+2*w2, w1, batch_first=True)
+        self.conv3 = MyConv(4*w1+2*w2, w2)
+        self.gru4 = nn.GRU(4*w1+3*w2, w1, batch_first=True)
+        self.conv4 = MyConv(5*w1+3*w2, w2)
+        self.gru5 = nn.GRU(5*w1+4*w2, w1, batch_first=True)
+        self.conv5 = MyConv(6*w1+4*w2, w2)
+        self.output  = nn.Linear(6*w1+5*w2, self.frames_per_step * self.output_dim)
+        self.glu1 = GLU(w1)
+        self.glu2 = GLU(w1)
+        self.glu3 = GLU(w1)
+        self.glu4 = GLU(w1)
+        self.glu5 = GLU(w1)
 
         nb_params = sum(p.numel() for p in self.parameters())
+        print(f"decoder: {nb_params:d}")
+
         # initialize weights
         self.apply(init_weights)
 
