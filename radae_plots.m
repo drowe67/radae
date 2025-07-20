@@ -227,7 +227,7 @@ function loss_SNR3k_plot(pnsr=0,png_fn, epslatex, varargin)
           SNR3k += data(:,3);
         end
         mn = min([mn; SNR3k]);
-        plot(SNR3k,data(:,2),sprintf("+-;%s;",leg))
+        plot(SNR3k,data(:,2),leg)
         i++;
     end
     hold off; grid('minor');

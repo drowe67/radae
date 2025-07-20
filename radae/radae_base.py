@@ -82,15 +82,17 @@ def n(x):
 
 #Wrapper for 1D conv layer
 class MyConv(nn.Module):
-    def __init__(self, input_dim, output_dim, dilation=1):
+    def __init__(self, input_dim, output_dim, dilation=1, kernel_size=2):
         super(MyConv, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.dilation=dilation
-        self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=2, padding='valid', dilation=dilation)
+        self.kernel_size = kernel_size
+        print(kernel_size)
+        self.conv = nn.Conv1d(input_dim, output_dim, kernel_size, padding='valid', dilation=dilation)
     def forward(self, x, state=None):
         device = x.device
-        conv_in = torch.cat([torch.zeros_like(x[:,0:self.dilation,:], device=device), x], -2).permute(0, 2, 1)
+        conv_in = torch.cat([torch.zeros_like(x[:,0:(self.dilation)*(self.kernel_size-1),:], device=device), x], -2).permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
 # Wrapper for GRU layer that maintains state internally
@@ -168,19 +170,20 @@ class CoreEncoder(nn.Module):
 
         # derived parameters
         self.input_dim = self. frames_per_step * self.feature_dim
+        kernel = 2
 
         # Layers are organized like a DenseNet
         self.dense_1 = nn.Linear(self.input_dim, 64)
         self.gru1 = nn.GRU(64, 64, batch_first=True)
-        self.conv1 = MyConv(128, 96)
+        self.conv1 = MyConv(128, 96, kernel_size=kernel)
         self.gru2 = nn.GRU(224, 64, batch_first=True)
-        self.conv2 = MyConv(288, 96, dilation=2)
+        self.conv2 = MyConv(288, 96, dilation=2, kernel_size=kernel)
         self.gru3 = nn.GRU(384, 64, batch_first=True)
-        self.conv3 = MyConv(448, 96, dilation=2)
+        self.conv3 = MyConv(448, 96, dilation=2, kernel_size=kernel)
         self.gru4 = nn.GRU(544, 64, batch_first=True)
-        self.conv4 = MyConv(608, 96, dilation=2)
+        self.conv4 = MyConv(608, 96, dilation=2, kernel_size=kernel)
         self.gru5 = nn.GRU(704, 64, batch_first=True)
-        self.conv5 = MyConv(768, 96, dilation=2)
+        self.conv5 = MyConv(768, 96, dilation=2, kernel_size=kernel)
 
         self.z_dense = nn.Linear(864, self.output_dim)
 
@@ -288,13 +291,8 @@ class CoreEncoderStatefull(nn.Module):
 #Decode symbols to reconstruct the vocoder features
 class CoreDecoder(nn.Module):
 
-    def __init__(self, input_dim, output_dim, frames_per_step = 4, variant=0):
-        """ core decoder for RADAE
-
-            Computes features from latents, initial state, and quantization index
-
-        """
-
+    def __init__(self, input_dim, output_dim, frames_per_step=4, w1=96, w2=32):
+ 
         super(CoreDecoder, self).__init__()
 
         # hyper parameters
@@ -302,22 +300,20 @@ class CoreDecoder(nn.Module):
         self.output_dim = output_dim
         self.input_size = self.input_dim
         self.frames_per_step = frames_per_step
-        self.variant = variant
-        w1 = 96
-        w2 = 32
+        kernel = 2
 
         # Layers are organized like a DenseNet
-        self.dense_1 = nn.Linear(self.input_size, 96)
+        self.dense_1 = nn.Linear(self.input_size, w1)
         self.gru1 = nn.GRU(w1, w1, batch_first=True)
-        self.conv1 = MyConv(2*w1, w2)
+        self.conv1 = MyConv(2*w1, w2, kernel_size=kernel)
         self.gru2 = nn.GRU(2*w1+w2, w1, batch_first=True)
-        self.conv2 = MyConv(3*w1+w2, w2)
+        self.conv2 = MyConv(3*w1+w2, w2, kernel_size=kernel)
         self.gru3 = nn.GRU(3*w1+2*w2, w1, batch_first=True)
-        self.conv3 = MyConv(4*w1+2*w2, w2)
+        self.conv3 = MyConv(4*w1+2*w2, w2, kernel_size=kernel)
         self.gru4 = nn.GRU(4*w1+3*w2, w1, batch_first=True)
-        self.conv4 = MyConv(5*w1+3*w2, w2)
+        self.conv4 = MyConv(5*w1+3*w2, w2, kernel_size=kernel)
         self.gru5 = nn.GRU(5*w1+4*w2, w1, batch_first=True)
-        self.conv5 = MyConv(6*w1+4*w2, w2)
+        self.conv5 = MyConv(6*w1+4*w2, w2, kernel_size=kernel)
         self.output  = nn.Linear(6*w1+5*w2, self.frames_per_step * self.output_dim)
         self.glu1 = GLU(w1)
         self.glu2 = GLU(w1)
@@ -359,11 +355,6 @@ class CoreDecoder(nn.Module):
 class CoreDecoderStatefull(nn.Module):
 
     def __init__(self, input_dim, output_dim, frames_per_step = 4):
-        """ core decoder for RADAE
-
-            Computes features from latent z
-
-        """
 
         super(CoreDecoderStatefull, self).__init__()
 

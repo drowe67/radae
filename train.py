@@ -79,6 +79,9 @@ parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols
 parser.add_argument('--timing_rand', action='store_true', help='random timeshift of [-1.+1] ms')
 parser.add_argument('--tanh_clipper', action='store_true', help='use tanh magnitude clipper (default hard clipper)')
 parser.add_argument('--papr', action='store_true', help='include PPAR in loss function')
+parser.add_argument('--plot_loss_compare', type=str, default="", help='txt file with one loss/line, to compare with this training session')
+parser.add_argument('--w1', type=int, default=96, help='Decoder GRU output dimension (default 96)')
+parser.add_argument('--w2', type=int, default=32, help='Decoder conv output dimension (default 32)')
 
 args = parser.parse_args()
 
@@ -133,7 +136,8 @@ model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo,
               freq_rand=args.freq_rand,gain_rand=args.gain_rand, bottleneck=args.bottleneck,
               pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp,
               txbpf_en = args.txbpf, pilots2=args.pilots2,timing_rand=args.timing_rand,
-              frames_per_step=args.frames_per_step, tanh_clipper=args.tanh_clipper)
+              frames_per_step=args.frames_per_step, tanh_clipper=args.tanh_clipper,
+              w1=args.w1, w2=args.w2)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
@@ -166,6 +170,9 @@ scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lam
 # optionally output z_hat from channel (e.g. for training other networks)
 if (args.write_latent):
     f_z_hat = open(args.write_latent,"wb")
+
+if args.plot_loss_compare:
+    loss_compare = np.loadtxt(args.plot_loss_compare)
 
 if __name__ == '__main__':
 
@@ -325,8 +332,11 @@ if __name__ == '__main__':
 
         if args.plot_loss:
             plt.clf()
-            plt.semilogy(range(1,epoch+1),loss_epoch[1:epoch+1])
+            plt.semilogy(range(1,epoch+1),loss_epoch[1:epoch+1],label=args.output)
+            if args.plot_loss_compare:
+                plt.semilogy(range(1,epoch+1),loss_compare[0:epoch],label=args.plot_loss_compare)
             plt.grid()
+            plt.legend()
             plt.show(block=False)
             plt.pause(0.01)
 

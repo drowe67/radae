@@ -82,6 +82,8 @@ parser.add_argument('--ssb_bpf', action='store_true', help=' SSB BPF simulation'
 parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
 parser.add_argument('--correct_time_offset', type=int, default=0, help='introduces a delay (or advance if -ve) in samples, applied in freq domain (default 0)')
 parser.add_argument('--tanh_clipper', action='store_true', help='use tanh magnitude clipper (default hard clipper)')
+parser.add_argument('--w1', type=int, default=96, help='Decoder GRU output dimension (default 96)')
+parser.add_argument('--w2', type=int, default=32, help='Decoder conv output dimension (default 32)')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -110,7 +112,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rat
               cyclic_prefix = args.cp, time_offset=args.time_offset, coarse_mag=args.coarse_mag, 
               bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset, txbpf_en = args.txbpf,
               pilots2=args.pilots2, correct_time_offset=args.correct_time_offset, tanh_clipper=args.tanh_clipper,
-              frames_per_step=args.frames_per_step, ssb_bpf = args.ssb_bpf)
+              frames_per_step=args.frames_per_step, ssb_bpf = args.ssb_bpf, w1=args.w1, w2=args.w2)
 checkpoint = torch.load(args.model_name, map_location='cpu',weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
