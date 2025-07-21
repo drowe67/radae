@@ -90,8 +90,10 @@ class RADAE(nn.Module):
                  frames_per_step = 4,
                  Nzmf = 3,                      # number of latent vectors in a modem frame
                  ssb_bpf = False,
-                 w1 = 96,
-                 w2 = 32
+                 w1_enc = 64,
+                 w2_enc = 96,
+                 w1_dec = 96,
+                 w2_dec = 32
                 ):
 
         super(RADAE, self).__init__()
@@ -129,8 +131,8 @@ class RADAE(nn.Module):
         self.ssb_bpf = ssb_bpf
 
         # TODO: nn.DataParallel() shouldn't be needed
-        self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck, frames_per_step=frames_per_step))
-        self.core_decoder =  nn.DataParallel(radae_base.CoreDecoder(latent_dim, feature_dim, frames_per_step=frames_per_step, w1=w1, w2=w2))
+        self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck, frames_per_step=frames_per_step, w1=w1_enc, w2=w2_enc))
+        self.core_decoder =  nn.DataParallel(radae_base.CoreDecoder(latent_dim, feature_dim, frames_per_step=frames_per_step, w1=w1_dec, w2=w2_dec))
         self.core_encoder_statefull =  nn.DataParallel(radae_base.CoreEncoderStatefull(feature_dim, latent_dim, bottleneck=bottleneck, frames_per_step=frames_per_step))
         self.core_decoder_statefull =  nn.DataParallel(radae_base.CoreDecoderStatefull(latent_dim, feature_dim, frames_per_step=frames_per_step))
         #self.core_encoder = CoreEncoder(feature_dim, latent_dim)

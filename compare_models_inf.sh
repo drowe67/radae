@@ -293,13 +293,16 @@ if [ $plot == "250716_inf" ]; then
   run_model 250717 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --tanh --auxdata --ssb_bpf
   run_model 250717 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --tanh --auxdata --ssb_bpf --g_file g_mpp.f32
 
-  run_model 250719 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --tanh --auxdata --w1 128 --ssb_bpf
-  run_model 250719 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --tanh --auxdata --w1 128 --ssb_bpf --g_file g_mpp.f32
+  run_model 250719 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --tanh --auxdata --w1_dec 128 --ssb_bpf
+  run_model 250719 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --tanh --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
 
-  model_list='model19_check3_awgn_np_0Hz model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250717_awgn_0Hz 250717_mpp_0Hz  250719_awgn_0Hz 250719_mpp_0Hz'
+  run_model 250721 40 200 awgn 0 --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --tanh --auxdata --w1_dec 128 --ssb_bpf
+  run_model 250721 40 200 mpp 0 --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --tanh --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
+
+  model_list='model19_check3_awgn_np_0Hz model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250719_awgn_0Hz 250719_mpp_0Hz 250721_awgn_0Hz 250721_mpp_0Hz'
   declare -a model_legend=("bd-;RADE V1 AWGN no pilots Nc=20;" "b+-;RADE V1 AWGN d=80 Nc=30;" "bo--;RADE V1 MPP d=80 Nc=30;" \
-                           "g+-;250717 Nc=10 SE 6;" "go--;250717 MPP Nc=10 SE 6;" \
-                           "r+-;250719 Nc=10 SE 6 w1 128;" "ro--;250719 MPP Nc=10 SE 6 w1=128;")
+                           "r+-;250719 Nc=10 SE 6 w1 128;" "ro--;250719 MPP Nc=10 SE 6 w1=128;" \
+                           "c+-;250721 Nc=10 SE 3 w1 128;" "co--;250721 MPP Nc=10 SE 3 w1=128;")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}

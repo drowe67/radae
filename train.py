@@ -80,8 +80,10 @@ parser.add_argument('--timing_rand', action='store_true', help='random timeshift
 parser.add_argument('--tanh_clipper', action='store_true', help='use tanh magnitude clipper (default hard clipper)')
 parser.add_argument('--papr', action='store_true', help='include PPAR in loss function')
 parser.add_argument('--plot_loss_compare', type=str, default="", help='txt file with one loss/line, to compare with this training session')
-parser.add_argument('--w1', type=int, default=96, help='Decoder GRU output dimension (default 96)')
-parser.add_argument('--w2', type=int, default=32, help='Decoder conv output dimension (default 32)')
+parser.add_argument('--w1_enc', type=int, default=64, help='Encoder GRU output dimension (default 64)')
+parser.add_argument('--w2_enc', type=int, default=96, help='Encoder conv output dimension (default 96)')
+parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output dimension (default 96)')
+parser.add_argument('--w2_dec', type=int, default=32, help='Decoder conv output dimension (default 32)')
 
 args = parser.parse_args()
 
@@ -137,7 +139,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo,
               pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp,
               txbpf_en = args.txbpf, pilots2=args.pilots2,timing_rand=args.timing_rand,
               frames_per_step=args.frames_per_step, tanh_clipper=args.tanh_clipper,
-              w1=args.w1, w2=args.w2)
+              w1_dec=args.w1_dec, w2_dec=args.w2_dec, w1_enc=args.w1_enc, w2_enc=args.w2_enc)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")

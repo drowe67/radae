@@ -60,7 +60,7 @@ def distortion_loss(y_true, y_pred, PAPR=0):
     if y_true.size(-1) == 21:
         data_error = y_pred[..., 20:21] - y_true[..., 20:21]
     loss = torch.mean(ceps_error ** 2 + 3. * (10/18) * torch.abs(pitch_error) * pitch_weight + (1/18) * corr_error ** 2 + (0.25/18)*data_error ** 2, dim=-1)
-    loss = torch.mean(loss, dim=-1) + (0.5/18)*PAPR
+    loss = torch.mean(loss, dim=-1) + (0.125/18)*PAPR
 
     # reduce bias towards lower Eb/No when training over a range of Eb/No
     #loss = torch.mean(torch.sqrt(torch.mean(loss, dim=1)))
@@ -88,7 +88,6 @@ class MyConv(nn.Module):
         self.output_dim = output_dim
         self.dilation=dilation
         self.kernel_size = kernel_size
-        print(kernel_size)
         self.conv = nn.Conv1d(input_dim, output_dim, kernel_size, padding='valid', dilation=dilation)
     def forward(self, x, state=None):
         device = x.device
@@ -158,7 +157,7 @@ class GLU(nn.Module):
 #Encoder takes input features and computes symbols to be transmitted
 class CoreEncoder(nn.Module):
 
-    def __init__(self, feature_dim, output_dim, bottleneck = 1, frames_per_step=4):
+    def __init__(self, feature_dim, output_dim, bottleneck = 1, frames_per_step=4, w1 = 64, w2 = 96):
 
         super(CoreEncoder, self).__init__()
 
@@ -173,21 +172,22 @@ class CoreEncoder(nn.Module):
         kernel = 2
 
         # Layers are organized like a DenseNet
-        self.dense_1 = nn.Linear(self.input_dim, 64)
-        self.gru1 = nn.GRU(64, 64, batch_first=True)
-        self.conv1 = MyConv(128, 96, kernel_size=kernel)
-        self.gru2 = nn.GRU(224, 64, batch_first=True)
-        self.conv2 = MyConv(288, 96, dilation=2, kernel_size=kernel)
-        self.gru3 = nn.GRU(384, 64, batch_first=True)
-        self.conv3 = MyConv(448, 96, dilation=2, kernel_size=kernel)
-        self.gru4 = nn.GRU(544, 64, batch_first=True)
-        self.conv4 = MyConv(608, 96, dilation=2, kernel_size=kernel)
-        self.gru5 = nn.GRU(704, 64, batch_first=True)
-        self.conv5 = MyConv(768, 96, dilation=2, kernel_size=kernel)
+        self.dense_1 = nn.Linear(self.input_dim, w1)
+        self.gru1 = nn.GRU(w1, w1, batch_first=True)
+        self.conv1 = MyConv(2*w1, w2, kernel_size=kernel)
+        self.gru2 = nn.GRU(2*w1+w2, w1, batch_first=True)
+        self.conv2 = MyConv(3*w1+w2, w2, dilation=2, kernel_size=kernel)
+        self.gru3 = nn.GRU(3*w1+2*w2, w1, batch_first=True)
+        self.conv3 = MyConv(4*w1+2*w2, w2, dilation=2, kernel_size=kernel)
+        self.gru4 = nn.GRU(4*w1+3*w2, w1, batch_first=True)
+        self.conv4 = MyConv(5*w1+3*w2, w2, dilation=2, kernel_size=kernel)
+        self.gru5 = nn.GRU(5*w1+4*w2, w1, batch_first=True)
+        self.conv5 = MyConv(6*w1+4*w2, w2, dilation=2, kernel_size=kernel)
 
-        self.z_dense = nn.Linear(864, self.output_dim)
+        self.z_dense = nn.Linear(6*w1+5*w2, self.output_dim)
 
         nb_params = sum(p.numel() for p in self.parameters())
+        print(f"encoder: {nb_params:d}")
 
         # initialize weights
         self.apply(init_weights)
@@ -253,7 +253,7 @@ class CoreEncoderStatefull(nn.Module):
         self.z_dense = nn.Linear(864, self.output_dim)
 
         nb_params = sum(p.numel() for p in self.parameters())
-
+ 
         # initialize weights
         self.apply(init_weights)
 
