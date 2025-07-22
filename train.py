@@ -56,7 +56,7 @@ parser.add_argument('--g_file', type=str, default="", help='path to rate Fs mult
 parser.add_argument('--rate_Fs', action='store_true', help='rate Fs simulation (default rate Rs)')
 parser.add_argument('--freq_rand', action='store_true', help='random phase and freq offset for each sequence')
 parser.add_argument('--gain_rand', action='store_true', help='random rx gain -20 .. +20dB, SNR unchanged')
-parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
+parser.add_argument('--bottleneck', type=int, default=0, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
 parser.add_argument('--pilots', action='store_true', help='insert pilot symbols')
 parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ data symbols using classical DSP')
 parser.add_argument('--eq_ls', action='store_true', help='Use per carrier least squares EQ (default mean6)')
@@ -78,12 +78,14 @@ training_group.add_argument('--txbpf', action='store_true', help='train with Tx 
 parser.add_argument('--pilots2', action='store_true', help='insert pilot symbols inside z vectors, replacing data symbols')
 parser.add_argument('--timing_rand', action='store_true', help='random timeshift of [-1.+1] ms')
 parser.add_argument('--tanh_clipper', action='store_true', help='use tanh magnitude clipper (default hard clipper)')
-parser.add_argument('--papr', action='store_true', help='include PPAR in loss function')
+parser.add_argument('--papr', action='store_true', help='include PAPR in loss function')
 parser.add_argument('--plot_loss_compare', type=str, default="", help='txt file with one loss/line, to compare with this training session')
 parser.add_argument('--w1_enc', type=int, default=64, help='Encoder GRU output dimension (default 64)')
 parser.add_argument('--w2_enc', type=int, default=96, help='Encoder conv output dimension (default 96)')
 parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output dimension (default 96)')
 parser.add_argument('--w2_dec', type=int, default=32, help='Decoder conv output dimension (default 32)')
+parser.add_argument('--peak', action='store_true', help='include peak power in loss function (alternative to bottleneck)')
+parser.add_argument('--sqrt', action='store_true', help='Use sqrt of loss to reduce bias towards low Eb/No')
 
 args = parser.parse_args()
 
@@ -139,7 +141,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo,
               pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp,
               txbpf_en = args.txbpf, pilots2=args.pilots2,timing_rand=args.timing_rand,
               frames_per_step=args.frames_per_step, tanh_clipper=args.tanh_clipper,
-              w1_dec=args.w1_dec, w2_dec=args.w2_dec, w1_enc=args.w1_enc, w2_enc=args.w2_enc)
+              w1_dec=args.w1_dec, w2_dec=args.w2_dec, w1_enc=args.w1_enc, w2_enc=args.w2_enc, peak=args.peak)
 
 if type(args.initial_checkpoint) != type(None):
     print(f"Loading from checkpoint: {args.initial_checkpoint}")
@@ -295,9 +297,13 @@ if __name__ == '__main__':
                 else:
                     output = model(features,H)
                 if args.papr:
-                    loss_by_batch = distortion_loss(features, output["features_hat"], output["PAPR"])
+                    loss_by_batch = distortion_loss(features, output["features_hat"], PAPR=output["PAPR"])
+                elif args.peak:
+                    loss_by_batch = distortion_loss(features, output["features_hat"], peak_power=output["peak_power"])
                 else:
-                    loss_by_batch = distortion_loss(features, output["features_hat"])                   
+                    loss_by_batch = distortion_loss(features, output["features_hat"])     
+                if args.sqrt:
+                    loss_by_batch = torch.mean(torch.sqrt(torch.mean(loss_by_batch, dim=1)))                  
                 total_loss = torch.mean(loss_by_batch)
                 total_loss.backward()
                 optimizer.step()

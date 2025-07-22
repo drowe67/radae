@@ -68,7 +68,7 @@ parser.add_argument('--pilot_eq', action='store_true', help='use pilots to EQ da
 parser.add_argument('--eq_ls', action='store_true', help='Use per carrier least squares EQ (default mean6)')
 parser.add_argument('--cp', type=float, default=0.0, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0)')
 parser.add_argument('--coarse_mag', action='store_true', help='Coarse magnitude correction (fixes --gain)')
-parser.add_argument('--bottleneck', type=int, default=1, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
+parser.add_argument('--bottleneck', type=int, default=0, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain')
 parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss to arg, print PASS/FAIL')
 parser.add_argument('--prepend_noise', type=float, default=0.0, help='insert time (sec) of just rate Fs channel noise (no RADAE signal) at start (default 0)')
 parser.add_argument('--append_noise', type=float, default=0.0, help='insert time (sec) of just rate Fs channel noise (no RADAE signal) at end (default 0)')
@@ -86,6 +86,7 @@ parser.add_argument('--w1_enc', type=int, default=64, help='Encoder GRU output d
 parser.add_argument('--w2_enc', type=int, default=96, help='Encoder conv output dimension (default 96)')
 parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output dimension (default 96)')
 parser.add_argument('--w2_dec', type=int, default=32, help='Decoder conv output dimension (default 32)')
+parser.add_argument('--peak', action='store_true', help='include peak power in loss function (alternative to bottleneck)')
 args = parser.parse_args()
 
 if len(args.h_file):
@@ -115,7 +116,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, ber_test=args.ber_test, rat
               bottleneck=args.bottleneck, correct_freq_offset=args.correct_freq_offset, txbpf_en = args.txbpf,
               pilots2=args.pilots2, correct_time_offset=args.correct_time_offset, tanh_clipper=args.tanh_clipper,
               frames_per_step=args.frames_per_step, ssb_bpf = args.ssb_bpf, w1_dec=args.w1_dec, w2_dec=args.w2_dec,
-              w1_enc=args.w1_enc, w2_enc=args.w2_enc)
+              w1_enc=args.w1_enc, w2_enc=args.w2_enc, peak=args.peak)
 checkpoint = torch.load(args.model_name, map_location='cpu',weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()

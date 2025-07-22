@@ -93,7 +93,8 @@ class RADAE(nn.Module):
                  w1_enc = 64,
                  w2_enc = 96,
                  w1_dec = 96,
-                 w2_dec = 32
+                 w2_dec = 32,
+                 peak = False
                 ):
 
         super(RADAE, self).__init__()
@@ -106,7 +107,7 @@ class RADAE(nn.Module):
         self.ber_test = ber_test
         self.multipath_delay = multipath_delay 
         self.rate_Fs = rate_Fs
-        assert bottleneck == 1 or bottleneck == 2 or bottleneck == 3
+        #assert bottleneck == 1 or bottleneck == 2 or bottleneck == 3
         self.bottleneck = bottleneck
         self.phase_offset = phase_offset
         self.freq_offset = freq_offset
@@ -129,6 +130,7 @@ class RADAE(nn.Module):
         self.correct_time_offset = correct_time_offset
         self.tanh_clipper = tanh_clipper
         self.ssb_bpf = ssb_bpf
+        self.peak = peak
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck, frames_per_step=frames_per_step, w1=w1_enc, w2=w2_enc))
@@ -632,6 +634,7 @@ class RADAE(nn.Module):
 
             tx_before_channel = tx
             PAPR = 0
+            peak_power = 0
 
             # rate Fs multipath model
             d = self.d_samples
@@ -674,7 +677,7 @@ class RADAE(nn.Module):
             EbNodB = torch.reshape(EbNodB,(num_batches,1))
             EbNo = 10**(EbNodB/10)
             
-            if self.bottleneck == 3:
+            if self.bottleneck == 3 or self.peak:
                 # determine sigma assuming rms power var(tx) = 1 (actually a fraction of a dB less in practice)
                 S = 1
                 sigma = (S*self.Fs/(EbNo*self.Rb))**(0.5)
@@ -710,63 +713,63 @@ class RADAE(nn.Module):
         else:
             # Simulate channel at one sample per QPSK symbol (Fs=Rs) --------------------------------
 
-            if self.bottleneck == 3:
-                num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*self.M
-                # Hybrid time & freq domain model - we need time domain to apply bottleneck
-                # IDFT to transform Nc carriers to M time domain samples
-                tx = torch.matmul(tx_sym, self.Winv)
+            num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*self.M
+            # Hybrid time & freq domain model - we need time domain to apply bottleneck
+            # IDFT to transform Nc carriers to M time domain samples
+            tx = torch.matmul(tx_sym, self.Winv)
 
-                # Optionally insert a cyclic prefix
-                Ncp = self.Ncp
-                if self.Ncp:
-                    tx_cp = torch.zeros((num_batches,num_timesteps_at_rate_Rs,self.M+Ncp),dtype=torch.complex64,device=tx.device)
-                    tx_cp[:,:,Ncp:] = tx
-                    tx_cp[:,:,:Ncp] = tx_cp[:,:,-Ncp:]
-                    tx = tx_cp
-                    num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*(self.M+Ncp)
- 
+            # Optionally insert a cyclic prefix
+            Ncp = self.Ncp
+            if self.Ncp:
+                tx_cp = torch.zeros((num_batches,num_timesteps_at_rate_Rs,self.M+Ncp),dtype=torch.complex64,device=tx.device)
+                tx_cp[:,:,Ncp:] = tx
+                tx_cp[:,:,:Ncp] = tx_cp[:,:,-Ncp:]
+                tx = tx_cp
+                num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*(self.M+Ncp)
+
+            if self.bottleneck == 3:
                 # Apply time domain magnitude bottleneck
                 if self.tanh_clipper:
                     tx = torch.tanh(torch.abs(tx))*torch.exp(1j*torch.angle(tx))
                 else:
                     tx = torch.exp(1j*torch.angle(tx))
 
-                # apply BPF-clip stages to obtain a reasonable 99% power bandwidth at low PAPR.  BPF is implemented by
-                # shifting signal to baseband an applying a real LPF of bandwidth B/2.  Three stages gives us a 99% power BW
-                # of around 1200-1400 Hz at 0 PAPR, loss appears similar to previous waveforms.
-                if self.txbpf_en:
-                    tx = torch.reshape(tx,(num_batches, 1, num_timesteps_at_rate_Fs))
-                    phase_vec = torch.exp(-1j*self.alpha*torch.arange(0,tx.shape[2],device=tx.device))
-                    tx = tx*phase_vec
+            # apply BPF-clip stages to obtain a reasonable 99% power bandwidth at low PAPR.  BPF is implemented by
+            # shifting signal to baseband an applying a real LPF of bandwidth B/2.  Three stages gives us a 99% power BW
+            # of around 1200-1400 Hz at 0 PAPR, loss appears similar to previous waveforms.
+            if self.txbpf_en:
+                tx = torch.reshape(tx,(num_batches, 1, num_timesteps_at_rate_Fs))
+                phase_vec = torch.exp(-1j*self.alpha*torch.arange(0,tx.shape[2],device=tx.device))
+                tx = tx*phase_vec
 
-                    tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
-                    tx = self.txbpf_conv(tx)
-                    tx = torch.exp(1j*torch.angle(tx))
+                tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
+                tx = self.txbpf_conv(tx)
+                tx = torch.exp(1j*torch.angle(tx))
 
-                    tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
-                    tx = self.txbpf_conv(tx)
-                    tx = torch.exp(1j*torch.angle(tx))
-                    
-                    tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
-                    tx = self.txbpf_conv(tx)
-                    #tx = torch.exp(1j*torch.angle(tx))
-                    
-                    tx = tx*torch.conj(phase_vec)
-                    tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M+Ncp))
-    
-                tx_before_channel = tx
+                tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
+                tx = self.txbpf_conv(tx)
+                tx = torch.exp(1j*torch.angle(tx))
+                
+                tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
+                tx = self.txbpf_conv(tx)
+                #tx = torch.exp(1j*torch.angle(tx))
+                
+                tx = tx*torch.conj(phase_vec)
+                tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M+Ncp))
 
-                # find per batch PAPR
-                tx_before_channel = torch.reshape(tx_before_channel,(num_batches, num_timesteps_at_rate_Fs))
-                peak_power, indices = torch.max(torch.abs(tx_before_channel)**2,dim=1)
-                av_power = torch.mean(torch.abs(tx_before_channel)**2,dim=1)
-                PAPR = peak_power/av_power
+            tx_before_channel = tx
 
-                # remove cyclic prefix
-                tx = tx[:,:,Ncp:Ncp+self.M]
+            # find per batch PAPR
+            tx_before_channel = torch.reshape(tx_before_channel,(num_batches, num_timesteps_at_rate_Fs))
+            peak_power, indices = torch.max(torch.abs(tx_before_channel)**2,dim=1)
+            av_power = torch.mean(torch.abs(tx_before_channel)**2,dim=1)
+            PAPR = peak_power/av_power
 
-                # DFT to transform M time domain samples to Nc freq domain samples
-                tx_sym = torch.matmul(tx, self.Wfwd)
+            # remove cyclic prefix
+            tx = tx[:,:,Ncp:Ncp+self.M]
+
+            # DFT to transform M time domain samples to Nc freq domain samples
+            tx_sym = torch.matmul(tx, self.Wfwd)
                     
             # note all further impairments are applied in the freq domain ...
                 
@@ -808,7 +811,7 @@ class RADAE(nn.Module):
 
             # AWGN noise ------------------
             # note noise power sigma**2 is split between real and imag channels
-            if self.bottleneck == 3:
+            if self.bottleneck == 3 or self.peak:
                 EbNo = 10**(EbNodB/10)
                 sigma = self.M/((2*self.Nc*EbNo)**(0.5))
                 sigma = sigma/(2**0.5)
@@ -862,5 +865,6 @@ class RADAE(nn.Module):
             "rx"     : rx,
             "sigma"  : sigma.cpu().numpy(),
             "EbNodB" : EbNodB.cpu().numpy(),
-            "PAPR"   : PAPR
+            "PAPR"   : PAPR,
+            "peak_power"   : peak_power
        }

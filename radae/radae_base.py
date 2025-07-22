@@ -47,7 +47,7 @@ def noise_quantize(x):
 
 
 # loss functions for vocoder features
-def distortion_loss(y_true, y_pred, PAPR=0):
+def distortion_loss(y_true, y_pred, PAPR=0, peak_power=None):
 
     if y_true.size(-1) != 20 and y_true.size(-1) != 21:
         raise ValueError('distortion loss is designed to work with 20 or 21 features')
@@ -61,6 +61,8 @@ def distortion_loss(y_true, y_pred, PAPR=0):
         data_error = y_pred[..., 20:21] - y_true[..., 20:21]
     loss = torch.mean(ceps_error ** 2 + 3. * (10/18) * torch.abs(pitch_error) * pitch_weight + (1/18) * corr_error ** 2 + (0.25/18)*data_error ** 2, dim=-1)
     loss = torch.mean(loss, dim=-1) + (0.125/18)*PAPR
+    if peak_power is not None:
+        loss = loss + (1.-peak_power)**2
 
     # reduce bias towards lower Eb/No when training over a range of Eb/No
     #loss = torch.mean(torch.sqrt(torch.mean(loss, dim=1)))
