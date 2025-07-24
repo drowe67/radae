@@ -297,11 +297,14 @@ if __name__ == '__main__':
                 else:
                     output = model(features,H)
                 if args.papr:
-                    loss_by_batch = distortion_loss(features, output["features_hat"], PAPR=output["PAPR"])
-                elif args.peak:
-                    loss_by_batch = distortion_loss(features, output["features_hat"], peak_power=output["peak_power"])
+                    PAPR=output["PAPR"]
                 else:
-                    loss_by_batch = distortion_loss(features, output["features_hat"])     
+                    PAPR = 0
+                if args.peak:
+                    peak_power=output["peak_power"]
+                else:
+                    peak_power = None
+                loss_by_batch = distortion_loss(features, output["features_hat"],PAPR=PAPR,peak_power=peak_power)     
                 if args.sqrt:
                     loss_by_batch = torch.mean(torch.sqrt(torch.mean(loss_by_batch, dim=1)))                  
                 total_loss = torch.mean(loss_by_batch)
@@ -321,13 +324,13 @@ if __name__ == '__main__':
                         n_bits = int(torch.numel(x))
                         BER = n_errors/n_bits
                         PAPRdB = float(10.0*torch.log10(torch.mean(output["PAPR"])))
-                        #print(torch.mean(output["PAPR"]),PAPRdB)
-                        #quit()
+                        peak_power = float(torch.max(output["peak_power"]))
                         tepoch.set_postfix(
                             current_loss=current_loss,
                             total_loss=running_total_loss / (i + 1),
                             BER=BER,
-                            PAPRdB=PAPRdB
+                            PAPRdB=PAPRdB,
+                            peak_power = peak_power
                         )
                     else:
                         tepoch.set_postfix(

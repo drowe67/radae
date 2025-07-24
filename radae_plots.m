@@ -118,9 +118,11 @@ endfunction
 
 
 function bwHz = bandwidth(rx, fcentre)
-  Nfft = 1204;
+  Nfft = 1024;
   Fs = 8000; y = pwelch(rx,[],[],Nfft,Fs); y_dB = 10*log10(y);
   figure(1);
+  % pwelch sometines chooses it's own DFT size
+  Nfft = length(y);
   plot((0:length(y)-1)*Fs/Nfft,y_dB);
 
   % 99% power bandwidth
