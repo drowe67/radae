@@ -757,6 +757,15 @@ class RADAE(nn.Module):
                 tx = tx*torch.conj(phase_vec)
                 tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M+Ncp))
 
+            if self.ssb_bpf:
+                tx = torch.reshape(tx,(num_batches, 1, num_timesteps_at_rate_Fs))
+                phase_vec = torch.exp(-1j*self.ssb_filt_alpha*torch.arange(0,tx.shape[2],device=tx.device))
+                tx = tx*phase_vec
+                tx = torch.concat((torch.zeros((num_batches,1,self.ssb_bpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.ssb_bpf_delay),device=tx.device)),dim=2)
+                tx = self.ssb_bpf_conv(tx)
+                tx = tx*torch.conj(phase_vec)
+                tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M+Ncp))
+
             tx_before_channel = tx
 
             # find per batch PAPR

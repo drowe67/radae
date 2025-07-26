@@ -306,15 +306,18 @@ if [ $plot == "250716_inf" ]; then
   run_model 250723 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
   run_model 250723 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
 
-  # using peak + papr
-  run_model 250723b 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
-  run_model 250723b 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
+  # repeat of 250723
+  run_model 250724 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
+  run_model 250724 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
+ 
+  # --ssb_bpf in training loop
+  run_model 250725 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
+  run_model 250725 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
 
-  model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250719_awgn_0Hz 250719_mpp_0Hz 250723_awgn_0Hz 250723_mpp_0Hz 250723b_awgn_0Hz 250723b_mpp_0Hz'
+  model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250723_awgn_0Hz 250723_mpp_0Hz 250725_awgn_0Hz 250725_mpp_0Hz'
   declare -a model_legend=("b+-;RADE V1 AWGN d=80 Nc=30;" "bo--;RADE V1 MPP d=80 Nc=30;" \
-                           "r+-;250719 Nc=10 SE 6 w1=128;" "ro--;250719 MPP Nc=10 SE 6 w1=128;" \
                            "c+-;250723 Nc=14 SE 3 w1=128 pk;" "co--;250723 MPP Nc=14 SE 3 w1=128 pk;" \
-                           "k+-;250723b Nc=14 SE 3 w1=128 pk;" "ko--;250723b MPP Nc=14 SE 3 w1=128 pk;")
+                           "g+-;250725 Nc=14 SE 3 w1=128 pk ssb;" "go--;250725 MPP Nc=14 SE 3 w1=128 pk ssb;")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}

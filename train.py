@@ -86,6 +86,7 @@ parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output d
 parser.add_argument('--w2_dec', type=int, default=32, help='Decoder conv output dimension (default 32)')
 parser.add_argument('--peak', action='store_true', help='include peak power in loss function (alternative to bottleneck)')
 parser.add_argument('--sqrt', action='store_true', help='Use sqrt of loss to reduce bias towards low Eb/No')
+parser.add_argument('--ssb_bpf', action='store_true', help=' SSB BPF simulation')
 
 args = parser.parse_args()
 
@@ -140,7 +141,7 @@ model = RADAE(num_features, latent_dim, args.EbNodB, range_EbNo=args.range_EbNo,
               freq_rand=args.freq_rand,gain_rand=args.gain_rand, bottleneck=args.bottleneck,
               pilots=args.pilots, pilot_eq=args.pilot_eq, eq_mean6 = not args.eq_ls, cyclic_prefix = args.cp,
               txbpf_en = args.txbpf, pilots2=args.pilots2,timing_rand=args.timing_rand,
-              frames_per_step=args.frames_per_step, tanh_clipper=args.tanh_clipper,
+              frames_per_step=args.frames_per_step, tanh_clipper=args.tanh_clipper, ssb_bpf = args.ssb_bpf,
               w1_dec=args.w1_dec, w2_dec=args.w2_dec, w1_enc=args.w1_enc, w2_enc=args.w2_enc, peak=args.peak)
 
 if type(args.initial_checkpoint) != type(None):
