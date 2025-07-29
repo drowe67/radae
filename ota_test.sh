@@ -2,7 +2,7 @@
 # ota_test.sh
 #
 # Stored file Over The Air (OTA) test for Radio Autoencoder:
-#   + Given an input speech wave file, constructs a chirp-compressed SSB-radae signal tx.wav
+#   + Given an input speech wave file, constructs a chirp-compressed SSB-rade1-rade2 signal tx.wav
 #   + Transmit the tx.wav over a COTS radio, receive to a rx.wav
 #   + Process rx.wav to measure the SNR, decodes the radae audio and extract SSB for comparison
 #
@@ -148,20 +148,31 @@ function process_rx {
     sox $rx $rx_trim trim $chirp_start
     cp $rx_trim $rx
 
-    # 4 sec chirp - 1 sec silence - x sec SSB - 1 sec silence - x sec RADAE
-    # start_radae = 4+1+x
+    # 4 sec chirp - 1 sec sil - x sec SSB - 1 sec sil - x sec rade1 - 1 sec sil - x sec rade 2 - 1 sec sil
+    # total = 4 + 3(1+x) + 1
+    # start_rade1 = 4+(1+x)
+    # start_rade2 = 4+2*(1+x)
     total_duration=$(sox --info -D $rx)
-    x=$(python3 -c "x=(${total_duration}-6)/2; print(\"%f\" % x)")
-    start_radae=$(python3 -c "start_radae=5+${x}; print(\"%f\" % start_radae)")
-    rx_radae=$(mktemp)
+    x=$(python3 -c "x=(${total_duration}-8)/3; print(\"%f\" % x)")
+    start_rade1=$(python3 -c "start_rade1=5+${x}+0.5; print(\"%f\" % start_rade1)")
+    len_rade1=$(python3 -c "len_rade1=${x}+0.5; print(\"%f\" % len_rade1)")
+    start_rade2=$(python3 -c "start_rade2=6+2*${x}+1; print(\"%f\" % start_rade2)")
+    rx_rade1=$(mktemp)
+    rx_rade2=$(mktemp)
     sox $rx ${filename}_ssb.wav trim 5 $x
-    sox $rx -t .s16 ${rx_radae}.raw trim $start_radae
-    sox -t .s16 -r 8000 -c 1 ${rx_radae}.raw radae_in.wav # wave version for debugging
+    sox $rx -t .s16 ${rx_rade1}.raw trim $start_rade1 $len_rade1
+    sox -t .s16 -r 8000 -c 1 ${rx_rade1}.raw rade1_in.wav # wave version for debugging
+    sox $rx -t .s16 ${rx_rade2}.raw trim $start_rade2 $x
+    sox -t .s16 -r 8000 -c 1 ${rx_rade2}.raw rade2_in.wav # wave version for debugging
 
-    # Use streaming RADAE Rx
-    cat ${rx_radae}.raw | python3 int16tof32.py --zeropad > ${rx_radae}.f32
-    cat ${rx_radae}.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 2>>${filename}_report.txt > features_rx_out.f32
-    lpcnet_demo -fargan-synthesis features_rx_out.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_radae.wav
+    # Use streaming RADE1 Rx
+    cat ${rx_rade1}.raw | python3 int16tof32.py --zeropad > ${rx_rade1}.f32
+    cat ${rx_rade1}.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 2>>${filename}_report.txt > features_rx_out.f32
+    lpcnet_demo -fargan-synthesis features_rx_out.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_rade1.wav
+
+    # RADE2 Rx
+    cat ${rx_rade2}.raw | python3 int16tof32.py --zeropad > ${rx_rade2}.f32
+    ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync ${rx_rade2}.f32 ${filename}_rade2.wav --latent-dim 56 --w1_dec 128 --gain 6.1E-5
 }
 
 function tx_ssb_radio {
@@ -322,9 +333,9 @@ fi
 # create 400-2000 Hz chirp header used for C/No est.  We generate 4.5s of chirp, to allow for trimming of
 # rx wave file - we need >=4 seconds of received chirp for C/No est at Rx
 
-echo "--------------------------------------------------------"
-echo "Creating chirp - compressed SSB - RADAE wave file tx.wav"
-echo "--------------------------------------------------------"
+echo "----------------------------------------------------------------"
+echo "Creating chirp - compressed SSB - RADE1 - RADE2 wave file tx.wav"
+echo "----------------------------------------------------------------"
 
 chirp=$(mktemp)
 if [ $peak -eq 1 ]; then
@@ -340,7 +351,8 @@ cat ${chirp}.f32 | python3 f32toint16.py --real > ${chirp}.raw
 speechfile_raw_8k=$(mktemp)
 comp_in=$(mktemp)
 tx_ssb=$(mktemp)
-tx_radae=$(mktemp)
+tx_radae1=$(mktemp)
+tx_radae2=$(mktemp)
 # With 16kHz input files, we need an 8kHz version for SSB
 sox $speechfile -r 8000 -t .s16 -c 1 $speechfile_raw_8k
 if [ -z $stationid ]; then
@@ -357,15 +369,21 @@ analog_compressor $comp_in $tx_ssb $gain
 speechfile_pad=$(mktemp).wav
 sox $speechfile $speechfile_pad pad 1@0
 
-# create modulated radae signal
-./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --end_of_over --auxdata --EbNodB 100 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae}.f32
+# create modulated radae V1 signal
+./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --end_of_over --auxdata --EbNodB 100 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae1}.f32
 # extract real (I) channel
-cat ${tx_radae}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae}.raw 
+cat ${tx_radae1}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae1}.raw 
+
+# create modulated radae V2 signal
+./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth $speechfile_pad /dev/null --rate_Fs --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --write_rx ${tx_radae2}.f32
+# extract real (I) channel
+cat ${tx_radae2}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae2}.raw 
 
 # Make power of both signals the same, by adjusting the levels to meet the setpoint
 if [ $peak -eq 1 ]; then
   set_peak $tx_ssb $setpoint_peak
-  set_peak ${tx_radae}.raw $setpoint_peak
+  set_peak ${tx_radae1}.raw $setpoint_peak
+  set_peak ${tx_radae2}.raw $setpoint_peak
 else
   set_rms $tx_ssb $setpoint_rms
   set_rms ${tx_radae}.raw $setpoint_rms
@@ -373,10 +391,11 @@ fi
 
 # insert 1 second of silence between signals
 sox -t .s16 -r 8k -c 1 $tx_ssb -t .s16 -r 8k -c 1 ${tx_ssb}_pad.raw pad 1@0
-sox -t .s16 -r 8k -c 1 ${tx_radae}.raw -t .s16 -r 8k -c 1 ${tx_radae}_pad.raw pad 1@0
+sox -t .s16 -r 8k -c 1 ${tx_radae1}.raw -t .s16 -r 8k -c 1 ${tx_radae1}_pad.raw pad 1
+sox -t .s16 -r 8k -c 1 ${tx_radae2}.raw -t .s16 -r 8k -c 1 ${tx_radae2}_pad.raw pad 1 1
 
 # cat signals together so we can send them over a radio at the same time
-cat ${chirp}.raw ${tx_ssb}_pad.raw ${tx_radae}_pad.raw > ${tx_path}/tx.raw
+cat ${chirp}.raw ${tx_ssb}_pad.raw ${tx_radae1}_pad.raw  ${tx_radae2}_pad.raw > ${tx_path}/tx.raw
 sox -t .s16 -r 8000 -c 1 ${tx_path}/tx.raw ${tx_path}/tx.wav
 
 # generate a 4MSP .iq8 file suitable for replaying by HackRF (can disable if not using HackRF)

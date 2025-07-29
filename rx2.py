@@ -141,7 +141,7 @@ if args.plots:
    plt.close('all')
 
 # Generate fine timing estimates - as a first pass for entire sample, as we don't
-# have a stateful fine tinming estimator
+# have a stateful fine timing estimator
 
 sequence_length = len(rx)//(Ncp+M) - 2
 Q = 8
@@ -153,7 +153,7 @@ for s in np.arange(Q-1,sequence_length):
       y2 = rx[st:st+Ncp]
       num = np.abs(np.dot(y1, np.conj(y2)))
       den = np.abs((np.dot(y1, np.conj(y1)) + np.dot(y2, np.conj(y2))))
-      Ry[s,delta_hat] = num/den
+      Ry[s,delta_hat] = num/(den+1E-12)
 Ry_smooth = np.zeros((sequence_length,Ncp+M),dtype=np.float32)
 for s in np.arange(sequence_length):
    Ry_smooth[s,:] = np.mean(Ry[s:s+Q,:],axis=0)
@@ -164,7 +164,7 @@ Ry_smooth = torch.reshape(torch.tensor(Ry_smooth),(1,Ry_smooth.shape[0],Ry_smoot
 
 logits_softmax = ft_nn(Ry_smooth)
 delta_hat = torch.argmax(logits_softmax, 2).cpu().detach().numpy().flatten().astype('float32')
-
+print(delta_hat)
 # Use average of first 1 second of FT est to obtain ideal sampling point, avoid
 # first few symbols as they appear to be start up transients. This is the location
 # of the first sample after the CP (see hf3 doc figure)
