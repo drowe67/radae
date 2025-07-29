@@ -276,6 +276,8 @@ int rade_rx_open(struct rade *r) {
     r->n_floats_out = (int)call_getter(r->pInst_radae_rx, "get_n_floats_out");
     r->nin_max = (int)call_getter(r->pInst_radae_rx, "get_nin_max");
     r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");
+    r->sync = (int)call_getter(r->pInst_radae_rx, "get_sync");
+    r->snr = (int)call_getter(r->pInst_radae_rx, "get_snrdB_3k_est");
     fprintf(stderr, "n_features_out: %d n_eoo_bits: %d n_floats_out: %d nin_max: %d nin: %d\n",
             (int)r->n_features_out, (int)r->n_eoo_bits, (int)r->n_floats_out, (int)r->nin_max, (int)r->nin);
         
