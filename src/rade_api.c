@@ -65,7 +65,8 @@ struct rade {
   npy_intp Nmf, Neoo;     
   npy_intp nin, nin_max;   
   npy_intp n_features_in, n_features_out, n_eoo_bits;  
-      
+  npy_intp sync, snr;
+    
   RADEEnc      enc_model;
   RADEEncState enc_state;
   PyObject *pModule_radae_tx, *pInst_radae_tx;
@@ -529,8 +530,10 @@ int rade_rx(struct rade *r, float features_out[], int *has_eoo_out, float eoo_ou
     *has_eoo_out = 1;
   }
 
-  // sample nin so we have an updated copy
+  // sample nin, sync and SNR so we have an updated copy
   r->nin = (int)call_getter(r->pInst_radae_rx, "get_nin");
+  r->sync = (int)call_getter(r->pInst_radae_rx, "get_sync");
+  r->snr = (int)call_getter(r->pInst_radae_rx, "get_snrdB_3k_est");
 
   // Release Python GIL
   PyGILState_Release(gstate);
@@ -543,16 +546,7 @@ int rade_rx(struct rade *r, float features_out[], int *has_eoo_out, float eoo_ou
 
 int rade_sync(struct rade *r) {
   assert(r != NULL);
-
-  // Acquire the Python GIL (needed for multithreaded use)
-  PyGILState_STATE gstate = PyGILState_Ensure();
-
-  int result = (int)call_getter(r->pInst_radae_rx, "get_sync");
-
-  // Release Python GIL
-  PyGILState_Release(gstate);
-
-  return result;
+  return r->sync;
 }
 
 // TODO: we need a float getter
@@ -563,14 +557,5 @@ float rade_freq_offset(struct rade *r) {
 
 RADE_EXPORT int rade_snrdB_3k_est(struct rade *r) {
   assert(r != NULL);
-
-  // Acquire the Python GIL (needed for multithreaded use)
-  PyGILState_STATE gstate = PyGILState_Ensure();
-
-  int result = (int)call_getter(r->pInst_radae_rx, "get_snrdB_3k_est");
-
-  // Release Python GIL
-  PyGILState_Release(gstate);
-
-  return result;
+  return r->snr;
 }
