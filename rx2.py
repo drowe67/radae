@@ -68,6 +68,7 @@ parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
 parser.add_argument('--pad_samples', type=int, default=0, help='Pad input with samples to simulate different timing offsets in rx signal')
 parser.add_argument('--gain', type=float, default=1.0, help='manual gain control')
+parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output dimension (default 96)')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -85,10 +86,9 @@ if args.auxdata:
 model = RADAE(num_features, latent_dim, EbNodB=100, Nzmf = 1,
               rate_Fs=True, bottleneck=args.bottleneck, cyclic_prefix=args.cp,
               time_offset=args.time_offset, correct_time_offset=args.correct_time_offset,
-              stateful_decoder=args.stateful)
+              stateful_decoder=args.stateful, w1_dec=args.w1_dec)
 checkpoint = torch.load(args.model_name, map_location='cpu', weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
-model.core_decoder_statefull_load_state_dict()
 model.eval()
 
 # Load fine timing model

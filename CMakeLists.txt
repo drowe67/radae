@@ -627,8 +627,10 @@ add_test(NAME bbfm_sc_bpf_loss
 # rx2.sh sanity check, high SNR
 add_test(NAME v2_rx2
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
-                       ./inference.sh 250515/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --bottleneck 3 --latent-dim 40 \
-                       --rate_Fs --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --write_rx brian_rx.f32; \
-         ./rx2.sh 250515/checkpoints/checkpoint_epoch_200.pth 250622_ft 250625_ml_sync brian_rx.f32 /dev/null --latent-dim 40; \
+                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
+                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
+                       --write_rx brian_rx.f32; \
+         ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync brian_rx.f32 /dev/null \
+         --latent-dim 56 --w1_dec 128; \
          python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare")
          set_tests_properties(v2_rx2 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
