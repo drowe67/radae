@@ -108,10 +108,11 @@ Nmf = int(Ns*(M+Ncp))   # number of samples in one modem frame
 Nc = model.Nc
 w = model.w.cpu().detach().numpy()
 
-# load rx rate_Fs samples, BPF to remove some of the noise and improve acquisition
+# load rx rate_Fs samples
 rx = np.fromfile(args.rx, dtype=np.csingle)*args.gain
 # ensure an integer number of frames
 rx = np.concatenate((np.zeros(args.pad_samples, dtype=np.complex64),rx))
+#rx = rx[args.pad_samples:]
 rx = rx[:Nmf*(len(rx)//Nmf)]
 print(f"samples: {len(rx):d} Nmf: {Nmf:d} modem frames: {len(rx)//Nmf}")
 
@@ -122,6 +123,7 @@ if args.plots:
    ax[0].set_title('Before BPF')
    ax[0].axis([0,len(rx)/model.Fs,0,3000])
 
+# BPF to remove some of the noise and improve acquisition
 Ntap = 0
 if args.bpf:
    Ntap=101
@@ -196,9 +198,9 @@ else:
    offset = 1
 z_hat_len = z_hat.shape[1]
 z_hat = z_hat[:,offset:z_hat_len-offset,:]
-z_hat = torch.reshape(z_hat,(1,-1,latent_dim))
 
 # run RADE decoder
+z_hat = torch.reshape(z_hat,(1,-1,latent_dim))
 features_hat = model.core_decoder(z_hat)
 features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:nb_total_features-num_features]], dim=-1)
 print(features_hat.shape)

@@ -629,8 +629,20 @@ add_test(NAME v2_rx2
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
                        ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
                        --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
-                       --write_rx brian_rx.f32; \
-         ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync brian_rx.f32 /dev/null \
+                       --ssb_bpf --write_rx brian_tx.f32; \
+         ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync brian_tx.f32 /dev/null \
          --latent-dim 56 --w1_dec 128; \
          python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare")
          set_tests_properties(v2_rx2 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# rx2.sh with complex->real conversions, and `ch` tool, high SNR.  Note --clip rqd for loss.py as brian_rx.f32 is delayed
+add_test(NAME v2_rx2_ch
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
+                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
+                       --ssb_bpf --write_rx brian_tx.f32; \
+         cat brian_tx.f32 | python3 f32toint16.py --real --scale 16383 | ~/codec2-dev/build_linux/src/ch - - | python3 int16tof32.py --zeropad > brian_rx.f32
+         ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync brian_rx.f32 /dev/null \
+         --latent-dim 56 --w1_dec 128 --gain 6.1E-5; \
+         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 4")
+         set_tests_properties(v2_rx2_ch PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
