@@ -189,7 +189,7 @@ class CoreEncoder(nn.Module):
         self.z_dense = nn.Linear(6*w1+5*w2, self.output_dim)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"encoder: {nb_params:d}")
+        print(f"encoder: {nb_params:d}",file=sys.stderr)
 
         # initialize weights
         self.apply(init_weights)
@@ -324,7 +324,7 @@ class CoreDecoder(nn.Module):
         self.glu5 = GLU(w1)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        print(f"decoder: {nb_params:d}")
+        print(f"decoder: {nb_params:d}",file=sys.stderr)
 
         # initialize weights
         self.apply(init_weights)

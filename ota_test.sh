@@ -167,8 +167,8 @@ function process_rx {
 
     # Use streaming RADE1 Rx
     cat ${rx_rade1}.raw | python3 int16tof32.py --zeropad > ${rx_rade1}.f32
-    cat ${rx_rade1}.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 2>>${filename}_report.txt > features_rx_out.f32
-    lpcnet_demo -fargan-synthesis features_rx_out.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_rade1.wav
+    cat ${rx_rade1}.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 2>>${filename}_report.txt > features_out_rx1.f32
+    lpcnet_demo -fargan-synthesis features_out_rx1.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_rade1.wav
 
     # RADE2 Rx
     cat ${rx_rade2}.raw | python3 int16tof32.py --zeropad > ${rx_rade2}.f32
@@ -328,6 +328,10 @@ if [ $channels -ne 1 ] || [ $sample_rate -ne 16000 ]; then
     exit 1 
 fi
 
+# extract speechfile anem without path or extension
+speechfile_no_path_no_ext="${speechfile##*/}" # Removes path
+speechfile_no_path_no_ext="${speechfile_no_path_no_ext%.*}" # Removes extension
+
 # create Tx file ------------------------
 
 # create 400-2000 Hz chirp header used for C/No est.  We generate 4.5s of chirp, to allow for trimming of
@@ -351,8 +355,8 @@ cat ${chirp}.f32 | python3 f32toint16.py --real > ${chirp}.raw
 speechfile_raw_8k=$(mktemp)
 comp_in=$(mktemp)
 tx_ssb=$(mktemp)
-tx_radae1=$(mktemp)
-tx_radae2=$(mktemp)
+tx_radae1=tx_rade1
+tx_radae2=tx_rade2
 # With 16kHz input files, we need an 8kHz version for SSB
 sox $speechfile -r 8000 -t .s16 -c 1 $speechfile_raw_8k
 if [ -z $stationid ]; then
@@ -370,38 +374,23 @@ speechfile_pad=$(mktemp).wav
 sox $speechfile $speechfile_pad pad 1@0
 
 # create modulated radae V1 signal
-./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --end_of_over --auxdata --EbNodB 100 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --write_rx ${tx_radae1}.f32
+./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --end_of_over --auxdata --EbNodB 100 \
+--bottleneck 3 --pilots --cp 0.004 --rate_Fs --tanh --ssb_bpf --write_rx ${tx_radae1}.f32
+# save features in/out for later "loss.py" measurments
+cp features_in.f32 ${speechfile_no_path_no_ext}_features_in.f32
+cp features_out.f32 ${speechfile_no_path_no_ext}_features_out_tx1.f32
 # extract real (I) channel
 cat ${tx_radae1}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae1}.raw 
 
 # create modulated radae V2 signal
-./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth $speechfile_pad /dev/null --rate_Fs --latent-dim 56 --peak --ssb_bpf --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --write_rx ${tx_radae2}.f32
+./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth $speechfile_pad /dev/null --rate_Fs --latent-dim 56 --peak --ssb_bpf \
+--cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --write_rx ${tx_radae2}.f32
+# save features in/out for later "loss.py" measurments
+cp features_out.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32
 # extract real (I) channel
 cat ${tx_radae2}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae2}.raw 
 
-# Make power of both signals the same, by adjusting the levels to meet the setpoint
-if [ $peak -eq 1 ]; then
-  set_peak $tx_ssb $setpoint_peak
-  set_peak ${tx_radae1}.raw $setpoint_peak
-  set_peak ${tx_radae2}.raw $setpoint_peak
-else
-  set_rms $tx_ssb $setpoint_rms
-  set_rms ${tx_radae}.raw $setpoint_rms
-fi
-
-# insert 1 second of silence between signals
-sox -t .s16 -r 8k -c 1 $tx_ssb -t .s16 -r 8k -c 1 ${tx_ssb}_pad.raw pad 1@0
-sox -t .s16 -r 8k -c 1 ${tx_radae1}.raw -t .s16 -r 8k -c 1 ${tx_radae1}_pad.raw pad 1
-sox -t .s16 -r 8k -c 1 ${tx_radae2}.raw -t .s16 -r 8k -c 1 ${tx_radae2}_pad.raw pad 1 1
-
-# cat signals together so we can send them over a radio at the same time
-cat ${chirp}.raw ${tx_ssb}_pad.raw ${tx_radae1}_pad.raw  ${tx_radae2}_pad.raw > ${tx_path}/tx.raw
-sox -t .s16 -r 8000 -c 1 ${tx_path}/tx.raw ${tx_path}/tx.wav
-
-# generate a 4MSP .iq8 file suitable for replaying by HackRF (can disable if not using HackRF)
-if [ $hackrf -eq 1 ]; then
-  ch ${tx_path}/tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
-fi
+# cp features_in.f32 ${speechfile_no_path_no_ext}_features_in.f32
 
 if [ $tx_file -eq 1 ]; then
   echo "Finished OK!"
