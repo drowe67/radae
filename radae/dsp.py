@@ -52,19 +52,25 @@ class complex_bpf():
       assert np.all(self.h == np.flip(self.h))
 
       self.mem = np.zeros(self.Ntap-1, dtype=np.csingle)
+      self.x_mem = np.zeros(self.Ntap-1, dtype=np.csingle)
       self.phase = 1 + 0j
+      self.n = -1 
 
    def bpf(self, x):
       n = len(x)
       phase_vec = self.phase*np.exp(-1j*self.alpha*np.arange(1,n+1))
       x_baseband = x*phase_vec                                         # mix down to baseband
-      x_mem = np.concatenate([self.mem,x_baseband])                    # pre-pend filter memory
-      x_filt = np.zeros(n, dtype=np.csingle)
+      if n > self.n:
+          self.x_filt = np.zeros(n, dtype=np.csingle)
+          self.n = n
+      if len(self.x_mem) != (len(self.mem) + len(x_baseband)):
+          self.x_mem = np.zeros(len(self.mem) + len(x_baseband), dtype=np.csingle)
+      np.concatenate([self.mem,x_baseband], out=self.x_mem)                    # pre-pend filter memory
       for i in np.arange(n):
-         x_filt[i] = np.dot(x_mem[i:i+self.Ntap],self.h)
-      self.mem = x_mem[-self.Ntap-1:]                                  # save filter state for next time
+         self.x_filt[i] = np.dot(self.x_mem[i:i+self.Ntap],self.h)
+      self.mem = self.x_mem[-self.Ntap-1:]                                  # save filter state for next time
       self.phase = phase_vec[-1]                                       # save phase state for next time
-      return x_filt*np.conj(phase_vec)                                 # mix back up to centre freq
+      return self.x_filt[0:n]*np.conj(phase_vec)                            # mix back up to centre freq
 
 def complex_bpf_test(plot_en=0):
    Ntap=101
@@ -124,6 +130,11 @@ class acquisition():
       self.Pacq_error1 = Pacq_error1
       self.Pacq_error2 = Pacq_error2
       self.fcoarse_range = np.arange(-frange/2,frange/2,fstep)
+      self.tfine_range = 0
+      self.ffine_range = 0
+
+      self.Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
+      self.Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
 
       # pre-calculate to speeds things up a bit
       p_w = np.zeros((M,len(self.fcoarse_range)), dtype=np.csingle)
@@ -149,8 +160,8 @@ class acquisition():
       # latency this could be reduced to a one symbol (M sample) search and Nmf+2*M sample buffer
       assert len(rx) == self.Nmf*2+M+Ncp
 
-      Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
-      Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
+      #Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
+      #Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
       Dtmax12 = 0
       f_ind_max = 0
       tmax = 0
@@ -167,9 +178,11 @@ class acquisition():
       for t in range(Nmf):
          # matrix multiply to speed up calculation of correlation
          # number of cols in first equal to number of rows in second
-         Dt1[t,:] = np.matmul(rx[t:t+M],self.p_w)
-         Dt2[t,:] = np.matmul(rx[t+Nmf:t+Nmf+M],self.p_w)
-         Dt12 = np.abs(Dt1[t,:]) + np.abs(Dt2[t,:])
+         #self.Dt1[t,:] = np.matmul(rx[t:t+M],self.p_w, out=self.Dt1[t,:])
+         np.matmul(rx[t:t+M],self.p_w, out=self.Dt1[t,:])
+         #self.Dt2[t,:] = np.matmul(rx[t+Nmf:t+Nmf+M],self.p_w, out=self.Dt2[t,:]))
+         np.matmul(rx[t+Nmf:t+Nmf+M],self.p_w, out=self.Dt2[t,:])
+         Dt12 = np.abs(self.Dt1[t,:]) + np.abs(self.Dt2[t,:])
          local_max = np.max(Dt12)
          if local_max > Dtmax12:
             Dtmax12 = local_max 
@@ -178,15 +191,15 @@ class acquisition():
             tmax = t
 
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
-      sigma_r1 = np.mean(np.abs(Dt1))/((np.pi/2)**0.5)
-      sigma_r2 = np.mean(np.abs(Dt2))/((np.pi/2)**0.5)
+      sigma_r1 = np.mean(np.abs(self.Dt1))/((np.pi/2)**0.5)
+      sigma_r2 = np.mean(np.abs(self.Dt2))/((np.pi/2)**0.5)
       sigma_r = (sigma_r1 + sigma_r2)/2.0
       Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error1/5.0))
 
       candidate = Dtmax12 > Dthresh
      
-      self.Dt1 = Dt1
-      self.Dt2 = Dt2
+      #self.Dt1 = Dt1
+      #self.Dt2 = Dt2
       self.Dthresh = Dthresh
       self.Dtmax12 = Dtmax12
       self.f_ind_max = f_ind_max
@@ -200,9 +213,11 @@ class acquisition():
       p = self.p
       M = self.M
       Nmf = self.Nmf
-   
-      Dt1 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
-      Dt2 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
+ 
+      if not np.array_equal(tfine_range, self.tfine_range) or not np.array_equal(ffine_range, self.ffine_range): 
+          self.Dt1_fine = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
+          self.Dt2_fine = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
+
       tmax_ind = 0
       Dtmax = 0
       
@@ -216,19 +231,19 @@ class acquisition():
          w_vec2_p = w_vec2*np.conj(p)
          for t in tfine_range:
             # current pilot samples at start of this modem frame
-            Dt1[t_ind,f_ind] = np.dot(rx[t:t+M],w_vec1_p)
+            self.Dt1_fine[t_ind,f_ind] = np.dot(rx[t:t+M],w_vec1_p)
             # next pilot samples at end of this modem frame
-            Dt2[t_ind,f_ind] = np.dot(rx[t+Nmf:t+Nmf+M],w_vec2_p)
+            self.Dt2_fine[t_ind,f_ind] = np.dot(rx[t+Nmf:t+Nmf+M],w_vec2_p)
 
-            if np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind]) > Dtmax:
-               Dtmax = np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind])
+            if np.abs(self.Dt1_fine[t_ind,f_ind]+self.Dt2_fine[t_ind,f_ind]) > Dtmax:
+               Dtmax = np.abs(self.Dt1_fine[t_ind,f_ind]+self.Dt2_fine[t_ind,f_ind])
                tmax = t
                tmax_ind = t_ind
                fmax = f 
             t_ind = t_ind + 1
          f_ind = f_ind + 1
          
-      self.D_fine = Dt1[tmax_ind,:]
+      self.D_fine = self.Dt1_fine[tmax_ind,:]
       
       return tmax, fmax
    
@@ -254,8 +269,10 @@ class acquisition():
       Nupdate = int(0.05*self.Dt1.shape[0])
       for i in range(Nupdate):
          t = np.random.randint(Nmf)
-         self.Dt1[t,:] = np.matmul(rx_conj[t:t+M],self.p_w)
-         self.Dt2[t,:] = np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w)
+         #self.Dt1[t,:] = np.matmul(rx_conj[t:t+M],self.p_w)
+         np.matmul(rx_conj[t:t+M],self.p_w, out=self.Dt1[t,:])
+         #self.Dt2[t,:] = np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w)
+         np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w, out=self.Dt2[t,:])
 
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
       sigma_r1 = np.mean(np.abs(self.Dt1))/((np.pi/2)**0.5)
