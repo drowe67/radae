@@ -34,7 +34,7 @@
 #    ./ota_test.sh wav/peter.wav -x 
 #    ~/codec2-dev/build_linux/src/ch tx.wav - --No -20 | sox -t .s16 -r 8000 -c 1 - rx.wav
 #    ./ota_test.sh -r rx.wav
-#    aplay rx_ssb.wav rx_radae.wav
+#    aplay rx_ssb.wav rx_radae1.wav rx_radae2.wav
 #
 # 2. Use IC-7200 SSB radio to Tx
 #    ./ota_test.sh wav/david_vk5dgr.wav -d -f 14236
@@ -74,6 +74,7 @@ peak=1
 hackrf=0
 tx_path="."
 just_tx=0
+loss=""
 
 source utils.sh
 
@@ -90,6 +91,7 @@ function print_help {
     echo "    -g                        SSB (analog) compressor gain"
     echo "    -i StationIDWaveFile      Prepend this file to identify transmission (should be 8kHz mono)"
     echo "    -k                        Generate HackRF output file tx.iq8"
+    echo "    -l InputSpeechWaveFile    (rx) calculate loss using previously generated feature files" 
     echo "    -o model                  Select radio model number ('rigctl -l' to list)"
     echo "    -r RxWaveFile             Process supplied rx wave file"
     echo "    -s SerialPort             The serial port (or hostname:port) to control SSB radio,"
@@ -169,10 +171,17 @@ function process_rx {
     cat ${rx_rade1}.raw | python3 int16tof32.py --zeropad > ${rx_rade1}.f32
     cat ${rx_rade1}.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 2>>${filename}_report.txt > features_out_rx1.f32
     lpcnet_demo -fargan-synthesis features_out_rx1.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_rade1.wav
-
+    
     # RADE2 Rx
     cat ${rx_rade2}.raw | python3 int16tof32.py --zeropad > ${rx_rade2}.f32
-    ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync ${rx_rade2}.f32 ${filename}_rade2.wav --latent-dim 56 --w1_dec 128 --gain 6.1E-5
+    ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync ${rx_rade2}.f32 ${filename}_rade2.wav --latent-dim 56 --w1_dec 128 --gain 1.2E-4
+
+    speechfile_no_path_no_ext=$3
+    if [ ! ${speechfile_no_path_no_ext} == "" ]; then
+      # optional loss measurements
+      python3 loss.py ${speechfile_no_path_no_ext}_features_in.f32 ${speechfile_no_path_no_ext}_features_out_tx1.f32 --features_hat2 features_out_rx1.f32 --compare | sed -n '5p'
+      python3 loss.py ${speechfile_no_path_no_ext}_features_in.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32 --features_hat2 features_out_rx2.f32 --compare | sed -n '5p'
+    fi
 }
 
 function tx_ssb_radio {
@@ -247,6 +256,11 @@ case $key in
         shift
         shift
     ;;
+    -l)
+        loss="$2"	
+        shift
+        shift
+    ;;
     -p)
         port="$2"	
         shift
@@ -303,7 +317,11 @@ if [ $rxwavefile -eq 1 ]; then
         echo "Can't find input wave file: ${1}!"
         exit 1
     fi   
-    process_rx $1 $freq_offset
+    if [ ! $loss == "" ]; then
+        speechfile_no_path_no_ext="${loss##*/}" # Removes path
+        speechfile_no_path_no_ext="${speechfile_no_path_no_ext%.*}" # Removes extension
+    fi
+    process_rx $1 $freq_offset $speechfile_no_path_no_ext
     exit 0
 fi
 
@@ -328,7 +346,7 @@ if [ $channels -ne 1 ] || [ $sample_rate -ne 16000 ]; then
     exit 1 
 fi
 
-# extract speechfile anem without path or extension
+# extract speechfile name without path or extension
 speechfile_no_path_no_ext="${speechfile##*/}" # Removes path
 speechfile_no_path_no_ext="${speechfile_no_path_no_ext%.*}" # Removes extension
 
@@ -390,8 +408,30 @@ cp features_out.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32
 # extract real (I) channel
 cat ${tx_radae2}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae2}.raw 
 
-# cp features_in.f32 ${speechfile_no_path_no_ext}_features_in.f32
+# Make power of both signals the same, by adjusting the levels to meet the setpoint
+if [ $peak -eq 1 ]; then
+  set_peak $tx_ssb $setpoint_peak
+  set_peak ${tx_radae1}.raw $setpoint_peak
+  set_peak ${tx_radae2}.raw $setpoint_peak
+else
+  set_rms $tx_ssb $setpoint_rms
+  set_rms ${tx_radae}.raw $setpoint_rms
+fi
 
+# insert 1 second of silence between signals
+sox -t .s16 -r 8k -c 1 $tx_ssb -t .s16 -r 8k -c 1 ${tx_ssb}_pad.raw pad 1@0
+sox -t .s16 -r 8k -c 1 ${tx_radae1}.raw -t .s16 -r 8k -c 1 ${tx_radae1}_pad.raw pad 1
+sox -t .s16 -r 8k -c 1 ${tx_radae2}.raw -t .s16 -r 8k -c 1 ${tx_radae2}_pad.raw pad 1 1
+
+# cat signals together so we can send them over a radio at the same time
+cat ${chirp}.raw ${tx_ssb}_pad.raw ${tx_radae1}_pad.raw  ${tx_radae2}_pad.raw > ${tx_path}/tx.raw
+sox -t .s16 -r 8000 -c 1 ${tx_path}/tx.raw ${tx_path}/tx.wav
+
+# generate a 4MSP .iq8 file suitable for replaying by HackRF (can disable if not using HackRF)
+if [ $hackrf -eq 1 ]; then
+  ch ${tx_path}/tx.raw - --complexout | tsrc - - 5 -c | tlininterp - tx.iq8 100 -d -f
+fi
+ 
 if [ $tx_file -eq 1 ]; then
   echo "Finished OK!"
   exit 0

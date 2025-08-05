@@ -166,7 +166,7 @@ Ry_smooth = torch.reshape(torch.tensor(Ry_smooth),(1,Ry_smooth.shape[0],Ry_smoot
 
 logits_softmax = ft_nn(Ry_smooth)
 delta_hat = torch.argmax(logits_softmax, 2).cpu().detach().numpy().flatten().astype('float32')
-print(delta_hat)
+#print(delta_hat)
 # Use average of first 1 second of FT est to obtain ideal sampling point, avoid
 # first few symbols as they appear to be start up transients. This is the location
 # of the first sample after the CP (see hf3 doc figure)
@@ -203,7 +203,7 @@ z_hat = z_hat[:,offset:z_hat_len-offset,:]
 z_hat = torch.reshape(z_hat,(1,-1,latent_dim))
 features_hat = model.core_decoder(z_hat)
 features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:nb_total_features-num_features]], dim=-1)
-print(features_hat.shape)
+#print(features_hat.shape)
 features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
 features_hat.tofile(args.features_hat)
 
