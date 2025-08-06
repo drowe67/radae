@@ -68,6 +68,7 @@ parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
 parser.add_argument('--pad_samples', type=int, default=0, help='Pad input with samples to simulate different timing offsets in rx signal')
 parser.add_argument('--gain', type=float, default=1.0, help='manual gain control')
+parser.add_argument('--agc', action='store_true', help='automatic gain control')
 parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output dimension (default 96)')
 args = parser.parse_args()
 
@@ -110,6 +111,13 @@ w = model.w.cpu().detach().numpy()
 
 # load rx rate_Fs samples
 rx = np.fromfile(args.rx, dtype=np.csingle)*args.gain
+# optional AGC
+if args.agc:
+   # target RMS level is PAPR ~ 3 dB less than peak of 1.0
+   target = 1.0*10**(-3/20)
+   gain = target/np.sqrt(np.mean(np.abs(rx)**2))
+   print(f"AGC target {target:3.2f} gain: {gain:3.2e}")
+   rx *= gain
 # ensure an integer number of frames
 rx = np.concatenate((np.zeros(args.pad_samples, dtype=np.complex64),rx))
 #rx = rx[args.pad_samples:]
@@ -159,7 +167,7 @@ for s in np.arange(Q-1,sequence_length):
 Ry_smooth = np.zeros((sequence_length,Ncp+M),dtype=np.float32)
 for s in np.arange(sequence_length):
    Ry_smooth[s,:] = np.mean(Ry[s:s+Q,:],axis=0)
-print(Ry_smooth.shape)
+#print(Ry_smooth.shape)
 if len(args.write_Ry):
    Ry_smooth.flatten().tofile(args.write_Ry)
 Ry_smooth = torch.reshape(torch.tensor(Ry_smooth),(1,Ry_smooth.shape[0],Ry_smooth.shape[1]))

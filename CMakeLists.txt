@@ -643,6 +643,6 @@ add_test(NAME v2_rx2_ch
                        --ssb_bpf --write_rx brian_tx.f32; \
          cat brian_tx.f32 | python3 f32toint16.py --real --scale 16383 | ~/codec2-dev/build_linux/src/ch - - | python3 int16tof32.py --zeropad > brian_rx.f32
          ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync brian_rx.f32 /dev/null \
-         --latent-dim 56 --w1_dec 128 --gain 6.1E-5; \
+         --latent-dim 56 --w1_dec 128 --agc; \
          python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 4")
          set_tests_properties(v2_rx2_ch PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
