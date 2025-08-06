@@ -53,7 +53,7 @@ parser.add_argument('--write_latent', type=str, default="", help='path to output
 parser.add_argument('--bottleneck', type=int, default=3, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain (default 3)')
 parser.add_argument('--cp', type=float, default=0.004, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0.04)')
 parser.add_argument('--no_bpf', action='store_false', dest='bpf', help='disable BPF')
-parser.add_argument('--freq_offset', type=float, help='insert a frequency offset, e.g. for manual coarse freq estimation')
+parser.add_argument('--freq_offset', type=float, default=0, help='correct for this frequency offset')
 parser.add_argument('--time_offset', type=int, default=-16, help='time domain sampling time offset in samples')
 parser.add_argument('--correct_time_offset', type=int, default=-16, help='introduces a delay (or advance if -ve) in samples, applied in freq domain (default 0)')
 parser.add_argument('--plots', action='store_true', help='display various plots')
@@ -108,9 +108,13 @@ Ns = model.Ns           # number of rate Rs symbols per modem frame
 Nmf = int(Ns*(M+Ncp))   # number of samples in one modem frame
 Nc = model.Nc
 w = model.w.cpu().detach().numpy()
+Fs = float(model.Fs)
 
 # load rx rate_Fs samples
 rx = np.fromfile(args.rx, dtype=np.csingle)*args.gain
+w_off = 2*np.pi*args.freq_offset/Fs
+rx = rx*np.exp(-1j*w_off*np.arange(len(rx)))
+
 # optional AGC
 if args.agc:
    # target RMS level is PAPR ~ 3 dB less than peak of 1.0

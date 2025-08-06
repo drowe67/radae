@@ -41,13 +41,13 @@ printf "\nRun Rx and check ML "loss" is OK ... \n\n"
 rm -f features_rx_out.f32
 rx_log=$(mktemp)
 ./ota_test.sh -r rx.wav >${rx_log}
-python3 loss.py features_in.f32 features_rx_out.f32 --loss_test ${loss_thresh} --clip_start 150 | tee /dev/stderr | grep "PASS" 
+python3 loss.py features_in.f32 features_out_rx1.f32 --loss_test ${loss_thresh} --clip_start 150 | tee /dev/stderr | grep "PASS" 
 if [ $? -ne 0 ]; then
   exit 1
 fi
 
 printf "\nCheck C/No estimates close ...\n\n"
-CNodB_est=$(cat ${rx_log} | grep "Measured:" | tr -s ' ' | cut -d' ' -f2)
+CNodB_est=$(cat ${rx_log} | grep "Measured:" | tr -s ' ' | cut -d' ' -f3)
 if [ $? -ne 0 ]; then
   exit 1
 fi

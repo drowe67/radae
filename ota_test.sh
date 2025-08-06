@@ -172,9 +172,14 @@ function process_rx {
     cat ${rx_rade1}.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 2>>${filename}_report.txt > features_out_rx1.f32
     lpcnet_demo -fargan-synthesis features_out_rx1.f32 - | sox -t .s16 -r 16000 -c 1 - ${filename}_rade1.wav
     
+    # extract freq offset est from RADE V1
+    rade1_foff_samples=$(mktemp)
+    cat rx_report.txt | grep sync |  tr -s ' ' | cut -d' ' -f17 > $rade1_foff_samples
+    rade1_foff=$(python3 -c "import numpy as np; foff_samples=np.loadtxt(\"${rade1_foff_samples}\"); print(f\"{np.mean(foff_samples)}\") ")
+
     # RADE2 Rx
     cat ${rx_rade2}.raw | python3 int16tof32.py --zeropad > ${rx_rade2}.f32
-    ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync ${rx_rade2}.f32 ${filename}_rade2.wav --latent-dim 56 --w1_dec 128 --agc
+    ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync ${rx_rade2}.f32 ${filename}_rade2.wav --latent-dim 56 --w1_dec 128 --agc --freq_offset ${rade1_foff}
 
     speechfile_no_path_no_ext=$3
     if [ ! ${speechfile_no_path_no_ext} == "" ]; then
