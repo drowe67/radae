@@ -85,6 +85,11 @@ case $key in
         shift
         shift
     ;;
+    --sil)
+        sil="$2"
+        shift
+        shift
+    ;;
     --results)
         results="$2"
         shift
@@ -274,7 +279,7 @@ function process {
         fi
 
         if [ $mode == "fargan" ]; then
-            ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth ${in} out.wav --auxdata --passthru
+            lpcnet_demo -features ${in} - | lpcnet_demo -fargan-synthesis - - | sox -t .s16 -r 16000 -c 1 - out.wav
         fi
 
         if [ $mode == "bbfm" ]; then
