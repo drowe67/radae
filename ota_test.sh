@@ -174,7 +174,8 @@ function process_rx {
     
     # extract freq offset est from RADE V1
     rade1_foff_samples=$(mktemp)
-    cat rx_report.txt | grep sync |  tr -s ' ' | cut -d' ' -f17 > $rade1_foff_samples
+    # sed ensures all lines have a leading whitespace
+    cat ${filename}_report.txt | grep sync | sed 's/^/  /' | tr -s ' ' | cut -d' ' -f17 > $rade1_foff_samples
     rade1_foff=$(python3 -c "import numpy as np; foff_samples=np.loadtxt(\"${rade1_foff_samples}\"); print(f\"{np.mean(foff_samples)}\") ")
 
     # RADE2 Rx
