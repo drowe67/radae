@@ -551,7 +551,7 @@ function plot_wer_bbfm(prefix_fn, png_fn="", epslatex="")
   c = load(controls_fn);
 
   if length(epslatex)
-    [textfontsize linewidth] = set_fonts(20);
+    [textfontsize linewidth] = set_fonts(30);
   end
 
   # WER v RdBm plot
@@ -562,15 +562,17 @@ function plot_wer_bbfm(prefix_fn, png_fn="", epslatex="")
   plot(fm_lmr60(:,1),fm_lmr60(:,2),'bo--;FM LMR60;');
   plot(rade_lmr60(:,1),rade_lmr60(:,2),'go--;RADE LMR60;');
   xmax=-100; xmin=-130; 
+  plot([xmin xmax],[c(3) c(3)],'r-;Codec 2 3200;')
   plot([xmin xmax],[c(2) c(2)],'m-;FARGAN;')
   plot([xmin xmax],[c(1) c(1)],'c-;clean;')
   hold off;
   axis([xmin,xmax,0,40]); grid; ylabel('WER \%'); xlabel("R (dBm)");
+  legend('boxoff');
 
   if length(png_fn)
     print("-dpng",png_fn,"-S800,600");
   end
   if length(epslatex)
-    print_eps_restore(epslatex,"-S250,250",textfontsize,linewidth);
+    print_eps_restore(epslatex,"-S250,300",textfontsize,linewidth);
   end  
 end

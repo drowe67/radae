@@ -246,7 +246,7 @@ function process {
         CNo_mean=$(print_mean_text_file ${CNo_log})
     fi
 
-    if [ $mode == "rade" ] || [ $mode == "fargan" ] || [ $mode == "bbfm" ]; then
+    if [ $mode == "rade" ] || [ $mode == "fargan" ] || [ $mode == "bbfm" ] || [ $mode == "3200" ]; then
         # find length of each file
         duration_log=""
         flac_full=""
@@ -280,6 +280,11 @@ function process {
 
         if [ $mode == "fargan" ]; then
             lpcnet_demo -features ${in} - | lpcnet_demo -fargan-synthesis - - | sox -t .s16 -r 16000 -c 1 - out.wav
+        fi
+
+        # Codece 2 3200 as a control
+        if [ $mode == "3200" ]; then
+            sox -t.s16 -r 16000 -c 1 ${in} -t .s16 -r 8000 - | c2enc 3200 - - | c2dec 3200 - - | sox -t .s16 -r 8000 -c 1 - -r 16000 out.wav
         fi
 
         if [ $mode == "bbfm" ]; then
@@ -348,7 +353,7 @@ function process {
     if [ $mode == "ssb" ] || [ $mode == "rade" ] || [ $mode == "700D" ]; then
       printf "%-6s %5.2f %5.2f %5.2f\n" $mode $SNR_mean $CNo_mean $wer | tee -a $results
     fi
-    if [ $mode == "clean" ] || [ $mode == "fargan" ] || [ $mode == "4kHz" ]; then
+    if [ $mode == "clean" ] || [ $mode == "fargan" ] || [ $mode == "4kHz" ] || [ $mode == "3200" ]; then
       printf "%-6s %5.2f\n" $mode $wer | tee -a $results
     fi
     if [ $mode == "fm" ] || [ $mode == "bbfm" ]; then

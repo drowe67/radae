@@ -110,13 +110,14 @@ function bbfm_top {
     # intersample silence section at the end of some output files.  OK to remove
     # intersample silence as very little processing delay with FARGAN alone
     ./asr_test.sh fargan -n $n --results ${controls_file} --sil 0
+    ./asr_test.sh 3200 -n $n --results ${controls_file}
     # strip off all but last column for Octave plotting
     cat ${controls_file} | awk '{print $NF}' > ${results_file}_c.txt
 
     fm ${results_file}_awgn_fm.txt "-100 -110 -115 -118 -120 -122 -125"
     bbfm ${results_file}_awgn_bbfm.txt "-100 -110 -120 -125 -126 -127"
     fm ${results_file}_lmr60_fm.txt "-100 -105 -110 -113 -115 -117 -120" "--h_file h_lmr60_Fs_8000Hz.f32"
-    bbfm ${results_file}_lmr60_bbfm.txt "-100 -110 -120 -122 -123 -125 -126" "--h_file h_lmr60_Rs_2000Hz.f32"
+    bbfm ${results_file}_lmr60_bbfm.txt "-100 -105 -110 -115 -120 -122 -123 -125 -126" "--h_file h_lmr60_Rs_2000Hz.f32"
 }
 
 POSITIONAL=()
