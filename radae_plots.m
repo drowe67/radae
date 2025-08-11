@@ -573,6 +573,6 @@ function plot_wer_bbfm(prefix_fn, png_fn="", epslatex="")
     print("-dpng",png_fn,"-S800,600");
   end
   if length(epslatex)
-    print_eps_restore(epslatex,"-S250,300",textfontsize,linewidth);
+    print_eps_restore(epslatex,"-S250,250",textfontsize,linewidth);
   end  
 end
