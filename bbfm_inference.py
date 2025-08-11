@@ -46,10 +46,10 @@ parser.add_argument('features_hat', type=str, help='path to output feature file 
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
 parser.add_argument('--cuda-visible-devices', type=str, help="set to 0 to run using GPU rather than CPU", default="")
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
-parser.add_argument('--CNRdB', type=float, default=100, help='FM demod input CNR in dB')
+parser.add_argument('--RdBm', type=float, default=-100, help='Receive level set point in dBm')
 parser.add_argument('--passthru', action='store_true', help='copy features in to feature out, bypassing ML network')
 parser.add_argument('--h_file', type=str, default="", help='path to rate Rs fading channel magnitude samples, rate Rs time steps by Nc=1 carriers .f32 format')
-parser.add_argument('--write_CNRdB', type=str, default="", help='path to output file of CNRdB per sample after fading in .f32 format')
+parser.add_argument('--write_RdBm', type=str, default="", help='path to output file of RdBm per sample after fading in .f32 format')
 parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss to arg, print PASS/FAIL')
 args = parser.parse_args()
 
@@ -66,8 +66,8 @@ nb_total_features = 36
 num_features = 20
 num_used_features = 20
 
-# load model from a checkpoint file
-model = BBFM(num_features, latent_dim, args.CNRdB)
+model = BBFM(num_features, latent_dim, args.RdBm)
+# load model weights from a checkpoint file
 checkpoint = torch.load(args.model_name, map_location='cpu', weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 checkpoint['state_dict'] = model.state_dict()
@@ -81,10 +81,10 @@ features = features[:, :, :num_used_features]
 features = torch.tensor(features)
 print(f"Processing: {nb_features_rounded} feature vectors")
 
-# default rate Rb multipath model H=1
 Rb = model.Rb
 Nc = 1
 num_timesteps_at_rate_Rs = model.num_timesteps_at_rate_Rs(nb_features_rounded)
+# default AWGN channel (H=1)
 H = torch.ones((1,num_timesteps_at_rate_Rs,Nc))
 
 # user supplied rate Rs multipath model, sequence of H magnitude samples
@@ -93,7 +93,7 @@ if args.h_file:
    print(H.shape, num_timesteps_at_rate_Rs)
    if H.shape[1] < num_timesteps_at_rate_Rs:
       print("Multipath H file too short")
-      quit()
+      exit(1)
    H = H[:,:num_timesteps_at_rate_Rs,:]
    H = torch.tensor(H)
 
@@ -130,13 +130,13 @@ if __name__ == '__main__':
       else:
          print("FAIL")
 
-   # write output symbols (latent vectors)
+   # optionally write output symbols (latent vectors)
    if len(args.write_latent):
       z_hat = output["z_hat"].cpu().detach().numpy().flatten().astype('float32')
       z_hat.tofile(args.write_latent)
    
-   # write CNRdB after fading
-   if len(args.write_CNRdB):
-      CNRdB = output["CNRdB"].cpu().detach().numpy().flatten().astype('float32')
-      CNRdB.tofile(args.write_CNRdB)
+   # optionally write RdBm after fading
+   if len(args.write_RdBm):
+      RdBm = output["RdBm"].cpu().detach().numpy().flatten().astype('float32')
+      RdBm.tofile(args.write_RdBm)
       

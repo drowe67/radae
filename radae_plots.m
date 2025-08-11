@@ -72,19 +72,25 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='')
     end
 endfunction
 
-function do_plots_bbfm(z1_fn, z2_fn="", png_fn='')
+function do_plots_bbfm(z1_fn, z2_fn='', png_fn='', epslatex='')
+    if length(epslatex)
+      [textfontsize linewidth] = set_fonts(20);
+    end
     z1=load_f32(z1_fn,1);
     figure(1); clf; 
-    stem(z1(1:40),'g');
+    stem(z1(1:80),'g');
+    axis([0 80 -1.2 1.2]);
     if length(z2_fn) 
       z2=load_f32(z2_fn,1);
       hold on;
       stem(z2(1:40),'r');
       hold off;
     end
-    title('Rx Symbols');
     if length(png_fn)
       print("-dpng",sprintf("%s.png",png_fn));
+    end
+    if length(epslatex)
+      print_eps_restore(sprintf("%s.eps",epslatex),"-S300,200",textfontsize,linewidth);
     end
 endfunction
 
@@ -173,6 +179,29 @@ function loss_CNo_plot(png_fn, Rs, B, varargin)
      ylabel('loss');
     if length(png_fn)
         print("-dpng",png_fn);
+    end
+endfunction
+
+% Plots loss v R curves from text files dumped by train_bbfm.py, pass in pairs from *loss_RdBm.txt,legend
+function loss_RdBm_plot(png_fn, epslatex, varargin)
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts(20);
+    end
+    figure(1); clf; hold on;
+    i = 1;
+    while i <= length(varargin)
+        fn = varargin{i};
+        data = load(fn);
+        i++; leg = varargin{i}; leg = strrep (leg, "_", "-")
+        plot(data(:,1),data(:,2),sprintf("+-;%s;",leg))
+        i++;
+    end
+    hold off; grid; xlabel('R (dBm)'); ylabel('loss'); legend('boxoff');
+    if length(png_fn)
+        print("-dpng",png_fn);
+    end
+    if length(epslatex)
+        print_eps_restore(epslatex,"-S300,200",textfontsize,linewidth);
     end
 endfunction
 
@@ -394,40 +423,64 @@ function y = relu(x)
   y(find(x<0)) = 0;
 end
 
-% Plot SNR v CNR for FM demod model
-function plot_SNR_CNR(epslatex="")
+function y = heaviside(x)
+ y = x>0;
+end
+
+% Plot SNR v R for FM demod model
+function bbfm_plot_SNR_R(epslatex="")
     if length(epslatex)
-        [textfontsize linewidth] = set_fonts();
+        [textfontsize linewidth] = set_fonts(20);
     end
-    figure(1); clf; hold on;
-    fd=5000; fm=3000; 
-    beta= fd/fm;
-    Gfm=10*log10(3*(beta^2)*(beta+1))
-    BWfm = 2*(fd+fm);
+
+    fd=2500; fm=3000; A = 1; k=1.38E-23; T=274; NFdB=5;
+    beta = fd/fm;
+    x_bar = A^2/2;
+    Gfm=10*log10(3*(beta^2)*x_bar/(1E3*k*T*fm)) - NFdB;
+    TdBm = 12 - Gfm;
+    printf("fd: %6.0f fm: %6.0f Beta: %f A: %5.2f x_bar: %5.2f Gfm: %5.2f dB TdBm: %5.2f\n", fd, fm, beta, A, x_bar, Gfm, TdBm);
 
     % vanilla implementation of curve
-    CNRdB=0:20;
-    for i=1:length(CNRdB)
-      if CNRdB(i) >= 12
-        SNRdB(i) = CNRdB(i) + Gfm;
+    RdBm=-130:-105;
+    for i=1:length(RdBm)
+      if RdBm(i) >= TdBm
+        SNRdB(i) = RdBm(i) + Gfm;
       else
-        SNRdB(i) = (1+Gfm/3)*CNRdB(i) - 3*Gfm;
+        SNRdB(i) = 3*RdBm(i) + Gfm - 2*TdBm;
       end
     end
 
-    % implementation using relus (suitable for PyTorch)
-    SNRdB_relu = relu(CNRdB-12) + 12 + Gfm;
-    SNRdB_relu += -relu(-(CNRdB-12))*(1+Gfm/3);
-
-    plot(CNRdB,SNRdB,'g;FM;'); 
-    plot(CNRdB,SNRdB_relu,'r+;FM relu;'); 
-    SSBdB = CNRdB + 10*log10(BWfm) - 10*log10(fm);
-    plot(CNRdB,SSBdB,'b;SSB;'); 
-    axis([min(CNRdB) max(CNRdB) 10 30]);
-    hold off; grid('minor'); xlabel('CNR (dB)'); ylabel('SNR (dB)'); legend('boxoff'); legend('location','northwest');
-    if length(epslatex)
-        print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
+    % implementation using common ML toolkit non-linearity rather than if/then for efficiency in training
+    SNRdB_heaviside = (RdBm+Gfm).*heaviside(RdBm-TdBm) + (3*RdBm+Gfm-2*TdBm).*heaviside(-RdBm+TdBm);
+  
+    figure(1); clf; hold on;
+    plot(RdBm,SNRdB,'g+-');
+    if length(epslatex) == 0
+      hold on; plot(RdBm,SNRdB_heaviside,'bx'); hold off;
     end
+    grid('minor'); xlabel('R (dBm)'); ylabel('SNR (dB)'); legend('off');
+    if length(epslatex)
+        print_eps_restore(epslatex,"-S300,200",textfontsize,linewidth);
+    end
+endfunction
+
+% test expression derived from Carslon (17)
+function bbfm_carlson()
+    fd=2500; fm=3000; 
+    beta = fd/fm;
+    Sx = 0.5;
+    Bt = 9E3;
+    CNR_dB = 0:20; CNR = 10.^(CNR_dB/10);
+    SNR1 = 3*(beta^2)*Sx*CNR;
+    num = 3*(beta^2)*Sx*CNR;
+    denom = (1+(12*beta/pi)*CNR.*exp(-fm*CNR/Bt));
+    SNR3 = num./denom;
+    SNR1_dB = 10*log10(SNR1);
+    SNR3_dB = 10*log10(SNR3);
+    figure(1); clf; hold on;
+    plot(CNR_dB,SNR1_dB,'b;Eq (1);');
+    plot(CNR_dB,SNR3_dB,'r;Eq (4);');
+    hold off; grid;
 endfunction
 
 % test handling of single sample per symbol phase jumps
@@ -494,4 +547,44 @@ function plot_sample_spec(wav_fn,png_spec_fn="")
   if length(png_spec_fn)
     print("-dpng",png_spec_fn,"-S800,600");
   end
+end
+
+function plot_wer_bbfm(prefix_fn, png_fn="", epslatex="")
+  fm_awgn_fn = sprintf("%s_asr_awgn_fm.txt",prefix_fn);
+  rade_awgn_fn = sprintf("%s_asr_awgn_bbfm.txt",prefix_fn);
+  fm_lmr60_fn = sprintf("%s_asr_lmr60_fm.txt",prefix_fn);
+  rade_lmr60_fn = sprintf("%s_asr_lmr60_bbfm.txt",prefix_fn);
+  controls_fn = sprintf("%s_asr_c.txt",prefix_fn);
+
+  fm_awgn = load(fm_awgn_fn);
+  rade_awgn = load(rade_awgn_fn);
+  fm_lmr60 = load(fm_lmr60_fn);
+  rade_lmr60 = load(rade_lmr60_fn);
+  c = load(controls_fn);
+
+  if length(epslatex)
+    [textfontsize linewidth] = set_fonts(30);
+  end
+
+  # WER v RdBm plot
+  figure(1); clf;
+  plot(fm_awgn(:,1),fm_awgn(:,2),'b+-;FM AWGN;');
+  hold on;
+  plot(rade_awgn(:,1),rade_awgn(:,2),'g+-;RADE AWGN;');
+  plot(fm_lmr60(:,1),fm_lmr60(:,2),'bo--;FM LMR60;');
+  plot(rade_lmr60(:,1),rade_lmr60(:,2),'go--;RADE LMR60;');
+  xmax=-100; xmin=-130; 
+  plot([xmin xmax],[c(3) c(3)],'r-;Codec 2 3200;')
+  plot([xmin xmax],[c(2) c(2)],'m-;FARGAN;')
+  plot([xmin xmax],[c(1) c(1)],'c-;clean;')
+  hold off;
+  axis([xmin,xmax,0,40]); grid; ylabel('WER \%'); xlabel("R (dBm)");
+  legend('boxoff');
+
+  if length(png_fn)
+    print("-dpng",png_fn,"-S800,600");
+  end
+  if length(epslatex)
+    print_eps_restore(epslatex,"-S250,250",textfontsize,linewidth);
+  end  
 end
