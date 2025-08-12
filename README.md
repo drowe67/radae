@@ -9,11 +9,6 @@ The RADE source code is released under the two-clause BSD license.
 
 For acronyms RADAE and RADE can be used interchangeably.  RADAE was the original name of the project.
 
-# Quickstart
-
-1. Installation section
-1. Inference section
-
 # Files
 
 | File | Description |
