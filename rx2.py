@@ -190,35 +190,42 @@ rx = np.concatenate((np.zeros(Ncp+M,dtype=np.complex64),rx,np.zeros(Ncp+M,dtype=
 if args.timing_onesec:
    # Use average of first 1 second of FT est to obtain ideal sampling point, avoid
    # first few symbols as they appear to be start up transients.  Really basic first pass
-   s = round(np.mean(delta_hat[10:50]-M))
+   s = int(np.mean(delta_hat[10:50]-M))
    print(f"sampling instant: {s:d}")
    rx = rx[Ncp+M+s:Ncp+M+s+len_rx]
    # obtain z_hat from OFDM rx signal
    rx = torch.tensor(rx, dtype=torch.complex64)
    z_hat = model.receiver(rx,run_decoder=False)
-   print(z_hat.shape)
+   print("z_hat.shape",z_hat.shape)
 else:
-   z_hat = torch.zeros((1,sequence_length//2, model.latent_dim), dtype=torch.float32)
-   for i in np.arange(0,sequence_length,model.Ns):
-      s = int(delta_hat[i]-M)
-      st = (i+1)*(Ncp+M)+s
-      en = st + 2*(Ncp+M)
+    # use timing estimates a they evolve
+   Nframes = sequence_length//model.Ns
+   z_hat = torch.zeros((1,Nframes, model.latent_dim), dtype=torch.float32)
+   for i in np.arange(0,Nframes):
+      s = int(delta_hat[model.Ns*i]-M)
+      st = (model.Ns*i+2)*(Ncp+M)+s
+      en = st + model.Ns*(Ncp+M)
       print(i,s,st,en)
-      # extract rx samples for i-th symbol
+      # extract rx samples for i-th frame
       rx_i = torch.tensor(rx[st:en], dtype=torch.complex64)
       #print(rx_i.shape)
       # run receiver to extract i-th freq domain OFDM symbols z_hat
       az_hat = model.receiver(rx_i,run_decoder=False)
       #print(z_hat.shape, z_hat[0,i,:].shape,az_hat.shape,az_hat[0,:,:].shape )
-      z_hat[0,i//2,:] = az_hat
+      z_hat[0,i,:] = az_hat
+   print("z_hat.shape",z_hat.shape)
+
+if len(args.write_latent):
+   z_hat.cpu().detach().numpy().flatten().astype('float32').tofile(args.write_latent)
       
 # now perform ML frame sync, two possibilities offset by one OFDM symbol (half a z vector)
 Nsync_syms = 10 # average sync metric over this many OFDM symbols
 print(z_hat.shape)
 z_hat = torch.reshape(z_hat,(1,-1,latent_dim//2))
 print(z_hat.shape)
-sync_even = torch.mean(sync_nn(torch.reshape(z_hat[0,:Nsync_syms,:],(1,-1,latent_dim))))
-sync_odd = torch.mean(sync_nn(torch.reshape(z_hat[0,1:Nsync_syms+1,:],(1,-1,latent_dim))))
+sync_st=10
+sync_even = torch.mean(sync_nn(torch.reshape(z_hat[0,sync_st:sync_st+Nsync_syms,:],(1,-1,latent_dim))))
+sync_odd = torch.mean(sync_nn(torch.reshape(z_hat[0,sync_st+1:sync_st+1+Nsync_syms,:],(1,-1,latent_dim))))
 print(f"sync_even: {sync_even:5.2f} sync_odd: {sync_odd:5.2f}")
 if sync_even > sync_odd:
    offset = 0
