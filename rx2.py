@@ -63,13 +63,15 @@ parser.add_argument('--stateful',  action='store_true', help='use stateful core 
 parser.add_argument('--xcorr_dimension', type=int, help='Dimension of Input cross-correlation (fine timing)',default = 160,required = False)
 parser.add_argument('--gru_dim', type=int, help='GRU Dimension (fine timing)',default = 64,required = False)
 parser.add_argument('--output_dim', type=int, help='Output dimension (fine timing)',default = 160,required = False)
-parser.add_argument('--write_Ry', type=str, default="", help='path to autocorrelation output feature file dim (Ncp+M) .f32 format in .f32 format')
+parser.add_argument('--write_Ry', type=str, default="", help='path to autocorrelation output feature file dim (seq_len,Ncp+M) .f32 format')
+parser.add_argument('--write_delta_hat', type=str, default="", help='path to delta_hat output feature file dim (seq_len) .f32 format in .f32 format')
 parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
 parser.add_argument('--pad_samples', type=int, default=0, help='Pad input with samples to simulate different timing offsets in rx signal')
 parser.add_argument('--gain', type=float, default=1.0, help='manual gain control')
 parser.add_argument('--agc', action='store_true', help='automatic gain control')
 parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output dimension (default 96)')
+parser.add_argument('--timing_onesec', action='store_true', help='first pass timing that just samples first 1s of sample')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -158,6 +160,7 @@ if args.plots:
 # have a stateful fine timing estimator
 
 sequence_length = len(rx)//(Ncp+M) - 2
+print(sequence_length)
 Q = 8
 Ry = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
 for s in np.arange(Q-1,sequence_length):
@@ -171,36 +174,49 @@ for s in np.arange(Q-1,sequence_length):
 Ry_smooth = np.zeros((sequence_length,Ncp+M),dtype=np.float32)
 for s in np.arange(sequence_length):
    Ry_smooth[s,:] = np.mean(Ry[s:s+Q,:],axis=0)
-#print(Ry_smooth.shape)
 if len(args.write_Ry):
    Ry_smooth.flatten().tofile(args.write_Ry)
 Ry_smooth = torch.reshape(torch.tensor(Ry_smooth),(1,Ry_smooth.shape[0],Ry_smooth.shape[1]))
 
 logits_softmax = ft_nn(Ry_smooth)
 delta_hat = torch.argmax(logits_softmax, 2).cpu().detach().numpy().flatten().astype('float32')
-#print(delta_hat)
-# Use average of first 1 second of FT est to obtain ideal sampling point, avoid
-# first few symbols as they appear to be start up transients. This is the location
-# of the first sample after the CP (see hf3 doc figure)
-s = round(np.mean(delta_hat[10:50]-M))
-print(f"sampling instant: {s:d}")
-len_rx = len(rx)
+if len(args.write_delta_hat):
+   delta_hat.flatten().tofile(args.write_delta_hat)
 # concat rx vector with zeros at either end so we can extract an integer number of symbols
 # despite fine timing offset
+len_rx = len(rx)
 rx = np.concatenate((np.zeros(Ncp+M,dtype=np.complex64),rx,np.zeros(Ncp+M,dtype=np.complex64)))
 # extract a vector corrected for fine timing est
-rx = rx[Ncp+M+s:Ncp+M+s+len_rx]
-# dummy frame sync
-#rx = rx[(Ncp+M):]
-#sys.exit(1)
-
-# obtain z_hat from OFDM rx signal
-rx = torch.tensor(rx, dtype=torch.complex64)
-z_hat = model.receiver(rx,run_decoder=False)
-
+if args.timing_onesec:
+   # Use average of first 1 second of FT est to obtain ideal sampling point, avoid
+   # first few symbols as they appear to be start up transients.  Really basic first pass
+   s = round(np.mean(delta_hat[10:50]-M))
+   print(f"sampling instant: {s:d}")
+   rx = rx[Ncp+M+s:Ncp+M+s+len_rx]
+   # obtain z_hat from OFDM rx signal
+   rx = torch.tensor(rx, dtype=torch.complex64)
+   z_hat = model.receiver(rx,run_decoder=False)
+   print(z_hat.shape)
+else:
+   z_hat = torch.zeros((1,sequence_length//2, model.latent_dim), dtype=torch.float32)
+   for i in np.arange(0,sequence_length,model.Ns):
+      s = int(delta_hat[i]-M)
+      st = (i+1)*(Ncp+M)+s
+      en = st + 2*(Ncp+M)
+      print(i,s,st,en)
+      # extract rx samples for i-th symbol
+      rx_i = torch.tensor(rx[st:en], dtype=torch.complex64)
+      #print(rx_i.shape)
+      # run receiver to extract i-th freq domain OFDM symbols z_hat
+      az_hat = model.receiver(rx_i,run_decoder=False)
+      #print(z_hat.shape, z_hat[0,i,:].shape,az_hat.shape,az_hat[0,:,:].shape )
+      z_hat[0,i//2,:] = az_hat
+      
 # now perform ML frame sync, two possibilities offset by one OFDM symbol (half a z vector)
 Nsync_syms = 10 # average sync metric over this many OFDM symbols
+print(z_hat.shape)
 z_hat = torch.reshape(z_hat,(1,-1,latent_dim//2))
+print(z_hat.shape)
 sync_even = torch.mean(sync_nn(torch.reshape(z_hat[0,:Nsync_syms,:],(1,-1,latent_dim))))
 sync_odd = torch.mean(sync_nn(torch.reshape(z_hat[0,1:Nsync_syms+1,:],(1,-1,latent_dim))))
 print(f"sync_even: {sync_even:5.2f} sync_odd: {sync_odd:5.2f}")
