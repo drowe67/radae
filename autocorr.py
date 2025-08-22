@@ -5,10 +5,11 @@
    
    Example:
 
-     ./inference.sh 250506/checkpoints/checkpoint_epoch_200.pth wav/all.wav /dev/null --bottleneck 3
-      --rate_Fs --auxdata --cp 0.004 --write_rx rx.f32
+     ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/all.wav /dev/null \\
+      --rate_Fs --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 \\
+      --auxdata --w1_dec 128 --write_rx all_rx.f32
 
-     python3 autocorr.py rx.f32 Ry.f32 delta.f32 -128 32
+     python3 autocorr.py rx.f32 Ry.f32 delta.f32
 
 /* Copyright (c) 2025 David Rowe */
    
@@ -50,10 +51,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('y', type=str, help='path to input file of rate Fs rx samples in ..IQIQ...f32 format')
 parser.add_argument('Ry', type=str, help='path to autocorrelation output feature file dim (Ncp+M) .f32 format')
 parser.add_argument('delta', type=str, help='path to fine timing ground truth (delta) output file dim .f32 format')
-parser.add_argument('tau', type=int, help='autocorrelation lag (e.g. M or 2(Ncp+M))')
-parser.add_argument('N', type=int, help='number of samples to correlate over (e.g. Ncp or M)')
 parser.add_argument('-Q', type=int, default=1, help='number of past symbols to correlate over (default 1)')
-parser.add_argument('--sequence_length', type=int, default=50, help='sequence length - number of consectutive symbols with same fine timing (default 100)')
+parser.add_argument('--sequence_length', type=int, default=50, help='sequence length - number of consectutive symbols with same fine timing (default 50)')
 parser.add_argument('-M', type=int, default=128, help='length of symbol in samples without cyclic prefix (default 128)')
 parser.add_argument('--Ncp', type=int, default=32, help='length of cyclic prefix in samples (default 32)')
 parser.add_argument('--Nseq', type=int, default=0, help='extract just first Nseq sequences (default extract all)')
@@ -63,8 +62,6 @@ parser.add_argument('--seq_hop', type=int, default=1, help='How many input symbo
 args = parser.parse_args()
 M = args.M
 Ncp = args.Ncp
-tau = args.tau
-N = args.N
 Q = args.Q
 sequence_length = args.sequence_length
 seq_hop = args.seq_hop
@@ -81,7 +78,7 @@ S = (np.dot(y,np.conj(y))/len(y)).real
 print(f"Nseq: {Nseq:d}, S: {S:5.2f}")
 
 # generate a unit power complex gaussian noise vector of the samme length as y
-rng = np.random.default_rng()
+rng = np.random.default_rng(42)
 n = (rng.standard_normal(size=len(y),dtype=np.float32) + 1j*rng.standard_normal(size=len(y),dtype=np.float32))/np.sqrt(2)
 print(f"var(n): {np.var(n):5.2f}")
 
@@ -102,7 +99,7 @@ for seq in np.arange(Nseq):
    print(f"\r{seq:d} ", end='')
 
    # single random timing offset for entire sequence
-   delta = int(np.random.random()*(Ncp+M))
+   delta = int(rng.random()*(Ncp+M))
 
    # chunk of input samples that we add noise to
    y_ = np.copy(y[seq*seq_hop*(Ncp+M):(seq*seq_hop+sequence_length+Q+1)*(Ncp+M)])
@@ -120,12 +117,14 @@ for seq in np.arange(Nseq):
    Ry = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
    for s in np.arange(sequence_length+Q-1):
       for delta_hat in np.arange(Ncp+M):
-         st = (s+1)*(Ncp+M) - delta + delta_hat
+         # Ncp term at start to adjust input samples to y(0) time reference used in paper
+         # st is the y(0) sample of the s-th symbol
+         st = Ncp + (s+1)*(Ncp+M) - delta + delta_hat
          #print(s,st, len(y_))
-         y1 = y_[st-tau:st-tau+N]
-         y2 = y_[st:st+N]
-         num = np.abs(np.dot(y1, np.conj(y2)))
-         den = np.abs((np.dot(y1, np.conj(y1)) + np.dot(y2, np.conj(y2))))
+         y_cp = y_[st-Ncp:st]
+         y_m = y_[st-Ncp+M:st+M]
+         num = np.abs(np.dot(y_cp, np.conj(y_m)))**2
+         den = 0.25*np.abs((np.dot(y_cp, np.conj(y_cp)) + np.dot(y_m, np.conj(y_m))))**2
          Ry[s,delta_hat] = num/den
 
    # Now output Ry & delta for each step in sequence, smoothing Ry over last Q symbols
