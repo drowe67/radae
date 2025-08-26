@@ -646,3 +646,13 @@ add_test(NAME v2_rx2_ch
          --latent-dim 56 --w1_dec 128 --agc; \
          python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 4")
          set_tests_properties(v2_rx2_ch PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# ML fine timing autocorr tool unit test
+
+add_test(NAME v2_autocorr
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
+                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
+                       --ssb_bpf --write_rx brian_tx.f32; \
+         python3 autocorr.py brian_tx.f32 Ry.f32 delta.f32 --Nseq 10 -Q 8 --test")
+         set_tests_properties(v2_autocorr PROPERTIES PASS_REGULAR_EXPRESSION "PASS")

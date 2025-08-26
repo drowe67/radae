@@ -57,8 +57,10 @@ parser.add_argument('-M', type=int, default=128, help='length of symbol in sampl
 parser.add_argument('--Ncp', type=int, default=32, help='length of cyclic prefix in samples (default 32)')
 parser.add_argument('--Nseq', type=int, default=0, help='extract just first Nseq sequences (default extract all)')
 parser.add_argument('--bpf',  type=int, default=0, help='enable band pass filter (default off)')
+parser.add_argument('--snr', type=float, default=100.00, help='Inject noise at a single SNR (default no noise)')
 parser.add_argument('--range_snr', action='store_true', help='Inject noise using a range of SNRs for training (default no noise)')
 parser.add_argument('--seq_hop', type=int, default=1, help='How many input symbols to jump for each training sequence (default 1)')
+parser.add_argument('--test', action='store_true', help='Test mode, check argmax(Ry) == delta')
 args = parser.parse_args()
 M = args.M
 Ncp = args.Ncp
@@ -66,6 +68,7 @@ Q = args.Q
 sequence_length = args.sequence_length
 seq_hop = args.seq_hop
 Fs = 8000
+passes = 0
 
 y = np.fromfile(args.y, dtype=np.complex64)
 if args.Nseq == 0:
@@ -107,11 +110,13 @@ for seq in np.arange(Nseq):
    # SNR value for sequence
    if args.range_snr:
       SNR3kdB = -2 +  15*rng.random()
-      SNR3k = 10**(SNR3kdB/10)
-      sigma = ((S*Fs)/(SNR3k*3000))**0.5
-      n_ = sigma*n[seq*seq_hop*(Ncp+M):(seq*seq_hop+sequence_length+Q+1)*(Ncp+M)]
-      y_ += n_
-      print(f"SNRdB: {SNR3kdB:5.2f} sigma: {sigma:5.2f} sigma_: {np.var(n_):5.2f}",end='')
+   else:
+      SNR3kdB = args.snr
+   SNR3k = 10**(SNR3kdB/10)
+   sigma = ((S*Fs)/(SNR3k*3000))**0.5
+   n_ = sigma*n[seq*seq_hop*(Ncp+M):(seq*seq_hop+sequence_length+Q+1)*(Ncp+M)]
+   y_ += n_
+   print(f"SNRdB: {SNR3kdB:5.2f} sigma: {sigma:5.2f} sigma_: {np.var(n_):5.2f}",end='')
    
    # calculate Ry for every time step in the sequence, plus Q-1 extra to support smoothing
    Ry = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
@@ -129,10 +134,26 @@ for seq in np.arange(Nseq):
 
    # Now output Ry & delta for each step in sequence, smoothing Ry over last Q symbols
    for s in np.arange(sequence_length):
-      aRy = np.mean(Ry[s:s+Q,:],axis=0)
-      aRy.tofile(f_Ry)
+      Ry_bar = np.mean(Ry[s:s+Q,:],axis=0)
+      Ry_bar.tofile(f_Ry)
       np.array([delta], dtype=np.float32).tofile(f_delta)
+      if args.test:
+         max_delta_hat = np.argmax(Ry_bar)
+         nmax = Ncp + M
+         # allow +/2 error, and recall error is modulo nmax e.g. error(0,159) is 1
+         ft_error = ((max_delta_hat - delta + nmax/2) % nmax) - nmax/2
+         if abs(ft_error) < 3:
+            passes += 1
+         else:
+            print(f" delta: {delta:d} max_delta_hat: {max_delta_hat:d} ft_error: {ft_error:f}")
 
 f_Ry.close()
 f_delta.close()
 print(f"")
+
+if args.test:
+   print(f"target: {Nseq*sequence_length:d} passes: {passes:d}")
+   if passes == Nseq*sequence_length:
+      print("PASS")
+   else:
+      print("FAIL")
