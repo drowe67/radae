@@ -61,6 +61,7 @@ parser.add_argument('--snr', type=float, default=100.00, help='Inject noise at a
 parser.add_argument('--range_snr', action='store_true', help='Inject noise using a range of SNRs for training (default no noise)')
 parser.add_argument('--seq_hop', type=int, default=1, help='How many input symbols to jump for each training sequence (default 1)')
 parser.add_argument('--test', action='store_true', help='Test mode, check argmax(Ry) == delta')
+parser.add_argument('--recursion', action='store_true', help='Use efficient recursion')
 args = parser.parse_args()
 M = args.M
 Ncp = args.Ncp
@@ -119,28 +120,54 @@ for seq in np.arange(Nseq):
    print(f"SNRdB: {SNR3kdB:5.2f} sigma: {sigma:5.2f} sigma_: {np.var(n_):5.2f}",end='')
    
    # calculate Ry for every time step in the sequence, plus Q-1 extra to support smoothing
-   Ry = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
+   Ry_norm = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
+
    for s in np.arange(sequence_length+Q-1):
-      for delta_hat in np.arange(Ncp+M):
-         # Ncp term at start to adjust input samples to y(0) time reference used in paper
-         # st is the y(0) sample of the s-th symbol
+      if args.recursion:
+         # note: this didn't speed up Python code but might be useful for C version
+         # compute delta_hat = 0 the long way
+         delta_hat = 0
          st = Ncp + (s+1)*(Ncp+M) - delta + delta_hat
-         #print(s,st, len(y_))
          y_cp = y_[st-Ncp:st]
          y_m = y_[st-Ncp+M:st+M]
-         num = np.abs(np.dot(y_cp, np.conj(y_m)))**2
-         den = 0.25*np.abs((np.dot(y_cp, np.conj(y_cp)) + np.dot(y_m, np.conj(y_m))))**2
-         Ry[s,delta_hat] = num/den
+         Ry = np.dot(y_cp, np.conj(y_m))
+         D = np.dot(y_cp, np.conj(y_cp)) + np.dot(y_m, np.conj(y_m))
+         Ry_norm[s,delta_hat] = 2.*np.abs(Ry)/np.abs(D)
+         # use recursion for remaining delta_hat
+         for delta_hat in np.arange(1,Ncp+M):
+            st = Ncp + (s+1)*(Ncp+M) - delta + delta_hat
+            y_cp = y_[st-Ncp:st]
+            y_m = y_[st-Ncp+M:st+M]
+            #Ry = np.dot(y_cp, np.conj(y_m))
+            Ry = Ry - y_[st-Ncp-1]*np.conj(y_[st-Ncp+M-1]) + y_[st-1]*np.conj(y_[st+M-1])
+            D = np.dot(y_cp, np.conj(y_cp)) + np.dot(y_m, np.conj(y_m))
+            Ry_norm[s,delta_hat] = 2.*np.abs(Ry)/np.abs(D)
+
+      else:
+         for delta_hat in np.arange(Ncp+M):
+            # Ncp term at start to adjust input samples to y(0) time reference used in paper
+            # st is the y(0) sample of the s-th symbol
+            st = Ncp + (s+1)*(Ncp+M) - delta + delta_hat
+            
+            y_cp = y_[st-Ncp:st]
+            y_m = y_[st-Ncp+M:st+M]
+            
+            Ry = np.dot(y_cp, np.conj(y_m))
+            D = np.dot(y_cp, np.conj(y_cp)) + np.dot(y_m, np.conj(y_m))
+            
+            Ry_norm[s,delta_hat] = 2.*np.abs(Ry)/np.abs(D)            
+            
 
    # Now output Ry & delta for each step in sequence, smoothing Ry over last Q symbols
    for s in np.arange(sequence_length):
-      Ry_bar = np.mean(Ry[s:s+Q,:],axis=0)
+      Ry_bar = np.mean(Ry_norm[s:s+Q,:],axis=0)
       Ry_bar.tofile(f_Ry)
       np.array([delta], dtype=np.float32).tofile(f_delta)
       if args.test:
          max_delta_hat = np.argmax(Ry_bar)
          nmax = Ncp + M
-         # allow +/2 error, and recall error is modulo nmax e.g. error(0,159) is 1
+         # allow +/2 error, and recall error is modulo nmax e.g. error(0,159) is 1.
+         # A test mode based on variance of ft_error might be useful here
          ft_error = ((max_delta_hat - delta + nmax/2) % nmax) - nmax/2
          if abs(ft_error) < 3:
             passes += 1
