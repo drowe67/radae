@@ -654,13 +654,7 @@ add_test(NAME v2_autocorr
                        ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
                        --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
                        --ssb_bpf --write_rx brian_tx.f32; \
-         python3 autocorr.py brian_tx.f32 Ry.f32 delta.f32 --Nseq 10 -Q 8 --test")
-         set_tests_properties(v2_autocorr PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
-
-add_test(NAME v2_autocorr_rec
-         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
-                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
-                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
-                       --ssb_bpf --write_rx brian_tx.f32; \
-         python3 autocorr.py brian_tx.f32 Ry_rec.f32 delta_rec.f32 --Nseq 10 -Q 8 --recursion --test";
-         set_tests_properties(v2_autocorr_rec PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+         python3 autocorr.py brian_tx.f32 Ry.f32 delta.f32 --Nseq 10 -Q 8 --test;
+         python3 autocorr.py brian_tx.f32 Ry_rec.f32 delta_rec.f32 --Nseq 10 -Q 8 --recursion --test;
+         python3 diff_f32.py Ry.f32 Ry_rec.f32")
+         set_tests_properties(v2_autocorr PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL")
