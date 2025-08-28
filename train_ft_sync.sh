@@ -12,12 +12,15 @@ inference_args="--rate_Fs --latent-dim 56 --peak --cp 0.004 --time_offset -16 --
 train_args=""
 
 function train_fine_timing() {
+    ft_model_id=$1
+    Nseq=$2
+    seq_hop=$3
     if [ ! -f ${model_id}_rx_mpp.f32 ]; then
       ./inference.sh  ${model} ${speech} /dev/null ${inference_args} --write_rx ${model_id}_rx_mpp.f32 --g_file g_mpp.f32
     fi
-    python3 autocorr.py  ${model_id}_rx_mpp.f32 Ry_mpp.f32 delta_mpp.f32 -128 32 --Nseq 4000 -Q 8 --range_snr --bpf 800 --seq_hop 25
-    python3 train_ft.py Ry_mpp.f32 delta_mpp.f32 --epochs 40 --save_model ${model_id}_ft
-    python3 train_ft.py Ry_mpp.f32 delta_mpp.f32 --inference ${model_id}_ft --fte_ml fte_ml.f32 --fte_dsp fte_dsp.ml
+    #python3 autocorr.py  ${model_id}_rx_mpp.f32 Ry_${ft_model_id}.f32 delta_${ft_model_id}.f32 --Nseq ${Nseq} --seq_hop ${seq_hop} -Q 8 --range_snr --bpf 800 
+    #python3 train_ft.py Ry_${ft_model_id}.f32 delta_${ft_model_id}.f32 --epochs 100 --save_model ${model_id}_${ft_model_id}_ft
+    python3 train_ft.py Ry_${ft_model_id}.f32 delta_${ft_model_id}.f32 --inference ${model_id}_${ft_model_id}_ft --fte_ml fte_${ft_model_id}_ml.f32 --fte_dsp fte_${ft_model_id}_dsp.f32
 }
 
 function train_sync() {
@@ -32,5 +35,6 @@ function train_sync() {
     python3 ml_sync.py ${model_id}_z_train.f32 --count 100000 --start 1000000 --inference ${model_id}_ml_sync --write_y_hat y_hat.f32 --latent_dim 56
 }
 
-#train_fine_timing
-train_sync
+train_fine_timing mpp_4k 4000 25
+train_fine_timing mpp_16k 16000 10
+#train_sync

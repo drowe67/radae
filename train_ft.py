@@ -23,6 +23,7 @@ parser.add_argument('--save_model', type=str, default="", help='filename of mode
 parser.add_argument('--inference', type=str, default="", help='Inference only with filename of saved model (default training mode)')
 parser.add_argument('--fte_ml', type=str, help='optional file to save fine time errors from ML')
 parser.add_argument('--fte_dsp', type=str, help='optional file to save fine time errors from clasical DSP argmax(Ry)')
+parser.add_argument('--Ncp', type=int, default=32, help='length of cyclic prefix in samples, used as outlier threshold (default 32)')
 
 args = parser.parse_args()
 
@@ -93,7 +94,7 @@ batch_size = 256
 dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=False)
 
 ft_nn = ft_nn.to(device)
-print(ft_nn)
+#print(ft_nn)
 num_weights = sum(p.numel() for p in ft_nn.parameters())
 print(f"weights: {num_weights}")
 
@@ -132,7 +133,7 @@ if len(args.inference) == 0:
                 avg_loss = np.mean(losses)
                 std_ml = np.mean(vars_ml)**0.5
                 std_dsp = np.mean(vars_dsp)**0.5
-                train_epoch.set_postfix({"Train Epoch" : epoch, "Train Loss":avg_loss, "std_ml" : std_ml,  "std_dsp" : std_dsp})
+                train_epoch.set_postfix({"Epoch" : epoch, "loss":avg_loss, "std_ml" : std_ml, "std_dsp" : std_dsp})
     
     if len(args.save_model):
         print(f"Saving model to: {args.save_model}")
@@ -169,8 +170,13 @@ else:
             ft_error_dsp.cpu().detach().numpy().flatten().astype('float32').tofile(f_fte_dsp)
 
     std_ml = np.std(ft_errors_ml)
+    Noutliers_ml = float(len(np.argwhere(np.abs(ft_errors_ml) > args.Ncp/2)))
     std_dsp = np.std(ft_errors_dsp)
-    print(f"Ntested: {dataset.__len__():d} std_ml: {std_ml:5.2f} std_dsp: {std_dsp:5.2f}")
+    Noutliers_dsp = float(len(np.argwhere(np.abs(ft_errors_dsp) > args.Ncp/2)))
+    N = dataset.__len__()*args.sequence_length
+    outliers_ml = 100*Noutliers_ml/N
+    outliers_dsp = 100*Noutliers_dsp/N
+    print(f"N: {dataset.__len__()*args.sequence_length:d} std_ml: {std_ml:5.2f} outliers_ml: {outliers_ml:5.3f}% std_dsp: {std_dsp:5.2f} outliers_dsp: {outliers_dsp:5.3f}%")
     
     if args.fte_ml:
         f_fte_ml.close()

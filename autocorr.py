@@ -52,7 +52,7 @@ parser.add_argument('y', type=str, help='path to input file of rate Fs rx sample
 parser.add_argument('Ry', type=str, help='path to autocorrelation output feature file dim (Ncp+M) .f32 format')
 parser.add_argument('delta', type=str, help='path to fine timing ground truth (delta) output file dim .f32 format')
 parser.add_argument('-Q', type=int, default=1, help='number of past symbols to correlate over (default 1)')
-parser.add_argument('--sequence_length', type=int, default=50, help='sequence length - number of consectutive symbols with same fine timing (default 50)')
+parser.add_argument('--sequence_length', type=int, default=50, help='sequence length - number of consecutive symbols with same fine timing (default 50)')
 parser.add_argument('-M', type=int, default=128, help='length of symbol in samples without cyclic prefix (default 128)')
 parser.add_argument('--Ncp', type=int, default=32, help='length of cyclic prefix in samples (default 32)')
 parser.add_argument('--Nseq', type=int, default=0, help='extract just first Nseq sequences (default extract all)')
@@ -72,14 +72,23 @@ Fs = 8000
 passes = 0
 
 y = np.fromfile(args.y, dtype=np.complex64)
+Nseq_available = len(y) // (Ncp+M)
 if args.Nseq == 0:
-   Nseq = len(y) // (Ncp+M) - sequence_length - 1
+   Nseq = Nseq_available
 else:
    Nseq = args.Nseq
+
+# make sure we don't run off the end of the file
+Nseq_required = Nseq*seq_hop + sequence_length+Q+1
+print(f"Nseq: {Nseq:d} Nseq_available: {Nseq_available:d} Nseq_required: {Nseq_required:d}")
+if Nseq_required > Nseq_available:
+   print(f"Nseq too large ... quiting")
+   quit()
+
 # measure signal power for entire vector to ensure a good mean if fading is present
 S = (np.dot(y,np.conj(y))/len(y)).real
 #S=np.var(y)
-print(f"Nseq: {Nseq:d}, S: {S:5.2f}")
+print(f"Signal power S: {S:5.2f}")
 
 # generate a unit power complex gaussian noise vector of the samme length as y
 rng = np.random.default_rng(42)
