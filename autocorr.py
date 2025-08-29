@@ -166,7 +166,6 @@ for seq in np.arange(Nseq):
             
             Ry_norm[s,delta_hat] = 2.*np.abs(Ry)/np.abs(D)            
             
-
    # Now output Ry & delta for each step in sequence, smoothing Ry over last Q symbols
    for s in np.arange(sequence_length):
       Ry_bar = np.mean(Ry_norm[s:s+Q,:],axis=0)

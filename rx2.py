@@ -162,26 +162,27 @@ if args.plots:
 sequence_length = len(rx)//(Ncp+M) - 2
 print(sequence_length)
 Q = 8
-Ry = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
+Ry_norm = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
 for s in np.arange(Q-1,sequence_length):
    for delta_hat in np.arange(Ncp+M):
       st = (s+1)*(Ncp+M) + delta_hat
-      y1 = rx[st-M:st-M+Ncp]
-      y2 = rx[st:st+Ncp]
-      num = np.abs(np.dot(y1, np.conj(y2)))
-      den = np.abs((np.dot(y1, np.conj(y1)) + np.dot(y2, np.conj(y2))))
-      Ry[s,delta_hat] = num/(den+1E-12)
-Ry_smooth = np.zeros((sequence_length,Ncp+M),dtype=np.float32)
+      y_cp = rx[st-Ncp:st]
+      y_m = rx[st-Ncp+M:st+M]
+      Ry = np.dot(y_cp, np.conj(y_m))
+      D = np.dot(y_cp, np.conj(y_cp)) + np.dot(y_m, np.conj(y_m))
+      Ry_norm[s,delta_hat] = 2.*np.abs(Ry)/np.abs(D)
+Ry_bar = np.zeros((sequence_length,Ncp+M),dtype=np.float32)
 for s in np.arange(sequence_length):
-   Ry_smooth[s,:] = np.mean(Ry[s:s+Q,:],axis=0)
+   Ry_bar[s,:] = np.mean(Ry_norm[s:s+Q,:],axis=0)
 if len(args.write_Ry):
-   Ry_smooth.flatten().tofile(args.write_Ry)
-Ry_smooth = torch.reshape(torch.tensor(Ry_smooth),(1,Ry_smooth.shape[0],Ry_smooth.shape[1]))
+   Ry_bar.flatten().tofile(args.write_Ry)
+Ry_bar = torch.reshape(torch.tensor(Ry_bar),(1,Ry_bar.shape[0],Ry_bar.shape[1]))
 
-logits_softmax = ft_nn(Ry_smooth)
+logits_softmax = ft_nn(Ry_bar)
 delta_hat = torch.argmax(logits_softmax, 2).cpu().detach().numpy().flatten().astype('float32')
 if len(args.write_delta_hat):
    delta_hat.flatten().tofile(args.write_delta_hat)
+quit()
 # concat rx vector with zeros at either end so we can extract an integer number of symbols
 # despite fine timing offset
 len_rx = len(rx)
@@ -192,11 +193,11 @@ if args.timing_onesec:
    # first few symbols as they appear to be start up transients.  Really basic first pass
    s = int(np.mean(delta_hat[10:50]-M))
    print(f"sampling instant: {s:d}")
-   rx = rx[Ncp+M+s:Ncp+M+s+len_rx]
+   #rx = rx[Ncp+M+s:Ncp+M+s+len_rx]
    # obtain z_hat from OFDM rx signal
    rx = torch.tensor(rx, dtype=torch.complex64)
    z_hat = model.receiver(rx,run_decoder=False)
-   print("z_hat.shape",z_hat.shape)
+   #print("z_hat.shape",z_hat.shape)
 else:
     # use timing estimates a they evolve
    Nframes = sequence_length//model.Ns
