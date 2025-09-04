@@ -8,6 +8,7 @@ PATH=${PATH}:${OPUS}
 model_id=250725
 model=${model_id}/checkpoints/checkpoint_epoch_200.pth
 speech=~/Downloads/all_speech.wav
+speech_test=wav/all.wav
 inference_args="--rate_Fs --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128"
 train_args=""
 
@@ -35,6 +36,48 @@ function train_sync() {
     python3 ml_sync.py ${model_id}_z_train.f32 --count 100000 --start 1000000 --inference ${model_id}_ml_sync --write_y_hat y_hat.f32 --latent_dim 56
 }
 
-train_fine_timing mpp_4k 4000 25
-train_fine_timing mpp_16k 16000 10
-#train_sync
+function test_ft() {
+    ft_model=$1
+    snr=$2
+    shift; shift
+    filename=$(basename -- "${speech_test}")
+    filename="${filename%.*}"
+    ./inference.sh  ${model} ${speech_test} /dev/null ${inference_args} --write_rx ${filename}_rx.f32 $@
+    python3 autocorr.py ${filename}_rx.f32 Ry.f32 delta.f32 --seq_hop 50 --Nseq 45 -Q 16 --bpf 800 --snr ${snr}
+    python3 train_ft.py Ry.f32 delta.f32 --inference ${ft_model} --fte_ml fte_ml.f32 --fte_dsp fte_dsp.f32
+}
+
+function print_help {
+    echo "usage:"
+    echo "  ./train_ft_sync.sh mode [options]"
+    echo ""
+    echo "  ./train_ft_sync.sh test_ft model snr [options]"
+    echo "  ./train_ft_sync.sh 250725_mpp_16k_ft 10"
+    echo "  ./train_ft_sync.sh test_ft 250725_mpp_16k_ft 0 --g_file g_mpp.f32"
+    echo ""
+    exit 1
+}
+
+if [ $# -lt 1 ]; then
+    print_help
+fi
+
+mode=$1
+if [ $mode == "train_ft" ]; then
+  if [ $# -lt 2 ]; then
+    print_help
+  fi
+  train_fine_timing $2
+fi
+if [ $mode == "train_sync" ]; then
+  train_sync
+fi
+if [ $mode == "test_ft" ]; then
+  if [ $# -lt 3 ]; then
+    print_help
+  fi
+  ft_model=$2
+  snr=$3
+  shift; shift; shift
+  test_ft $ft_model $snr $@
+fi

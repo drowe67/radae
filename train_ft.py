@@ -170,7 +170,8 @@ else:
             ft_error_dsp.cpu().detach().numpy().flatten().astype('float32').tofile(f_fte_dsp)
 
     std_ml = np.std(ft_errors_ml)
-    Noutliers_ml = float(len(np.argwhere(np.abs(ft_errors_ml) > args.Ncp/2)))
+    mean_ml = np.mean(ft_errors_ml)
+    Noutliers_ml = float(len(np.argwhere(np.abs(ft_errors_ml-mean_ml) > args.Ncp/2)))
     std_dsp = np.std(ft_errors_dsp)
     Noutliers_dsp = float(len(np.argwhere(np.abs(ft_errors_dsp) > args.Ncp/2)))
     N = dataset.__len__()*args.sequence_length
