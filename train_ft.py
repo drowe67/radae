@@ -24,6 +24,7 @@ parser.add_argument('--inference', type=str, default="", help='Inference only wi
 parser.add_argument('--fte_ml', type=str, help='optional file to save fine time errors from ML')
 parser.add_argument('--fte_dsp', type=str, help='optional file to save fine time errors from clasical DSP argmax(Ry)')
 parser.add_argument('--Ncp', type=int, default=32, help='length of cyclic prefix in samples, used as outlier threshold (default 32)')
+parser.add_argument('--Nacq', type=int, default=0, help='remove samples from start of estimates due to acquisition (default 0)')
 
 args = parser.parse_args()
 
@@ -159,6 +160,14 @@ else:
         delta, Ry = delta.to(device, non_blocking=True), Ry.to(device, non_blocking=True)
         logits_softmax = ft_nn(Ry)
         delta_hat = torch.argmax(logits_softmax, 2)
+
+        # optionally remove acquisition estimates, as we are more interested in steady state performance after acquisition
+        #print(delta.shape, delta_hat.shape, Ry.shape)
+        delta = delta[:,args.Nacq:]
+        delta_hat = delta_hat[:,args.Nacq:]
+        Ry = Ry[:,args.Nacq:,:]
+        #print(delta.shape, delta_hat.shape, Ry.shape)
+        
         ft_error_ml = calc_ft_error_ml(delta_hat = delta_hat,labels = delta, nmax = args.output_dim)
         ft_errors_ml.append(ft_error_ml.detach().cpu().flatten())
         if args.fte_ml:

@@ -72,28 +72,28 @@ Fs = 8000
 passes = 0
 
 y = np.fromfile(args.y, dtype=np.complex64)
-Nseq_available = len(y) // (Ncp+M)
+Nsym_available = len(y) // (Ncp+M)
 if args.Nseq == 0:
-   Nseq = Nseq_available
+   # TODO not sure if this is quite right
+   Nseq = (Nsym_available - sequence_length-Q-1) // seq_hop
 else:
    Nseq = args.Nseq
 
 # make sure we don't run off the end of the file
-Nseq_required = Nseq*seq_hop + sequence_length+Q+1
-print(f"Nseq: {Nseq:d} Nseq_available: {Nseq_available:d} Nseq_required: {Nseq_required:d}")
-if Nseq_required > Nseq_available:
-   print(f"Nseq too large ... quiting")
+Nsym_required = Nseq*seq_hop + sequence_length+Q+1
+print(f"Nseq: {Nseq:d} Nsym_available: {Nsym_available:d} Nsym_required: {Nsym_required:d}")
+if Nsym_required > Nsym_available:
+   print(f"File not long enough ... quiting")
    quit()
 
 # measure signal power for entire vector to ensure a good mean if fading is present
 S = (np.dot(y,np.conj(y))/len(y)).real
-#S=np.var(y)
-print(f"Signal power S: {S:5.2f}")
+#print(f"Signal power S: {S:5.2f}")
 
 # generate a unit power complex gaussian noise vector of the samme length as y
 rng = np.random.default_rng(42)
 n = (rng.standard_normal(size=len(y),dtype=np.float32) + 1j*rng.standard_normal(size=len(y),dtype=np.float32))/np.sqrt(2)
-print(f"var(n): {np.var(n):5.2f}")
+#print(f"var(n): {np.var(n):5.2f}")
 
 f_Ry = open(args.Ry,"wb")
 f_delta = open(args.delta,"wb")
@@ -142,13 +142,14 @@ for seq in np.arange(Nseq):
          Ry = np.dot(y_cp, np.conj(y_m))
          D = np.dot(y_cp, np.conj(y_cp)) + np.dot(y_m, np.conj(y_m))
          Ry_norm[s,delta_hat] = 2.*np.abs(Ry)/np.abs(D)
-         # use recursion for remaining delta_hat
+         # use recursion for remaining delta_hat != 0
          for delta_hat in np.arange(1,Ncp+M):
             st = Ncp + (s+1)*(Ncp+M) - delta + delta_hat
             y_cp = y_[st-Ncp:st]
             y_m = y_[st-Ncp+M:st+M]
             #Ry = np.dot(y_cp, np.conj(y_m))
             Ry = Ry - y_[st-Ncp-1]*np.conj(y_[st-Ncp+M-1]) + y_[st-1]*np.conj(y_[st+M-1])
+            # TODO this could be efficiently computed via recursion as well
             D = np.dot(y_cp, np.conj(y_cp)) + np.dot(y_m, np.conj(y_m))
             Ry_norm[s,delta_hat] = 2.*np.abs(Ry)/np.abs(D)
 

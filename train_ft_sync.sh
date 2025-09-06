@@ -43,16 +43,17 @@ function test_ft() {
     filename=$(basename -- "${speech_test}")
     filename="${filename%.*}"
     ./inference.sh  ${model} ${speech_test} /dev/null ${inference_args} --write_rx ${filename}_rx.f32 $@
-    python3 autocorr.py ${filename}_rx.f32 Ry.f32 delta.f32 --seq_hop 50 --Nseq 45 -Q 16 --bpf 800 --snr ${snr}
-    python3 train_ft.py Ry.f32 delta.f32 --inference ${ft_model} --fte_ml fte_ml.f32 --fte_dsp fte_dsp.f32
+    python3 autocorr.py ${filename}_rx.f32 Ry.f32 delta.f32 --seq_hop 50 -Q 8 --bpf 800 --snr ${snr} --sequence_length 200
+    python3 train_ft.py Ry.f32 delta.f32 --inference ${ft_model} --fte_ml fte_ml.f32 --fte_dsp fte_dsp.f32 --sequence_length 200
 }
 
 function print_help {
     echo "usage:"
     echo "  ./train_ft_sync.sh mode [options]"
     echo ""
-    echo "  ./train_ft_sync.sh test_ft model snr [options]"
-    echo "  ./train_ft_sync.sh 250725_mpp_16k_ft 10"
+    echo "FT Test mode:"
+    echo "  ./train_ft_sync.sh test_ft ft_model snr [options]"
+    echo "  ./train_ft_sync.sh test_ft 250725_mpp_16k_ft 10"
     echo "  ./train_ft_sync.sh test_ft 250725_mpp_16k_ft 0 --g_file g_mpp.f32"
     echo ""
     exit 1
