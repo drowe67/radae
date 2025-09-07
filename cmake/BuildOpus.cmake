@@ -6,7 +6,9 @@ if (CMAKE_CROSSCOMPILING)
 set(CONFIGURE_COMMAND ${CONFIGURE_COMMAND} --host=${CMAKE_C_COMPILER_TARGET} --target=${CMAKE_C_COMPILER_TARGET})
 endif (CMAKE_CROSSCOMPILING)
 
+if (NOT DEFINED OPUS_URL)
 set(OPUS_URL https://github.com/xiph/opus/archive/refs/heads/main.zip)
+endif (NOT DEFINED OPUS_URL)
 
 include(ExternalProject)
 if(APPLE AND BUILD_OSX_UNIVERSAL)
