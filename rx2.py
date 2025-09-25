@@ -182,7 +182,7 @@ logits_softmax = ft_nn(Ry_bar)
 delta_hat = torch.argmax(logits_softmax, 2).cpu().detach().numpy().flatten().astype('float32')
 if len(args.write_delta_hat):
    delta_hat.flatten().tofile(args.write_delta_hat)
-quit()
+
 # concat rx vector with zeros at either end so we can extract an integer number of symbols
 # despite fine timing offset
 len_rx = len(rx)
@@ -190,14 +190,16 @@ rx = np.concatenate((np.zeros(Ncp+M,dtype=np.complex64),rx,np.zeros(Ncp+M,dtype=
 # extract a vector corrected for fine timing est
 if args.timing_onesec:
    # Use average of first 1 second of FT est to obtain ideal sampling point, avoid
-   # first few symbols as they appear to be start up transients.  Really basic first pass
-   s = int(np.mean(delta_hat[10:50]-M))
+   # first few symbols as they appear to be start up transients.  Really basic first pass.
+   # Note conversion in time reference, delta_hat is referenced to Ncp/M boundary, but
+   # receiver uses start of CP.
+   delta_hat_rx = int(np.mean(delta_hat[10:50])) - Ncp
    print(f"sampling instant: {s:d}")
-   #rx = rx[Ncp+M+s:Ncp+M+s+len_rx]
+   rx = rx[Ncp+M+delta_hat_rx:Ncp+M+delta_hat_rx+len_rx]
    # obtain z_hat from OFDM rx signal
    rx = torch.tensor(rx, dtype=torch.complex64)
    z_hat = model.receiver(rx,run_decoder=False)
-   #print("z_hat.shape",z_hat.shape)
+   print("z_hat.shape",z_hat.shape)
 else:
     # use timing estimates a they evolve
    Nframes = sequence_length//model.Ns
@@ -206,7 +208,7 @@ else:
       s = int(delta_hat[model.Ns*i]-M)
       st = (model.Ns*i+2)*(Ncp+M)+s
       en = st + model.Ns*(Ncp+M)
-      print(i,s,st,en)
+      #print(i,s,st,en)
       # extract rx samples for i-th frame
       rx_i = torch.tensor(rx[st:en], dtype=torch.complex64)
       #print(rx_i.shape)
