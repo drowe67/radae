@@ -64,7 +64,8 @@ parser.add_argument('--xcorr_dimension', type=int, help='Dimension of Input cros
 parser.add_argument('--gru_dim', type=int, help='GRU Dimension (fine timing)',default = 64,required = False)
 parser.add_argument('--output_dim', type=int, help='Output dimension (fine timing)',default = 160,required = False)
 parser.add_argument('--write_Ry', type=str, default="", help='path to autocorrelation output feature file dim (seq_len,Ncp+M) .f32 format')
-parser.add_argument('--write_delta_hat', type=str, default="", help='path to delta_hat output feature file dim (seq_len) .f32 format in .f32 format')
+parser.add_argument('--write_delta_hat', type=str, default="", help='path to delta_hat output file dim (seq_len) .f32 format in .f32 format')
+parser.add_argument('--write_delta_hat_rx', type=str, default="", help='path to delta_hat_rx file dim (seq_len) .f32 format in .f32 format')
 parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
 parser.add_argument('--pad_samples', type=int, default=0, help='Pad input with samples to simulate different timing offsets in rx signal')
@@ -194,19 +195,20 @@ if args.timing_onesec:
    # Note conversion in time reference, delta_hat is referenced to Ncp/M boundary, but
    # receiver uses start of CP.
    delta_hat_rx = int(np.mean(delta_hat[10:50])) - Ncp
-   print(f"sampling instant: {s:d}")
+   print(f"sampling instant: {delta_hat_rx:d}")
    rx = rx[Ncp+M+delta_hat_rx:Ncp+M+delta_hat_rx+len_rx]
    # obtain z_hat from OFDM rx signal
    rx = torch.tensor(rx, dtype=torch.complex64)
    z_hat = model.receiver(rx,run_decoder=False)
    print("z_hat.shape",z_hat.shape)
 else:
-    # use timing estimates a they evolve
+   # use timing estimates as they evolve
    Nframes = sequence_length//model.Ns
    z_hat = torch.zeros((1,Nframes, model.latent_dim), dtype=torch.float32)
+   delta_hat_rx = np.zeros(Nframes,dtype=np.int16)
    for i in np.arange(0,Nframes):
-      s = int(delta_hat[model.Ns*i]-M)
-      st = (model.Ns*i+2)*(Ncp+M)+s
+      delta_hat_rx[i] = int(delta_hat[model.Ns*i]-Ncp)
+      st = (model.Ns*i+2)*(Ncp+M) + delta_hat_rx[i]
       en = st + model.Ns*(Ncp+M)
       #print(i,s,st,en)
       # extract rx samples for i-th frame
@@ -217,6 +219,10 @@ else:
       #print(z_hat.shape, z_hat[0,i,:].shape,az_hat.shape,az_hat[0,:,:].shape )
       z_hat[0,i,:] = az_hat
    print("z_hat.shape",z_hat.shape)
+print(delta_hat_rx)
+
+if len(args.write_delta_hat_rx):
+   np.float32(delta_hat_rx).flatten().tofile(args.write_delta_hat_rx)
 
 if len(args.write_latent):
    z_hat.cpu().detach().numpy().flatten().astype('float32').tofile(args.write_latent)
