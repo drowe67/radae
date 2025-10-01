@@ -73,6 +73,8 @@ parser.add_argument('--gain', type=float, default=1.0, help='manual gain control
 parser.add_argument('--agc', action='store_true', help='automatic gain control')
 parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output dimension (default 96)')
 parser.add_argument('--timing_onesec', action='store_true', help='first pass timing that just samples first 1s of sample')
+parser.add_argument('--noframe_sync', action='store_true', help='disable frame sync (default enabled)')
+parser.add_argument('--test_mode', action='store_true', help='inject test delta sequence')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -187,7 +189,8 @@ if len(args.write_delta_hat):
 # concat rx vector with zeros at either end so we can extract an integer number of symbols
 # despite fine timing offset
 len_rx = len(rx)
-rx = np.concatenate((np.zeros(Ncp+M,dtype=np.complex64),rx,np.zeros(Ncp+M,dtype=np.complex64)))
+#rx = np.concatenate((np.zeros(Ncp+M,dtype=np.complex64),rx,np.zeros(Ncp+M,dtype=np.complex64)))
+rx = np.concatenate((rx,np.zeros(Ncp+M,dtype=np.complex64)))
 # extract a vector corrected for fine timing est
 if args.timing_onesec:
    # Use average of first 1 second of FT est to obtain ideal sampling point, avoid
@@ -206,11 +209,25 @@ else:
    Nframes = sequence_length//model.Ns
    z_hat = torch.zeros((1,Nframes, model.latent_dim), dtype=torch.float32)
    delta_hat_rx = np.zeros(Nframes,dtype=np.int16)
+   test_delta_hat_rx = 2
+   # note only one time estimate per frame (Ns symbols), we don't want a timing change
+   # mid frame
    for i in np.arange(0,Nframes):
-      delta_hat_rx[i] = int(delta_hat[model.Ns*i]-Ncp)
-      st = (model.Ns*i+2)*(Ncp+M) + delta_hat_rx[i]
+      if args.test_mode:
+         delta_hat_rx[i] = int(np.mean(delta_hat[10:50])) - Ncp
+         if i == 50:
+            test_delta_hat_rx -= 3
+         if i == 60:
+            test_delta_hat_rx += 3
+         delta_hat_rx[i] = test_delta_hat_rx
+      else:
+         delta_hat_rx[i] = int(delta_hat[model.Ns*i]-Ncp)
+
+      st = (model.Ns*i)*(Ncp+M) + delta_hat_rx[i]
+      st = max(st,0)
       en = st + model.Ns*(Ncp+M)
-      #print(i,s,st,en)
+      if i < 10:
+         print(i,delta_hat_rx[i],st,en)
       # extract rx samples for i-th frame
       rx_i = torch.tensor(rx[st:en], dtype=torch.complex64)
       #print(rx_i.shape)
@@ -228,23 +245,24 @@ if len(args.write_latent):
    z_hat.cpu().detach().numpy().flatten().astype('float32').tofile(args.write_latent)
       
 # now perform ML frame sync, two possibilities offset by one OFDM symbol (half a z vector)
-Nsync_syms = 10 # average sync metric over this many OFDM symbols
-print(z_hat.shape)
-z_hat = torch.reshape(z_hat,(1,-1,latent_dim//2))
-print(z_hat.shape)
-sync_st=10
-sync_even = torch.mean(sync_nn(torch.reshape(z_hat[0,sync_st:sync_st+Nsync_syms,:],(1,-1,latent_dim))))
-sync_odd = torch.mean(sync_nn(torch.reshape(z_hat[0,sync_st+1:sync_st+1+Nsync_syms,:],(1,-1,latent_dim))))
-print(f"sync_even: {sync_even:5.2f} sync_odd: {sync_odd:5.2f}")
-if sync_even > sync_odd:
-   offset = 0
-else:
-   offset = 1
-z_hat_len = z_hat.shape[1]
-z_hat = z_hat[:,offset:z_hat_len-offset,:]
+if args.noframe_sync == False:
+   Nsync_syms = 10 # average sync metric over this many OFDM symbols
+   print(z_hat.shape)
+   z_hat = torch.reshape(z_hat,(1,-1,latent_dim//2))
+   print(z_hat.shape)
+   sync_st=10
+   sync_even = torch.mean(sync_nn(torch.reshape(z_hat[0,sync_st:sync_st+Nsync_syms,:],(1,-1,latent_dim))))
+   sync_odd = torch.mean(sync_nn(torch.reshape(z_hat[0,sync_st+1:sync_st+1+Nsync_syms,:],(1,-1,latent_dim))))
+   print(f"sync_even: {sync_even:5.2f} sync_odd: {sync_odd:5.2f}")
+   if sync_even > sync_odd:
+      offset = 0
+   else:
+      offset = 1
+   z_hat_len = z_hat.shape[1]
+   z_hat = z_hat[:,offset:z_hat_len-offset,:]
+   z_hat = torch.reshape(z_hat,(1,-1,latent_dim))
 
 # run RADE decoder
-z_hat = torch.reshape(z_hat,(1,-1,latent_dim))
 features_hat = model.core_decoder(z_hat)
 features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:nb_total_features-num_features]], dim=-1)
 #print(features_hat.shape)
