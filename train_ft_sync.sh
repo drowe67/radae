@@ -5,7 +5,7 @@
 OPUS=build/src
 PATH=${PATH}:${OPUS}
 
-model_id=250725
+model_id=251001a
 model=${model_id}/checkpoints/checkpoint_epoch_200.pth
 speech=~/Downloads/all_speech.wav
 speech_test=wav/all.wav
@@ -19,8 +19,8 @@ function train_fine_timing() {
     if [ ! -f ${model_id}_rx_mpp.f32 ]; then
       ./inference.sh  ${model} ${speech} /dev/null ${inference_args} --write_rx ${model_id}_rx_mpp.f32 --g_file g_mpp.f32
     fi
-    #python3 autocorr.py  ${model_id}_rx_mpp.f32 Ry_${ft_model_id}.f32 delta_${ft_model_id}.f32 --Nseq ${Nseq} --seq_hop ${seq_hop} -Q 8 --range_snr --bpf 800 
-    #python3 train_ft.py Ry_${ft_model_id}.f32 delta_${ft_model_id}.f32 --epochs 100 --save_model ${model_id}_${ft_model_id}_ft
+    python3 autocorr.py  ${model_id}_rx_mpp.f32 Ry_${ft_model_id}.f32 delta_${ft_model_id}.f32 --Nseq ${Nseq} --seq_hop ${seq_hop} -Q 8 --range_snr --bpf 800 
+    python3 train_ft.py Ry_${ft_model_id}.f32 delta_${ft_model_id}.f32 --epochs 100 --save_model ${model_id}_${ft_model_id}_ft
     python3 train_ft.py Ry_${ft_model_id}.f32 delta_${ft_model_id}.f32 --inference ${model_id}_${ft_model_id}_ft --fte_ml fte_${ft_model_id}_ml.f32 --fte_dsp fte_${ft_model_id}_dsp.f32
 }
 
@@ -68,7 +68,8 @@ if [ $mode == "train_ft" ]; then
   if [ $# -lt 2 ]; then
     print_help
   fi
-  train_fine_timing $2
+  shift; 
+  train_fine_timing $@
 fi
 if [ $mode == "train_sync" ]; then
   train_sync

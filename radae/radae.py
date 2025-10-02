@@ -790,6 +790,7 @@ class RADAE(nn.Module):
             # per-sequence random [-1,1] ms time shift, which results in a linear phase shift across frequency
             # models fine timing errors
             if self.timing_rand:
+                """
                 d = 0.001*(1 - 2*torch.rand((num_batches,1),device=tx_sym.device))
                 # Use vector multiply to create a shape (batch,Nc) 2D tensor
                 phase_offset = -d*torch.reshape(self.w,(1,self.Nc))*self.Fs
@@ -799,6 +800,22 @@ class RADAE(nn.Module):
                 tx_sym = tx_sym.permute(0,2,1)
                 tx_sym = tx_sym * torch.exp(1j*phase_offset)
                 tx_sym = tx_sym.permute(0,2,1)
+                """
+
+                # each symbol has it's own time offset
+                d = 0.001*(1 - 2*torch.rand((num_batches,num_timesteps_at_rate_Rs,1),device=tx_sym.device))
+                # expand tensor to (num_batches,num_timesteps,Nc), same time offset for each carrier
+                d_big = d.expand(-1,-1,self.Nc)
+                #print(d_big[0,0:5,:])
+                #print(d_big[1,0:10,:])
+                # bphase[:,] = omega
+                #print(d_big.shape,self.w.shape)
+                # Use element by element multiplication to get phase shifts for each carrier of each symbol
+                phase_offset = -d_big*self.w*self.Fs
+                #print(phase_offset[0,0:5,:])
+                #print(d_big.shape, phase_offset.shape)
+                #quit()
+                tx_sym = tx_sym * torch.exp(1j*phase_offset)
 
             # per sequence random [-2,2] fine frequency offset        
             if self.freq_rand:
