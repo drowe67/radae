@@ -45,7 +45,8 @@ class RADAEDataset(torch.utils.data.Dataset):
                 h_file="",            # rate Rs multipath channel samples
                 g_file="",            # rate Fs multipath channel samples
                 rate_Fs = False,
-                auxdata = False       # one auxillary data symbol in every feature vector
+                auxdata = False,      # one auxillary data symbol in every feature vector
+                h_dtype = np.float32
                 ):
 
         self.sequence_length = sequence_length
@@ -66,7 +67,7 @@ class RADAEDataset(torch.utils.data.Dataset):
         # optionally set up rate Rs multipath model
         self.H_sequence_length = H_sequence_length
         if len(h_file):
-            self.H = np.reshape(np.fromfile(h_file, dtype=np.float32), (-1, Nc))
+            self.H = np.reshape(np.fromfile(h_file, h_dtype), (-1, Nc))
             self.H_num_sequences = self.H.shape[0] // self.H_sequence_length
             if self.H_num_sequences < self.num_sequences:
                 print(f"dataloader: Number sequences in multipath H file less than feature file:")
