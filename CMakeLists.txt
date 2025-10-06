@@ -658,3 +658,15 @@ add_test(NAME v2_autocorr
          python3 autocorr.py brian_tx.f32 Ry_rec.f32 delta_rec.f32 --Nseq 10 -Q 8 --recursion --test;
          python3 diff_f32.py Ry.f32 Ry_rec.f32")
          set_tests_properties(v2_autocorr PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL")
+
+# WIP 251002 model, FT looking good but still needs frame sync
+add_test(NAME v2_251002
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       ./inference.sh 251002/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
+                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata \
+                       --w1_dec 128 --write_rx brian_rx_mpp.f32 --g_file g_mpp.f32; \
+                       ./rx2.sh 251002/checkpoints/checkpoint_epoch_200.pth 251002_mpp_16k_ft 250725_ml_sync \
+                       brian_rx_mpp.f32 /dev/null --latent-dim 56 --w1_dec 128 --write_Ry Ry.f32 \
+                       --write_delta_hat_rx delta_hat_rx.f32 --noframe_sync;
+                       python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 25")
+         set_tests_properties(v2_autocorr PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL")

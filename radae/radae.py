@@ -802,14 +802,17 @@ class RADAE(nn.Module):
                 tx_sym = tx_sym.permute(0,2,1)
                 """
 
-                # each symbol has it's own time offset
-                d = 0.001*(1 - 2*torch.rand((num_batches,num_timesteps_at_rate_Rs,1),device=tx_sym.device))
-                # expand tensor to (num_batches,num_timesteps,Nc), same time offset for each carrier
-                d_big = d.expand(-1,-1,self.Nc)
+                # each frame (two symbols) has it's own time offset
+                Ns_ = 2 # TODO make train.py calculate Ns correctly
+                assert (num_timesteps_at_rate_Rs % Ns_) == 0
+                d = 0.001*(1 - 2*torch.rand((num_batches,num_timesteps_at_rate_Rs//Ns_,1),device=tx_sym.device))
+                # expand tensor to (num_batches,num_timesteps,Nc), same time offset for each carrier across Ns symbols 
+                d_big = d.expand(-1,-1,Ns_*self.Nc)
+                d_big = torch.reshape(d_big, (num_batches,num_timesteps_at_rate_Rs,self.Nc))
                 #print(d_big[0,0:5,:])
                 #print(d_big[1,0:10,:])
                 # bphase[:,] = omega
-                #print(d_big.shape,self.w.shape)
+                #print(d.shape, d_big.shape,self.w.shape)
                 # Use element by element multiplication to get phase shifts for each carrier of each symbol
                 phase_offset = -d_big*self.w*self.Fs
                 #print(phase_offset[0,0:5,:])

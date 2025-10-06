@@ -5,7 +5,7 @@
 OPUS=build/src
 PATH=${PATH}:${OPUS}
 
-model_id=251001a
+model_id=251002
 model=${model_id}/checkpoints/checkpoint_epoch_200.pth
 speech=~/Downloads/all_speech.wav
 speech_test=wav/all.wav
