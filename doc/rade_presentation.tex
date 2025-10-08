@@ -350,12 +350,58 @@ RADE is an outcome of the FreeDV Project ...
 
 \begin{frame}{RADE V2}
 \begin{itemize}
-\item RADE V1 is hybrid DSP/ML deisgn
+\item RADE V1 is hybrid DSP/ML design
 \item What if we build all components using ML?
-\item TOOD: block diagram
-\item TODO: table comparing
-\item status, some basic OTA tests, comfirming key features.  Building up and integrating ML signal processing blocks.
+\item Status: basic OTA tests, comfirming key features.
+\item Building up and integrating ML signal processing blocks.
+\item Speech quality target $\ge$ RADE V1. 
+\item Sensitivity target 2-3 dB better than RADE V1.
 \end{itemize}
+
+\vspace{5mm}
+
+\begin{tabular}{|c||c||c||c|}
+\hline
+     & RADE V1 & RADE V2 & SSB \\
+\hline
+Audio Bandwidth (Hz) & 8000 & 8000 & 2400 \\
+RF Bandwidth (Hz) & 1500 & 800 & 2400 \\
+99\% OBW (Hz) & - & 800 & 2400 \\
+PAPR (dB) & 4.5 & 3 & $>$ 6 \\
+Latency (ms) & 180 & 40 & - \\
+\hline
+\end{tabular}
+
+\end{frame}
+
+\begin{frame}
+\begin{tikzpicture}[auto, node distance=2.25cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.25cm]
+
+\node [input] (rinput) {};
+\node [block, right of=rinput,node distance=1.5cm] (bpf) {BPF};
+\node [block, right of=bpf] (sample1) {Sample};
+\node [tmp, right of=bpf,node distance=1.125cm] (z) {};
+\node [block, draw=blue, above of=sample1] (ft) {Fine Timing};
+\node [block, right of=sample1] (dft) {DFT};
+\node [tmp, right of=dft,node distance=1.125cm] (z1) {};
+\node [block, right of=dft] (sample2) {Sample};
+\node [block,  draw=blue, above of=sample2] (fsync) {Frame Sync};
+\node [block,  draw=blue, right of=sample2] (rade_dec) {RADE Dec};
+\node [output, right of=rade_dec,node distance=1.5cm] (routput) {};
+
+\draw [->] (rinput) -- node[below=0.6] {$y(n-\delta)$} (bpf);
+\draw [->] (bpf) -- (sample1);
+\draw [->] (z) |- (ft);
+\draw [->] (ft) -- node[right] {$\hat{\delta}$} (sample1);
+\draw [->] (sample1) -- node[below=0.6cm] {$y(n)$} (dft);
+\draw [->] (dft) -- node[below=0.6cm] {$\mathbf{Y}_k$} (sample2);
+\draw [->] (fsync) -- node[right] {$f={0|1}$} (sample2);
+\draw [->] (z1) |- (fsync);
+\draw [->] (sample2) -- node[below=0.6cm] {$\hat{\mathbf{z}}$} (rade_dec);
+\draw [->] (rade_dec) -- node[below=0.6cm] {$\hat{\mathbf{f}}$} (routput);
+
+\end{tikzpicture}
+
 \end{frame}
 
 \section{Conclusion}
