@@ -75,7 +75,7 @@ RADE is an outcome of the FreeDV Project ...
 
 \section{Design Versus Training}
 
-\begin{frame}
+\begin{frame}{Design Versus Training}
 
 \begin{itemize}
 	\item Previously, we would design a system
@@ -85,12 +85,14 @@ RADE is an outcome of the FreeDV Project ...
 	\item Lets build the Detector using machine learning
 \end{itemize}
 
+\vspace{5mm}
+
 \begin{tikzpicture}[auto, node distance=3cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
 
 % AM receiver block diagram
 
 \node [input] (rinput) {};
-\node [block, below of=rinput, node distance=1.25cm,text width=2cm] (bpf) {Band Pass Filter};
+\node [block, right of=rinput, node distance=2cm,text width=2cm] (bpf) {Band Pass Filter};
 \node [block, right of=bpf] (detector) {(Diode) Detector};
 \node [block, right of=detector] (lpf) {Low Pass Filter};
 \node [output, below of=lpf, node distance=1.25cm,text width=2cm] (routput) {};
@@ -108,7 +110,7 @@ RADE is an outcome of the FreeDV Project ...
 	\item Start with an untrained neural network
 	\item Collect some training material
 	\item Many examples of input and desired output
-	\item Adjust the network so it matches the desired output
+	\item Train the network so it matches the desired output
 \end{itemize}
 
 % Detector training block diagram
@@ -270,7 +272,7 @@ RADE is an outcome of the FreeDV Project ...
 \item Like Codec 2 for M17
 \item Fully open source
 \item Our scope is HF, so this was a bonus outcome from the ARDC grant
-\item Downside is requires more CPU that classical vocoder (fraction of a Pi or cell phone and likely to fall)
+\item Downside is requires more CPU than classical vocoder (fraction of a Pi or cell phone and likely to fall)
 \end{itemize}
 \end{frame}
 
@@ -374,7 +376,7 @@ Latency (ms) & 180 & 40 & - \\
 
 \end{frame}
 
-\begin{frame}
+\begin{frame}{RADE V2 Decoder}
 \begin{tikzpicture}[auto, node distance=2.25cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.25cm]
 
 \node [input] (rinput) {};
@@ -412,7 +414,7 @@ Latency (ms) & 180 & 40 & - \\
 	\item RADE - Radio Autoencoder
 	\item RADE V1 uses ML combined with classical DSP
 	\item High quality speech over HF at low and high SNRs
-	\item BBFM version for VHF/UHF
+	\item BBFM - RADE for VHF/UHF
 	\item RADE V2 (nearly 100\% ML) in development
 	\item Supported by a grant from Amateur Radio Digital Communications
 	\item Developed by Hams for Hams
