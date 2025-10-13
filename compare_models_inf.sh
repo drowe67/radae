@@ -60,6 +60,48 @@ function run_model() {
     done
 }
 
+# Run inference + rx2.sh on a range of SNRs to compute loss
+function run_model_rx2() {
+  model=$1
+  model_ft=$2
+  model_sync=$3
+  dim=$4
+  epoch=$5
+  chan=$6
+  shift
+  shift
+  shift
+  shift
+  shift
+  shift
+  # EbNodB_list='0 1.5 3 4.5 6 9 12 15 18 21 24'
+  EbNodB_list='24'
+  results=${model}_${chan}_loss_SNR3k.txt
+  
+  # return if results file already exists
+  if [ $rebuild -eq 0 ]; then
+    if [ -f $results ]; then
+      return
+    fi
+  fi
+
+  rx=$(mktemp)
+  rm -f $results
+  for aEbNodB in $EbNodB_list
+    do
+      log=$(./inference.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${input_file} /dev/null --rate_Fs \
+						   --latent-dim ${dim} --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata \
+						   --w1_dec 128 --write ${rx} --EbNodB ${aEbNodB} $@)
+      SNR3k=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f4)
+      PAPR=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f5)
+      loss_inf=$(echo "$log" | grep "loss:" | tr -s ' ' | cut -d' ' -f2)
+	  ./rx2.sh ${model}/checkpoints/checkpoint_${epoch}_200.pth ${model_ft} ${model_sync} \
+               ${rx} /dev/null --latent-dim 56 --w1_dec 128 --noframe_sync;
+	  loss_rx2=$(python3 loss.py features_in.f32 features_out_rx2.f32 | grep 'loss' | tr -s ' ' | cut -d' ' -f3)
+      printf "%f\t%f\t%f\t%f\n" $SNR3k $PAPR $loss_inf $loss_rx2 >> $results
+    done
+}
+
 function print_help {
     echo
     echo " Compare models by plotting loss v SNR/PSNR curves from time domain inference"
@@ -319,6 +361,15 @@ if [ $plot == "250716_inf" ]; then
   run_model 250726 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
 
   model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250725_awgn_0Hz 250725_mpp_0Hz'
+  declare -a model_legend=("b+-;RADE V1 AWGN Nc=30;" "bo--;RADE V1 MPP Nc=30;" \
+                           "g+-;250725 AWGN Nc=14;" "go--;250725 MPP Nc=14;")
+fi
+
+# Plot curves to explore integeration of FT estimator
+if [ $plot == "251013_inf" ]; then
+  run_model_rx2 251002 251002_mpp_16k_ft 250725_ml_sync 56 200 awgn 
+  exit 0
+  model_list='251002_awgn'
   declare -a model_legend=("b+-;RADE V1 AWGN Nc=30;" "bo--;RADE V1 MPP Nc=30;" \
                            "g+-;250725 AWGN Nc=14;" "go--;250725 MPP Nc=14;")
 fi
