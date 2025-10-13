@@ -75,7 +75,7 @@ function run_model_rx2() {
   shift
   shift
   # EbNodB_list='0 1.5 3 4.5 6 9 12 15 18 21 24'
-  EbNodB_list='24'
+  EbNodB_list=' 3 9 18'
   results=${model}_${chan}_loss_SNR3k.txt
   
   # return if results file already exists
@@ -91,14 +91,14 @@ function run_model_rx2() {
     do
       log=$(./inference.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${input_file} /dev/null --rate_Fs \
 						   --latent-dim ${dim} --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata \
-						   --w1_dec 128 --write ${rx} --EbNodB ${aEbNodB} $@)
+						   --w1_dec 128 --write_rx ${rx} --EbNodB ${aEbNodB} $@)
       SNR3k=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f4)
       PAPR=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f5)
       loss_inf=$(echo "$log" | grep "loss:" | tr -s ' ' | cut -d' ' -f2)
-	  ./rx2.sh ${model}/checkpoints/checkpoint_${epoch}_200.pth ${model_ft} ${model_sync} \
+	  ./rx2.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${model_ft} ${model_sync} \
                ${rx} /dev/null --latent-dim 56 --w1_dec 128 --noframe_sync;
-	  loss_rx2=$(python3 loss.py features_in.f32 features_out_rx2.f32 | grep 'loss' | tr -s ' ' | cut -d' ' -f3)
-      printf "%f\t%f\t%f\t%f\n" $SNR3k $PAPR $loss_inf $loss_rx2 >> $results
+	  loss_rx2=$(python3 loss.py features_in.f32 features_out_rx2.f32 --clip_start 25 | grep 'loss' | tr -s ' ' | cut -d' ' -f3)
+      printf "%f\t%f\t%f\t%f\n" $SNR3k $loss_rx2 $PAPR >> $results
     done
 }
 
@@ -368,10 +368,8 @@ fi
 # Plot curves to explore integeration of FT estimator
 if [ $plot == "251013_inf" ]; then
   run_model_rx2 251002 251002_mpp_16k_ft 250725_ml_sync 56 200 awgn 
-  exit 0
   model_list='251002_awgn'
-  declare -a model_legend=("b+-;RADE V1 AWGN Nc=30;" "bo--;RADE V1 MPP Nc=30;" \
-                           "g+-;250725 AWGN Nc=14;" "go--;250725 MPP Nc=14;")
+  declare -a model_legend=("b+-;251002 FT;")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
