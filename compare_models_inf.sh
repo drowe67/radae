@@ -75,7 +75,7 @@ function run_model_rx2() {
   shift
   shift
   # EbNodB_list='0 1.5 3 4.5 6 9 12 15 18 21 24'
-  EbNodB_list=' 3 9 18'
+  EbNodB_list='1 3 6 9 12 18 24'
   results=${model}_${chan}_loss_SNR3k.txt
   
   # return if results file already exists
@@ -98,7 +98,7 @@ function run_model_rx2() {
 	  ./rx2.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${model_ft} ${model_sync} \
                ${rx} /dev/null --latent-dim 56 --w1_dec 128 --noframe_sync;
 	  loss_rx2=$(python3 loss.py features_in.f32 features_out_rx2.f32 --clip_start 25 | grep 'loss' | tr -s ' ' | cut -d' ' -f3)
-      printf "%f\t%f\t%f\t%f\n" $SNR3k $loss_rx2 $PAPR >> $results
+      printf "%f\t%f\t%f\t%f\n" $SNR3k $loss_rx2 $PAPR $loss_inf >> $results
     done
 }
 
@@ -367,9 +367,21 @@ fi
 
 # Plot curves to explore integeration of FT estimator
 if [ $plot == "251013_inf" ]; then
-  run_model_rx2 251002 251002_mpp_16k_ft 250725_ml_sync 56 200 awgn 
-  model_list='251002_awgn'
-  declare -a model_legend=("b+-;251002 FT;")
+  run_model 250725 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
+  run_model 250725 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
+
+  #run_model_rx2 251002 251002_mpp_16k_ft 250725_ml_sync 56 200 awgn
+  # put inf stage loss in col 2	
+  #echo "x=load('251002_awgn_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 251002_awgn_inf_loss_SNR3k.txt x" | octave-cli -qf
+
+  #run_model_rx2 251002 251002_mpp_16k_ft 250725_ml_sync 56 200 mpp --g_file g_mpp.f32
+  # put inf stage loss in col 2	
+  #echo "x=load('251002_mpp_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 251002_mpp_inf_loss_SNR3k.txt x" | octave-cli -qf
+
+  model_list=' 250725_awgn_0Hz 250725_mpp_0Hz 251002_awgn_inf 251002_mpp_inf 251002_awgn 251002_mpp'
+  declare -a model_legend=("r+-;250725 AWGN Genie;" "ro--;250725 MPP Genie;" \
+                           "b+-;251002 AWGN Genie;" "bo--;251002 MPP Genie;" \
+						   "g+-;251002 AWGN FT;" "go--;251002 MPP FT;")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
