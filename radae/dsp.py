@@ -135,7 +135,8 @@ class acquisition():
 
       self.Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
       self.Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
-
+      self.Dt12 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
+ 
       # pre-calculate to speeds things up a bit
       p_w = np.zeros((M,len(self.fcoarse_range)), dtype=np.csingle)
       f_ind = 0
@@ -160,8 +161,6 @@ class acquisition():
       # latency this could be reduced to a one symbol (M sample) search and Nmf+2*M sample buffer
       assert len(rx) == self.Nmf*2+M+Ncp
 
-      #Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
-      #Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
       Dtmax12 = 0
       f_ind_max = 0
       tmax = 0
@@ -175,20 +174,21 @@ class acquisition():
       # or ML based acquisition
 
       rx = np.conj(rx)
-      for t in range(Nmf):
-         # matrix multiply to speed up calculation of correlation
-         # number of cols in first equal to number of rows in second
-         #self.Dt1[t,:] = np.matmul(rx[t:t+M],self.p_w, out=self.Dt1[t,:])
-         np.matmul(rx[t:t+M],self.p_w, out=self.Dt1[t,:])
-         #self.Dt2[t,:] = np.matmul(rx[t+Nmf:t+Nmf+M],self.p_w, out=self.Dt2[t,:]))
-         np.matmul(rx[t+Nmf:t+Nmf+M],self.p_w, out=self.Dt2[t,:])
-         Dt12 = np.abs(self.Dt1[t,:]) + np.abs(self.Dt2[t,:])
-         local_max = np.max(Dt12)
-         if local_max > Dtmax12:
-            Dtmax12 = local_max 
-            f_ind_max = np.argmax(Dt12)
-            fmax = self.fcoarse_range[f_ind_max]
-            tmax = t
+      rx_slided_1 = np.lib.stride_tricks.as_strided(rx[0:], shape=(Nmf,M), strides=rx.strides*2)
+      rx_slided_2 = np.lib.stride_tricks.as_strided(rx[Nmf:], shape=(Nmf,M), strides=rx.strides*2)
+      np.matmul(rx_slided_1, self.p_w, out=self.Dt1)
+      np.abs(self.Dt1, out=self.Dt1)
+      np.matmul(rx_slided_2, self.p_w, out=self.Dt2)
+      np.abs(self.Dt2, out=self.Dt2)
+      np.add(self.Dt1[:], self.Dt2[:], out=self.Dt12)
+      maxes = np.max(self.Dt12, axis=1)
+      amaxes = np.argmax(self.Dt12, axis=1)
+      local_max = np.max(maxes)
+      if local_max > Dtmax12:
+          Dtmax12 = local_max
+          tmax = np.argmax(maxes)
+          f_ind_max = amaxes[tmax]
+          fmax = self.fcoarse_range[f_ind_max]
 
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
       sigma_r1 = np.mean(np.abs(self.Dt1))/((np.pi/2)**0.5)
@@ -198,8 +198,6 @@ class acquisition():
 
       candidate = Dtmax12 > Dthresh
      
-      #self.Dt1 = Dt1
-      #self.Dt2 = Dt2
       self.Dthresh = Dthresh
       self.Dtmax12 = Dtmax12
       self.f_ind_max = f_ind_max
