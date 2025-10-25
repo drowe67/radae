@@ -135,7 +135,6 @@ class acquisition():
 
       self.Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
       self.Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
-      self.Dt12 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
 
       # pre-calculate to speeds things up a bit
       p_w = np.zeros((M,len(self.fcoarse_range)), dtype=np.csingle)
@@ -175,43 +174,25 @@ class acquisition():
       # TODO: explore strategies to speed up such as under sampled timing, fft for efficient correlation,
       # or ML based acquisition
 
-      np.conj(rx, out=rx)
-      rx_slided_1 = np.lib.stride_tricks.as_strided(rx[0:], shape=(Nmf,M), strides=rx.strides*2)
-      rx_slided_2 = np.lib.stride_tricks.as_strided(rx[Nmf:], shape=(Nmf,M), strides=rx.strides*2)
-      np.matmul(rx_slided_1, self.p_w, out=self.Dt1)
-      np.abs(self.Dt1, out=self.Dt1)
-      np.matmul(rx_slided_2, self.p_w, out=self.Dt2)
-      np.abs(self.Dt2, out=self.Dt2)
-      np.add(self.Dt1[:], self.Dt2[:], out=self.Dt12)
-      maxes = np.max(self.Dt12, axis=1)
-      amaxes = np.argmax(self.Dt12, axis=1)
-      local_max = np.max(maxes)
-      if local_max > Dtmax12:
-          Dtmax12 = local_max
-          tmax = np.argmax(maxes)
-          f_ind_max = amaxes[tmax]
-          fmax = self.fcoarse_range[f_ind_max]
-
-      # (M) * (M,len(self.fcoarse_range)
-      #for t in range(Nmf):
-      #   # matrix multiply to speed up calculation of correlation
-      #   # number of cols in first equal to number of rows in second
-      #   #np.matmul(rx[t:t+M],self.p_w, out=self.Dt1[t,:])
-      #   #np.abs(self.Dt1[t,:], out=self.Dt1[t,:])
-      #   #np.matmul(rx[t+Nmf:t+Nmf+M],self.p_w, out=self.Dt2[t,:])
-      #   #np.abs(self.Dt2[t,:], out=self.Dt2[t,:])
-      #   #np.add(self.Dt1[t,:], self.Dt2[t,:], out=self.Dt12)
-      #   local_max = maxes[t] # np.max(self.Dt12[t])
-      #   if local_max > Dtmax12:
-      #      Dtmax12 = local_max 
-      #      f_ind_max = amaxes[t] #np.argmax(self.Dt12[t])
-      #      fmax = self.fcoarse_range[f_ind_max]
-      #      tmax = t
+      rx = np.conj(rx)
+      for t in range(Nmf):
+         # matrix multiply to speed up calculation of correlation
+         # number of cols in first equal to number of rows in second
+         #self.Dt1[t,:] = np.matmul(rx[t:t+M],self.p_w, out=self.Dt1[t,:])
+         np.matmul(rx[t:t+M],self.p_w, out=self.Dt1[t,:])
+         #self.Dt2[t,:] = np.matmul(rx[t+Nmf:t+Nmf+M],self.p_w, out=self.Dt2[t,:]))
+         np.matmul(rx[t+Nmf:t+Nmf+M],self.p_w, out=self.Dt2[t,:])
+         Dt12 = np.abs(self.Dt1[t,:]) + np.abs(self.Dt2[t,:])
+         local_max = np.max(Dt12)
+         if local_max > Dtmax12:
+            Dtmax12 = local_max 
+            f_ind_max = np.argmax(Dt12)
+            fmax = self.fcoarse_range[f_ind_max]
+            tmax = t
 
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
-      sqrt_pi_2 = ((np.pi/2)**0.5)
-      sigma_r1 = np.mean(self.Dt1)/sqrt_pi_2
-      sigma_r2 = np.mean(self.Dt2)/sqrt_pi_2
+      sigma_r1 = np.mean(np.abs(self.Dt1))/((np.pi/2)**0.5)
+      sigma_r2 = np.mean(np.abs(self.Dt2))/((np.pi/2)**0.5)
       sigma_r = (sigma_r1 + sigma_r2)/2.0
       Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error1/5.0))
 
@@ -241,23 +222,21 @@ class acquisition():
       Dtmax = 0
       
       f_ind = 0
-      p_conj = np.conj(p)
       for f in ffine_range:
          t_ind = 0
          w = 2*np.pi*f/Fs
          w_vec1 = np.exp(-1j*w*np.arange(M))
-         w_vec1_p = w_vec1*p_conj
+         w_vec1_p = w_vec1*np.conj(p)
          w_vec2 = w_vec1*np.exp(-1j*w*Nmf)
-         w_vec2_p = w_vec2*p_conj
+         w_vec2_p = w_vec2*np.conj(p)
          for t in tfine_range:
             # current pilot samples at start of this modem frame
             self.Dt1_fine[t_ind,f_ind] = np.dot(rx[t:t+M],w_vec1_p)
             # next pilot samples at end of this modem frame
             self.Dt2_fine[t_ind,f_ind] = np.dot(rx[t+Nmf:t+Nmf+M],w_vec2_p)
 
-            tmp = np.abs(self.Dt1_fine[t_ind,f_ind]+self.Dt2_fine[t_ind,f_ind])
-            if tmp > Dtmax:
-               Dtmax = tmp
+            if np.abs(self.Dt1_fine[t_ind,f_ind]+self.Dt2_fine[t_ind,f_ind]) > Dtmax:
+               Dtmax = np.abs(self.Dt1_fine[t_ind,f_ind]+self.Dt2_fine[t_ind,f_ind])
                tmax = t
                tmax_ind = t_ind
                fmax = f 
@@ -288,20 +267,16 @@ class acquisition():
 
       rx_conj = np.conj(rx)
       Nupdate = int(0.05*self.Dt1.shape[0])
-      t_list = np.sort(np.random.randint(Nmf, size=(Nupdate,)))
-      #for i in range(Nupdate):
-      for t in t_list:
-         #t = np.random.randint(Nmf)
+      for i in range(Nupdate):
+         t = np.random.randint(Nmf)
          #self.Dt1[t,:] = np.matmul(rx_conj[t:t+M],self.p_w)
          np.matmul(rx_conj[t:t+M],self.p_w, out=self.Dt1[t,:])
-         np.abs(self.Dt1[t], out=self.Dt1[t])
          #self.Dt2[t,:] = np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w)
          np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w, out=self.Dt2[t,:])
-         np.abs(self.Dt2[t], out=self.Dt2[t])
 
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
-      sigma_r1 = np.mean(self.Dt1)/((np.pi/2)**0.5)
-      sigma_r2 = np.mean(self.Dt2)/((np.pi/2)**0.5)
+      sigma_r1 = np.mean(np.abs(self.Dt1))/((np.pi/2)**0.5)
+      sigma_r2 = np.mean(np.abs(self.Dt2))/((np.pi/2)**0.5)
       sigma_r = (sigma_r1 + sigma_r2)/2.0
       Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error2/5.0))
       Dthresh_eoo = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error1/5.0)) # low thresh of false EOO
@@ -309,14 +284,13 @@ class acquisition():
       # compare to maxima at current timing and freq offset
       w = 2*np.pi*fmax/Fs
       w_vec = np.exp(-1j*w*np.arange(M))
-      tmp = np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M])
       Dtmax12 = np.abs(np.dot(np.conj(w_vec*rx[tmax:tmax+M]),p))
-      Dtmax12 += np.abs(np.dot(tmp,p))
+      Dtmax12 += np.abs(np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),p))
       valid = Dtmax12 > Dthresh
  
       # compare with end of over sequence
       Dtmax12_eoo = np.abs(np.dot(np.conj(w_vec*rx[tmax+M+Ncp:tmax+2*M+Ncp]),pend))
-      Dtmax12_eoo += np.abs(np.dot(tmp,pend))
+      Dtmax12_eoo += np.abs(np.dot(np.conj(w_vec*rx[tmax+Nmf:tmax+Nmf+M]),pend))
       endofover = Dtmax12_eoo > Dthresh_eoo
      
       self.Dthresh = Dthresh
@@ -424,7 +398,6 @@ class receiver_one():
    def est_pilots(self, rx_sym_pilots, num_modem_frames, Nc, Ns):
       rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
       # 3-pilot least squares fit across frequency, ref: freedv_low.pdf
-      g = None
       for i in torch.arange(num_modem_frames+1):
          for c in range(Nc):
                c_mid = c
@@ -436,10 +409,7 @@ class receiver_one():
                local_path_delay_s = 0.0025      # guess at actual path delay, means a little bit of noise on scatter
                a = local_path_delay_s*self.Fs
                h = torch.reshape(rx_sym_pilots[0,0,Ns*i,c_mid-1:c_mid+2]/self.P[c_mid-1:c_mid+2],(3,1))
-               if g is None:
-                   g = torch.matmul(self.Pmat[c],h)
-               else:
-                   torch.matmul(self.Pmat[c],h, out=g)
+               g = torch.matmul(self.Pmat[c],h)
                rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
 
       return rx_pilots
@@ -481,8 +451,7 @@ class receiver_one():
                # assume pilots at index 0 and Ns+1, we want to linearly interpolate channel at 1...Ns 
                rx_ch = slope*torch.arange(0,self.Ns+2) + rx_pilots[i,c]
                rx_ch_angle = torch.angle(rx_ch)
-               #rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
-               torch.multiply(rx_sym_pilots[0,i,1:self.Ns+1,c], torch.exp(-1j*rx_ch_angle[1:self.Ns+1]), out=rx_sym_pilots[0,i,1:self.Ns+1,c])
+               rx_sym_pilots[0,i,1:self.Ns+1,c] = rx_sym_pilots[0,i,1:self.Ns+1,c]*torch.exp(-1j*rx_ch_angle[1:self.Ns+1])
 
       # est ampl across one just two sets of pilots seems to work OK (loss isn't impacted)
       if self.coarse_mag:
