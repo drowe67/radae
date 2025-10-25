@@ -233,8 +233,9 @@ class acquisition():
             # next pilot samples at end of this modem frame
             self.Dt2_fine[t_ind,f_ind] = np.dot(rx[t+Nmf:t+Nmf+M],w_vec2_p)
 
-            if np.abs(self.Dt1_fine[t_ind,f_ind]+self.Dt2_fine[t_ind,f_ind]) > Dtmax:
-               Dtmax = np.abs(self.Dt1_fine[t_ind,f_ind]+self.Dt2_fine[t_ind,f_ind])
+            abs_val = np.abs(self.Dt1_fine[t_ind,f_ind]+self.Dt2_fine[t_ind,f_ind])
+            if abs_val > Dtmax:
+               Dtmax = abs_val
                tmax = t
                tmax_ind = t_ind
                fmax = f 
@@ -374,6 +375,7 @@ class receiver_one():
       self.pilot_gain = pilot_gain
       self.time_offset = time_offset
       self.coarse_mag = coarse_mag
+      self.rx_pilots = None
 
       # pre-compute some matrices
       self.Pmat = torch.empty(Nc,2,3,dtype=torch.complex64)
@@ -394,7 +396,8 @@ class receiver_one():
       self.c = 2.513
          
    def est_pilots(self, rx_sym_pilots, num_modem_frames, Nc, Ns):
-      rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
+      if self.rx_pilots is None or self.rx_pilots.size != (num_modem_frames+1)*Nc:
+          self.rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
       # 3-pilot least squares fit across frequency, ref: freedv_low.pdf
       for i in torch.arange(num_modem_frames+1):
          for c in range(Nc):
@@ -408,9 +411,9 @@ class receiver_one():
                a = local_path_delay_s*self.Fs
                h = torch.reshape(rx_sym_pilots[0,0,Ns*i,c_mid-1:c_mid+2]/self.P[c_mid-1:c_mid+2],(3,1))
                g = torch.matmul(self.Pmat[c],h)
-               rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
+               self.rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
 
-      return rx_pilots
+      return self.rx_pilots
 
    # update SNR estimate
    def update_snr_est(self, rx_sym_pilots, rx_pilots):
