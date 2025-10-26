@@ -215,6 +215,8 @@ class acquisition():
       if not np.array_equal(tfine_range, self.tfine_range) or not np.array_equal(ffine_range, self.ffine_range): 
           self.Dt1_fine = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
           self.Dt2_fine = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
+          self.tfine_range = tfine_range
+          self.ffine_range = ffine_range
 
       tmax_ind = 0
       Dtmax = 0
