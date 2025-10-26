@@ -225,10 +225,11 @@ class acquisition():
       for f in ffine_range:
          t_ind = 0
          w = 2*np.pi*f/Fs
+         p_conj = np.conj(p)
          w_vec1 = np.exp(-1j*w*np.arange(M))
-         w_vec1_p = w_vec1*np.conj(p)
+         w_vec1_p = w_vec1*p_conj
          w_vec2 = w_vec1*np.exp(-1j*w*Nmf)
-         w_vec2_p = w_vec2*np.conj(p)
+         w_vec2_p = w_vec2*p_conj
          for t in tfine_range:
             # current pilot samples at start of this modem frame
             self.Dt1_fine[t_ind,f_ind] = np.dot(rx[t:t+M],w_vec1_p)
@@ -401,6 +402,9 @@ class receiver_one():
       if self.rx_pilots is None or self.rx_pilots.size != (num_modem_frames+1)*Nc:
           self.rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
       # 3-pilot least squares fit across frequency, ref: freedv_low.pdf
+      local_path_delay_s = 0.0025      # guess at actual path delay, means a little bit of noise on scatter
+      a = local_path_delay_s*self.Fs
+      w_exp = torch.exp(-1j*self.w*a)
       for i in torch.arange(num_modem_frames+1):
          for c in range(Nc):
                c_mid = c
@@ -409,11 +413,9 @@ class receiver_one():
                   c_mid = 1
                if c == Nc-1:
                   c_mid = Nc-2
-               local_path_delay_s = 0.0025      # guess at actual path delay, means a little bit of noise on scatter
-               a = local_path_delay_s*self.Fs
                h = torch.reshape(rx_sym_pilots[0,0,Ns*i,c_mid-1:c_mid+2]/self.P[c_mid-1:c_mid+2],(3,1))
                g = torch.matmul(self.Pmat[c],h)
-               self.rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
+               self.rx_pilots[i,c] = g[0] + g[1]*w_exp[c]
 
       return self.rx_pilots
 
