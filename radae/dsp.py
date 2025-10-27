@@ -212,20 +212,20 @@ class acquisition():
       M = self.M
       Nmf = self.Nmf
  
-      if not np.array_equal(tfine_range, self.tfine_range) or not np.array_equal(ffine_range, self.ffine_range): 
+      if len(tfine_range) != self.tfine_range or len(ffine_range) != self.ffine_range:
           self.Dt1_fine = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
           self.Dt2_fine = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
-          self.tfine_range = tfine_range
-          self.ffine_range = ffine_range
+          self.tfine_range = len(tfine_range)
+          self.ffine_range = len(ffine_range)
 
       tmax_ind = 0
       Dtmax = 0
       
       f_ind = 0
+      p_conj = np.conj(p)
       for f in ffine_range:
          t_ind = 0
          w = 2*np.pi*f/Fs
-         p_conj = np.conj(p)
          w_vec1 = np.exp(-1j*w*np.arange(M))
          w_vec1_p = w_vec1*p_conj
          w_vec2 = w_vec1*np.exp(-1j*w*Nmf)
@@ -269,11 +269,9 @@ class acquisition():
 
       rx_conj = np.conj(rx)
       Nupdate = int(0.05*self.Dt1.shape[0])
-      for i in range(Nupdate):
-         t = np.random.randint(Nmf)
-         #self.Dt1[t,:] = np.matmul(rx_conj[t:t+M],self.p_w)
+      t_list = np.random.choice(np.arange(Nmf), (Nupdate,), False)
+      for t in t_list:
          np.matmul(rx_conj[t:t+M],self.p_w, out=self.Dt1[t,:])
-         #self.Dt2[t,:] = np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w)
          np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w, out=self.Dt2[t,:])
 
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
