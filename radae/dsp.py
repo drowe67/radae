@@ -191,8 +191,9 @@ class acquisition():
           fmax = self.fcoarse_range[f_ind_max]
 
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
-      sigma_r1 = np.mean(np.abs(self.Dt1))/((np.pi/2)**0.5)
-      sigma_r2 = np.mean(np.abs(self.Dt2))/((np.pi/2)**0.5)
+      sqrt_pi_2 = ((np.pi/2)**0.5)
+      sigma_r1 = np.mean(self.Dt1)/sqrt_pi_2
+      sigma_r2 = np.mean(self.Dt2)/sqrt_pi_2
       sigma_r = (sigma_r1 + sigma_r2)/2.0
       Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error1/5.0))
 
