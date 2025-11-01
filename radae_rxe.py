@@ -291,6 +291,9 @@ class radae_rx:
                next_state = "search"
 
          self.state = next_state
+         if self.state == "search":
+             # Reset nin to default as we don't know timing yet.
+             self.nin = Nmf
          self.mf += 1
 
          # We call core decoder at end to model behaivour with external C core decoder
