@@ -370,13 +370,13 @@ if [ $plot == "251013_inf" ]; then
   run_model 250725 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
   run_model 250725 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
 
-  #run_model_rx2 251002 251002_mpp_16k_ft 250725_ml_sync 56 200 awgn
+  run_model_rx2 251002 251002_mpp_16k_ft 250725_ml_sync 56 200 awgn
   # put inf stage loss in col 2	
-  #echo "x=load('251002_awgn_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 251002_awgn_inf_loss_SNR3k.txt x" | octave-cli -qf
+  echo "x=load('251002_awgn_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 251002_awgn_inf_loss_SNR3k.txt x" | octave-cli -qf
 
-  #run_model_rx2 251002 251002_mpp_16k_ft 250725_ml_sync 56 200 mpp --g_file g_mpp.f32
+  run_model_rx2 251002 251002_mpp_16k_ft 250725_ml_sync 56 200 mpp --g_file g_mpp.f32
   # put inf stage loss in col 2	
-  #echo "x=load('251002_mpp_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 251002_mpp_inf_loss_SNR3k.txt x" | octave-cli -qf
+  echo "x=load('251002_mpp_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 251002_mpp_inf_loss_SNR3k.txt x" | octave-cli -qf
 
   model_list=' 250725_awgn_0Hz 250725_mpp_0Hz 251002_awgn_inf 251002_mpp_inf 251002_awgn 251002_mpp'
   declare -a model_legend=("r+-;250725 AWGN Genie;" "ro--;250725 MPP Genie;" \
