@@ -387,6 +387,16 @@ add_test(NAME radae_rx_slip_plus
                        python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.2 --acq_time_test 1.0")
                        set_tests_properties(radae_rx_slip_plus PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# Test bugfix for issue where a combination of timing slips and dropped frames over a long enough
+# period of time results in the RADE DSP logic being unable to regain sync.
+add_test(NAME radae_rx_slip_plus_drops
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                        sox wav/long_qso.wav -t .s16 -r 8020 -c 1 - | \
+                          python3 int16tof32.py --zeropad | \
+                          OMP_NUM_THREADS=1 python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 2>&1 >/dev/null | \
+                          tail -n1 | \
+                          grep 'state: sync'")
+
 # Test ability to handle buffer slips due to sample clock offsets, rx ADC clock < tx ADC clock
 add_test(NAME radae_rx_slip_minus
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
