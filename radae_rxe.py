@@ -292,7 +292,7 @@ class radae_rx:
 
          self.state = next_state
          if self.state == "search":
-             # Reset nin because we're not sure of the timing of any incoming signal yet.
+             # Reset nin to default as we don't know timing yet.
              self.nin = Nmf
          self.mf += 1
 
