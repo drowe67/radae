@@ -129,7 +129,7 @@ for seq in np.arange(Nseq):
    print(f"SNRdB: {SNR3kdB:5.2f} sigma: {sigma:5.2f} sigma_: {np.var(n_):5.2f}",end='')
    
    # calculate Ry for every time step in the sequence, plus Q-1 extra to support smoothing
-   Ry_norm = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
+   Ry_norm = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.complex64)
 
    for s in np.arange(sequence_length+Q-1):
       if args.recursion:
@@ -165,7 +165,7 @@ for seq in np.arange(Nseq):
             Ry = np.dot(y_cp, np.conj(y_m))
             D = np.dot(y_cp, np.conj(y_cp)) + np.dot(y_m, np.conj(y_m))
             
-            Ry_norm[s,delta_hat] = 2.*np.abs(Ry)/np.abs(D)            
+            Ry_norm[s,delta_hat] = 2.*Ry/np.abs(D)            
             
    # Now output Ry & delta for each step in sequence, smoothing Ry over last Q symbols
    for s in np.arange(sequence_length):
