@@ -231,19 +231,17 @@ class acquisition():
          w_vec1_p = w_vec1*p_conj
          w_vec2 = w_vec1*np.exp(-1j*w*Nmf)
          w_vec2_p = w_vec2*p_conj
-         for t in tfine_range:
-            # current pilot samples at start of this modem frame
-            self.Dt1_fine[t_ind,f_ind] = np.dot(rx[t:t+M],w_vec1_p)
-            # next pilot samples at end of this modem frame
-            self.Dt2_fine[t_ind,f_ind] = np.dot(rx[t+Nmf:t+Nmf+M],w_vec2_p)
-
-            abs_val = np.abs(self.Dt1_fine[t_ind,f_ind]+self.Dt2_fine[t_ind,f_ind])
-            if abs_val > Dtmax:
-               Dtmax = abs_val
-               tmax = t
-               tmax_ind = t_ind
-               fmax = f 
-            t_ind = t_ind + 1
+         rx_slided_1 = np.lib.stride_tricks.as_strided(rx[tfine_range[0]:], shape=(self.tfine_range,M), strides=rx.strides*2)
+         rx_slided_2 = np.lib.stride_tricks.as_strided(rx[tfine_range[0]+Nmf:], shape=(self.tfine_range,M), strides=rx.strides*2)
+         self.Dt1_fine[:,f_ind] = np.dot(rx_slided_1, w_vec1_p) #, out=self.Dt1_fine[:,f_ind])
+         self.Dt2_fine[:,f_ind] = np.dot(rx_slided_2, w_vec2_p) #, out=self.Dt2_fine[:,f_ind])
+         abs_vals = np.abs(self.Dt1_fine[:,f_ind] + self.Dt2_fine[:,f_ind])
+         max_abs_val = np.max(abs_vals)
+         if max_abs_val > Dtmax:
+             Dtmax = max_abs_val
+             tmax_ind = np.argmax(abs_vals)
+             tmax = tfine_range[tmax_ind]
+             fmax = f
          f_ind = f_ind + 1
          
       self.D_fine = self.Dt1_fine[tmax_ind,:]
