@@ -87,6 +87,10 @@ struct rade {
   npy_intp n_floats_out;
   float *floats_out;
   RADE_COMP *rx_in;
+
+#if (PY_MAJOR_VERSION > 3) || (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 10)
+  int lastPythonGcState;
+#endif // (PY_MAJOR_VERSION > 3) || (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 10)
 };
 
 
@@ -352,8 +356,8 @@ struct rade *rade_open(char model_file[], int flags) {
   // That isn't good for real-time audio, so disable it while
   // RADE is running.
 #if (PY_MAJOR_VERSION > 3) || (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 10)
-  int prevGcState = PyGC_Disable();
-  fprintf(stderr, "Python garbage collector disabled (previous state %d)\n", prevGcState);
+  r->lastPythonGcState = PyGC_Disable();
+  fprintf(stderr, "Python garbage collector disabled (previous state %d)\n", r->lastPythonGcState);
 #endif // (PY_MAJOR_VERSION > 3) || (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 10)
 
   // TODO: implement me
@@ -385,6 +389,15 @@ void rade_close(struct rade *r) {
 
   rade_tx_close(r);
   rade_rx_close(r);
+
+#if (PY_MAJOR_VERSION > 3) || (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 10)
+  // Reenable garbage collector, if previously disabled
+  if (r->lastPythonGcState) {
+    PyGC_Enable();
+    PyGC_Collect();
+    fprintf(stderr, "Python garbage collector reenabled.\n");
+  }
+#endif // (PY_MAJOR_VERSION > 3) || (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 10)
 
   // Release Python GIL
   PyGILState_Release(gstate);
