@@ -66,8 +66,8 @@ class complex_bpf():
       if len(self.x_mem) != (len(self.mem) + len(x_baseband)):
           self.x_mem = np.zeros(len(self.mem) + len(x_baseband), dtype=np.csingle)
       np.concatenate([self.mem,x_baseband], out=self.x_mem)                    # pre-pend filter memory
-      for i in np.arange(n):
-         self.x_filt[i] = np.dot(self.x_mem[i:i+self.Ntap],self.h)
+      x_mem_slided = np.lib.stride_tricks.as_strided(self.x_mem[0:], shape=(n,self.Ntap), strides=self.x_mem.strides*2)
+      self.x_filt[0:n] = np.dot(x_mem_slided, self.h)
       self.mem = self.x_mem[-self.Ntap-1:]                                  # save filter state for next time
       self.phase = phase_vec[-1]                                       # save phase state for next time
       return self.x_filt[0:n]*np.conj(phase_vec)                            # mix back up to centre freq
