@@ -269,13 +269,24 @@ class acquisition():
       rx_conj = np.conj(rx)
       Nupdate = int(0.05*self.Dt1.shape[0])
       t_list = np.random.choice(np.arange(Nmf), (Nupdate,), False)
+      rx_conj_list_1 = np.zeros((len(t_list), M), dtype=np.csingle)
+      rx_conj_list_2 = np.zeros((len(t_list), M), dtype=np.csingle)
+      t_idx = 0
       for t in t_list:
-         np.matmul(rx_conj[t:t+M],self.p_w, out=self.Dt1[t,:])
-         np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w, out=self.Dt2[t,:])
+         rx_conj_list_1[t_idx,:] = rx_conj[t:t+M]
+         rx_conj_list_2[t_idx,:] = rx_conj[t+Nmf:t+Nmf+M]
+         t_idx = t_idx + 1
+      rx_conj_res_1 = np.abs(np.matmul(rx_conj_list_1, self.p_w))
+      rx_conj_res_2 = np.abs(np.matmul(rx_conj_list_2, self.p_w))
+      t_idx = 0
+      for t in t_list:
+         self.Dt1[t,:] = rx_conj_res_1[t_idx,:]
+         self.Dt2[t,:] = rx_conj_res_2[t_idx,:]
+         t_idx = t_idx + 1
 
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
-      sigma_r1 = np.mean(np.abs(self.Dt1))/((np.pi/2)**0.5)
-      sigma_r2 = np.mean(np.abs(self.Dt2))/((np.pi/2)**0.5)
+      sigma_r1 = np.mean(self.Dt1)/((np.pi/2)**0.5)
+      sigma_r2 = np.mean(self.Dt2)/((np.pi/2)**0.5)
       sigma_r = (sigma_r1 + sigma_r2)/2.0
       Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error2/5.0))
       Dthresh_eoo = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error1/5.0)) # low thresh of false EOO
