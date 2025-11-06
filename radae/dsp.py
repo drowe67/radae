@@ -233,8 +233,8 @@ class acquisition():
          w_vec2_p = w_vec2*p_conj
          rx_slided_1 = np.lib.stride_tricks.as_strided(rx[tfine_range[0]:], shape=(self.tfine_range,M), strides=rx.strides*2)
          rx_slided_2 = np.lib.stride_tricks.as_strided(rx[tfine_range[0]+Nmf:], shape=(self.tfine_range,M), strides=rx.strides*2)
-         self.Dt1_fine[:,f_ind] = np.dot(rx_slided_1, w_vec1_p) #, out=self.Dt1_fine[:,f_ind])
-         self.Dt2_fine[:,f_ind] = np.dot(rx_slided_2, w_vec2_p) #, out=self.Dt2_fine[:,f_ind])
+         self.Dt1_fine[:,f_ind] = np.dot(rx_slided_1, w_vec1_p)
+         self.Dt2_fine[:,f_ind] = np.dot(rx_slided_2, w_vec2_p)
          abs_vals = np.abs(self.Dt1_fine[:,f_ind] + self.Dt2_fine[:,f_ind])
          max_abs_val = np.max(abs_vals)
          if max_abs_val > Dtmax:
