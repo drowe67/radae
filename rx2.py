@@ -64,8 +64,9 @@ parser.add_argument('--xcorr_dimension', type=int, help='Dimension of Input cros
 parser.add_argument('--gru_dim', type=int, help='GRU Dimension (fine timing)',default = 64,required = False)
 parser.add_argument('--output_dim', type=int, help='Output dimension (fine timing)',default = 160,required = False)
 parser.add_argument('--write_Ry', type=str, default="", help='path to autocorrelation output feature file dim (seq_len,Ncp+M) .f32 format')
-parser.add_argument('--write_delta_hat', type=str, default="", help='path to delta_hat output file dim (seq_len) .f32 format in .f32 format')
-parser.add_argument('--write_delta_hat_rx', type=str, default="", help='path to delta_hat_rx file dim (seq_len) .f32 format in .f32 format')
+parser.add_argument('--write_delta_hat', type=str, default="", help='path to delta_hat output file dim (seq_len) in .f32 format')
+parser.add_argument('--write_delta_hat_rx', type=str, default="", help='path to delta_hat_rx file dim (seq_len) in .f32 format')
+parser.add_argument('--read_delta_hat', type=str, default="", help='path to delta_hat input file dim (seq_len) in .f32 format')
 parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
 parser.add_argument('--pad_samples', type=int, default=0, help='Pad input with samples to simulate different timing offsets in rx signal')
@@ -185,6 +186,9 @@ logits_softmax = ft_nn(Ry_bar)
 delta_hat = torch.argmax(logits_softmax, 2).cpu().detach().numpy().flatten().astype('float32')
 if len(args.write_delta_hat):
    delta_hat.flatten().tofile(args.write_delta_hat)
+# over rides internal estimator   
+if len(args.read_delta_hat):
+   delta_hat = np.fromfile(args.read_delta_hat, dtype=np.float32)
 
 # concat rx vector with zeros at either end so we can extract an integer number of symbols
 # despite fine timing offset
