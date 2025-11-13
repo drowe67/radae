@@ -4,7 +4,7 @@
 function dpp = adapp(d)
     dpp = zeros(length(d),1);
     count = 0;
-    beta = 0.99;
+    beta = 0.9995;
     for n=2:length(d)
       if abs(d(n)-dpp(n-1)) > 16
         count++;
