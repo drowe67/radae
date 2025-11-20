@@ -67,7 +67,7 @@ RADE is an outcome of the FreeDV Project ...
 \begin{itemize}
     \item Open source HF digital voice for amateur radio
     \item Since 2023, funded by an ARDC grant
-    \item 6 person Project Leadership Team
+    \item 6 person Project Leadership Team, 2 part time engineers
     \item Financial sponsor is the Software Freedom Conservancy
     \item Project Goal: a voice mode competitive with SSB at high and low SNRs
 \end{itemize}
@@ -75,7 +75,7 @@ RADE is an outcome of the FreeDV Project ...
 
 \section{Design Versus Training}
 
-\begin{frame}
+\begin{frame}{Design Versus Training}
 
 \begin{itemize}
 	\item Previously, we would design a system
@@ -85,12 +85,14 @@ RADE is an outcome of the FreeDV Project ...
 	\item Lets build the Detector using machine learning
 \end{itemize}
 
+\vspace{5mm}
+
 \begin{tikzpicture}[auto, node distance=3cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
 
 % AM receiver block diagram
 
 \node [input] (rinput) {};
-\node [block, below of=rinput, node distance=1.25cm,text width=2cm] (bpf) {Band Pass Filter};
+\node [block, right of=rinput, node distance=2cm,text width=2cm] (bpf) {Band Pass Filter};
 \node [block, right of=bpf] (detector) {(Diode) Detector};
 \node [block, right of=detector] (lpf) {Low Pass Filter};
 \node [output, below of=lpf, node distance=1.25cm,text width=2cm] (routput) {};
@@ -108,7 +110,7 @@ RADE is an outcome of the FreeDV Project ...
 	\item Start with an untrained neural network
 	\item Collect some training material
 	\item Many examples of input and desired output
-	\item Adjust the network so it matches the desired output
+	\item Train the network so it matches the desired output
 \end{itemize}
 
 % Detector training block diagram
@@ -259,30 +261,165 @@ RADE is an outcome of the FreeDV Project ...
 
 \end{frame}
 
+\section{RADE over Baseband FM}
+\begin{frame}{RADE BBFM}
+\begin{itemize}
+\item Application of RADE for VHF/UHF
+\item Significant performance gains in speech quality and robustness
+\item High quality, 8 kHz speech, robust to fading
+\item Through typical analog FM "BBFM" radio architecture, as used for FM, M17, DStar etc
+\item We've developed the physical layer, not a complete protocol
+\item Like Codec 2 for M17
+\item Fully open source
+\item Our scope is HF, so this was a bonus outcome from the ARDC grant
+\item Downside is requires more CPU than classical vocoder (fraction of a Pi or cell phone and likely to fall)
+\end{itemize}
+\end{frame}
+
+\begin{frame}{RADE BBFM Examples}
+\begin{itemize}
+\item  FreeDV BBFM Page \href{http://freedv.org/rade-bbfm/}
+{\beamergotobutton{Link}}
+\item Highest quality (-100 dBm)
+\item Low quality (-120dBm 60 km/hr vehicle fading) 
+\end{itemize}
+\end{frame}
+
+% BBFM Classical DSP
+
+\begin{frame}
+\begin{tikzpicture}[auto, node distance=3cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
+
+\node [input] (rinput) {};
+\node [block, below of=rinput, node distance=1.25cm] (speech_enc) {Speech Enc};
+\node [block, right of=speech_enc] (fec_enc) {FEC Enc};
+\node [block, right of=fec_enc] (tx_filt) {Tx Filter};
+\node [block, right of=tx_filt] (fm_mod) {FM Mod};
+\node [block, below of=fm_mod,node distance=2cm] (bbfm) {Radio Channel};
+\node [block, below of=bbfm,node distance=2cm] (fm_demod) {FM Demod};
+\node [block, left of=fm_demod] (rx_filt) {Rx Filter};
+\node [block, left of=rx_filt] (fec_dec) {FEC Decoder};
+\node [block, left of=fec_dec] (speech_dec) {Speech Dec};
+\node [output, below of=speech_dec,node distance=1.25cm] (routput) {};
+
+\draw [->] node[above,text width=1cm] {Input Speech} (rinput) -- (speech_enc);
+\draw [->] (speech_enc) -- (fec_enc);
+\draw [->] (fec_enc) -- (tx_filt);
+\draw [->] (tx_filt) -- (fm_mod);
+\draw [->] (fm_mod) -- (bbfm);
+\draw [->] (bbfm) -- (fm_demod);
+\draw [->] (fm_demod) -- (rx_filt);
+\draw [->] (rx_filt) -- (fec_dec);
+\draw [->] (fec_dec) -- (speech_dec);
+\draw [->] (speech_dec) -- (routput) node[below, text width=1cm] {Output Speech};
+
+\end{tikzpicture}
+\end{frame}
+
+% BBFM - RADE
+
+\begin{frame}
+\begin{tikzpicture}[auto, node distance=3cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
+
+\node [input] (rinput) {};
+\node [block, below of=rinput, node distance=1.25cm] (feature_ext) {Feature Extraction};
+\node [block, right of=feature_ext] (rade_enc) {RADE Encoder};
+\node [block, right of=rade_enc] (tx_filt) {Tx Filter};
+\node [block, right of=tx_filt] (fm_mod) {FM Mod};
+\node [block, below of=fm_mod,node distance=2cm] (bbfm) {Radio Channel};
+\node [block, below of=bbfm,node distance=2cm] (fm_demod) {FM Demod};
+\node [block, left of=fm_demod] (rx_filt) {Rx Filter};
+\node [block, left of=rx_filt] (rade_dec) {RADE Decoder};
+\node [block, left of=rade_dec] (fargan) {FARGAN Synthesis};
+\node [output, below of=fargan,node distance=1.25cm] (routput) {};
+
+\draw [->] node[above,text width=1cm] {Input Speech} (rinput) -- (feature_ext);
+\draw [->] (feature_ext) -- node[above, text width=0.5cm] {$\bf{f}$} (rade_enc);
+\draw [->] (rade_enc) -- node[above, text width=0.5cm] {$\bf{z}$} (tx_filt);
+\draw [->] (tx_filt) -- (fm_mod);
+\draw [->] (fm_mod) -- (bbfm);
+\draw [->] (bbfm) -- (fm_demod);
+\draw [->] (fm_demod) -- (rx_filt);
+\draw [->] (rx_filt) -- node[above, text width=0.5cm] {$\hat{\bf{z}}$} (rade_dec);
+\draw [->] (rade_dec) -- node[above, text width=0.5cm] {$\hat{\bf{f}}$} (fargan);
+\draw [->] (fargan) -- (routput) node[below, text width=1cm] {Output Speech};
+
+\end{tikzpicture}
+
+\end{frame}
+
+\section{RADE V2}
+
+\begin{frame}{RADE V2}
+\begin{itemize}
+\item RADE V1 is hybrid DSP/ML design
+\item What if we build all components using ML?
+\item Status: basic OTA tests, comfirming key features.
+\item Building up and integrating ML signal processing blocks.
+\item Speech quality target $\ge$ RADE V1. 
+\item Sensitivity target 2-3 dB better than RADE V1.
+\end{itemize}
+
+\vspace{5mm}
+
+\begin{tabular}{|c||c||c||c|}
+\hline
+     & RADE V1 & RADE V2 & SSB \\
+\hline
+Audio Bandwidth (Hz) & 8000 & 8000 & 2400 \\
+RF Bandwidth (Hz) & 1500 & 800 & 2400 \\
+99\% OBW (Hz) & - & 800 & 2400 \\
+PAPR (dB) & 4.5 & 3 & $>$ 6 \\
+Latency (ms) & 180 & 40 & - \\
+\hline
+\end{tabular}
+
+\end{frame}
+
+\begin{frame}{RADE V2 Decoder}
+\begin{tikzpicture}[auto, node distance=2.25cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.25cm]
+
+\node [input] (rinput) {};
+\node [block, right of=rinput,node distance=1.5cm] (bpf) {BPF};
+\node [block, right of=bpf] (sample1) {Sample};
+\node [tmp, right of=bpf,node distance=1.125cm] (z) {};
+\node [block, draw=blue, above of=sample1] (ft) {Fine Timing};
+\node [block, right of=sample1] (dft) {DFT};
+\node [tmp, right of=dft,node distance=1.125cm] (z1) {};
+\node [block, right of=dft] (sample2) {Sample};
+\node [block,  draw=blue, above of=sample2] (fsync) {Frame Sync};
+\node [block,  draw=blue, right of=sample2] (rade_dec) {RADE Dec};
+\node [output, right of=rade_dec,node distance=1.5cm] (routput) {};
+
+\draw [->] (rinput) -- node[below=0.6] {$y(n-\delta)$} (bpf);
+\draw [->] (bpf) -- (sample1);
+\draw [->] (z) |- (ft);
+\draw [->] (ft) -- node[right] {$\hat{\delta}$} (sample1);
+\draw [->] (sample1) -- node[below=0.6cm] {$y(n)$} (dft);
+\draw [->] (dft) -- node[below=0.6cm] {$\mathbf{Y}_k$} (sample2);
+\draw [->] (fsync) -- node[right] {$f={0|1}$} (sample2);
+\draw [->] (z1) |- (fsync);
+\draw [->] (sample2) -- node[below=0.6cm] {$\hat{\mathbf{z}}$} (rade_dec);
+\draw [->] (rade_dec) -- node[below=0.6cm] {$\hat{\mathbf{f}}$} (routput);
+
+\end{tikzpicture}
+
+\end{frame}
+
 \section{Conclusion}
 
 \begin{frame}{Conclusion}
 \begin{itemize}
 	\item Training versus Design
 	\item RADE - Radio Autoencoder
-	\item ML combined with classical DSP
+	\item RADE V1 uses ML combined with classical DSP
 	\item High quality speech over HF at low and high SNRs
-	\item FreeDV GUI Application, sound card, SSB radio
+	\item BBFM - RADE for VHF/UHF
+	\item RADE V2 (nearly 100\% ML) in development
 	\item Supported by a grant from Amateur Radio Digital Communications
-	\item Crowd sourced testing - thanks to many Hams around the world
 	\item Developed by Hams for Hams
 \end{itemize}
 
 \end{frame}
-
-\begin{frame}{Links}
-\begin{description}
-    \item[Download] freedv.org 
-    \item[Help] freedv.org - mailing list, QSO finder chat, Discord chat
-    \item[QSO Finder] qso.freedv.org \href{http://qso.freedv.org}{\beamergotobutton{Link}}
-    \item[PSK Reporter] \href{https://pskreporter.info/pskmap?preset&callsign=ZZZZZ&what=all&mode=FREEDV&timerange=86400&mapCenter=17.5,-8,2.6}{\beamergotobutton{Link}}    
-    \item[RADE Intro Doc] \href{https://github.com/drowe67/radae/blob/main/doc/rade_intro_waveform.pdf} {\beamergotobutton{Link}}
-\end{description}
-\end{frame} 
 
 \end{document}
