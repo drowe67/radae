@@ -63,8 +63,8 @@ else(NOT CMAKE_CROSSCOMPILING)
         target_include_directories(Python3::NumPy INTERFACE ${Python3_ROOT_DIR}/Lib/site-packages/numpy/_core/include)
 
         # Find specific filename for Python library to avoid hardcoding.
-        file(GLOB PYTHON_IMPLIB ${Python3_ROOT_DIR}/libs/python3*.lib)
-        file(GLOB PYTHON_DLL ${Python3_ROOT_DIR}/python3*.dll)
+        file(GLOB PYTHON_IMPLIB ${Python3_ROOT_DIR}/libs/python3?*.lib)
+        file(GLOB PYTHON_DLL ${Python3_ROOT_DIR}/python3?*.dll)
 
         message(STATUS "Python library file: ${PYTHON_IMPLIB}")
         message(STATUS "Python DLL file: ${PYTHON_DLL}")
