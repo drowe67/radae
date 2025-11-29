@@ -7,7 +7,7 @@ set(CONFIGURE_COMMAND ${CONFIGURE_COMMAND} --host=${CMAKE_C_COMPILER_TARGET} --t
 endif (CMAKE_CROSSCOMPILING)
 
 if (NOT DEFINED OPUS_URL)
-set(OPUS_URL https://github.com/xiph/opus/archive/refs/heads/940d4e5af64351ca8ba8390df3f555484c567fbb.zip)
+set(OPUS_URL https://github.com/xiph/opus/archive/940d4e5af64351ca8ba8390df3f555484c567fbb.zip)
 endif (NOT DEFINED OPUS_URL)
 
 include(ExternalProject)
