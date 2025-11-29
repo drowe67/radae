@@ -67,7 +67,7 @@ else(NOT CMAKE_CROSSCOMPILING)
         file(GLOB PYTHON_DLL RELATIVE ${Python3_ROOT_DIR} python3*.dll)
 
         set_property(TARGET Python3::Python PROPERTY IMPORTED_IMPLIB ${Python3_ROOT_DIR}/libs/${PYTHON_IMPLIB})
-        set_property(TARGET Python3::Python PROPERTY IMPORTED_LOCATION ${Python3_ROOT_DIR}/$(PYTHON_DLL})
+        set_property(TARGET Python3::Python PROPERTY IMPORTED_LOCATION ${Python3_ROOT_DIR}/${PYTHON_DLL})
         set_property(TARGET Python3::NumPy PROPERTY IMPORTED_IMPLIB ${Python3_ROOT_DIR}/Lib/site-packages/numpy/core/lib/npymath.lib)
         set_property(TARGET Python3::NumPy PROPERTY IMPORTED_LOCATION ${Python3_ROOT_DIR}/Lib/site-packages/numpy/core/lib/npymath.lib)
     else(WIN32)
