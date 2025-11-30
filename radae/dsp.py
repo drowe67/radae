@@ -52,19 +52,25 @@ class complex_bpf():
       assert np.all(self.h == np.flip(self.h))
 
       self.mem = np.zeros(self.Ntap-1, dtype=np.csingle)
+      self.x_mem = np.zeros(self.Ntap-1, dtype=np.csingle)
       self.phase = 1 + 0j
+      self.n = -1 
 
    def bpf(self, x):
       n = len(x)
       phase_vec = self.phase*np.exp(-1j*self.alpha*np.arange(1,n+1))
       x_baseband = x*phase_vec                                         # mix down to baseband
-      x_mem = np.concatenate([self.mem,x_baseband])                    # pre-pend filter memory
-      x_filt = np.zeros(n, dtype=np.csingle)
-      for i in np.arange(n):
-         x_filt[i] = np.dot(x_mem[i:i+self.Ntap],self.h)
-      self.mem = x_mem[-self.Ntap-1:]                                  # save filter state for next time
+      if n > self.n:
+          self.x_filt = np.zeros(n, dtype=np.csingle)
+          self.n = n
+      if len(self.x_mem) != (len(self.mem) + len(x_baseband)):
+          self.x_mem = np.zeros(len(self.mem) + len(x_baseband), dtype=np.csingle)
+      np.concatenate([self.mem,x_baseband], out=self.x_mem)                    # pre-pend filter memory
+      x_mem_slided = np.lib.stride_tricks.as_strided(self.x_mem[0:], shape=(n,self.Ntap), strides=self.x_mem.strides*2)
+      self.x_filt[0:n] = np.dot(x_mem_slided, self.h)
+      self.mem = self.x_mem[-self.Ntap-1:]                                  # save filter state for next time
       self.phase = phase_vec[-1]                                       # save phase state for next time
-      return x_filt*np.conj(phase_vec)                                 # mix back up to centre freq
+      return self.x_filt[0:n]*np.conj(phase_vec)                            # mix back up to centre freq
 
 def complex_bpf_test(plot_en=0):
    Ntap=101
@@ -124,7 +130,13 @@ class acquisition():
       self.Pacq_error1 = Pacq_error1
       self.Pacq_error2 = Pacq_error2
       self.fcoarse_range = np.arange(-frange/2,frange/2,fstep)
+      self.tfine_range = 0
+      self.ffine_range = 0
 
+      self.Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
+      self.Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
+      self.Dt12 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
+ 
       # pre-calculate to speeds things up a bit
       p_w = np.zeros((M,len(self.fcoarse_range)), dtype=np.csingle)
       f_ind = 0
@@ -149,8 +161,6 @@ class acquisition():
       # latency this could be reduced to a one symbol (M sample) search and Nmf+2*M sample buffer
       assert len(rx) == self.Nmf*2+M+Ncp
 
-      Dt1 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
-      Dt2 = np.zeros((self.Nmf,len(self.fcoarse_range)), dtype=np.csingle)
       Dtmax12 = 0
       f_ind_max = 0
       tmax = 0
@@ -164,29 +174,31 @@ class acquisition():
       # or ML based acquisition
 
       rx = np.conj(rx)
-      for t in range(Nmf):
-         # matrix multiply to speed up calculation of correlation
-         # number of cols in first equal to number of rows in second
-         Dt1[t,:] = np.matmul(rx[t:t+M],self.p_w)
-         Dt2[t,:] = np.matmul(rx[t+Nmf:t+Nmf+M],self.p_w)
-         Dt12 = np.abs(Dt1[t,:]) + np.abs(Dt2[t,:])
-         local_max = np.max(Dt12)
-         if local_max > Dtmax12:
-            Dtmax12 = local_max 
-            f_ind_max = np.argmax(Dt12)
-            fmax = self.fcoarse_range[f_ind_max]
-            tmax = t
+      rx_slided_1 = np.lib.stride_tricks.as_strided(rx[0:], shape=(Nmf,M), strides=rx.strides*2)
+      rx_slided_2 = np.lib.stride_tricks.as_strided(rx[Nmf:], shape=(Nmf,M), strides=rx.strides*2)
+      np.matmul(rx_slided_1, self.p_w, out=self.Dt1)
+      np.abs(self.Dt1, out=self.Dt1)
+      np.matmul(rx_slided_2, self.p_w, out=self.Dt2)
+      np.abs(self.Dt2, out=self.Dt2)
+      np.add(self.Dt1[:], self.Dt2[:], out=self.Dt12)
+      maxes = np.max(self.Dt12, axis=1)
+      amaxes = np.argmax(self.Dt12, axis=1)
+      local_max = np.max(maxes)
+      if local_max > Dtmax12:
+          Dtmax12 = local_max
+          tmax = np.argmax(maxes)
+          f_ind_max = amaxes[tmax]
+          fmax = self.fcoarse_range[f_ind_max]
 
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
-      sigma_r1 = np.mean(np.abs(Dt1))/((np.pi/2)**0.5)
-      sigma_r2 = np.mean(np.abs(Dt2))/((np.pi/2)**0.5)
+      sqrt_pi_2 = ((np.pi/2)**0.5)
+      sigma_r1 = np.mean(self.Dt1)/sqrt_pi_2
+      sigma_r2 = np.mean(self.Dt2)/sqrt_pi_2
       sigma_r = (sigma_r1 + sigma_r2)/2.0
       Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error1/5.0))
 
       candidate = Dtmax12 > Dthresh
      
-      self.Dt1 = Dt1
-      self.Dt2 = Dt2
       self.Dthresh = Dthresh
       self.Dtmax12 = Dtmax12
       self.f_ind_max = f_ind_max
@@ -200,35 +212,39 @@ class acquisition():
       p = self.p
       M = self.M
       Nmf = self.Nmf
-   
-      Dt1 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
-      Dt2 = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
+ 
+      if len(tfine_range) != self.tfine_range or len(ffine_range) != self.ffine_range:
+          self.Dt1_fine = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
+          self.Dt2_fine = np.zeros((len(tfine_range),len(ffine_range)), dtype=np.csingle)
+          self.tfine_range = len(tfine_range)
+          self.ffine_range = len(ffine_range)
+
       tmax_ind = 0
       Dtmax = 0
       
       f_ind = 0
+      p_conj = np.conj(p)
       for f in ffine_range:
          t_ind = 0
          w = 2*np.pi*f/Fs
          w_vec1 = np.exp(-1j*w*np.arange(M))
-         w_vec1_p = w_vec1*np.conj(p)
+         w_vec1_p = w_vec1*p_conj
          w_vec2 = w_vec1*np.exp(-1j*w*Nmf)
-         w_vec2_p = w_vec2*np.conj(p)
-         for t in tfine_range:
-            # current pilot samples at start of this modem frame
-            Dt1[t_ind,f_ind] = np.dot(rx[t:t+M],w_vec1_p)
-            # next pilot samples at end of this modem frame
-            Dt2[t_ind,f_ind] = np.dot(rx[t+Nmf:t+Nmf+M],w_vec2_p)
-
-            if np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind]) > Dtmax:
-               Dtmax = np.abs(Dt1[t_ind,f_ind]+Dt2[t_ind,f_ind])
-               tmax = t
-               tmax_ind = t_ind
-               fmax = f 
-            t_ind = t_ind + 1
+         w_vec2_p = w_vec2*p_conj
+         rx_slided_1 = np.lib.stride_tricks.as_strided(rx[tfine_range[0]:], shape=(self.tfine_range,M), strides=rx.strides*2)
+         rx_slided_2 = np.lib.stride_tricks.as_strided(rx[tfine_range[0]+Nmf:], shape=(self.tfine_range,M), strides=rx.strides*2)
+         self.Dt1_fine[:,f_ind] = np.dot(rx_slided_1, w_vec1_p)
+         self.Dt2_fine[:,f_ind] = np.dot(rx_slided_2, w_vec2_p)
+         abs_vals = np.abs(self.Dt1_fine[:,f_ind] + self.Dt2_fine[:,f_ind])
+         max_abs_val = np.max(abs_vals)
+         if max_abs_val > Dtmax:
+             Dtmax = max_abs_val
+             tmax_ind = np.argmax(abs_vals)
+             tmax = tfine_range[tmax_ind]
+             fmax = f
          f_ind = f_ind + 1
          
-      self.D_fine = Dt1[tmax_ind,:]
+      self.D_fine = self.Dt1_fine[tmax_ind,:]
       
       return tmax, fmax
    
@@ -252,14 +268,25 @@ class acquisition():
 
       rx_conj = np.conj(rx)
       Nupdate = int(0.05*self.Dt1.shape[0])
-      for i in range(Nupdate):
-         t = np.random.randint(Nmf)
-         self.Dt1[t,:] = np.matmul(rx_conj[t:t+M],self.p_w)
-         self.Dt2[t,:] = np.matmul(rx_conj[t+Nmf:t+Nmf+M],self.p_w)
+      t_list = np.random.choice(np.arange(Nmf), (Nupdate,), False)
+      rx_conj_list_1 = np.zeros((len(t_list), M), dtype=np.csingle)
+      rx_conj_list_2 = np.zeros((len(t_list), M), dtype=np.csingle)
+      t_idx = 0
+      for t in t_list:
+         rx_conj_list_1[t_idx,:] = rx_conj[t:t+M]
+         rx_conj_list_2[t_idx,:] = rx_conj[t+Nmf:t+Nmf+M]
+         t_idx = t_idx + 1
+      rx_conj_res_1 = np.abs(np.matmul(rx_conj_list_1, self.p_w))
+      rx_conj_res_2 = np.abs(np.matmul(rx_conj_list_2, self.p_w))
+      t_idx = 0
+      for t in t_list:
+         self.Dt1[t,:] = rx_conj_res_1[t_idx,:]
+         self.Dt2[t,:] = rx_conj_res_2[t_idx,:]
+         t_idx = t_idx + 1
 
       # Ref: radae.pdf "Pilot Detection over Multiple Frames"
-      sigma_r1 = np.mean(np.abs(self.Dt1))/((np.pi/2)**0.5)
-      sigma_r2 = np.mean(np.abs(self.Dt2))/((np.pi/2)**0.5)
+      sigma_r1 = np.mean(self.Dt1)/((np.pi/2)**0.5)
+      sigma_r2 = np.mean(self.Dt2)/((np.pi/2)**0.5)
       sigma_r = (sigma_r1 + sigma_r2)/2.0
       Dthresh = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error2/5.0))
       Dthresh_eoo = 2*sigma_r*np.sqrt(-np.log(self.Pacq_error1/5.0)) # low thresh of false EOO
@@ -359,6 +386,7 @@ class receiver_one():
       self.pilot_gain = pilot_gain
       self.time_offset = time_offset
       self.coarse_mag = coarse_mag
+      self.rx_pilots = None
 
       # pre-compute some matrices
       self.Pmat = torch.empty(Nc,2,3,dtype=torch.complex64)
@@ -379,8 +407,12 @@ class receiver_one():
       self.c = 2.513
          
    def est_pilots(self, rx_sym_pilots, num_modem_frames, Nc, Ns):
-      rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
+      if self.rx_pilots is None or self.rx_pilots.size != (num_modem_frames+1)*Nc:
+          self.rx_pilots = torch.zeros(num_modem_frames+1, Nc, dtype=torch.complex64)
       # 3-pilot least squares fit across frequency, ref: freedv_low.pdf
+      local_path_delay_s = 0.0025      # guess at actual path delay, means a little bit of noise on scatter
+      a = local_path_delay_s*self.Fs
+      w_exp = torch.exp(-1j*self.w*a)
       for i in torch.arange(num_modem_frames+1):
          for c in range(Nc):
                c_mid = c
@@ -389,13 +421,11 @@ class receiver_one():
                   c_mid = 1
                if c == Nc-1:
                   c_mid = Nc-2
-               local_path_delay_s = 0.0025      # guess at actual path delay, means a little bit of noise on scatter
-               a = local_path_delay_s*self.Fs
                h = torch.reshape(rx_sym_pilots[0,0,Ns*i,c_mid-1:c_mid+2]/self.P[c_mid-1:c_mid+2],(3,1))
                g = torch.matmul(self.Pmat[c],h)
-               rx_pilots[i,c] = g[0] + g[1]*torch.exp(-1j*self.w[c]*a)
+               self.rx_pilots[i,c] = g[0] + g[1]*w_exp[c]
 
-      return rx_pilots
+      return self.rx_pilots
 
    # update SNR estimate
    def update_snr_est(self, rx_sym_pilots, rx_pilots):
