@@ -130,6 +130,7 @@ def complex_bpf_test(plot_en=0):
    # one filtering operation on entire sample
    rx = np.cos(2*np.pi*centre_freq_Hz*np.arange(Fs_Hz)/Fs_Hz)    # 1 sec real sinewave
    rx_bpf = bpf.bpf(rx)
+   rx_bpf.tofile("complex_bpf_test1.c64")
    print(rx.shape,rx_bpf.shape)
    ok1 = complex_bpf_test(rx_bpf[Ntap-1:],"OK1",plot_en)
  
@@ -139,6 +140,7 @@ def complex_bpf_test(plot_en=0):
    rx_bpf2 = np.zeros(0,dtype=np.csingle)
    for f in range(Nframes):
        rx_bpf2 = np.concatenate([rx_bpf2,bpf.bpf(rx[f*Nmf:(f+1)*Nmf])])
+   rx_bpf2.tofile("complex_bpf_test2.c64")
    print(Nframes, rx_bpf2.shape)
    ok2 = complex_bpf_test(rx_bpf2[Ntap-1:],"OK2",plot_en)
       
