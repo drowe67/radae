@@ -629,7 +629,7 @@ class single_carrier:
       self.g = 1
 
       # 4x oversampling filter for timing offset simulation
-      self.lpf = complex_bpf(101,self.Fs*4,self.Fs, 0, self.Fs * 4)
+      self.lpf = complex_bpf(101,self.Fs*4,self.Fs, 0, self.Fs * 40)
       # create a RNG with same sequence for BER testing with separate tx and rx
       seed = 65647437836358831880808032086803839626
       self.rng = np.random.default_rng(seed)
