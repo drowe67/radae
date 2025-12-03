@@ -37,7 +37,7 @@ import math
 import sys
 
 class complex_bpf():
-   def __init__(self, Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz):
+   def __init__(self, Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz, max_len):
       self.Ntap = Ntap
       B = bandwidth_Hz/Fs_Hz
       self.alpha = 2*np.pi*centre_freq_Hz/Fs_Hz
@@ -56,9 +56,9 @@ class complex_bpf():
       # Perform initial allocation of x_mem for the BPF.
       self.x_mem = np.zeros(self.Ntap-1, dtype=np.csingle)
 
-      # Set initial value for array length. If we get a larger input,
-      # this is what will trigger reallocation.
-      self.n = -1
+      # Preallocate filter
+      self.x_filt = np.zeros(max_len, dtype=np.csingle)
+      self.n = max_len
 
       self.phase = 1 + 0j
 
@@ -67,10 +67,8 @@ class complex_bpf():
       phase_vec = self.phase*np.exp(-1j*self.alpha*np.arange(1,n+1))
       x_baseband = x*phase_vec                                         # mix down to baseband
 
-      # Reallocate filter memory if the input is larger than the previous call.
-      if n > self.n:
-          self.x_filt = np.zeros(n, dtype=np.csingle)
-          self.n = n
+      # Make sure length is less than the filter length
+      assert(n <= self.n)
 
       # Reallocate x_mem if x_baseband size changes
       if len(self.x_mem) != (len(self.mem) + len(x_baseband)):
@@ -108,7 +106,7 @@ def complex_bpf_test(plot_en=0):
    bandwidth_Hz = 800
    centre_freq_Hz = 1000
    print(f"BPF bandwidth: {bandwidth_Hz:f} centre: {centre_freq_Hz:f}")
-   bpf = complex_bpf(Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz)
+   bpf = complex_bpf(Ntap, Fs_Hz, bandwidth_Hz, centre_freq_Hz, Fs_Hz)
 
    # -ve freq component of cos() should be attenuated by at least 40dB
    def complex_bpf_test(rx_bpf, pass_str, plot_en):
@@ -629,7 +627,7 @@ class single_carrier:
       self.g = 1
 
       # 4x oversampling filter for timing offset simulation
-      self.lpf = complex_bpf(101,self.Fs*4,self.Fs, 0)
+      self.lpf = complex_bpf(101,self.Fs*4,self.Fs, 0, self.Fs)
       # create a RNG with same sequence for BER testing with separate tx and rx
       seed = 65647437836358831880808032086803839626
       self.rng = np.random.default_rng(seed)
