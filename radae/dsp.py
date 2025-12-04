@@ -51,31 +51,29 @@ class complex_bpf():
       # if true we can remove time flip from convolution
       assert np.all(self.h == np.flip(self.h))
 
-      self.mem = np.zeros(self.Ntap-1, dtype=np.csingle)
+      self.mem = np.zeros(self.Ntap-1, dtype=np.complex128)
 
       # Perform initial allocation of x_mem for the BPF.
-      self.x_mem = np.zeros(self.Ntap-1, dtype=np.csingle)
+      self.x_mem = np.zeros(len(self.mem) + max_len, dtype=np.complex128)
 
       # Preallocate filter
-      self.x_filt = np.zeros(max_len, dtype=np.csingle)
+      self.x_filt = np.zeros(max_len, dtype=np.complex128)
       self.n = max_len
 
       self.phase = 1 + 0j
 
    def bpf(self, x):
       n = len(x)
-      phase_vec = self.phase*np.exp(-1j*self.alpha*np.arange(1,n+1))
-      x_baseband = x*phase_vec                                         # mix down to baseband
 
       # Make sure length is less than the filter length
       assert(n <= self.n)
 
-      # Reallocate x_mem if x_baseband size changes
-      if len(self.x_mem) != (len(self.mem) + len(x_baseband)):
-          self.x_mem = np.zeros(len(self.mem) + len(x_baseband), dtype=np.csingle)
+      # Mix down to baseband
+      phase_vec = self.phase*np.exp(-1j*self.alpha*np.arange(1,n+1))
+      x_baseband = x*phase_vec
 
       # Store concatenated memory and baseband samples into x_mem
-      np.concatenate([self.mem,x_baseband], out=self.x_mem)                    # pre-pend filter memory
+      np.concatenate([self.mem,x_baseband], out=self.x_mem[0:len(self.mem) + n])
 
       # as_strided generates a list of samples with each entry offset by 1 from the previous.
       # For example, given an array [1,2,3,4] and a shape of (3,2), as_strided produces the following array:
@@ -95,10 +93,15 @@ class complex_bpf():
       # The advantage of operating on the strided array is that we make only one transition between Python
       # and the NumPy C code, reducing overhead.
       self.x_filt[0:n] = np.dot(x_mem_slided, self.h)
-      self.mem = self.x_mem[-self.Ntap-1:]                                  # save filter state for next time
 
-      self.phase = phase_vec[-1]                                       # save phase state for next time
-      return self.x_filt[0:n]*np.conj(phase_vec)                                 # mix back up to centre freq
+      # Save filter state for next time
+      self.mem = self.x_mem[-self.Ntap-1:]
+
+      # Save phase state for next time
+      self.phase = phase_vec[-1]
+
+      # Mix back up to center frequency
+      return self.x_filt[0:n]*np.conj(phase_vec)
 
 def complex_bpf_test(plot_en=0):
    Ntap=101
