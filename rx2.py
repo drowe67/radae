@@ -44,7 +44,6 @@ from models_sync import FrameSyncNet
 parser = argparse.ArgumentParser()
 
 parser.add_argument('model_name', type=str, help='path to RADE model in .pth format')
-parser.add_argument('ft_model_name', type=str, help='path to fine timing model in .pth format')
 parser.add_argument('sync_model_name', type=str, help='path to sync model in .pth format')
 parser.add_argument('rx', type=str, help='path to input file of rate Fs rx samples in ..IQIQ...f32 format')
 parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
@@ -63,8 +62,11 @@ parser.add_argument('--stateful',  action='store_true', help='use stateful core 
 parser.add_argument('--xcorr_dimension', type=int, help='Dimension of Input cross-correlation (fine timing)',default = 160,required = False)
 parser.add_argument('--gru_dim', type=int, help='GRU Dimension (fine timing)',default = 64,required = False)
 parser.add_argument('--output_dim', type=int, help='Output dimension (fine timing)',default = 160,required = False)
-parser.add_argument('--write_Ry', type=str, default="", help='path to autocorrelation output feature file dim (seq_len,Ncp+M) .f32 format')
-parser.add_argument('--write_delta_hat', type=str, default="", help='path to delta_hat output file dim (seq_len) in .f32 format')
+parser.add_argument('--write_Ry', type=str, default="", help='path to smoothed autocorrelation output feature file dim (seq_len,Ncp+M) .f32 format')
+parser.add_argument('--write_delta_hat', type=str, default="", help='path to delta_hat output file dim (seq_len) in .int16 format')
+parser.add_argument('--write_delta_hat_pp', type=str, default="", help='path to delta_hat_pp output file dim (seq_len) in .int16 format')
+parser.add_argument('--write_sig_det', type=str, default="", help='path to signal detection flag output file dim (seq_len) in .int16 format')
+parser.add_argument('--write_freq_offset', type=str, default="", help='path to freq offset est output file dim (seq_len) in .float32 format')
 parser.add_argument('--write_delta_hat_rx', type=str, default="", help='path to delta_hat_rx file dim (seq_len) in .f32 format')
 parser.add_argument('--read_delta_hat', type=str, default="", help='path to delta_hat input file dim (seq_len) in .f32 format')
 parser.set_defaults(bpf=True)
@@ -98,11 +100,6 @@ checkpoint = torch.load(args.model_name, map_location='cpu', weights_only=True)
 model.load_state_dict(checkpoint['state_dict'], strict=False)
 model.eval()
 
-# Load fine timing model
-ft_nn = ftDNNXcorr(args.xcorr_dimension, args.gru_dim, args.output_dim)
-ft_nn.load_state_dict(torch.load(args.ft_model_name,weights_only=True,map_location=torch.device('cpu')))
-ft_nn.eval()
-
 # Load sync model
 sync_nn = FrameSyncNet(latent_dim)
 sync_nn.load_state_dict(torch.load(args.sync_model_name,weights_only=True,map_location=torch.device('cpu')))
@@ -115,13 +112,14 @@ Nmf = int(Ns*(M+Ncp))   # number of samples in one modem frame
 Nc = model.Nc
 w = model.w.cpu().detach().numpy()
 Fs = float(model.Fs)
+alpha = 0.85
 
 # load rx rate_Fs samples
 rx = np.fromfile(args.rx, dtype=np.csingle)*args.gain
 w_off = 2*np.pi*args.freq_offset/Fs
 rx = rx*np.exp(-1j*w_off*np.arange(len(rx)))
 
-# optional AGC
+# optional AGC, just a basic block based algorithm to get us started
 if args.agc:
    # target RMS level is PAPR ~ 3 dB less than peak of 1.0
    target = 1.0*10**(-3/20)
@@ -130,7 +128,7 @@ if args.agc:
    rx *= gain
 # ensure an integer number of frames
 rx = np.concatenate((np.zeros(args.pad_samples, dtype=np.complex64),rx))
-#rx = rx[args.pad_samples:]
+
 rx = rx[:Nmf*(len(rx)//Nmf)]
 print(f"samples: {len(rx):d} Nmf: {Nmf:d} modem frames: {len(rx)//Nmf}")
 
@@ -160,33 +158,67 @@ if args.plots:
    input("hit[enter] to end.")
    plt.close('all')
 
-# Generate fine timing estimates - as a first pass for entire sample, as we don't
-# have a stateful fine timing estimator
+# Generate fine timing estimates
 
 sequence_length = len(rx)//(Ncp+M) - 2
 print(sequence_length)
-Q = 8
-Ry_norm = np.zeros((sequence_length+Q-1,Ncp+M),dtype=np.float32)
-for s in np.arange(Q-1,sequence_length):
+
+# normalised autocorrelation function
+Ry_norm = np.zeros((sequence_length,Ncp+M),dtype=np.complex64)
+for s in np.arange(sequence_length):
    for delta_hat in np.arange(Ncp+M):
       st = (s+1)*(Ncp+M) + delta_hat
       y_cp = rx[st-Ncp:st]
       y_m = rx[st-Ncp+M:st+M]
       Ry = np.dot(y_cp, np.conj(y_m))
       D = np.dot(y_cp, np.conj(y_cp)) + np.dot(y_m, np.conj(y_m))
-      Ry_norm[s,delta_hat] = 2.*np.abs(Ry)/np.abs(D)
-Ry_bar = np.zeros((sequence_length,Ncp+M),dtype=np.float32)
-for s in np.arange(sequence_length):
-   Ry_bar[s,:] = np.mean(Ry_norm[s:s+Q,:],axis=0)
-if len(args.write_Ry):
-   Ry_bar.flatten().tofile(args.write_Ry)
-Ry_bar = torch.reshape(torch.tensor(Ry_bar),(1,Ry_bar.shape[0],Ry_bar.shape[1]))
+      Ry_norm[s,delta_hat] = 2.*Ry/np.abs(D)
 
-logits_softmax = ft_nn(Ry_bar)
-delta_hat = torch.argmax(logits_softmax, 2).cpu().detach().numpy().flatten().astype('float32')
+# IIR smoothing
+Ry_smooth = np.zeros((sequence_length,Ncp+M),dtype=np.complex64)
+Ry_smooth[0,:] = Ry_norm[0,:]
+for s in np.arange(1,sequence_length):
+   Ry_smooth[s,:] = Ry_smooth[s-1,:]*alpha + Ry_norm[s,:]*(1.-alpha)
+if len(args.write_Ry):
+   Ry_smooth.flatten().tofile(args.write_Ry)
+
+# extract timing and freq offset estimates, signal detection flag
+Ry_max = np.max(np.abs(Ry_smooth), axis=1)
+delta_hat = np.int16(np.argmax(np.abs(Ry_smooth), axis=1))
+Ts=0.42
+sig_det = np.int16(Ry_max > Ts)
+
+# post process to smooth out symbol-symbol variations in timing
+# due to noise, but allowing big shifts during acquisition and slow 
+# gradual change due clock offsets 
+delta_hat_pp = np.zeros(sequence_length,dtype=np.int16)
+count = 0
+beta = 0.9995
+thresh = Ncp//2
+for s in np.arange(1,sequence_length):
+   if np.abs(delta_hat[s]-delta_hat_pp[s-1]) > thresh:
+      count += 1
+   if count > 5:
+      delta_hat_pp[s] = delta_hat[s]
+      count = 0
+   else:
+      delta_hat_pp[s] = delta_hat_pp[s-1]*beta + delta_hat[s]*(1-beta)
+
+# freq offset estimates
+freq_offset = np.zeros(sequence_length,dtype=np.float32)
+for s in np.arange(1,sequence_length):
+   delta_phi = np.angle(Ry_smooth[s,delta_hat[s]])
+   freq_offset[s] = -delta_phi*Fs/(2.*np.pi*M)
+
 if len(args.write_delta_hat):
    delta_hat.flatten().tofile(args.write_delta_hat)
-# over rides internal estimator   
+if len(args.write_delta_hat_pp):
+   delta_hat_pp.flatten().tofile(args.write_delta_hat_pp)
+if len(args.write_sig_det):
+   sig_det.flatten().tofile(args.write_sig_det)
+if len(args.write_freq_offset):
+   freq_offset.flatten().tofile(args.write_freq_offset)
+# optionally read in external timing est, overrides internal estimator   
 if len(args.read_delta_hat):
    delta_hat = np.fromfile(args.read_delta_hat, dtype=np.float32)
 
