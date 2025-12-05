@@ -58,6 +58,7 @@ class complex_bpf():
       self.n = max_len
 
       self.phase = 1 + 0j
+      self.phase_vec_exp = np.exp(-1j*self.alpha*np.arange(1,max_len+1), dtype=np.complex64)
 
    def bpf(self, x):
       n = len(x)
@@ -66,7 +67,7 @@ class complex_bpf():
       assert(n <= self.n)
 
       # Mix down to baseband
-      phase_vec = self.phase*np.exp(-1j*self.alpha*np.arange(1,n+1), dtype=np.complex64)
+      phase_vec = self.phase*self.phase_vec_exp[0:n]
       x_baseband = x*phase_vec
 
       # Store concatenated memory and baseband samples into x_mem
