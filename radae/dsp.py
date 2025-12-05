@@ -88,7 +88,7 @@ class complex_bpf():
       #
       # The advantage of operating on the strided array is that we make only one transition between Python
       # and the NumPy C code, reducing overhead.
-      self.x_filt[0:n] = np.dot(x_mem_slided, self.h)
+      np.dot(x_mem_slided, self.h, out=self.x_filt[0:n])
 
       # Save filter state for next time
       self.mem = x_mem[-self.Ntap-1:]
