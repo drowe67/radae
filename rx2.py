@@ -190,19 +190,19 @@ sig_det = np.int16(Ry_max > Ts)
 
 # post process to smooth out symbol-symbol variations in timing
 # due to noise, but allowing big shifts during acquisition and slow 
-# gradual change due clock offsets 
-delta_hat_pp = np.zeros(sequence_length,dtype=np.int16)
+delta_hat_pp = np.zeros(sequence_length,dtype=np.float32)
 count = 0
-beta = 0.9995
+beta = 0.99
 thresh = Ncp//2
 for s in np.arange(1,sequence_length):
    if np.abs(delta_hat[s]-delta_hat_pp[s-1]) > thresh:
       count += 1
-   if count > 5:
-      delta_hat_pp[s] = delta_hat[s]
-      count = 0
+      if count > 5:
+         delta_hat_pp[s] = delta_hat[s]
+         count = 0
    else:
-      delta_hat_pp[s] = delta_hat_pp[s-1]*beta + delta_hat[s]*(1-beta)
+      count = 0
+      delta_hat_pp[s] = delta_hat_pp[s-1]*beta + np.float32(delta_hat[s])*(1-beta)
 
 # freq offset estimates
 freq_offset = np.zeros(sequence_length,dtype=np.float32)
@@ -211,13 +211,13 @@ for s in np.arange(1,sequence_length):
    freq_offset[s] = -delta_phi*Fs/(2.*np.pi*M)
 
 if len(args.write_delta_hat):
-   delta_hat.flatten().tofile(args.write_delta_hat)
+   delta_hat.tofile(args.write_delta_hat)
 if len(args.write_delta_hat_pp):
-   delta_hat_pp.flatten().tofile(args.write_delta_hat_pp)
+   np.int16(delta_hat_pp).tofile(args.write_delta_hat_pp)
 if len(args.write_sig_det):
-   sig_det.flatten().tofile(args.write_sig_det)
+   sig_det.tofile(args.write_sig_det)
 if len(args.write_freq_offset):
-   freq_offset.flatten().tofile(args.write_freq_offset)
+   freq_offset.tofile(args.write_freq_offset)
 # optionally read in external timing est, overrides internal estimator   
 if len(args.read_delta_hat):
    delta_hat = np.fromfile(args.read_delta_hat, dtype=np.float32)
