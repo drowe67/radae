@@ -67,7 +67,9 @@ parser.add_argument('--write_delta_hat', type=str, default="", help='path to del
 parser.add_argument('--write_delta_hat_pp', type=str, default="", help='path to delta_hat_pp output file dim (seq_len) in .int16 format')
 parser.add_argument('--write_sig_det', type=str, default="", help='path to signal detection flag output file dim (seq_len) in .int16 format')
 parser.add_argument('--write_freq_offset', type=str, default="", help='path to freq offset est output file dim (seq_len) in .float32 format')
+parser.add_argument('--write_freq_offset_smooth', type=str, default="", help='path to smoothed freq offset est output file dim (seq_len) in .float32 format')
 parser.add_argument('--write_delta_hat_rx', type=str, default="", help='path to delta_hat_rx file dim (seq_len) in .f32 format')
+parser.add_argument('--write_state', type=str, default="", help='path to sync state machine output file dim (seq_len) in .int16 format')
 parser.add_argument('--read_delta_hat', type=str, default="", help='path to delta_hat input file dim (seq_len) in .f32 format')
 parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
@@ -189,7 +191,8 @@ Ts=0.42
 sig_det = np.int16(Ry_max > Ts)
 
 # post process to smooth out symbol-symbol variations in timing
-# due to noise, but allowing big shifts during acquisition and slow 
+# due to noise, but allowing big shifts during acquisition and 
+# tracking of slow timing changes due to clock offsets
 delta_hat_pp = np.zeros(sequence_length,dtype=np.float32)
 count = 0
 beta = 0.99
@@ -204,7 +207,7 @@ for s in np.arange(1,sequence_length):
       count = 0
       delta_hat_pp[s] = delta_hat_pp[s-1]*beta + np.float32(delta_hat[s])*(1-beta)
 
-# freq offset estimates
+# (raw) freq offset estimates
 freq_offset = np.zeros(sequence_length,dtype=np.float32)
 for s in np.arange(1,sequence_length):
    delta_phi = np.angle(Ry_smooth[s,delta_hat[s]])
@@ -222,6 +225,66 @@ if len(args.write_freq_offset):
 if len(args.read_delta_hat):
    delta_hat = np.fromfile(args.read_delta_hat, dtype=np.float32)
 
+# sync state machine, smooth freq offset ests when in sync
+state = "noise"
+count = 0
+freq_offset_smooth = np.zeros(sequence_length,dtype=np.float32)
+state_log = np.zeros(sequence_length,dtype=np.int16)
+
+for s in np.arange(1,sequence_length):
+
+   next_state = state
+   if state == "noise":
+      state_log[s] = 0
+      if sig_det[s]:
+         count += 1
+         if count == 5:
+            next_state = "signal"
+            count = 0
+            delta_phi = np.angle(Ry_smooth[s,delta_hat[s]])
+            freq_offset_smooth[s] = -delta_phi*Fs/(2.*np.pi*M)
+   if state == "signal":
+      state_log[s] = 1
+      if not sig_det[s]:
+         count += 1
+         if count == 5:
+            next_state = "noise"
+            count = 0
+      else:
+         freq_offset_smooth[s] = beta*freq_offset_smooth[s-1] - (1-beta)*delta_phi*Fs/(2.*np.pi*M)
+   state = next_state 
+
+if len(args.write_freq_offset_smooth):
+   freq_offset_smooth.tofile(args.write_freq_offset_smooth)
+if len(args.write_state):
+   state_log.tofile(args.write_state)
+
+rx = np.concatenate((rx,np.zeros(Ncp+M,dtype=np.complex64)))
+
+# use timing estimates as they evolve to extract frames
+Nframes = sequence_length//model.Ns
+z_hat = torch.zeros((1,Nframes, model.latent_dim), dtype=torch.float32)
+delta_hat_rx = np.zeros(Nframes,dtype=np.int16)
+
+# note only one time estimate per frame (Ns symbols), we don't want a timing change
+# mid frame
+for i in np.arange(0,Nframes):
+   # map back to index ref to start of symbol that Ncp/M junction
+   delta_hat_rx[i] = int(delta_hat_pp[model.Ns*i]-Ncp)
+
+   st = (model.Ns*i)*(Ncp+M) + delta_hat_rx[i]
+   st = max(st,0)
+   en = st + model.Ns*(Ncp+M)
+   if i < 10:
+      print(i,delta_hat_rx[i],st,en)
+   # extract rx samples for i-th frame
+   rx_i = torch.tensor(rx[st:en], dtype=torch.complex64)
+   # run receiver to extract i-th freq domain OFDM symbols z_hat
+   az_hat = model.receiver(rx_i,run_decoder=False)
+   z_hat[0,i,:] = az_hat
+print("z_hat.shape",z_hat.shape)
+
+"""
 # concat rx vector with zeros at either end so we can extract an integer number of symbols
 # despite fine timing offset
 len_rx = len(rx)
@@ -273,6 +336,7 @@ else:
       z_hat[0,i,:] = az_hat
    print("z_hat.shape",z_hat.shape)
 print(delta_hat_rx)
+"""
 
 if len(args.write_delta_hat_rx):
    np.float32(delta_hat_rx).flatten().tofile(args.write_delta_hat_rx)
