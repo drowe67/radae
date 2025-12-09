@@ -2,7 +2,7 @@
 /*
   RADE V2 receiver: rate Fs complex samples in, features out.
 
-  No pilots, ML fine timing and frame sync.
+  No pilots, DSP acquisition, ML frame sync.
 
   Copyright (c) 2025 by David Rowe */
 
@@ -160,12 +160,12 @@ if args.plots:
    input("hit[enter] to end.")
    plt.close('all')
 
-# Generate fine timing estimates
+# Acquisition - timing, freq offset, and signal present estimates
 
 sequence_length = len(rx)//(Ncp+M) - 2
 print(sequence_length)
 
-# normalised autocorrelation function
+# Normalised autocorrelation function
 Ry_norm = np.zeros((sequence_length,Ncp+M),dtype=np.complex64)
 for s in np.arange(sequence_length):
    for delta_hat in np.arange(Ncp+M):
@@ -265,12 +265,21 @@ rx = np.concatenate((rx,np.zeros(Ncp+M,dtype=np.complex64)))
 Nframes = sequence_length//model.Ns
 z_hat = torch.zeros((1,Nframes, model.latent_dim), dtype=torch.float32)
 delta_hat_rx = np.zeros(Nframes,dtype=np.int16)
+rx_phase = 1 + 1j*0
+rx_phase_vec = np.zeros(model.Ns*(Ncp+M),np.csingle)
 
 # note only one time estimate per frame (Ns symbols), we don't want a timing change
 # mid frame
 for i in np.arange(0,Nframes):
-   # map back to index ref to start of symbol that Ncp/M junction
+   # map delta_hat from Ncp/M junction to start sample of symbol
    delta_hat_rx[i] = int(delta_hat_pp[model.Ns*i]-Ncp)
+   
+   # set up phase continous vector to correct freq offset
+   freq_offset_rx = freq_offset_smooth[model.Ns*i]
+   w = 2*np.pi*freq_offset_rx/Fs
+   for n in range(model.Ns*(Ncp+M)):
+      rx_phase = rx_phase*np.exp(-1j*w)
+      rx_phase_vec[n] = rx_phase
 
    st = (model.Ns*i)*(Ncp+M) + delta_hat_rx[i]
    st = max(st,0)
@@ -278,7 +287,7 @@ for i in np.arange(0,Nframes):
    if i < 10:
       print(i,delta_hat_rx[i],st,en)
    # extract rx samples for i-th frame
-   rx_i = torch.tensor(rx[st:en], dtype=torch.complex64)
+   rx_i = torch.tensor(rx_phase_vec*rx[st:en], dtype=torch.complex64)
    # run receiver to extract i-th freq domain OFDM symbols z_hat
    az_hat = model.receiver(rx_i,run_decoder=False)
    z_hat[0,i,:] = az_hat
