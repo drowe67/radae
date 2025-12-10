@@ -293,60 +293,6 @@ for i in np.arange(0,Nframes):
    z_hat[0,i,:] = az_hat
 print("z_hat.shape",z_hat.shape)
 
-"""
-# concat rx vector with zeros at either end so we can extract an integer number of symbols
-# despite fine timing offset
-len_rx = len(rx)
-#rx = np.concatenate((np.zeros(Ncp+M,dtype=np.complex64),rx,np.zeros(Ncp+M,dtype=np.complex64)))
-rx = np.concatenate((rx,np.zeros(Ncp+M,dtype=np.complex64)))
-# extract a vector corrected for fine timing est
-if args.timing_onesec:
-   # Use average of first 1 second of FT est to obtain ideal sampling point, avoid
-   # first few symbols as they appear to be start up transients.  Really basic first pass.
-   # Note conversion in time reference, delta_hat is referenced to Ncp/M boundary, but
-   # receiver uses start of CP.
-   delta_hat_rx = int(np.mean(delta_hat[10:50])) - Ncp
-   print(f"sampling instant: {delta_hat_rx:d}")
-   rx = rx[Ncp+M+delta_hat_rx:Ncp+M+delta_hat_rx+len_rx]
-   # obtain z_hat from OFDM rx signal
-   rx = torch.tensor(rx, dtype=torch.complex64)
-   z_hat = model.receiver(rx,run_decoder=False)
-   print("z_hat.shape",z_hat.shape)
-else:
-   # use timing estimates as they evolve
-   Nframes = sequence_length//model.Ns
-   z_hat = torch.zeros((1,Nframes, model.latent_dim), dtype=torch.float32)
-   delta_hat_rx = np.zeros(Nframes,dtype=np.int16)
-   test_delta_hat_rx = 2
-   # note only one time estimate per frame (Ns symbols), we don't want a timing change
-   # mid frame
-   for i in np.arange(0,Nframes):
-      if args.test_mode:
-         delta_hat_rx[i] = int(np.mean(delta_hat[10:50])) - Ncp
-         if i == 50:
-            test_delta_hat_rx -= 3
-         if i == 60:
-            test_delta_hat_rx += 3
-         delta_hat_rx[i] = test_delta_hat_rx
-      else:
-         delta_hat_rx[i] = int(delta_hat[model.Ns*i]-Ncp)
-
-      st = (model.Ns*i)*(Ncp+M) + delta_hat_rx[i]
-      st = max(st,0)
-      en = st + model.Ns*(Ncp+M)
-      if i < 10:
-         print(i,delta_hat_rx[i],st,en)
-      # extract rx samples for i-th frame
-      rx_i = torch.tensor(rx[st:en], dtype=torch.complex64)
-      #print(rx_i.shape)
-      # run receiver to extract i-th freq domain OFDM symbols z_hat
-      az_hat = model.receiver(rx_i,run_decoder=False)
-      #print(z_hat.shape, z_hat[0,i,:].shape,az_hat.shape,az_hat[0,:,:].shape )
-      z_hat[0,i,:] = az_hat
-   print("z_hat.shape",z_hat.shape)
-print(delta_hat_rx)
-"""
-
 if len(args.write_delta_hat_rx):
    np.float32(delta_hat_rx).flatten().tofile(args.write_delta_hat_rx)
 
