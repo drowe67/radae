@@ -38,13 +38,12 @@ import numpy as np
 from matplotlib import pyplot as plt
 import torch
 from radae import RADAE,complex_bpf
-from models_ft import ftDNNXcorr
 from models_sync import FrameSyncNet
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument('model_name', type=str, help='path to RADE model in .pth format')
-parser.add_argument('sync_model_name', type=str, help='path to sync model in .pth format')
+parser.add_argument('frame_sync_model_name', type=str, help='path to frame sync model in .pth format')
 parser.add_argument('rx', type=str, help='path to input file of rate Fs rx samples in ..IQIQ...f32 format')
 parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 80", default=80)
@@ -103,9 +102,9 @@ model.load_state_dict(checkpoint['state_dict'], strict=False)
 model.eval()
 
 # Load sync model
-sync_nn = FrameSyncNet(latent_dim)
-sync_nn.load_state_dict(torch.load(args.sync_model_name,weights_only=True,map_location=torch.device('cpu')))
-sync_nn.eval()
+frame_sync_nn = FrameSyncNet(latent_dim)
+frame_sync_nn.load_state_dict(torch.load(args.frame_sync_model_name,weights_only=True,map_location=torch.device('cpu')))
+frame_sync_nn.eval()
 
 M = model.M
 Ncp = model.Ncp
@@ -230,6 +229,12 @@ state = "noise"
 count = 0
 freq_offset_smooth = np.zeros(sequence_length,dtype=np.float32)
 state_log = np.zeros(sequence_length,dtype=np.int16)
+frame_sync_log = np.zeros((sequence_length,2),dtype=np.float32)
+frame_sync_even = 0.
+frame_sync_odd = 0.
+
+# off air samples for i-th frame
+rx_i = torch.zeros((1,Ns*(Ncp+M)),dtype=torch.complex64)
 
 for s in np.arange(1,sequence_length):
 
@@ -243,6 +248,8 @@ for s in np.arange(1,sequence_length):
             count = 0
             delta_phi = np.angle(Ry_smooth[s,delta_hat[s]])
             freq_offset_smooth[s] = -delta_phi*Fs/(2.*np.pi*M)
+            frame_sync_even = 0.
+            frame_sync_odd = 0.
    if state == "signal":
       state_log[s] = 1
       if not sig_det[s]:
@@ -252,12 +259,45 @@ for s in np.arange(1,sequence_length):
             count = 0
       else:
          freq_offset_smooth[s] = beta*freq_offset_smooth[s-1] - (1-beta)*delta_phi*Fs/(2.*np.pi*M)
+         # correct freq offset
+         #  keep phase vector normalised
+         # extract single symbol, construct a frame with previous symbol
+
+         # adjust timing to point to start of symbol
+         delta_hat_rx = int(delta_hat_pp[s]-Ncp)
+
+         # extract symbol into end of i-th frame
+         st = s*(Ncp+M) + delta_hat_rx
+         en = st + Ncp+M
+         rx_i[0,:Ncp+M] = rx_i[0,:Ncp+M:]
+         rx_i[0,Ncp+M:] = torch.tensor(rx[st:en], dtype=torch.complex64)
+         # run receiver to extract i-th freq domain OFDM symbols z_hat
+         az_hat = model.receiver(rx_i,run_decoder=False)
+
+         # update odd and even frame sync metrics
+         frame_sync_metric = frame_sync_nn(torch.reshape(az_hat,(1,-1,latent_dim)))
+         frame_sync_metric = frame_sync_metric.cpu().detach().numpy().flatten()
+         print(az_hat.shape, frame_sync_metric)
+
+         if s % 2:
+            frame_sync_odd = beta*frame_sync_odd - (1-beta)*frame_sync_metric
+         else:
+            frame_sync_even = beta*frame_sync_even - (1-beta)*frame_sync_metric           
+         print(frame_sync_odd, frame_sync_even)
+         # frame sync det
+         # needs odd and even candidate frame
+         # IIR smooth
    state = next_state 
+   print(s,state,frame_sync_even)
+   frame_sync_log[s,0] = frame_sync_even
+   frame_sync_log[s,1] = frame_sync_odd
 
 if len(args.write_freq_offset_smooth):
    freq_offset_smooth.tofile(args.write_freq_offset_smooth)
 if len(args.write_state):
    state_log.tofile(args.write_state)
+if len(args.write_frame_sync):
+   frame_sync_log.flatten().tofile(args.write_frame_sync)
 
 rx = np.concatenate((rx,np.zeros(Ncp+M,dtype=np.complex64)))
 
