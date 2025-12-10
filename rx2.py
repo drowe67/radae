@@ -69,6 +69,7 @@ parser.add_argument('--write_freq_offset', type=str, default="", help='path to f
 parser.add_argument('--write_freq_offset_smooth', type=str, default="", help='path to smoothed freq offset est output file dim (seq_len) in .float32 format')
 parser.add_argument('--write_delta_hat_rx', type=str, default="", help='path to delta_hat_rx file dim (seq_len) in .f32 format')
 parser.add_argument('--write_state', type=str, default="", help='path to sync state machine output file dim (seq_len) in .int16 format')
+parser.add_argument('--write_frame_sync', type=str, default="", help='path to frame sync output file dim (seq_len,2) in .int16 format')
 parser.add_argument('--read_delta_hat', type=str, default="", help='path to delta_hat input file dim (seq_len) in .f32 format')
 parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
@@ -234,7 +235,7 @@ frame_sync_even = 0.
 frame_sync_odd = 0.
 
 # off air samples for i-th frame
-rx_i = torch.zeros((1,Ns*(Ncp+M)),dtype=torch.complex64)
+rx_i = torch.zeros((Ns*(Ncp+M)),dtype=torch.complex64)
 
 for s in np.arange(1,sequence_length):
 
@@ -254,41 +255,37 @@ for s in np.arange(1,sequence_length):
       state_log[s] = 1
       if not sig_det[s]:
          count += 1
-         if count == 5:
+         if count == 10:
             next_state = "noise"
             count = 0
+      
+      freq_offset_smooth[s] = beta*freq_offset_smooth[s-1] - (1-beta)*delta_phi*Fs/(2.*np.pi*M)
+      # correct freq offset
+      #  keep phase vector normalised
+      # extract single symbol, construct a frame with previous symbol
+
+      # adjust timing to point to start of symbol
+      delta_hat_rx = int(delta_hat_pp[s]-Ncp)
+
+      # extract symbol into end of i-th frame
+      st = s*(Ncp+M) + delta_hat_rx
+      en = st + Ncp+M
+      rx_i[:Ncp+M] = rx_i[Ncp+M:]
+      rx_i[Ncp+M:] = torch.tensor(rx[st:en], dtype=torch.complex64)
+      # run receiver to extract i-th freq domain OFDM symbols z_hat for one frame
+      # Note this is run at symbol rate (twice frame rate) so we can get odd and even stats
+      az_hat = model.receiver(rx_i,run_decoder=False)
+
+      # update odd and even frame sync metrics
+      frame_sync_metric_torch = frame_sync_nn(az_hat)
+      frame_sync_metric = float(frame_sync_metric_torch[0,0,0])
+      
+      if s % 2:
+         frame_sync_odd = alpha*frame_sync_odd + (1-alpha)*frame_sync_metric
       else:
-         freq_offset_smooth[s] = beta*freq_offset_smooth[s-1] - (1-beta)*delta_phi*Fs/(2.*np.pi*M)
-         # correct freq offset
-         #  keep phase vector normalised
-         # extract single symbol, construct a frame with previous symbol
-
-         # adjust timing to point to start of symbol
-         delta_hat_rx = int(delta_hat_pp[s]-Ncp)
-
-         # extract symbol into end of i-th frame
-         st = s*(Ncp+M) + delta_hat_rx
-         en = st + Ncp+M
-         rx_i[0,:Ncp+M] = rx_i[0,:Ncp+M:]
-         rx_i[0,Ncp+M:] = torch.tensor(rx[st:en], dtype=torch.complex64)
-         # run receiver to extract i-th freq domain OFDM symbols z_hat
-         az_hat = model.receiver(rx_i,run_decoder=False)
-
-         # update odd and even frame sync metrics
-         frame_sync_metric = frame_sync_nn(torch.reshape(az_hat,(1,-1,latent_dim)))
-         frame_sync_metric = frame_sync_metric.cpu().detach().numpy().flatten()
-         print(az_hat.shape, frame_sync_metric)
-
-         if s % 2:
-            frame_sync_odd = beta*frame_sync_odd - (1-beta)*frame_sync_metric
-         else:
-            frame_sync_even = beta*frame_sync_even - (1-beta)*frame_sync_metric           
-         print(frame_sync_odd, frame_sync_even)
-         # frame sync det
-         # needs odd and even candidate frame
-         # IIR smooth
+         frame_sync_even = alpha*frame_sync_even + (1-alpha)*frame_sync_metric
    state = next_state 
-   print(s,state,frame_sync_even)
+   
    frame_sync_log[s,0] = frame_sync_even
    frame_sync_log[s,1] = frame_sync_odd
 
@@ -346,8 +343,8 @@ if args.noframe_sync == False:
    z_hat = torch.reshape(z_hat,(1,-1,latent_dim//2))
    print(z_hat.shape)
    sync_st=10
-   sync_even = torch.mean(sync_nn(torch.reshape(z_hat[0,sync_st:sync_st+Nsync_syms,:],(1,-1,latent_dim))))
-   sync_odd = torch.mean(sync_nn(torch.reshape(z_hat[0,sync_st+1:sync_st+1+Nsync_syms,:],(1,-1,latent_dim))))
+   sync_even = torch.mean(frame_sync_nn(torch.reshape(z_hat[0,sync_st:sync_st+Nsync_syms,:],(1,-1,latent_dim))))
+   sync_odd = torch.mean(frame_sync_nn(torch.reshape(z_hat[0,sync_st+1:sync_st+1+Nsync_syms,:],(1,-1,latent_dim))))
    print(f"sync_even: {sync_even:5.2f} sync_odd: {sync_odd:5.2f}")
    if sync_even > sync_odd:
       offset = 0
