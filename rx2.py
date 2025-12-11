@@ -237,9 +237,18 @@ frame_sync_odd = 0.
 # off air samples for i-th frame
 rx_i = torch.zeros((Ns*(Ncp+M)),dtype=torch.complex64)
 
+rx_phase = 1 + 1j*0
+rx_phase_vec = np.zeros(Ncp+M,np.csingle)
+Nframes = sequence_length//model.Ns
+z_hat = torch.zeros((1,Nframes, model.latent_dim), dtype=torch.float32)
+
 for s in np.arange(1,sequence_length):
 
    next_state = state
+
+   print(f"{s:3d} {s//2:3d} state: {state:5s} sig_det: {sig_det[s]:1d} count: {count:1d} ", end='', file=sys.stderr)
+   print(f"fs_even: {frame_sync_even:5.3f} fs_odd: {frame_sync_odd:5.3f}", file=sys.stderr)
+
    if state == "noise":
       state_log[s] = 0
       if sig_det[s]:
@@ -267,11 +276,18 @@ for s in np.arange(1,sequence_length):
       # adjust timing to point to start of symbol
       delta_hat_rx = int(delta_hat_pp[s]-Ncp)
 
+      # set up phase continous vector to correct freq offset
+      freq_offset_rx = freq_offset_smooth[s]
+      w = 2*np.pi*freq_offset_rx/Fs
+      for n in range(Ncp+M):
+         rx_phase = rx_phase*np.exp(-1j*w)
+         rx_phase_vec[n] = rx_phase
+
       # extract symbol into end of i-th frame
       st = s*(Ncp+M) + delta_hat_rx
       en = st + Ncp+M
       rx_i[:Ncp+M] = rx_i[Ncp+M:]
-      rx_i[Ncp+M:] = torch.tensor(rx[st:en], dtype=torch.complex64)
+      rx_i[Ncp+M:] = torch.tensor(rx_phase_vec*rx[st:en], dtype=torch.complex64)
       # run receiver to extract i-th freq domain OFDM symbols z_hat for one frame
       # Note this is run at symbol rate (twice frame rate) so we can get odd and even stats
       az_hat = model.receiver(rx_i,run_decoder=False)
@@ -281,9 +297,16 @@ for s in np.arange(1,sequence_length):
       frame_sync_metric = float(frame_sync_metric_torch[0,0,0])
       
       if s % 2:
+         # odd frame alignment
          frame_sync_odd = alpha*frame_sync_odd + (1-alpha)*frame_sync_metric
+         if frame_sync_odd > frame_sync_even:
+            z_hat[0,s//2,:] = az_hat
       else:
+         # even frame alignment
          frame_sync_even = alpha*frame_sync_even + (1-alpha)*frame_sync_metric
+         if frame_sync_even > frame_sync_odd:
+            z_hat[0,s//2,:] = az_hat
+
    state = next_state 
    
    frame_sync_log[s,0] = frame_sync_even
@@ -298,6 +321,7 @@ if len(args.write_frame_sync):
 
 rx = np.concatenate((rx,np.zeros(Ncp+M,dtype=np.complex64)))
 
+"""
 # use timing estimates as they evolve to extract frames
 Nframes = sequence_length//model.Ns
 z_hat = torch.zeros((1,Nframes, model.latent_dim), dtype=torch.float32)
@@ -328,6 +352,7 @@ for i in np.arange(0,Nframes):
    # run receiver to extract i-th freq domain OFDM symbols z_hat
    az_hat = model.receiver(rx_i,run_decoder=False)
    z_hat[0,i,:] = az_hat
+"""
 print("z_hat.shape",z_hat.shape)
 
 if len(args.write_delta_hat_rx):
