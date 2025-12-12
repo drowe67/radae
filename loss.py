@@ -69,8 +69,10 @@ def find_loss(features_fn, features_hat_fn):
    features_hat_seq_length = features_hat.shape[1]
    #print(features.shape, features_hat.shape)
    assert features_hat_seq_length
-   assert features_hat_seq_length <= features_seq_length
-
+   if features_hat_seq_length >= features_seq_length:
+      print(f"features_hat_length: {features_hat_seq_length:d} > features_length: {features_seq_length:d}")
+      quit()
+      
    # So features_hat will be shorter than features sequence.  Time align them based on min loss
    min_loss = distortion_loss(features[:,:features_hat_seq_length,:],features_hat).cpu().detach().numpy()[0]
    min_start = 0
