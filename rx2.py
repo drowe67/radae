@@ -61,9 +61,11 @@ parser.add_argument('--stateful',  action='store_true', help='use stateful core 
 parser.add_argument('--xcorr_dimension', type=int, help='Dimension of Input cross-correlation (fine timing)',default = 160,required = False)
 parser.add_argument('--gru_dim', type=int, help='GRU Dimension (fine timing)',default = 64,required = False)
 parser.add_argument('--output_dim', type=int, help='Output dimension (fine timing)',default = 160,required = False)
-parser.add_argument('--write_Ry', type=str, default="", help='path to smoothed autocorrelation output feature file dim (seq_len,Ncp+M) .f32 format')
+parser.add_argument('--write_Ry_norm', type=str, default="", help='path to normalised autocorrelation output feature file dim (seq_len,Ncp+M) .f32 format')
+parser.add_argument('--write_Ry_smooth', type=str, default="", help='path to smoothed autocorrelation output feature file dim (seq_len,Ncp+M) .f32 format')
 parser.add_argument('--write_delta_hat', type=str, default="", help='path to delta_hat output file dim (seq_len) in .int16 format')
 parser.add_argument('--write_delta_hat_pp', type=str, default="", help='path to delta_hat_pp output file dim (seq_len) in .int16 format')
+parser.add_argument('--write_Ry_max', type=str, default="", help='path to Ty_max output file dim (seq_len) in .f32 format')
 parser.add_argument('--write_sig_det', type=str, default="", help='path to signal detection flag output file dim (seq_len) in .int16 format')
 parser.add_argument('--write_freq_offset', type=str, default="", help='path to freq offset est output file dim (seq_len) in .float32 format')
 parser.add_argument('--write_freq_offset_smooth', type=str, default="", help='path to smoothed freq offset est output file dim (seq_len) in .float32 format')
@@ -176,13 +178,16 @@ for s in np.arange(sequence_length):
       D = np.dot(y_cp, np.conj(y_cp)) + np.dot(y_m, np.conj(y_m))
       Ry_norm[s,delta_hat] = 2.*Ry/np.abs(D)
 
+if len(args.write_Ry_norm):
+   Ry_norm.flatten().tofile(args.write_Ry_norm)
+
 # IIR smoothing
 Ry_smooth = np.zeros((sequence_length,Ncp+M),dtype=np.complex64)
-Ry_smooth[0,:] = Ry_norm[0,:]
+#Ry_smooth[0,:] = Ry_norm[0,:]
 for s in np.arange(1,sequence_length):
    Ry_smooth[s,:] = Ry_smooth[s-1,:]*alpha + Ry_norm[s,:]*(1.-alpha)
-if len(args.write_Ry):
-   Ry_smooth.flatten().tofile(args.write_Ry)
+if len(args.write_Ry_smooth):
+   Ry_smooth.flatten().tofile(args.write_Ry_smooth)
 
 # extract timing and freq offset estimates, signal detection flag
 Ry_max = np.max(np.abs(Ry_smooth), axis=1)
@@ -217,6 +222,8 @@ if len(args.write_delta_hat):
    delta_hat.tofile(args.write_delta_hat)
 if len(args.write_delta_hat_pp):
    np.int16(delta_hat_pp).tofile(args.write_delta_hat_pp)
+if len(args.write_Ry_max):
+   Ry_max.tofile(args.write_Ry_max)
 if len(args.write_sig_det):
    sig_det.tofile(args.write_sig_det)
 if len(args.write_freq_offset):
@@ -241,12 +248,13 @@ rx_phase = 1 + 1j*0
 rx_phase_vec = np.zeros(Ncp+M,np.csingle)
 Nframes = sequence_length//model.Ns
 z_hat = torch.zeros((1,Nframes, model.latent_dim), dtype=torch.float32)
+i = 0
 
 for s in np.arange(1,sequence_length):
 
    next_state = state
 
-   print(f"{s:3d} {s//2:3d} state: {state:5s} sig_det: {sig_det[s]:1d} count: {count:1d} ", end='', file=sys.stderr)
+   print(f"{s:3d} {s//2:3d} state: {state:6s} sig_det: {sig_det[s]:1d} count: {count:1d} ", end='', file=sys.stderr)
    print(f"fs_even: {frame_sync_even:5.3f} fs_odd: {frame_sync_odd:5.3f}", file=sys.stderr)
 
    if state == "noise":
@@ -300,17 +308,22 @@ for s in np.arange(1,sequence_length):
          # odd frame alignment
          frame_sync_odd = alpha*frame_sync_odd + (1-alpha)*frame_sync_metric
          if frame_sync_odd > frame_sync_even:
-            z_hat[0,s//2,:] = az_hat
+            z_hat[0,i,:] = az_hat
+            i += 1
       else:
          # even frame alignment
          frame_sync_even = alpha*frame_sync_even + (1-alpha)*frame_sync_metric
          if frame_sync_even > frame_sync_odd:
-            z_hat[0,s//2,:] = az_hat
+            z_hat[0,i,:] = az_hat
+            i += 1
 
    state = next_state 
    
    frame_sync_log[s,0] = frame_sync_even
    frame_sync_log[s,1] = frame_sync_odd
+
+# truncate from max length
+z_hat = z_hat[:,:i,:]
 
 if len(args.write_freq_offset_smooth):
    freq_offset_smooth.tofile(args.write_freq_offset_smooth)
