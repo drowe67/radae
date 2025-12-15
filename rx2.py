@@ -79,7 +79,7 @@ parser.add_argument('--pad_samples', type=int, default=0, help='Pad input with s
 parser.add_argument('--gain', type=float, default=1.0, help='manual gain control')
 parser.add_argument('--agc', action='store_true', help='automatic gain control')
 parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output dimension (default 96)')
-parser.add_argument('--timing_onesec', action='store_true', help='first pass timing that just samples first 1s of sample')
+parser.add_argument('--nofreq_offset', action='store_true', help='disable frreq offset correction (default enabled)')
 parser.add_argument('--noframe_sync', action='store_true', help='disable frame sync (default enabled)')
 parser.add_argument('--test_mode', action='store_true', help='inject test delta sequence')
 args = parser.parse_args()
@@ -208,6 +208,8 @@ for s in np.arange(1,sequence_length):
       if count > 5:
          delta_hat_pp[s] = delta_hat[s]
          count = 0
+      else:
+         delta_hat_pp[s] = delta_hat_pp[s-1]*beta + np.float32(delta_hat[s])*(1-beta)
    else:
       count = 0
       delta_hat_pp[s] = delta_hat_pp[s-1]*beta + np.float32(delta_hat[s])*(1-beta)
@@ -254,9 +256,6 @@ for s in np.arange(1,sequence_length):
 
    next_state = state
 
-   print(f"{s:3d} {s//2:3d} state: {state:6s} sig_det: {sig_det[s]:1d} count: {count:1d} ", end='', file=sys.stderr)
-   print(f"fs_even: {frame_sync_even:5.3f} fs_odd: {frame_sync_odd:5.3f}", file=sys.stderr)
-
    if state == "noise":
       state_log[s] = 0
       if sig_det[s]:
@@ -264,7 +263,10 @@ for s in np.arange(1,sequence_length):
          if count == 5:
             next_state = "signal"
             count = 0
-            delta_phi = np.angle(Ry_smooth[s,delta_hat[s]])
+            if args.nofreq_offset:
+               delta_phi = 0.
+            else:
+               delta_phi = np.angle(Ry_smooth[s,delta_hat[s]])
             freq_offset_smooth[s] = -delta_phi*Fs/(2.*np.pi*M)
             frame_sync_even = 0.
             frame_sync_odd = 0.
@@ -275,8 +277,14 @@ for s in np.arange(1,sequence_length):
          if count == 10:
             next_state = "noise"
             count = 0
-      
+      else:
+         count = 0
+      if args.nofreq_offset:
+         delta_phi = 0.
+      else:
+         delta_phi = np.angle(Ry_smooth[s,delta_hat[s]])
       freq_offset_smooth[s] = beta*freq_offset_smooth[s-1] - (1-beta)*delta_phi*Fs/(2.*np.pi*M)
+      
       # correct freq offset
       #  keep phase vector normalised
       # extract single symbol, construct a frame with previous symbol
@@ -304,15 +312,16 @@ for s in np.arange(1,sequence_length):
       frame_sync_metric_torch = frame_sync_nn(az_hat)
       frame_sync_metric = float(frame_sync_metric_torch[0,0,0])
       
+      gamma = beta
       if s % 2:
          # odd frame alignment
-         frame_sync_odd = alpha*frame_sync_odd + (1-alpha)*frame_sync_metric
+         frame_sync_odd = gamma*frame_sync_odd + (1-gamma)*frame_sync_metric
          if frame_sync_odd > frame_sync_even:
             z_hat[0,i,:] = az_hat
             i += 1
       else:
          # even frame alignment
-         frame_sync_even = alpha*frame_sync_even + (1-alpha)*frame_sync_metric
+         frame_sync_even = gamma*frame_sync_even + (1-gamma)*frame_sync_metric
          if frame_sync_even > frame_sync_odd:
             z_hat[0,i,:] = az_hat
             i += 1
@@ -321,6 +330,11 @@ for s in np.arange(1,sequence_length):
    
    frame_sync_log[s,0] = frame_sync_even
    frame_sync_log[s,1] = frame_sync_odd
+
+   print(f"{s:3d} {i:3d} state: {state:6s} sig_det: {sig_det[s]:1d} count: {count:1d} ", end='', file=sys.stderr)
+   print(f"fs_even: {frame_sync_even:5.3f} fs_odd: {frame_sync_odd:5.3f} ", end='', file=sys.stderr)
+   print(f"delta_hat: {delta_hat[s]:3.0f} delta_hat_pp: {delta_hat_pp[s]:3.0f} ", end='',file=sys.stderr)
+   print(f"f_off: {freq_offset_smooth[s]:5.2f}", file=sys.stderr)
 
 # truncate from max length
 z_hat = z_hat[:,:i,:]
