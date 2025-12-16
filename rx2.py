@@ -73,14 +73,14 @@ parser.add_argument('--write_delta_hat_rx', type=str, default="", help='path to 
 parser.add_argument('--write_state', type=str, default="", help='path to sync state machine output file dim (seq_len) in .int16 format')
 parser.add_argument('--write_frame_sync', type=str, default="", help='path to frame sync output file dim (seq_len,2) in .int16 format')
 parser.add_argument('--read_delta_hat', type=str, default="", help='path to delta_hat input file dim (seq_len) in .f32 format')
+parser.add_argument('--fix_delta_hat', type=int,  default=0, help='disable timing estimation and used fixed delta_hat (default: use timing estimation)')
 parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
 parser.add_argument('--pad_samples', type=int, default=0, help='Pad input with samples to simulate different timing offsets in rx signal')
 parser.add_argument('--gain', type=float, default=1.0, help='manual gain control')
 parser.add_argument('--agc', action='store_true', help='automatic gain control')
 parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output dimension (default 96)')
-parser.add_argument('--nofreq_offset', action='store_true', help='disable frreq offset correction (default enabled)')
-parser.add_argument('--noframe_sync', action='store_true', help='disable frame sync (default enabled)')
+parser.add_argument('--nofreq_offset', action='store_true', help='disable freq offset correction (default enabled)')
 parser.add_argument('--test_mode', action='store_true', help='inject test delta sequence')
 args = parser.parse_args()
 
@@ -191,7 +191,10 @@ if len(args.write_Ry_smooth):
 
 # extract timing and freq offset estimates, signal detection flag
 Ry_max = np.max(np.abs(Ry_smooth), axis=1)
-delta_hat = np.int16(np.argmax(np.abs(Ry_smooth), axis=1))
+if args.fix_delta_hat:
+   delta_hat = args.fix_delta_hat*np.ones(sequence_length, dtype=np.int16)
+else:
+   delta_hat = np.int16(np.argmax(np.abs(Ry_smooth), axis=1))
 Ts=0.42
 sig_det = np.int16(Ry_max > Ts)
 
@@ -200,7 +203,7 @@ sig_det = np.int16(Ry_max > Ts)
 # tracking of slow timing changes due to clock offsets
 delta_hat_pp = np.zeros(sequence_length,dtype=np.float32)
 count = 0
-beta = 0.99
+beta = 0.999
 thresh = Ncp//2
 for s in np.arange(1,sequence_length):
    if np.abs(delta_hat[s]-delta_hat_pp[s-1]) > thresh:
@@ -274,7 +277,7 @@ for s in np.arange(1,sequence_length):
       state_log[s] = 1
       if not sig_det[s]:
          count += 1
-         if count == 10:
+         if count == 30:
             next_state = "noise"
             count = 0
       else:
@@ -388,6 +391,7 @@ if len(args.write_delta_hat_rx):
 if len(args.write_latent):
    z_hat.cpu().detach().numpy().flatten().astype('float32').tofile(args.write_latent)
       
+"""
 # now perform ML frame sync, two possibilities offset by one OFDM symbol (half a z vector)
 if args.noframe_sync == False:
    Nsync_syms = 10 # average sync metric over this many OFDM symbols
@@ -405,6 +409,7 @@ if args.noframe_sync == False:
    z_hat_len = z_hat.shape[1]
    z_hat = z_hat[:,offset:z_hat_len-offset,:]
    z_hat = torch.reshape(z_hat,(1,-1,latent_dim))
+"""
 
 # run RADE decoder
 features_hat = model.core_decoder(z_hat)
