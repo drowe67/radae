@@ -335,7 +335,7 @@ for s in np.arange(1,sequence_length):
    frame_sync_log[s,1] = frame_sync_odd
 
    print(f"{s:3d} {i:3d} state: {state:6s} sig_det: {sig_det[s]:1d} count: {count:1d} ", end='', file=sys.stderr)
-   print(f"fs_even: {frame_sync_even:5.3f} fs_odd: {frame_sync_odd:5.3f} ", end='', file=sys.stderr)
+   print(f"fs: {frame_sync_odd > frame_sync_even:d} ", end='', file=sys.stderr)
    print(f"delta_hat: {delta_hat[s]:3.0f} delta_hat_pp: {delta_hat_pp[s]:3.0f} ", end='',file=sys.stderr)
    print(f"f_off: {freq_offset_smooth[s]:5.2f}", file=sys.stderr)
 
