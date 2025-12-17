@@ -82,6 +82,7 @@ parser.add_argument('--agc', action='store_true', help='automatic gain control')
 parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output dimension (default 96)')
 parser.add_argument('--nofreq_offset', action='store_true', help='disable freq offset correction (default enabled)')
 parser.add_argument('--test_mode', action='store_true', help='inject test delta sequence')
+parser.add_argument('--hangover', type=int, default=75, help='Number of symbols of no signal before retunring to noise state (default 75)')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -116,7 +117,7 @@ Nmf = int(Ns*(M+Ncp))   # number of samples in one modem frame
 Nc = model.Nc
 w = model.w.cpu().detach().numpy()
 Fs = float(model.Fs)
-alpha = 0.85
+alpha = 0.95
 
 # load rx rate_Fs samples
 rx = np.fromfile(args.rx, dtype=np.csingle)*args.gain
@@ -277,7 +278,7 @@ for s in np.arange(1,sequence_length):
       state_log[s] = 1
       if not sig_det[s]:
          count += 1
-         if count == 30:
+         if count == args.hangover:
             next_state = "noise"
             count = 0
       else:
@@ -390,7 +391,7 @@ if len(args.write_delta_hat_rx):
 
 if len(args.write_latent):
    z_hat.cpu().detach().numpy().flatten().astype('float32').tofile(args.write_latent)
-      
+
 """
 # now perform ML frame sync, two possibilities offset by one OFDM symbol (half a z vector)
 if args.noframe_sync == False:
