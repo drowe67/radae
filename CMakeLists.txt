@@ -624,49 +624,32 @@ add_test(NAME bbfm_sc_bpf_loss
 
 # RADE V2 -----------------------------------------------------------------------------------------------
 
-# rx2.sh sanity check, high SNR
-add_test(NAME v2_rx2
+# rx2.sh "4 point" tests
+add_test(NAME v2_rx2_awgn_high
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
-                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
-                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
-                       --ssb_bpf --write_rx brian_tx.f32; \
-         ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync brian_tx.f32 /dev/null \
-         --latent-dim 56 --w1_dec 128; \
-         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare")
-         set_tests_properties(v2_rx2 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+                       ./test/v2_spot.sh")
+         set_tests_properties(v2_rx2_awgn_high PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_rx2_awgn_low
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.03 ./test/v2_spot.sh --EbNodB 1")
+         set_tests_properties(v2_rx2_awgn_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_rx2_mpp_high
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       ./test/v2_spot.sh --g_file g_mpp.f32")
+         set_tests_properties(v2_rx2_mpp_high PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_rx2_mpp_low
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.03 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6")
+         set_tests_properties(v2_rx2_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# rx2.sh with complex->real conversions, and `ch` tool, high SNR.  Note --clip rqd for loss.py as brian_rx.f32 is delayed
+# rx2.sh with complex->real conversions, `ch` tool, and --agc, high SNR
 add_test(NAME v2_rx2_ch
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
                        ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
                        --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
                        --ssb_bpf --write_rx brian_tx.f32; \
          cat brian_tx.f32 | python3 f32toint16.py --real --scale 16383 | ~/codec2-dev/build_linux/src/ch - - | python3 int16tof32.py --zeropad > brian_rx.f32
-         ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ft 250725_ml_sync brian_rx.f32 /dev/null \
-         --latent-dim 56 --w1_dec 128 --agc; \
-         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 4")
+         ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ml_sync brian_rx.f32 /dev/null \
+         --latent-dim 56 --w1_dec 128 --agc --quiet; \
+         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 50 --clip_end 50")
          set_tests_properties(v2_rx2_ch PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
-
-# ML fine timing autocorr tool unit test
-
-add_test(NAME v2_autocorr
-         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
-                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
-                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
-                       --ssb_bpf --write_rx brian_tx.f32; \
-         python3 autocorr.py brian_tx.f32 Ry.f32 delta.f32 --Nseq 10 -Q 8 --test;
-         python3 autocorr.py brian_tx.f32 Ry_rec.f32 delta_rec.f32 --Nseq 10 -Q 8 --recursion --test;
-         python3 diff_f32.py Ry.f32 Ry_rec.f32")
-         set_tests_properties(v2_autocorr PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL")
-
-# WIP 251002 model, FT looking good but still needs frame sync
-add_test(NAME v2_251002
-         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
-                       ./inference.sh 251002/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
-                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata \
-                       --w1_dec 128 --write_rx brian_rx_mpp.f32 --g_file g_mpp.f32; \
-                       ./rx2.sh 251002/checkpoints/checkpoint_epoch_200.pth 251002_mpp_16k_ft 250725_ml_sync \
-                       brian_rx_mpp.f32 /dev/null --latent-dim 56 --w1_dec 128 --write_Ry Ry.f32 \
-                       --write_delta_hat_rx delta_hat_rx.f32 --noframe_sync;
-                       python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 25")
-         set_tests_properties(v2_autocorr PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL")

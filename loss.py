@@ -48,6 +48,7 @@ parser.add_argument('--clip_start', type=int, default=0, help='remove this many 
 parser.add_argument('--clip_end', type=int, default=0, help='remove this many feat vecs (e.g. frames x 4) (default 0)')
 parser.add_argument('--plot', action='store_true', help='plot loss versus time')
 parser.add_argument('--compare', action='store_true', help='compare features_hat and features_hat2')
+parser.add_argument('--delta', type=float, default=0.01, help='threshold for --compare')
 args = parser.parse_args()
 
 device = torch.device("cpu")
@@ -110,7 +111,7 @@ if args.features_hat2:
    min_loss2, min_start2, loss2 = find_loss(args.features, args.features_hat2)
    if args.compare:
       print(f"loss1: {min_loss:5.3f} loss2: {min_loss2:5.3f} delta: {np.abs(min_loss-min_loss2):5.3f}")
-      if np.abs(min_loss-min_loss2) < 0.01:
+      if np.abs(min_loss-min_loss2) < args.delta:
          print("PASS")
 
 if args.plot:

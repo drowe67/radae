@@ -76,6 +76,7 @@ parser.add_argument('--read_delta_hat', type=str, default="", help='path to delt
 parser.add_argument('--fix_delta_hat', type=int,  default=0, help='disable timing estimation and used fixed delta_hat (default: use timing estimation)')
 parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
+parser.set_defaults(verbose=True)
 parser.add_argument('--pad_samples', type=int, default=0, help='Pad input with samples to simulate different timing offsets in rx signal')
 parser.add_argument('--gain', type=float, default=1.0, help='manual gain control')
 parser.add_argument('--agc', action='store_true', help='automatic gain control')
@@ -83,6 +84,7 @@ parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output d
 parser.add_argument('--nofreq_offset', action='store_true', help='disable freq offset correction (default enabled)')
 parser.add_argument('--test_mode', action='store_true', help='inject test delta sequence')
 parser.add_argument('--hangover', type=int, default=75, help='Number of symbols of no signal before retunring to noise state (default 75)')
+parser.add_argument('--quiet', action='store_false', dest='verbose', help='inject test delta sequence')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -335,10 +337,11 @@ for s in np.arange(1,sequence_length):
    frame_sync_log[s,0] = frame_sync_even
    frame_sync_log[s,1] = frame_sync_odd
 
-   print(f"{s:3d} {i:3d} state: {state:6s} sig_det: {sig_det[s]:1d} count: {count:1d} ", end='', file=sys.stderr)
-   print(f"fs: {frame_sync_odd > frame_sync_even:d} ", end='', file=sys.stderr)
-   print(f"delta_hat: {delta_hat[s]:3.0f} delta_hat_pp: {delta_hat_pp[s]:3.0f} ", end='',file=sys.stderr)
-   print(f"f_off: {freq_offset_smooth[s]:5.2f}", file=sys.stderr)
+   if args.verbose:
+      print(f"{s:3d} {i:3d} state: {state:6s} sig_det: {sig_det[s]:1d} count: {count:1d} ", end='', file=sys.stderr)
+      print(f"fs: {frame_sync_odd > frame_sync_even:d} ", end='', file=sys.stderr)
+      print(f"delta_hat: {delta_hat[s]:3.0f} delta_hat_pp: {delta_hat_pp[s]:3.0f} ", end='',file=sys.stderr)
+      print(f"f_off: {freq_offset_smooth[s]:5.2f}", file=sys.stderr)
 
 # truncate from max length
 z_hat = z_hat[:,:i,:]
