@@ -61,8 +61,16 @@ else(NOT CMAKE_CROSSCOMPILING)
     if(WIN32)
         target_include_directories(Python3::Python INTERFACE ${Python3_ROOT_DIR}/include)
         target_include_directories(Python3::NumPy INTERFACE ${Python3_ROOT_DIR}/Lib/site-packages/numpy/_core/include)
-        set_property(TARGET Python3::Python PROPERTY IMPORTED_IMPLIB ${Python3_ROOT_DIR}/libs/python312.lib)
-        set_property(TARGET Python3::Python PROPERTY IMPORTED_LOCATION ${Python3_ROOT_DIR}/python312.dll)
+
+        # Find specific filename for Python library to avoid hardcoding.
+        file(GLOB PYTHON_IMPLIB ${Python3_ROOT_DIR}/libs/python3?*.lib)
+        file(GLOB PYTHON_DLL ${Python3_ROOT_DIR}/python3?*.dll)
+
+        message(STATUS "Python library file: ${PYTHON_IMPLIB}")
+        message(STATUS "Python DLL file: ${PYTHON_DLL}")
+
+        set_property(TARGET Python3::Python PROPERTY IMPORTED_IMPLIB ${PYTHON_IMPLIB})
+        set_property(TARGET Python3::Python PROPERTY IMPORTED_LOCATION ${PYTHON_DLL})
         set_property(TARGET Python3::NumPy PROPERTY IMPORTED_IMPLIB ${Python3_ROOT_DIR}/Lib/site-packages/numpy/core/lib/npymath.lib)
         set_property(TARGET Python3::NumPy PROPERTY IMPORTED_LOCATION ${Python3_ROOT_DIR}/Lib/site-packages/numpy/core/lib/npymath.lib)
     else(WIN32)
@@ -386,6 +394,16 @@ add_test(NAME radae_rx_slip_plus
                        cat rx_.f32 | python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 > features_rxs_out.f32; \
                        python3 loss.py features_in.f32 features_rxs_out.f32 --loss_test 0.2 --acq_time_test 1.0")
                        set_tests_properties(radae_rx_slip_plus PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# Test bugfix for issue where a combination of timing slips and dropped frames over a long enough
+# period of time results in the RADE DSP logic being unable to regain sync.
+add_test(NAME radae_rx_slip_plus_drops
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                        sox wav/long_qso.wav -t .s16 -r 8020 -c 1 - | \
+                          python3 int16tof32.py --zeropad | \
+                          OMP_NUM_THREADS=1 python3 radae_rxe.py --model model19_check3/checkpoints/checkpoint_epoch_100.pth -v 2 2>&1 >/dev/null | \
+                          tail -n1 | \
+                          grep 'state: sync'")
 
 # Test ability to handle buffer slips due to sample clock offsets, rx ADC clock < tx ADC clock
 add_test(NAME radae_rx_slip_minus

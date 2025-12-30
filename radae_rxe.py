@@ -106,7 +106,7 @@ class radae_rx:
          bandwidth = 1.2*(w[Nc-1] - w[0])*model.Fs/(2*np.pi)
          centre = (w[Nc-1] + w[0])*model.Fs/(2*np.pi)/2
          print(f"Input BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
-         self.bpf = complex_bpf(Ntap, model.Fs, bandwidth,centre)
+         self.bpf = complex_bpf(Ntap, model.Fs, bandwidth,centre, model.Fs)
 
       self.acq = acquisition(Fs,Rs,M,Ncp,Nmf,p,model.pend)
 
@@ -291,6 +291,9 @@ class radae_rx:
                next_state = "search"
 
          self.state = next_state
+         if self.state == "search":
+             # Reset nin to default as we don't know timing yet.
+             self.nin = Nmf
          self.mf += 1
 
          # We call core decoder at end to model behaivour with external C core decoder

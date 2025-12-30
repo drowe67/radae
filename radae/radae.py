@@ -260,7 +260,9 @@ class RADAE(nn.Module):
             bandwidth = 1600
             centre = (self.w[Nc-1] + self.w[0])*self.Fs/(2*torch.pi)/2
             print(f"Tx BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
-            txbpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth, centre)
+            # note we perform filtering using ML conv funcs in forward(), not complex_bpf.bpf(),
+            # so we just call constructor to create filter coeffs.  Same for ssb_bpf below
+            txbpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth, centre, 0)
             self.txbpf_conv = nn.Conv1d(1, 1, kernel_size=len(txbpf.h), dtype=torch.complex64)
             self.alpha = txbpf.alpha
             self.txbpf_delay = int(Ntap // 2)
@@ -277,7 +279,7 @@ class RADAE(nn.Module):
             bandwidth = 2700-300
             centre = (2700+300)/2
             print(f"SSB BPF bandwidth: {bandwidth:f} centre: {centre:f}")
-            ssb_bpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth, centre)
+            ssb_bpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth, centre, 0)
             self.ssb_bpf_conv = nn.Conv1d(1, 1, kernel_size=len(ssb_bpf.h), dtype=torch.complex64)
             self.ssb_bpf_delay = int(Ntap // 2)
             self.ssb_filt_alpha = ssb_bpf.alpha

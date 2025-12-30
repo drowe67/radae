@@ -1,12 +1,14 @@
 message(STATUS "Will build opus with FARGAN")
 
-set(CONFIGURE_COMMAND ./autogen.sh && ./configure --enable-dred --disable-shared --disable-doc --disable-extra-programs)
+set(CONFIGURE_COMMAND ./autogen.sh && ./configure --enable-osce --enable-dred --disable-shared --disable-doc --disable-extra-programs)
 
 if (CMAKE_CROSSCOMPILING)
 set(CONFIGURE_COMMAND ${CONFIGURE_COMMAND} --host=${CMAKE_C_COMPILER_TARGET} --target=${CMAKE_C_COMPILER_TARGET})
 endif (CMAKE_CROSSCOMPILING)
 
-set(OPUS_URL https://gitlab.xiph.org/xiph/opus/-/archive/main/opus-main.tar.gz)
+if (NOT DEFINED OPUS_URL)
+set(OPUS_URL https://github.com/xiph/opus/archive/940d4e5af64351ca8ba8390df3f555484c567fbb.zip)
+endif (NOT DEFINED OPUS_URL)
 
 include(ExternalProject)
 if(APPLE AND BUILD_OSX_UNIVERSAL)
