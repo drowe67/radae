@@ -37,11 +37,11 @@ sox tx.wav -t .s16 - trim 0 4 | \
 CNodB_ch=$(cat ${ch_log} | grep "C/No" | tr -s ' ' | cut -d' ' -f5)
 
 printf "\nRun Rx and check ML "loss" is OK ... \n\n"
-# We don't check acq time as start time of RADAE is uncertain due to silence etc
-rm -f features_rx_out.f32
+rm -f features_rx_out_rx1.f32
 rx_log=$(mktemp)
-./ota_test.sh -r rx.wav >${rx_log}
-python3 loss.py features_in.f32 features_out_rx1.f32 --loss_test ${loss_thresh} --clip_start 150 | tee /dev/stderr | grep "PASS" 
+./ota_test.sh -d -r rx.wav >${rx_log}
+# --clip_end has side effect of increasing range of time_alignment, might be a better way to do that
+python3 loss.py features_in.f32 features_out_rx1.f32 --loss_test ${loss_thresh} --clip_start 150 --clip_end 150 | tee /dev/stderr | grep "PASS" 
 if [ $? -ne 0 ]; then
   exit 1
 fi

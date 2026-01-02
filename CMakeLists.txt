@@ -176,13 +176,13 @@ add_test(NAME chirp_mpp
 # Low SNR ota_test.sh, with chirp measurement, AWGN
 add_test(NAME ota_test_awgn
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./test/ota_test_cal.sh ${CODEC2_DEV_BUILD_DIR} -21 0.4")
+                       ./test/ota_test_cal.sh ${CODEC2_DEV_BUILD_DIR} -24 0.4")
 
 # Low SNR ota_test.sh, with chirp measurement, MPP, high loss threshold as we only care about gross errors,
 # like stuck in false sync
 add_test(NAME ota_test_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./test/ota_test_cal.sh ${CODEC2_DEV_BUILD_DIR} -24 0.4 --mpp --freq -25")
+                       ./test/ota_test_cal.sh ${CODEC2_DEV_BUILD_DIR} -30 0.4 --mpp --freq -25")
 
 
 # Acquisition tests ------------------------------------------------------------------------------------
