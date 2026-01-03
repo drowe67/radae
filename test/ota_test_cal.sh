@@ -40,8 +40,7 @@ printf "\nRun Rx and check ML "loss" is OK ... \n\n"
 rm -f features_rx_out_rx1.f32
 rx_log=$(mktemp)
 ./ota_test.sh -d -r rx.wav >${rx_log}
-# --clip_end has side effect of increasing range of time_alignment, might be a better way to do that
-python3 loss.py features_in.f32 features_out_rx1.f32 --loss_test ${loss_thresh} --clip_start 150 --clip_end 150 | tee /dev/stderr | grep "PASS" 
+python3 loss.py features_in.f32 features_out_rx1.f32 --loss_test ${loss_thresh} --clip_start 150  | tee /dev/stderr | grep "PASS" 
 if [ $? -ne 0 ]; then
   exit 1
 fi

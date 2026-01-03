@@ -55,6 +55,7 @@ device = torch.device("cpu")
 nb_total_features = 36
 num_features = 20
 num_used_features = 20
+Tstep=0.01
 
 def load_features(filename):
    features = np.reshape(np.fromfile(filename, dtype=np.float32), (1, -1, nb_total_features))
@@ -64,11 +65,14 @@ def load_features(filename):
 
 def find_loss(features_fn, features_hat_fn):
    features = load_features(features_fn)
+   # zero pad either side to support +/- 1 second time alignment range
+   pad = torch.zeros((1,int(1./Tstep),num_used_features))
+   features = torch.cat([pad,features,pad],dim=1)
+
    features_hat = load_features(features_hat_fn)
    features_hat = features_hat[:,args.clip_start:features_hat.shape[1]-args.clip_end,:]
    features_seq_length = features.shape[1]
    features_hat_seq_length = features_hat.shape[1]
-   #print(features.shape, features_hat.shape)
    assert features_hat_seq_length
    if features_hat_seq_length >= features_seq_length:
       print(f"features_hat_length: {features_hat_seq_length:d} > features_length: {features_seq_length:d}")
@@ -83,7 +87,7 @@ def find_loss(features_fn, features_hat_fn):
          min_loss = loss
          min_start = start
    print(f"Loss between {features_fn:s} and {features_hat_fn:s}")
-   print(f"  loss: {min_loss:5.3f} start: {min_start:d} acq_time: {min_start*0.01:5.2f} s")
+   print(f"  loss: {min_loss:5.3f} start: {min_start:d} acq_time: {min_start*Tstep:5.2f} s")
 
    # compute frame by frame loss for plotting
    nframes = features_hat_seq_length - min_start
