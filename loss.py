@@ -66,7 +66,8 @@ def load_features(filename):
 def find_loss(features_fn, features_hat_fn):
    features = load_features(features_fn)
    # zero pad either side to support +/- 1 second time alignment range
-   pad = torch.zeros((1,int(1./Tstep),num_used_features))
+   pad_time = 1.
+   pad = torch.zeros((1,int(pad_time/Tstep),num_used_features))
    features = torch.cat([pad,features,pad],dim=1)
 
    features_hat = load_features(features_hat_fn)
@@ -87,7 +88,8 @@ def find_loss(features_fn, features_hat_fn):
          min_loss = loss
          min_start = start
    print(f"Loss between {features_fn:s} and {features_hat_fn:s}")
-   print(f"  loss: {min_loss:5.3f} start: {min_start:d} acq_time: {min_start*Tstep:5.2f} s")
+   acq_time = min_start*Tstep - pad_time
+   print(f"  loss: {min_loss:5.3f} start: {min_start:d} acq_time: {acq_time:5.2f} s")
 
    # compute frame by frame loss for plotting
    nframes = features_hat_seq_length - min_start
@@ -95,9 +97,9 @@ def find_loss(features_fn, features_hat_fn):
    loss = np.zeros(nframes)
    for f in range(nframes):
       loss[f] = distortion_loss(features[:,f+min_start:f+min_start+1,:],features_hat[:,f:f+1,:]).cpu().detach().numpy()[0]
-   return min_loss, min_start, loss
+   return min_loss, acq_time, loss
 
-min_loss, min_start,loss = find_loss(args.features, args.features_hat)
+min_loss, acq_time, loss = find_loss(args.features, args.features_hat)
 
 if args.loss_test > 0.0:
    if min_loss > args.loss_test:
@@ -105,7 +107,7 @@ if args.loss_test > 0.0:
       quit()
 if args.acq_time_test > 0:
    # one feature vector every 10ms
-   if min_start*0.01 > args.acq_time_test:
+   if acq_time > args.acq_time_test:
       print("FAIL")
       quit()
 if args.loss_test > 0.0 or args.acq_time_test:
