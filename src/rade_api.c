@@ -331,7 +331,7 @@ void rade_rx_close(struct rade *r) {
 }
 
 void rade_initialize(void) {
-  Py_Initialize();
+  Py_InitializeEx(0);
   main_thread_state = PyEval_SaveThread();
 }
 
