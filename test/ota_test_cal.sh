@@ -36,11 +36,15 @@ sox tx.wav -t .s16 - trim 0 4 | \
 ~/codec2-dev/build_linux/src/ch - /dev/null --gain ${GAIN} --No ${No} --after_fade --fading_dir . $@ 2>${ch_log}
 CNodB_ch=$(cat ${ch_log} | grep "C/No" | tr -s ' ' | cut -d' ' -f5)
 
-printf "\nRun Rx and check ML "loss" is OK ... \n\n"
-rm -f features_rx_out_rx1.f32
+printf "\nRun V1 and V2 Rx and check ML "loss" is OK ... \n\n"
+rm -f features_rx_out_rx1.f32 features_rx_out_rx2.f32
 rx_log=$(mktemp)
 ./ota_test.sh -d -r rx.wav >${rx_log}
 python3 loss.py features_in.f32 features_out_rx1.f32 --loss_test ${loss_thresh} --clip_start 150  | tee /dev/stderr | grep "PASS" 
+if [ $? -ne 0 ]; then
+  exit 1
+fi
+python3 loss.py features_in.f32 features_out_rx2.f32 --loss_test ${loss_thresh} --clip_start 150  | tee /dev/stderr | grep "PASS" 
 if [ $? -ne 0 ]; then
   exit 1
 fi
