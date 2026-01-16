@@ -114,7 +114,7 @@ if args.loss_test > 0.0 or args.acq_time_test:
    print("PASS")
 
 if args.features_hat2:
-   min_loss2, min_start2, loss2 = find_loss(args.features, args.features_hat2)
+   min_loss2, acq_time2, loss2 = find_loss(args.features, args.features_hat2)
    if args.compare:
       print(f"loss1: {min_loss:5.3f} loss2: {min_loss2:5.3f} delta: {np.abs(min_loss-min_loss2):5.3f}")
       if np.abs(min_loss-min_loss2) < args.delta:
@@ -124,7 +124,8 @@ if args.plot:
    if args.features_hat2:
       plt.figure(1)
       plt.plot(loss, "b-", label=args.features_hat)
-      x = range(min_start2,min_start2+len(loss2))
+      acq_timestep = int(acq_time2/Tstep)
+      x = range(acq_timestep,acq_timestep+len(loss2))
       plt.plot(x, loss2, "r-", label=args.features_hat2)
       plt.legend(loc="upper left")
       plt.figure(2)
