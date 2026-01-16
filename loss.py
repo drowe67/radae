@@ -44,16 +44,18 @@ parser.add_argument('features_hat', type=str, help='path to output feature file 
 parser.add_argument('--features_hat2', type=str, help='path to optional 2nd features file to compare two runs')
 parser.add_argument('--loss_test', type=float, default=0.0, help='compare loss to arg, print PASS/FAIL')
 parser.add_argument('--acq_time_test', type=float, default=0, help='compare acquisition time to threshold arg, print PASS/FAIL')
-parser.add_argument('--clip_start', type=int, default=0, help='remove this many frames from end, useful to remove start of over resync (default 0)')
-parser.add_argument('--clip_end', type=int, default=0, help='remove this many frames from end, useful to remove end of over noise (default 0)')
+parser.add_argument('--clip_start', type=int, default=0, help='remove this many feat vecs (e.g. frames x 4) from start (default 0)')
+parser.add_argument('--clip_end', type=int, default=0, help='remove this many feat vecs (e.g. frames x 4) (default 0)')
 parser.add_argument('--plot', action='store_true', help='plot loss versus time')
 parser.add_argument('--compare', action='store_true', help='compare features_hat and features_hat2')
+parser.add_argument('--delta', type=float, default=0.01, help='threshold for --compare')
 args = parser.parse_args()
 
 device = torch.device("cpu")
 nb_total_features = 36
 num_features = 20
 num_used_features = 20
+Tstep=0.01
 
 def load_features(filename):
    features = np.reshape(np.fromfile(filename, dtype=np.float32), (1, -1, nb_total_features))
@@ -63,14 +65,20 @@ def load_features(filename):
 
 def find_loss(features_fn, features_hat_fn):
    features = load_features(features_fn)
+   # zero pad either side to support +/- 1 second time alignment range
+   pad_time = 1.
+   pad = torch.zeros((1,int(pad_time/Tstep),num_used_features))
+   features = torch.cat([pad,features,pad],dim=1)
+
    features_hat = load_features(features_hat_fn)
    features_hat = features_hat[:,args.clip_start:features_hat.shape[1]-args.clip_end,:]
    features_seq_length = features.shape[1]
    features_hat_seq_length = features_hat.shape[1]
-   #print(features.shape, features_hat.shape)
    assert features_hat_seq_length
-   assert features_hat_seq_length <= features_seq_length
-
+   if features_hat_seq_length >= features_seq_length:
+      print(f"features_hat_length: {features_hat_seq_length:d} > features_length: {features_seq_length:d}")
+      quit()
+      
    # So features_hat will be shorter than features sequence.  Time align them based on min loss
    min_loss = distortion_loss(features[:,:features_hat_seq_length,:],features_hat).cpu().detach().numpy()[0]
    min_start = 0
@@ -80,7 +88,8 @@ def find_loss(features_fn, features_hat_fn):
          min_loss = loss
          min_start = start
    print(f"Loss between {features_fn:s} and {features_hat_fn:s}")
-   print(f"  loss: {min_loss:5.3f} start: {min_start:d} acq_time: {min_start*0.01:5.2f} s")
+   acq_time = min_start*Tstep - pad_time
+   print(f"  loss: {min_loss:5.3f} start: {min_start:d} acq_time: {acq_time:5.2f} s")
 
    # compute frame by frame loss for plotting
    nframes = features_hat_seq_length - min_start
@@ -88,9 +97,9 @@ def find_loss(features_fn, features_hat_fn):
    loss = np.zeros(nframes)
    for f in range(nframes):
       loss[f] = distortion_loss(features[:,f+min_start:f+min_start+1,:],features_hat[:,f:f+1,:]).cpu().detach().numpy()[0]
-   return min_loss, min_start, loss
+   return min_loss, acq_time, loss
 
-min_loss, min_start,loss = find_loss(args.features, args.features_hat)
+min_loss, acq_time, loss = find_loss(args.features, args.features_hat)
 
 if args.loss_test > 0.0:
    if min_loss > args.loss_test:
@@ -98,24 +107,25 @@ if args.loss_test > 0.0:
       quit()
 if args.acq_time_test > 0:
    # one feature vector every 10ms
-   if min_start*0.01 > args.acq_time_test:
+   if acq_time > args.acq_time_test:
       print("FAIL")
       quit()
 if args.loss_test > 0.0 or args.acq_time_test:
    print("PASS")
 
 if args.features_hat2:
-   min_loss2, min_start2, loss2 = find_loss(args.features, args.features_hat2)
+   min_loss2, acq_time2, loss2 = find_loss(args.features, args.features_hat2)
    if args.compare:
       print(f"loss1: {min_loss:5.3f} loss2: {min_loss2:5.3f} delta: {np.abs(min_loss-min_loss2):5.3f}")
-      if np.abs(min_loss-min_loss2) < 0.01:
+      if np.abs(min_loss-min_loss2) < args.delta:
          print("PASS")
 
 if args.plot:
    if args.features_hat2:
       plt.figure(1)
       plt.plot(loss, "b-", label=args.features_hat)
-      x = range(min_start2,min_start2+len(loss2))
+      acq_timestep = int(acq_time2/Tstep)
+      x = range(acq_timestep,acq_timestep+len(loss2))
       plt.plot(x, loss2, "r-", label=args.features_hat2)
       plt.legend(loc="upper left")
       plt.figure(2)
