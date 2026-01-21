@@ -1,6 +1,6 @@
 #!/bin/bash -x
 #
-# RADE V2 spot test - use extra arguments to set channel type
+# RADE V2 spot test for "4 point tests" - use extra arguments to set channel type
 
 OPUS=build/src
 PATH=${PATH}:${OPUS}
