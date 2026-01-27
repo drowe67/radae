@@ -19,16 +19,26 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="",H_complex=0)
         fd = 450E6*(60*1E3/3600/3E8)
         dopplerSpreadHz = 2*fd;
         path_delay_s = 200E-6
+    elseif strcmp(ch,"mpp_low")
+        % test case at one end of MPP channel delay spread
+        dopplerSpreadHz = 0.0; path_delay_s = 2E-3;
+        G1 = ones(nsam,1); G2 = zeros(nsam,1);
+    elseif strcmp(ch,"mpp_high")
+        % test case at other end of MPP channel delay spread
+        dopplerSpreadHz = 0.0; path_delay_s = 2E-3;
+        G1 = zeros(nsam,1); G2 = ones(nsam,1);
     else
         printf("Unknown channel type!")
         return
     end
         
-    G1 = doppler_spread(dopplerSpreadHz, Fs, nsam).';
-    G2 = doppler_spread(dopplerSpreadHz, Fs, nsam).';
-    
-    % approximation to normalise power through HF channel
-    hf_gain = 1.0/sqrt(var(G1)+var(G2));
+    hf_gain = 1;
+    if dopplerSpreadHz
+      G1 = doppler_spread(dopplerSpreadHz, Fs, nsam).';
+      G2 = doppler_spread(dopplerSpreadHz, Fs, nsam).';
+      % approximation to normalise power through HF channel
+      hf_gain = 1.0/sqrt(var(G1)+var(G2));
+    end
 
     % H matrix of magnitude samples, timesteps along rows, carrier alongs cols
     % sampled at rate Rs (one sample per symbol).
