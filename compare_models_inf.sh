@@ -387,6 +387,28 @@ if [ $plot == "251113_inf" ]; then
             						   "g+-;250725 AWGN FT;" "go--;250725 MPP FT;")
 fi
 
+# Jan 26 timing corner case - train model that can handle a wider Nj
+if [ $plot == "260127_inf" ]; then
+  # RADE V1 as run OTA today
+  run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --ssb_bpf
+  run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --ssb_bpf --g_file g_mpp.f32
+
+  run_model 250725 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
+  run_model 250725 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
+
+  run_model 260127 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
+  run_model 260127 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
+
+  run_model 260128b 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
+  run_model 260128b 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
+
+  model_list='model19_check3_awgn model19_check3_mpp 250725_awgn_0Hz 250725_mpp_0Hz 260127_awgn_0Hz  260127_mpp_0Hz 260128b_awgn_0Hz  260128b_mpp_0Hz '
+  declare -a model_legend=("b+-;RADE V1 AWGN;" "bo--;RADE V1 MPP;" \
+                           "r+-;250725 AWGN Genie;" "ro--;250725 MPP Genie;" \
+  					               "g+-;260127 AWGN Genie;" "go--;260127 MPP Genie;"
+          						     "c+-;260128b AWGN Genie;" "co--;260128b MPP Genie;")
+fi
+
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
 vargs=""
 i=0
