@@ -671,3 +671,23 @@ add_test(NAME v2_rx2_ch
          --latent-dim 56 --w1_dec 128 --agc --quiet; \
          python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 50 --clip_end 50")
          set_tests_properties(v2_rx2_ch PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# tests to exercise limits of timing est to decoder interface (Jan 2026 timing corner case)
+# we allow a little bit of extra loss at limits (delta=0.05), but want to trap a complete breakdown (like frame sync failing)
+
+add_test(NAME v2_timing_low_delta1
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh;
+                       delta=0.05 ./test/v2_timing.sh --g_file g_mpp_low.f32 --correct_time_offset -8 --fix_delta_hat 32 --quiet")
+         set_tests_properties(v2_timing_low_delta1 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_timing_low_delta2
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.05 ./test/v2_timing.sh --g_file g_mpp_low.f32 --correct_time_offset -8 --fix_delta_hat 48 --quiet")
+         set_tests_properties(v2_timing_low_delta2 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_timing_high_delta1
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.05 ./test/v2_timing.sh --g_file g_mpp_high.f32 --correct_time_offset -8 --fix_delta_hat 32 --quiet")
+         set_tests_properties(v2_timing_high_delta1 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_timing_high_delta2
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.05 ./test/v2_timing.sh --g_file g_mpp_high.f32 --correct_time_offset -8 --fix_delta_hat 48 --quiet")
+         set_tests_properties(v2_timing_high_delta2 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")

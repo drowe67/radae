@@ -5,7 +5,7 @@
 OPUS=build/src
 PATH=${PATH}:${OPUS}
 
-model_id=251002
+model_id=250725
 model=${model_id}/checkpoints/checkpoint_epoch_200.pth
 speech=~/Downloads/all_speech.wav
 speech_test=wav/all.wav
@@ -25,15 +25,15 @@ function train_fine_timing() {
 }
 
 function train_sync() {
-    if [ ! -f ${model_id}_z_train.f32 ]; then
+    if [ ! -f ${model_id}a_z_train.f32 ]; then
         # "--plot_EqNo" disables actual training, it just runs one epoch to collect results
         python3 train.py --cuda-visible-devices 0 --sequence-length 400 --batch-size 512 --epochs 200 --lr 0.003 --lr-decay-factor 0.0001 \
         ~/Downloads/tts_speech_16k_speexdsp.f32 tmp --latent-dim 56 --cp 0.004 --auxdata --w1_dec 128 --peak --h_file h_nc14_mpp_train.c64 \
-        --h_complex --range_EbNo --range_EbNo_start 3 --timing_rand --freq_rand --ssb_bpf \
-        --plot_EqNo ${model_id} --initial-checkpoint ${model} --write_latent ${model_id}_z_train.f32
+        --h_complex --range_EbNo --range_EbNo_start 3 --timing_rand --timing_jitter 0.002 --freq_rand --ssb_bpf \
+        --plot_EqNo ${model_id} --initial-checkpoint ${model} --write_latent ${model_id}a_z_train.f32
     fi
-    python3 ml_sync.py ${model_id}_z_train.f32 --count 100000 --save_model ${model_id}_ml_sync --latent_dim 56
-    python3 ml_sync.py ${model_id}_z_train.f32 --count 100000 --start 1000000 --inference ${model_id}_ml_sync --write_y_hat y_hat.f32 --latent_dim 56
+    python3 ml_sync.py ${model_id}a_z_train.f32 --count 100000 --save_model ${model_id}a_ml_sync --latent_dim 56
+    python3 ml_sync.py ${model_id}a_z_train.f32 --count 100000 --start 1000000 --inference ${model_id}a_ml_sync --write_y_hat y_hat.f32 --latent_dim 56
 }
 
 function test_ft() {
