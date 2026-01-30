@@ -94,7 +94,8 @@ class RADAE(nn.Module):
                  w2_enc = 96,
                  w1_dec = 96,
                  w2_dec = 32,
-                 peak = False
+                 peak = False,
+                 timing_jitter = 0.001
                 ):
 
         super(RADAE, self).__init__()
@@ -131,6 +132,7 @@ class RADAE(nn.Module):
         self.tanh_clipper = tanh_clipper
         self.ssb_bpf = ssb_bpf
         self.peak = peak
+        self.timing_jitter = timing_jitter
 
         # TODO: nn.DataParallel() shouldn't be needed
         self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck, frames_per_step=frames_per_step, w1=w1_enc, w2=w2_enc))
@@ -789,11 +791,10 @@ class RADAE(nn.Module):
                 phase = torch.exp(1j*phase)
                 tx_sym = tx_sym*phase
 
-            # per-sequence random [-1,1] ms time shift, which results in a linear phase shift across frequency
+            # per-sequence random [-1,1] ms timing jitter, which results in a linear phase shift across frequency
             # models fine timing errors
             if self.timing_rand:
-                """
-                d = 0.001*(1 - 2*torch.rand((num_batches,1),device=tx_sym.device))
+                d = self.timing_jitter*(1 - 2*torch.rand((num_batches,1),device=tx_sym.device))
                 # Use vector multiply to create a shape (batch,Nc) 2D tensor
                 phase_offset = -d*torch.reshape(self.w,(1,self.Nc))*self.Fs
                 phase_offset = torch.reshape(phase_offset,(num_batches,self.Nc,1))
@@ -802,26 +803,7 @@ class RADAE(nn.Module):
                 tx_sym = tx_sym.permute(0,2,1)
                 tx_sym = tx_sym * torch.exp(1j*phase_offset)
                 tx_sym = tx_sym.permute(0,2,1)
-                """
-
-                # each frame (two symbols) has it's own time offset
-                Ns_ = 2 # TODO make train.py calculate Ns correctly
-                assert (num_timesteps_at_rate_Rs % Ns_) == 0
-                d = 0.001*(1 - 2*torch.rand((num_batches,num_timesteps_at_rate_Rs//Ns_,1),device=tx_sym.device))
-                # expand tensor to (num_batches,num_timesteps,Nc), same time offset for each carrier across Ns symbols 
-                d_big = d.expand(-1,-1,Ns_*self.Nc)
-                d_big = torch.reshape(d_big, (num_batches,num_timesteps_at_rate_Rs,self.Nc))
-                #print(d_big[0,0:5,:])
-                #print(d_big[1,0:10,:])
-                # bphase[:,] = omega
-                #print(d.shape, d_big.shape,self.w.shape)
-                # Use element by element multiplication to get phase shifts for each carrier of each symbol
-                phase_offset = -d_big*self.w*self.Fs
-                #print(phase_offset[0,0:5,:])
-                #print(d_big.shape, phase_offset.shape)
-                #quit()
-                tx_sym = tx_sym * torch.exp(1j*phase_offset)
-
+ 
             # per sequence random [-2,2] fine frequency offset        
             if self.freq_rand:
                 freq_offset = 4*torch.rand((num_batches,1),device=tx_sym.device) - 2.0
