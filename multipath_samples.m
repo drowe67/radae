@@ -12,6 +12,8 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="",H_complex=0)
         dopplerSpreadHz = 0.1; path_delay_s = 0.5E-3;
     elseif strcmp(ch,"mpp")
         dopplerSpreadHz = 1.0; path_delay_s = 2E-3;
+    elseif strcmp(ch,"mppa")
+        dopplerSpreadHz = 1.0; path_delay_s = 3E-3;
     elseif strcmp(ch,"mpd")
         dopplerSpreadHz = 2.0; path_delay_s = 4E-3;
     elseif strcmp(ch,"lmr60")
@@ -39,6 +41,8 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="",H_complex=0)
       % approximation to normalise power through HF channel
       hf_gain = 1.0/sqrt(var(G1)+var(G2));
     end
+
+    printf("dopplerSpreadHz: %5.2f path_delay_s: %f hf_gain: %f\n",dopplerSpreadHz, path_delay_s,  hf_gain);
 
     % H matrix of magnitude samples, timesteps along rows, carrier alongs cols
     % sampled at rate Rs (one sample per symbol).
