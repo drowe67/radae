@@ -255,11 +255,12 @@ rx_i = torch.zeros((Ns*(Ncp+M)),dtype=torch.complex64)
 rx_phase = 1 + 1j*0
 rx_phase_vec = np.zeros(Ncp+M,np.csingle)
 Nframes = sequence_length//model.Ns
-z_hat = torch.zeros((1,Nframes, model.latent_dim), dtype=torch.float32)
+z_hat = torch.zeros((1,sequence_length, model.latent_dim), dtype=torch.float32)
 i = 0
 
 for s in np.arange(1,sequence_length):
 
+   prev_state = state
    next_state = state
 
    if state == "noise":
@@ -337,7 +338,7 @@ for s in np.arange(1,sequence_length):
    frame_sync_log[s,0] = frame_sync_even
    frame_sync_log[s,1] = frame_sync_odd
 
-   if args.verbose:
+   if args.verbose or state != prev_state:
       print(f"{s:3d} {i:3d} state: {state:6s} sig_det: {sig_det[s]:1d} count: {count:1d} ", end='', file=sys.stderr)
       print(f"fs: {frame_sync_odd > frame_sync_even:d} ", end='', file=sys.stderr)
       print(f"delta_hat: {delta_hat[s]:3.0f} delta_hat_pp: {delta_hat_pp[s]:3.0f} ", end='',file=sys.stderr)
