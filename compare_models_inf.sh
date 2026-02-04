@@ -60,20 +60,20 @@ function run_model() {
     done
 }
 
-# Run inference + rx2.sh on a range of SNRs to compute loss
+# Run inference + rx2.sh on a range of SNRs to compute loss.  inference.sh is the "tx", plus ideal "rx", rx2.sh is
+# the "real world, practical" rx with timing estimators, frame sync etc.
 function run_model_rx2() {
   model=$1
-  model_ft=$2
-  model_sync=$3
-  dim=$4
-  epoch=$5
-  chan=$6
+  model_sync=$2
+  dim=$3
+  epoch=$4
+  chan=$5
   shift
   shift
   shift
   shift
   shift
-  shift
+
   # EbNodB_list='0 1.5 3 4.5 6 9 12 15 18 21 24'
   EbNodB_list='1 3 6 9 12 18 24'
   results=${model}_${chan}_loss_SNR3k.txt
@@ -95,10 +95,9 @@ function run_model_rx2() {
       SNR3k=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f4)
       PAPR=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f5)
       loss_inf=$(echo "$log" | grep "loss:" | tr -s ' ' | cut -d' ' -f2)
-    ./jmv_ft_tool.sh ${rx} delta_hat.f32
-    # note ${model_ft} ${model_sync} not actually used in practice, we just valid models to run previous code
-	  ./rx2.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${model_ft} ${model_sync} \
-               ${rx} /dev/null --latent-dim 56 --w1_dec 128 --noframe_sync --read_delta_hat delta_hat.f32
+    # use a long hangover to avoid breaking sync and messing up loss measurements
+	  ./rx2.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${model_sync} \
+               ${rx} /dev/null --latent-dim 56 --w1_dec 128  --correct_time_offset -8 --quiet --hangover 200
 	  loss_rx2=$(python3 loss.py features_in.f32 features_out_rx2.f32 --clip_start 25 | grep 'loss' | tr -s ' ' | cut -d' ' -f3)
       printf "%f\t%f\t%f\t%f\n" $SNR3k $loss_rx2 $PAPR $loss_inf >> $results
     done
@@ -153,8 +152,11 @@ esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
+# Create input speech material and MPP fading samples
 build_input_file_from_librispeech ${n_samples} ${input_file}
-
+if [ ! -f g_mpp_1200s.f32 ]; then
+  DISPLAY="" echo "Fs=8000; Rs=50; Nc=20; multipath_samples('mpp', Fs, Rs, Nc, 1200, '','g_mpp_1200s.f32'); quit" | octave-cli -qf
+fi
 
 # compare RADE V1 to 250227b
 if [ $plot == "250227b_inf" ]; then
@@ -367,27 +369,7 @@ if [ $plot == "250716_inf" ]; then
                            "g+-;250725 AWGN Nc=14;" "go--;250725 MPP Nc=14;")
 fi
 
-# Plot curves to explore integeration of JMV adasmooth FT estimator
-if [ $plot == "251113_inf" ]; then
-  # RADE V1 as run OTA today
-  run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --ssb_bpf
-  run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --ssb_bpf --g_file g_mpp.f32
-
-  run_model_rx2 250725 251002_mpp_16k_ft 250725_ml_sync 56 200 awgn
-  # put inf stage loss in col 2	
-  echo "x=load('250725_awgn_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 250725_awgn_inf_loss_SNR3k.txt x" | octave-cli -qf
-
-  run_model_rx2 250725 251002_mpp_16k_ft 250725_ml_sync 56 200 mpp --g_file g_mpp.f32
-  # put inf stage loss in col 2	
-  echo "x=load('250725_mpp_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 250725_mpp_inf_loss_SNR3k.txt x" | octave-cli -qf
-
-  model_list='model19_check3_awgn model19_check3_mpp 250725_awgn_inf 250725_mpp_inf 250725_awgn 250725_mpp'
-  declare -a model_legend=("b+-;RADE V1 AWGN;" "bo--;RADE V1 MPP;" \
-                           "r+-;250725 AWGN Genie;" "ro--;250725 MPP Genie;" \
-            						   "g+-;250725 AWGN FT;" "go--;250725 MPP FT;")
-fi
-
-# Jan 26 timing corner case - train model that can handle a wider Nj
+# Jan 26 timing corner case - try training different models that can handle a wider range of timing intervals at decoder input
 if [ $plot == "260127_inf" ]; then
   # RADE V1 as run OTA today
   run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --ssb_bpf
@@ -396,17 +378,39 @@ if [ $plot == "260127_inf" ]; then
   run_model 250725 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
   run_model 250725 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
 
+  # repeat of 250725
   run_model 260127 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
   run_model 260127 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
 
+  # trained with MMPA model, 1 Hz Doppler, 3ms delay spread
   run_model 260128b 56 200 awgn 0 --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf 
   run_model 260128b 56 200 mpp 0  --bottleneck 0 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --ssb_bpf --g_file g_mpp.f32
 
-  model_list='model19_check3_awgn model19_check3_mpp 250725_awgn_0Hz 250725_mpp_0Hz 260127_awgn_0Hz  260127_mpp_0Hz 260128b_awgn_0Hz  260128b_mpp_0Hz '
+  model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250725_awgn_0Hz 250725_mpp_0Hz 260127_awgn_0Hz  260127_mpp_0Hz 260128b_awgn_0Hz  260128b_mpp_0Hz '
   declare -a model_legend=("b+-;RADE V1 AWGN;" "bo--;RADE V1 MPP;" \
                            "r+-;250725 AWGN Genie;" "ro--;250725 MPP Genie;" \
   					               "g+-;260127 AWGN Genie;" "go--;260127 MPP Genie;"
           						     "c+-;260128b AWGN Genie;" "co--;260128b MPP Genie;")
+fi
+
+# Plot curves to compare complete rx2.py receiver with "genie" (ideal) timing
+if [ $plot == "260203_inf" ]; then
+  # RADE V1 as run OTA today
+  run_model model19_check3 80 100 awgn 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --ssb_bpf
+  run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --ssb_bpf --g_file g_mpp_1200s.f32
+
+  run_model_rx2 250725 250725a_ml_sync 56 200 awgn
+  # put inf stage loss in col 2, this is the "genie" version
+  echo "x=load('250725_awgn_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 250725_awgn_inf_loss_SNR3k.txt x" | octave-cli -qf
+
+  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32
+  # put inf stage loss in col 2, this is the "genie" version
+  echo "x=load('250725_mpp_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 250725_mpp_inf_loss_SNR3k.txt x" | octave-cli -qf
+
+  model_list='model19_check3_awgn_0Hz model19_check3_mpp_0Hz 250725_awgn_inf 250725_mpp_inf 250725_awgn 250725_mpp'
+  declare -a model_legend=("b+-;RADE V1 AWGN;" "bo--;RADE V1 MPP;" \
+                           "r+-;250725 AWGN Genie;" "ro--;250725 MPP Genie;" \
+            						   "g+-;250725 AWGN rx2;" "go--;250725 MPP rx2;")
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}

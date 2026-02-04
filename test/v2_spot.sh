@@ -20,7 +20,7 @@ delta=${delta:-0.01}
 # figure(2); freq_offset_smooth=load_f32('freq_offset_smooth.f32',1); plot(freq_offset_smooth);
 # 2) remove --quiet and look for state transitions (e.g. back to noise), which upsets alignment for loss.py
 ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync 250725_rx.f32 /dev/null --latent-dim 56 \
---w1_dec 128 --hangover 100 --quiet \
+--w1_dec 128 --hangover 100 --correct_time_offset -8 --quiet \
 --write_sig_det sig_det.int16 --write_state state.int16 --write_freq_offset_smooth freq_offset_smooth.f32 \
 --write_frame_sync frame_sync.f32
 
