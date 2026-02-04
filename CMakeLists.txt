@@ -383,7 +383,7 @@ add_test(NAME radae_rx_dfs
 
 # Test ability to handle buffer slips due to sample clock offsets, rx ADC clock > tx ADC clock.  We make sample clock error larger than 200ppm spec
 # in order to exercise code.  Nice thing about "nin" design is it allows us to get meaningful "loss.py" results, ie no frames are lost.  We're
-# really just trying to exercise the slip code here, not too cocnerned about loss.  There should be a noticable transition in tmax in each test as
+# really just trying to exercise the slip code here, not too concerned about loss.  There should be a noticable transition in tmax in each test as
 # it hits the upper or lower limit
 add_test(NAME radae_rx_slip_plus
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
@@ -700,3 +700,4 @@ add_test(NAME v2_timing_high_delta2
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
                        delta=0.05 ./test/v2_timing.sh --g_file g_mpp_high.f32 --correct_time_offset -8 --fix_delta_hat 48 --quiet")
          set_tests_properties(v2_timing_high_delta2 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+

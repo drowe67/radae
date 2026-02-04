@@ -126,13 +126,6 @@ rx = np.fromfile(args.rx, dtype=np.csingle)*args.gain
 w_off = 2*np.pi*args.freq_offset/Fs
 rx = rx*np.exp(-1j*w_off*np.arange(len(rx)))
 
-# optional AGC, just a basic block based algorithm to get us started
-if args.agc:
-   # target RMS level is PAPR ~ 3 dB less than peak of 1.0
-   target = 1.0*10**(-3/20)
-   gain = target/np.sqrt(np.mean(np.abs(rx)**2))
-   print(f"AGC target {target:3.2f} gain: {gain:3.2e}")
-   rx *= gain
 # ensure an integer number of frames
 rx = np.concatenate((np.zeros(args.pad_samples, dtype=np.complex64),rx))
 
@@ -165,10 +158,24 @@ if args.plots:
    input("hit[enter] to end.")
    plt.close('all')
 
+
 # Acquisition - timing, freq offset, and signal present estimates
 
 sequence_length = len(rx)//(Ncp+M) - 2
 print(sequence_length)
+
+# optional AGC, updates on blocks calculated once a symbol, IIR smoothed
+gain_smooth = np.zeros(sequence_length,dtype=np.float32)
+if args.agc:
+   # target RMS level is PAPR ~ 3 dB less than peak of 1.0
+   target = 1.0*10**(-3/20)
+   for s in np.arange(1,sequence_length):
+      st = (s+1)*(Ncp+M)
+      en = st + Ncp+M
+      gain = target/np.sqrt(np.mean(np.abs(rx[st:en])**2))
+      gain_smooth[s] = gain_smooth[s-1]*alpha + gain*(1.-alpha)
+      print(f"AGC target {target:3.2f} gain: {gain:3.2e}")
+   rx *= gain
 
 # Normalised autocorrelation function
 Ry_norm = np.zeros((sequence_length,Ncp+M),dtype=np.complex64)
@@ -292,10 +299,6 @@ for s in np.arange(1,sequence_length):
          delta_phi = np.angle(Ry_smooth[s,delta_hat[s]])
       freq_offset_smooth[s] = beta*freq_offset_smooth[s-1] - (1-beta)*delta_phi*Fs/(2.*np.pi*M)
       
-      # correct freq offset
-      #  keep phase vector normalised
-      # extract single symbol, construct a frame with previous symbol
-
       # adjust timing to point to start of symbol
       delta_hat_rx = int(delta_hat_pp[s]-Ncp)
 
