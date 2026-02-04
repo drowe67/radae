@@ -14,6 +14,10 @@ if(NOT CODEC2_DEV_BUILD_DIR)
     set(CODEC2_DEV_BUILD_DIR $HOME/codec2-dev/build_linux )
 endif()
 
+if(NOT RADAE_NOPY_BUILD_DIR)
+    set(RADAE_NOPY_BUILD_DIR $HOME/radae_nopy/build )
+endif()
+
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.11" CACHE STRING "Minimum OS X deployment version" FORCE)
 
 # Build universal ARM64 and x86_64 binaries on Mac.
@@ -640,3 +644,41 @@ add_test(NAME bbfm_sc_bpf_loss
                        python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
                        set_tests_properties(bbfm_sc_bpf_loss PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# RADAE_NOPY C Port tests --------------------------------------------------------------------
+
+# basic test of streaming Tx/Rx, compare to vanilla Tx in inference.py
+add_test(NAME radae_nopy_tx_basic
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/brian_g8sez.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --write_rx rx.f32 --correct_freq_offset; \
+                       cat features_in.f32 | ${RADAE_NOPY_BUILD_DIR}/src/radae_tx > rx.f32
+                       cat rx.f32 | ${RADAE_NOPY_BUILD_DIR}/src/radae_rx > features_txs_out.f32; \
+                       python3 loss.py features_in.f32 features_txs_out.f32 --loss_test 0.15 --acq_time_test 0.5 --clip_start 5")
+                       set_tests_properties(radae_nopy_tx_basic PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# TODO need unit test for band pass filter, Python test, C unit test
+
+# SNR=-2dB AWGN
+add_test(NAME radae_nopy_rx_awgn
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --EbNodB 1 --freq_offset 13 \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 --write_rx rx.f32  \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --auxdata --correct_freq_offset; \
+                       cat rx.f32 | ${RADAE_NOPY_BUILD_DIR}/src/radae_rx > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.3 --acq_time_test 1.0 --clip_end 300")
+                       set_tests_properties(radae_nopy_rx_awgn PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# SNR=0dB MPP
+# End of over detection is not always reliable on MPP, so run-on timer terminates over, --clip_end removes garbage at end
+# We don't don't bother checking acquisition time on this channel, as it's a severe case.
+add_test(NAME radae_nopy_rx_mpp
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       test/make_g.sh; \
+                       ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth wav/all.wav /dev/null \
+                       --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 \
+                       --EbNodB 3 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
+                       --prepend_noise 1 --append_noise 3 --end_of_over --auxdata --correct_freq_offset; \
+                       cat rx.f32 | ${RADAE_NOPY_BUILD_DIR}/src/radae_rx > features_rx_out.f32; \
+                       python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.35 --clip_end 300")
+                       set_tests_properties(radae_nopy_rx_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
