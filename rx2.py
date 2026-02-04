@@ -83,7 +83,7 @@ parser.add_argument('--agc', action='store_true', help='automatic gain control')
 parser.add_argument('--w1_dec', type=int, default=96, help='Decoder GRU output dimension (default 96)')
 parser.add_argument('--nofreq_offset', action='store_true', help='disable freq offset correction (default enabled)')
 parser.add_argument('--test_mode', action='store_true', help='inject test delta sequence')
-parser.add_argument('--hangover', type=int, default=75, help='Number of symbols of no signal before retunring to noise state (default 75)')
+parser.add_argument('--hangover', type=int, default=75, help='Number of symbols of no signal before returning to noise state (default 75)')
 parser.add_argument('--quiet', action='store_false', dest='verbose', help='inject test delta sequence')
 args = parser.parse_args()
 

@@ -659,6 +659,15 @@ add_test(NAME v2_rx2_mpp_low
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
                        delta=0.03 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6")
          set_tests_properties(v2_rx2_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+        
+# repeat v2_rx2_mpp_low with 20ms (half frame) time shift to repeat last test with opposite frame sync
+# to visualise FS metrics:
+# octave:377>  figure(4); frame_sync=load_f32('frame_sync.f32',2); plot(frame_sync(:,1)); hold on; plot(frame_sync(:,2)); hold off;
+add_test(NAME v2_rx2_oppfs
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.03 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6 --prepend_noise 0.98")
+         set_tests_properties(v2_rx2_oppfs PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 
 # rx2.sh with complex->real conversions, `ch` tool, and --agc, high SNR
 add_test(NAME v2_rx2_ch
