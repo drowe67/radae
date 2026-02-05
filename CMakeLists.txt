@@ -679,6 +679,7 @@ add_test(NAME radae_nopy_rx_mpp
                        --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --time_offset -16 \
                        --EbNodB 3 --freq_offset -11 --g_file g_mpp.f32 --write_rx rx.f32 \
                        --prepend_noise 1 --append_noise 3 --end_of_over --auxdata --correct_freq_offset; \
-                       cat rx.f32 | ${RADAE_NOPY_BUILD_DIR}/src/radae_rx > features_rx_out.f32; \
+                       cat rx.f32 | ${RADAE_NOPY_BUILD_DIR}/src/radae_rx --disable_unsync 5.0 > features_rx_out.f32; \
                        python3 loss.py features_in.f32 features_rx_out.f32 --loss 0.35 --clip_end 300")
                        set_tests_properties(radae_nopy_rx_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
