@@ -55,6 +55,7 @@ jobs:
           cd radae_nopy
           mkdir build
           cd build
+          cmake ..
           make
 
       - name: build radae
