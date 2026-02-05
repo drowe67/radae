@@ -51,7 +51,7 @@ jobs:
         shell: bash
         working-directory: /home/runner/
         run: |
-          git clone https://github.com/peterbmarks/radae_nopy.git
+          git clone https://github.com/drowe67/radae_nopy.git
           cd radae_nopy
           mkdir build
           cd build
