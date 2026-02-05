@@ -786,3 +786,28 @@ add_test(NAME radae_nopy_rx_stack_c
                        ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -fargan-synthesis - /dev/null; \
                        RUN_TIME=$(cat log.txt); DUR=$(soxi -D $WAV); percent=$(python3 -c \"percent=100*$RUN_TIME/$DUR; print('%f' % percent)\"); \
                        printf \"\nrun time: %5.2f duration: %5.2f percent CPU: %5.2f\n\n\" $RUN_TIME $DUR $percent ")
+
+# EOO data: C tx & rx, no noise. Note Python radae_txe.py just generates eoo_tx.f32 for C radae_tx
+add_test(NAME radae_nopy_eoo_data_c
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
+                       cat features_in.f32 | python3 radae_txe.py --eoo_data_test > /dev/null; \
+                       cat features_in.f32 | ${RADAE_NOPY_BUILD_DIR}/src/radae_tx > rx.f32; \
+                       cat rx.f32 | ${RADAE_NOPY_BUILD_DIR}/src/radae_rx > /dev/null; \
+                       python3 eoo_ber.py eoo_tx.f32 eoo_rx.f32")
+                       set_tests_properties(radae_nopy_eoo_data_c PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# C tx & rx, over a multipath channel, we set up 5 "overs", each with an EOO chunk of data.  Just one of them needs
+# to have a BER < 5% for a PASS.  About 6dB SNR
+add_test(NAME radae_nopy_eoo_data_mpp
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh; \
+                       ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
+                       cat features_in.f32 | python3 radae_txe.py --eoo_data_test > /dev/null; \
+                       cat features_in.f32 | ${RADAE_NOPY_BUILD_DIR}/src/radae_tx > tx.f32; \
+                       cat tx.f32 tx.f32 tx.f32 tx.f32 tx.f32 > tx_2.f32;
+                       cat tx_2.f32 | python3 f32toint16.py --real --scale 8192 > tx.raw; \
+                       ${CODEC2_DEV_BUILD_DIR}/src/ch tx.raw rx.raw --No -24 --mpp --fading_dir .; \
+                       cat rx.raw | python3 int16tof32.py --zeropad > rx.f32; \
+                       cat rx.f32 |  ${RADAE_NOPY_BUILD_DIR}/src/radae_rx > /dev/null; \
+                       python3 eoo_ber.py eoo_tx.f32 eoo_rx.f32")
+                       set_tests_properties(radae_nopy_eoo_data_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
