@@ -10,7 +10,7 @@ function print_help {
     echo
     echo "RADE V2 Jan 2026 timing investigation helper script"
     echo
-    echo "  usage ./test/v2_timing.sh [--g_file file_name] [rx.sh options]"
+    echo "  usage ./test/v2_timing.sh [--g_file file_name] [rx2.sh options]"
     echo "  for example:"
     echo "       ./test/v2_timing.sh --correct_time_offset -22"
     echo "       ./test/v2_timing.sh --g_file mpp_low.f32 --correct_time_offset -8 --fix_delta_hat 32"

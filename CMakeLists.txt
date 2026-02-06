@@ -668,19 +668,6 @@ add_test(NAME v2_rx2_oppfs
                        delta=0.03 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6 --prepend_noise 0.98")
          set_tests_properties(v2_rx2_oppfs PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-
-# rx2.sh with complex->real conversions, `ch` tool, and --agc, high SNR
-add_test(NAME v2_rx2_ch
-         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
-                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
-                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
-                       --ssb_bpf --write_rx brian_tx.f32; \
-         cat brian_tx.f32 | python3 f32toint16.py --real --scale 16383 | ~/codec2-dev/build_linux/src/ch - - | python3 int16tof32.py --zeropad > brian_rx.f32
-         ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ml_sync brian_rx.f32 /dev/null \
-         --latent-dim 56 --w1_dec 128 --agc --quiet; \
-         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 50 --clip_end 50")
-         set_tests_properties(v2_rx2_ch PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
-
 # tests to exercise limits of timing est to decoder interface (Jan 2026 timing corner case)
 # we allow a little bit of extra loss at limits (delta=0.05), but want to trap a complete breakdown (like frame sync failing)
 
@@ -701,3 +688,25 @@ add_test(NAME v2_timing_high_delta2
                        delta=0.05 ./test/v2_timing.sh --g_file g_mpp_high.f32 --correct_time_offset -8 --fix_delta_hat 48 --quiet")
          set_tests_properties(v2_timing_high_delta2 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# spot checks with AGC
+
+add_test(NAME v2_rx2_agc_mpp_high
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       ./test/v2_spot.sh --g_file g_mpp.f32 --agc --gain 4")
+         set_tests_properties(v2_rx2_mpp_high PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_rx2_agc_mpp_low
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.03 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6 --agc --gain 0.25")
+         set_tests_properties(v2_rx2_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# rx2.sh with complex->real conversions, `ch` tool, and --agc, high SNR
+add_test(NAME v2_rx2_ch
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
+                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
+                       --ssb_bpf --write_rx brian_tx.f32; \
+         cat brian_tx.f32 | python3 f32toint16.py --real --scale 16383 | ~/codec2-dev/build_linux/src/ch - - | python3 int16tof32.py --zeropad > brian_rx.f32
+         ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ml_sync brian_rx.f32 /dev/null \
+         --latent-dim 56 --w1_dec 128 --agc --quiet --write_gain_smooth gain.f32 --gain 1.22E-4; \
+         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 50 --clip_end 50")
+         set_tests_properties(v2_rx2_ch PROPERTIES PASS_REGULAR_EXPRESSION "PASS")

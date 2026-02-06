@@ -74,6 +74,7 @@ parser.add_argument('--write_state', type=str, default="", help='path to sync st
 parser.add_argument('--write_frame_sync', type=str, default="", help='path to frame sync output file dim (seq_len,2) in .int16 format')
 parser.add_argument('--read_delta_hat', type=str, default="", help='path to delta_hat input file dim (seq_len) in .f32 format')
 parser.add_argument('--fix_delta_hat', type=int,  default=0, help='disable timing estimation and used fixed delta_hat (default: use timing estimation)')
+parser.add_argument('--write_gain_smooth', type=str, default="", help='path to smoothed AGC output feature file dim (seq_len) .f32 format')
 parser.set_defaults(bpf=True)
 parser.set_defaults(auxdata=True)
 parser.set_defaults(verbose=True)
@@ -165,17 +166,20 @@ sequence_length = len(rx)//(Ncp+M) - 2
 print(sequence_length)
 
 # optional AGC, updates on blocks calculated once a symbol, IIR smoothed
-gain_smooth = np.zeros(sequence_length,dtype=np.float32)
+gain_smooth = np.ones(sequence_length,dtype=np.float32)
 if args.agc:
    # target RMS level is PAPR ~ 3 dB less than peak of 1.0
    target = 1.0*10**(-3/20)
+   alpha_agc = 0.995
    for s in np.arange(1,sequence_length):
       st = (s+1)*(Ncp+M)
       en = st + Ncp+M
-      gain = target/np.sqrt(np.mean(np.abs(rx[st:en])**2))
-      gain_smooth[s] = gain_smooth[s-1]*alpha + gain*(1.-alpha)
-      print(f"AGC target {target:3.2f} gain: {gain:3.2e}")
-   rx *= gain
+      gain = target/(np.sqrt(np.mean(np.abs(rx[st:en])**2)) + 1E-6)
+      gain = min(gain,10.0)
+      gain = max(gain,0.1)
+      gain_smooth[s] = gain_smooth[s-1]*alpha_agc + gain*(1.-alpha_agc)
+      print(f"AGC target {target:3.2f} gain_smooth: {gain_smooth[s]:3.2e}")
+      rx[st:en] *= gain
 
 # Normalised autocorrelation function
 Ry_norm = np.zeros((sequence_length,Ncp+M),dtype=np.complex64)
@@ -243,6 +247,8 @@ if len(args.write_sig_det):
    sig_det.tofile(args.write_sig_det)
 if len(args.write_freq_offset):
    freq_offset.tofile(args.write_freq_offset)
+if len(args.write_gain_smooth):
+   gain_smooth.tofile(args.write_gain_smooth)
 # optionally read in external timing est, overrides internal estimator   
 if len(args.read_delta_hat):
    delta_hat = np.fromfile(args.read_delta_hat, dtype=np.float32)
