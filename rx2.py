@@ -178,7 +178,7 @@ if args.agc:
       gain = min(gain,10.0)
       gain = max(gain,0.1)
       gain_smooth[s] = gain_smooth[s-1]*alpha_agc + gain*(1.-alpha_agc)
-      print(f"AGC target {target:3.2f} gain_smooth: {gain_smooth[s]:3.2e}")
+      #print(f"AGC target {target:3.2f} gain_smooth: {gain_smooth[s]:3.2e}")
       rx[st:en] *= gain
 
 # Normalised autocorrelation function

@@ -699,7 +699,7 @@ add_test(NAME v2_rx2_agc_mpp_low
                        delta=0.03 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6 --agc --gain 0.25")
          set_tests_properties(v2_rx2_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# rx2.sh with complex->real conversions, `ch` tool, and --agc, high SNR
+# rx2.sh with complex->real conversions, `ch` tool, and --agc, high SNR, note --gain need to get us in ballpark
 add_test(NAME v2_rx2_ch
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
                        ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
