@@ -74,9 +74,36 @@ function run_model_rx2() {
   shift
   shift
 
+  # strip of args for inference.sh
+  results=${model}_${chan}_loss_SNR3k.txt
+  g_file=""
+  a_g_file=""
+  POSITIONAL=()
+  while [[ $# -gt 0 ]]
+  do
+  key="$1"
+  case $key in
+      --g_file)
+          g_file="--g_file"
+          a_g_file="$2"	
+          shift
+          shift
+      ;;
+      --results)
+          results="$2"	
+          shift
+          shift
+      ;;
+      *)
+      POSITIONAL+=("$1") # save it in an array for later
+      shift
+      ;;
+  esac
+  done
+  set -- "${POSITIONAL[@]}" # restore positional parameters
+
   # EbNodB_list='0 1.5 3 4.5 6 9 12 15 18 21 24'
   EbNodB_list='1 3 6 9 12 18 24'
-  results=${model}_${chan}_loss_SNR3k.txt
   
   # return if results file already exists
   if [ $rebuild -eq 0 ]; then
@@ -91,14 +118,14 @@ function run_model_rx2() {
     do
       log=$(./inference.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${input_file} /dev/null --rate_Fs \
 						   --latent-dim ${dim} --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata \
-						   --w1_dec 128 --write_rx ${rx} --EbNodB ${aEbNodB} $@)
+						   --w1_dec 128 --write_rx ${rx} --EbNodB ${aEbNodB} $g_file $a_g_file)
       SNR3k=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f4)
       PAPR=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f5)
       loss_inf=$(echo "$log" | grep "loss:" | tr -s ' ' | cut -d' ' -f2)
-    # use a long hangover to avoid breaking sync and messing up loss measurements
-	  ./rx2.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${model_sync} \
-               ${rx} /dev/null --latent-dim 56 --w1_dec 128  --correct_time_offset -8 --quiet --hangover 200
-	  loss_rx2=$(python3 loss.py features_in.f32 features_out_rx2.f32 --clip_start 25 | grep 'loss' | tr -s ' ' | cut -d' ' -f3)
+      # use a long hangover to avoid breaking sync and messing up loss measurements
+	    ./rx2.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${model_sync} \
+               ${rx} /dev/null --latent-dim 56 --w1_dec 128  --correct_time_offset -8 --quiet $@
+	    loss_rx2=$(python3 loss.py features_in.f32 features_out_rx2.f32 --clip_start 25 | grep 'loss' | tr -s ' ' | cut -d' ' -f3)
       printf "%f\t%f\t%f\t%f\n" $SNR3k $loss_rx2 $PAPR $loss_inf >> $results
     done
 }
@@ -403,7 +430,7 @@ if [ $plot == "260203_inf" ]; then
   # put inf stage loss in col 2, this is the "genie" version
   echo "x=load('250725_awgn_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 250725_awgn_inf_loss_SNR3k.txt x" | octave-cli -qf
 
-  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32
+  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200
   # put inf stage loss in col 2, this is the "genie" version
   echo "x=load('250725_mpp_loss_SNR3k.txt'); x(:,2)=x(:,4); save -ascii 250725_mpp_inf_loss_SNR3k.txt x" | octave-cli -qf
 
@@ -411,6 +438,23 @@ if [ $plot == "260203_inf" ]; then
   declare -a model_legend=("b+-;RADE V1 AWGN;" "bo--;RADE V1 MPP;" \
                            "r+-;250725 AWGN Genie;" "ro--;250725 MPP Genie;" \
             						   "g+-;250725 AWGN rx2;" "go--;250725 MPP rx2;")
+fi
+
+# V2 curves to examine effect of AGC
+if [ $plot == "260206_inf" ]; then
+  # RADE V1 as run OTA today
+  run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --ssb_bpf --g_file g_mpp_1200s.f32
+
+  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200
+  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200 --results 250725_mpp_agc1_loss_SNR3k.txt --agc --gain 10
+  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200 --results 250725_mpp_agc2_loss_SNR3k.txt --agc --gain 0.1
+
+  model_list='model19_check3_mpp_0Hz 250725_mpp 250725_mpp_agc1 250725_mpp_agc2'
+  declare -a model_legend=("bo--;RADE V1 MPP;" \
+                           "g+--;250725 MPP rx2;" \
+                           "ro--;250725 MPP AGC 10 rx2;" \
+                           "co--;250725 MPP AGC 0.1 rx2;")
+
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
