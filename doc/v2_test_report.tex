@@ -1,0 +1,52 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{calc,arrows,shapes,positioning,automata}
+\usepackage{tkz-euclide}
+\usepackage[numbib]{tocbibind}
+\usepackage{float}
+\usepackage{array}
+\usepackage{bm}
+\usepackage{siunitx}  
+\usepackage{xstring}
+\usepackage{catchfile}
+
+\CatchFileDef{\headfull}{../.git/HEAD}{}
+\StrGobbleRight{\headfull}{1}[\head]
+\StrBehind[2]{\head}{/}[\branch]
+\IfFileExists{../.git/refs/heads/\branch}{%
+    \CatchFileDef{\commit}{../.git/refs/heads/\branch}{}}{%
+    \newcommand{\commit}{\dots~(in \emph{packed-refs})}}
+\newcommand{\gitrevision}{%
+  \StrLeft{\commit}{7}%
+}
+
+\begin{document}
+
+% Tikz code used to support block diagrams
+% credit: https://tex.stackexchange.com/questions/175969/block-diagrams-using-tikz
+
+\tikzset{
+block/.style = {draw, fill=white, rectangle, minimum height=3em, minimum width=3em},
+tmp/.style  = {coordinate}, 
+circ/.style= {draw, fill=white, circle, node distance=1cm, minimum size=0.6cm},
+input/.style = {coordinate},
+output/.style= {coordinate},
+pinstyle/.style = {pin edge={to-,thin,black}}
+}
+
+\title{FreeDV-060 Radio Autoencoder (RADE) V2 Test Report}
+\author{David Rowe VK5DGR}
+\date{\today \quad Git: \texttt{\gitrevision} on branch \texttt{\branch}\\}
+\maketitle
+
+\section{Introduction}
+
+This document describes the tests performed on the prototype RADE V2 waveform, and the test results.
+
+\subsection{Acknowledgements}
+
+The RADE concept evolved from a discussion between Jean-Marc Valin and David Rowe, after which Jean-Marc quickly put together an initial proof-of-concept demo. Over a period of several months David built on this work to develop a practical over the air waveform for speech over HF radio channels. This waveform is denoted RADE V1. Mooneer Salem is handling integration of RADE V1 into the FreeDV GUI application. The FreeDV Project Leadership Team and many others have helped with support and testing. The contributions from David, Mooneer and the FreeDV PLT was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
+
+\end{document}

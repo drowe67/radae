@@ -86,6 +86,7 @@ parser.add_argument('--nofreq_offset', action='store_true', help='disable freq o
 parser.add_argument('--test_mode', action='store_true', help='inject test delta sequence')
 parser.add_argument('--hangover', type=int, default=75, help='Number of symbols of no signal before returning to noise state (default 75)')
 parser.add_argument('--quiet', action='store_false', dest='verbose', help='inject test delta sequence')
+parser.add_argument('--verbose', action='store_true', dest='verbose', help='inject test delta sequence')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
