@@ -467,5 +467,6 @@ for model in $model_list
   done
 echo "radae_plots; loss_SNR3k_plot(psnr=0,'${plot}_loss_SNR3k_models',''${vargs}); quit" | octave-cli -qf # PNG
 echo "radae_plots; loss_SNR3k_plot(psnr=1,'${plot}_loss_PNR3k_models',''${vargs}); quit" | octave-cli -qf # PNG
+echo "radae_plots; loss_SNR3k_plot(psnr=0,'','${plot}_loss_SNR3k_models'${vargs}); quit" | octave-cli -qf # EPS
 echo "radae_plots; loss_SNR3k_plot(psnr=1,'','${plot}_loss_PNR3k_models'${vargs}); quit" | octave-cli -qf # EPS
 

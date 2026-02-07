@@ -49,4 +49,88 @@ This document describes the tests performed on the prototype RADE V2 waveform, a
 
 The RADE concept evolved from a discussion between Jean-Marc Valin and David Rowe, after which Jean-Marc quickly put together an initial proof-of-concept demo. Over a period of several months David built on this work to develop a practical over the air waveform for speech over HF radio channels. This waveform is denoted RADE V1. Mooneer Salem is handling integration of RADE V1 into the FreeDV GUI application. The FreeDV Project Leadership Team and many others have helped with support and testing. The contributions from David, Mooneer and the FreeDV PLT was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
 
+\section{Feb 2026 Test Results}
+
+\subsection{configuration}
+
+\begin{table} [h]
+\caption{Configuration for test campaign.}
+\label{tab:time_to_acq}
+\centering
+\begin{tabular}{ l | l }
+ \hline
+  Date  & From 5 Feb 2026 \\
+  Git Hash & bda6f2 \\
+  ML encoder/decoder & 250725 \\
+  ML sync & 250725a\_ml\_sync \\
+ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Overall Performance}
+
+The script \emph{./compare\_models\_inf.sh -p 260203\_inf} was used to generate loss versus SNR curves for the following conditions:
+\begin{itemize}
+\item RADE V1 AWGN and MPP channels.
+\item RADE V2 with no timing estimator, state machine, of frequency offset estimator (Genie V2) using \emph{inference.sh}.
+\item RADE V2 with real world estimators and state machine using \emph{rx2.sh}.
+\end{itemize}
+
+The RADE V1 simulation is run using the \emph{inference.sh} script with phase equalisation but without timing estimation.  Spot checks of RADE V1 indicate this has no measurable affect on loss versus SNR.  The V2 curves with and without estimators are coincident, showing the estimator algorithms have a small impact on performance.  The high SNR on the green V2 curve at less than -1 \si{dB} is a measurement artefact due to the state machine falling out of sync at low SNRs; decoded audio is still possible as it recovers and re-syncs.
+Looking at the AWGN curves on the loss versus SNR plot, for any SNR above 5 \si{dB}, the loss of V2 is less than V1. Taking into account the PAPR gains (loss versus PNR curve), gains over V1 of approximately 3 \si{dB} can be observed at low PNRs on the MPP curves.
+
+\begin{figure}[h]
+\caption{Loss versus SNR and PNR for various RADE V1, and RADE V2 with and without estimators.}
+\label{fig:260203_inf_loss_SNR3k_models}
+\begin{center}
+\scalebox{.9}{\input {260203_inf_loss_SNR3k_models.tex}}
+\scalebox{.9}{\input {260203_inf_loss_PNR3k_models.tex}}
+\end{center}
+\end{figure}
+
+\subsection{AGC}
+
+The script \emph{./compare\_models\_inf.sh -p 260206\_inf} was used to generate loss versus SNR curves for 3 AGC conditions on the MPP channel:
+\begin{enumerate}
+\item Baseline with no AGC.
+\item AGC enabled with +10 \si{dB} gain.
+\item AGC enabled with -10 \si{dB} gain.
+\end{enumerate}
+The AGC curves are coincident with the baseline curve, indicating AGC has a small impact on performance. AGC operation is limited to $\pm 10 \si{dB}$ above the RSM level of 1.0, therefore a manual gain may be required, e.g. to scale from a real $\pm 2^{15}$ gain common with deployments.  AGC adapts over time, so may have a greater impact on loss when tested with shorter samples.
+
+\begin{figure}[h]
+\caption{Loss versus SNR for various AGC conditions.}
+\label{fig:260206_inf_loss_SNR3k_models}
+\begin{center}
+\scalebox{.9}{\input {260206_inf_loss_SNR3k_models.tex}}
+\end{center}
+\end{figure}
+
+\subsection{Acquisition}
+
+Testing acquisition time using \emph{v2\_spot.sh}. Note we prepend 1 second of silence in these tests which is subtracted for the reported \emph{acq\_time} to obtain the results in the Table \ref{tab:time_to_acq}.  Acquisition time is longer as SNR drops, which is quite acceptable.  High SNR acquisition time on a good channel of 200 \si{ms} is a little slow (similar to RADE V1) given the latency of 40 \si{ms} so as further work it would be nice to improve this.  This is partially due to state machine design that is optimised for low SNR channels.  It maybe possible to modify the state machine to transition quickly if the probability of a valid signal is high.
+
+\begin{table} [h]
+\caption{Time to acquisition $T_{aq}$.}
+\label{tab:time_to_acq}
+\centering
+\begin{tabular}{ c | c | r | r }
+ \hline
+ Channel & EbNodB & SNR & $T_{aq}$ (ms) \\
+ \hline
+ AWGN & 100 & 100 & 200 \\
+ AWGN & 10 & 3.56 &  240 \\
+ AWGN & 1 & -5.44 & 1080 \\
+ MPP & 10 & 3.56 & 320 \\
+ MPP & 5 & -1.44 & 1040 \\
+ \hline
+\end{tabular}
+\end{table}
+
+\subsection{MPD results}
+
+\section{Conclusion}
+
+Present test results against requirements.
+
 \end{document}
