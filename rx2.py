@@ -365,72 +365,16 @@ if len(args.write_frame_sync):
    frame_sync_log.flatten().tofile(args.write_frame_sync)
 
 rx = np.concatenate((rx,np.zeros(Ncp+M,dtype=np.complex64)))
+z_hat.shape
+print(f"latent vectors: {z_hat.shape[1]:d}")
 
-"""
-# use timing estimates as they evolve to extract frames
-Nframes = sequence_length//model.Ns
-z_hat = torch.zeros((1,Nframes, model.latent_dim), dtype=torch.float32)
-delta_hat_rx = np.zeros(Nframes,dtype=np.int16)
-rx_phase = 1 + 1j*0
-rx_phase_vec = np.zeros(model.Ns*(Ncp+M),np.csingle)
-
-# note only one time estimate per frame (Ns symbols), we don't want a timing change
-# mid frame
-for i in np.arange(0,Nframes):
-   # map delta_hat from Ncp/M junction to start sample of symbol
-   delta_hat_rx[i] = int(delta_hat_pp[model.Ns*i]-Ncp)
-   
-   # set up phase continous vector to correct freq offset
-   freq_offset_rx = freq_offset_smooth[model.Ns*i]
-   w = 2*np.pi*freq_offset_rx/Fs
-   for n in range(model.Ns*(Ncp+M)):
-      rx_phase = rx_phase*np.exp(-1j*w)
-      rx_phase_vec[n] = rx_phase
-
-   st = (model.Ns*i)*(Ncp+M) + delta_hat_rx[i]
-   st = max(st,0)
-   en = st + model.Ns*(Ncp+M)
-   if i < 10:
-      print(i,delta_hat_rx[i],st,en)
-   # extract rx samples for i-th frame
-   rx_i = torch.tensor(rx_phase_vec*rx[st:en], dtype=torch.complex64)
-   # run receiver to extract i-th freq domain OFDM symbols z_hat
-   az_hat = model.receiver(rx_i,run_decoder=False)
-   z_hat[0,i,:] = az_hat
-"""
-print("z_hat.shape",z_hat.shape)
-
-if len(args.write_delta_hat_rx):
-   np.float32(delta_hat_rx).flatten().tofile(args.write_delta_hat_rx)
-
-if len(args.write_latent):
-   z_hat.cpu().detach().numpy().flatten().astype('float32').tofile(args.write_latent)
-
-"""
-# now perform ML frame sync, two possibilities offset by one OFDM symbol (half a z vector)
-if args.noframe_sync == False:
-   Nsync_syms = 10 # average sync metric over this many OFDM symbols
-   print(z_hat.shape)
-   z_hat = torch.reshape(z_hat,(1,-1,latent_dim//2))
-   print(z_hat.shape)
-   sync_st=10
-   sync_even = torch.mean(frame_sync_nn(torch.reshape(z_hat[0,sync_st:sync_st+Nsync_syms,:],(1,-1,latent_dim))))
-   sync_odd = torch.mean(frame_sync_nn(torch.reshape(z_hat[0,sync_st+1:sync_st+1+Nsync_syms,:],(1,-1,latent_dim))))
-   print(f"sync_even: {sync_even:5.2f} sync_odd: {sync_odd:5.2f}")
-   if sync_even > sync_odd:
-      offset = 0
-   else:
-      offset = 1
-   z_hat_len = z_hat.shape[1]
-   z_hat = z_hat[:,offset:z_hat_len-offset,:]
-   z_hat = torch.reshape(z_hat,(1,-1,latent_dim))
-"""
-
-# run RADE decoder
-features_hat = model.core_decoder(z_hat)
-features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:nb_total_features-num_features]], dim=-1)
-#print(features_hat.shape)
-features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
+features_hat = np.zeros(0)
+if z_hat.shape[1]:
+   # run RADE decoder
+   features_hat = model.core_decoder(z_hat)
+   features_hat = torch.cat([features_hat, torch.zeros_like(features_hat)[:,:,:nb_total_features-num_features]], dim=-1)
+   #print(features_hat.shape)
+   features_hat = features_hat.cpu().detach().numpy().flatten().astype('float32')
 features_hat.tofile(args.features_hat)
 
 if len(args.write_latent):
