@@ -572,7 +572,7 @@ add_test(NAME c_decoder_aux_mpp
 
 # EOO data -------------------------------------------------------------------------------------------
 
-# Pythion Tx & Rx, no noise
+# Python Tx & Rx, no noise
 add_test(NAME radae_eoo_data_py
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \

@@ -13,7 +13,7 @@ function print_help {
     echo
     echo "RADE V2 spot test helper script"
     echo
-    echo "  usage ./test/v2_spot.sh [--g_file file_name] [--EbNodB value] [rx2.sh options]"
+    echo "  usage ./test/v2_spot.sh [--g_file file_name] [--EbNodB value] [--prepend_noise Nsecs] [rx2.sh options]"
     echo "  for example:"
     echo "       ./test/v2_spot.sh "
     echo "       ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6 "
@@ -28,6 +28,11 @@ g_file=""
 a_g_file=""
 EbNodB=""
 a_EbNodB_value=""
+a_prepend_noise=1
+sine_amp=""
+a_sine_amp=""
+sine_freq=""
+a_sine_freq=""
 POSITIONAL=()
 while [[ $# -gt 0 ]]
 do
@@ -45,6 +50,23 @@ case $key in
         shift
         shift
     ;;
+    --prepend_noise)
+        a_prepend_noise="$2"	
+        shift
+        shift
+    ;;
+    --sine_amp)
+        sine_amp="--sine_amp"
+        a_sine_amp="$2"	
+        shift
+        shift
+    ;;
+    --sine_freq)
+        sine_freq="--sine_freq"
+        a_sine_freq="$2"	
+        shift
+        shift
+    ;;
     -h)
         print_help	
     ;;
@@ -58,7 +80,8 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 
 ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/all.wav /dev/null --rate_Fs --latent-dim 56 \
 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --write_rx 250725_rx.f32 \
---prepend_noise 1 --append_noise 2 --freq_offset 25 --correct_freq_offset $g_file $a_g_file $EbNodB $a_EbNodB_value
+--prepend_noise $a_prepend_noise --append_noise 2 --freq_offset 25 --correct_freq_offset \
+$g_file $a_g_file $EbNodB $a_EbNodB_value $sine_amp $a_sine_amp $sine_freq $a_sine_freq
 
 # debug tips:
 # 1) Use Octave to plot internal states, e.g. 

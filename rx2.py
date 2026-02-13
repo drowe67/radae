@@ -61,8 +61,8 @@ parser.add_argument('--stateful',  action='store_true', help='use stateful core 
 parser.add_argument('--xcorr_dimension', type=int, help='Dimension of Input cross-correlation (fine timing)',default = 160,required = False)
 parser.add_argument('--gru_dim', type=int, help='GRU Dimension (fine timing)',default = 64,required = False)
 parser.add_argument('--output_dim', type=int, help='Output dimension (fine timing)',default = 160,required = False)
-parser.add_argument('--write_Ry_norm', type=str, default="", help='path to normalised autocorrelation output feature file dim (seq_len,Ncp+M) .f32 format')
-parser.add_argument('--write_Ry_smooth', type=str, default="", help='path to smoothed autocorrelation output feature file dim (seq_len,Ncp+M) .f32 format')
+parser.add_argument('--write_Ry_norm', type=str, default="", help='path to normalised autocorrelation output feature file dim (seq_len,Ncp+M) .c64 format')
+parser.add_argument('--write_Ry_smooth', type=str, default="", help='path to smoothed autocorrelation output feature file dim (seq_len,Ncp+M) .c64 format')
 parser.add_argument('--write_delta_hat', type=str, default="", help='path to delta_hat output file dim (seq_len) in .int16 format')
 parser.add_argument('--write_delta_hat_pp', type=str, default="", help='path to delta_hat_pp output file dim (seq_len) in .int16 format')
 parser.add_argument('--write_Ry_max', type=str, default="", help='path to Ty_max output file dim (seq_len) in .f32 format')
@@ -271,6 +271,7 @@ rx_phase_vec = np.zeros(Ncp+M,np.csingle)
 Nframes = sequence_length//model.Ns
 z_hat = torch.zeros((1,sequence_length, model.latent_dim), dtype=torch.float32)
 i = 0
+n_acq = 0
 
 for s in np.arange(1,sequence_length):
 
@@ -284,6 +285,7 @@ for s in np.arange(1,sequence_length):
          if count == 5:
             next_state = "signal"
             count = 0
+            n_acq += 1
             if args.nofreq_offset:
                delta_phi = 0.
             else:
@@ -379,3 +381,5 @@ features_hat.tofile(args.features_hat)
 
 if len(args.write_latent):
    z_hat.cpu().detach().numpy().flatten().astype('float32').tofile(args.write_latent)
+
+print(f"n_acd: {n_acq:d}")
