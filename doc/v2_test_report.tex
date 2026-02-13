@@ -47,7 +47,19 @@ This document describes the tests performed on the prototype RADE V2 waveform, a
 
 \subsection{Acknowledgements}
 
-The RADE concept evolved from a discussion between Jean-Marc Valin and David Rowe, after which Jean-Marc quickly put together an initial proof-of-concept demo. Over a period of several months David built on this work to develop a practical over the air waveform for speech over HF radio channels. This waveform is denoted RADE V1. Mooneer Salem is handling integration of RADE V1 into the FreeDV GUI application. The FreeDV Project Leadership Team and many others have helped with support and testing. The contributions from David, Mooneer and the FreeDV PLT was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
+The RADE concept evolved from a discussion between Jean-Marc Valin and David Rowe, after which Jean-Marc quickly put together an initial proof-of-concept demo. Over a period of several months David built on this work to develop a practical over the air waveform for speech over HF radio channels. This waveform is denoted RADE V1. 
+Over the course of 2025 and early 2026 David worked on developing RADEV2, which has several novel innovations:
+\begin{itemize}
+\item Using ML to handle HF channel phase distortion, fine frequency offsets, and small timing estimates.
+\item No pilot or unique word symbols.
+\item A $N_c=14$ waveform with a 800 \si{Hz} 99\% occupied bandwidth (OBW).
+\item PAPR set by a filter inside the encoder.
+\item Low latency frame of around 40 \si{ms}.
+\item ML based frame sync, rather than pilot symbols.
+\end{itemize}
+Jean-Marc again assisted with suggestion for timing estimation and frequency offset estimation.
+
+The FreeDV Project Leadership Team and many others have helped with support and testing. The contributions from David, Mooneer and the FreeDV PLT was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
 
 \section{Feb 2026 Test Results}
 
@@ -69,7 +81,7 @@ The RADE concept evolved from a discussion between Jean-Marc Valin and David Row
 
 \subsection{Overall Performance}
 
-The script \emph{./compare\_models\_inf.sh -p 260203\_inf} was used to generate loss versus SNR curves for the following conditions:
+The script \emph{./compare\_models\_inf.sh -p 260203\_inf} was used to generate loss versus SNR/PNR curves (plotted in Figure \ref{fig:260203_inf_loss_SNR3k_models}) for the following conditions:
 \begin{itemize}
 \item RADE V1 AWGN and MPP channels.
 \item RADE V2 with no timing estimator, state machine, of frequency offset estimator (Genie V2) using \emph{inference.sh}.
@@ -77,7 +89,8 @@ The script \emph{./compare\_models\_inf.sh -p 260203\_inf} was used to generate 
 \end{itemize}
 
 The RADE V1 simulation is run using the \emph{inference.sh} script with phase equalisation but without timing estimation.  Spot checks of RADE V1 indicate this has no measurable affect on loss versus SNR.  The V2 curves with and without estimators are coincident, showing the estimator algorithms have a small impact on performance.  The high SNR on the green V2 curve at less than -1 \si{dB} is a measurement artefact due to the state machine falling out of sync at low SNRs; decoded audio is still possible as it recovers and re-syncs.
-Looking at the AWGN curves on the loss versus SNR plot, for any SNR above 5 \si{dB}, the loss of V2 is less than V1. Taking into account the PAPR gains (loss versus PNR curve), gains over V1 of approximately 3 \si{dB} can be observed at low PNRs on the MPP curves.
+Looking at the AWGN curves on the loss versus SNR plot, for any SNR above 5 \si{dB}, the loss of V2 is less than V1.
+The performance target for V2 was 3 \si{dB} over V1. Taking into account the PAPR gains (loss versus PNR curve), gains over V1 of approximately 3 \si{dB} can be observed at low PNRs on the MPP curves.
 
 \begin{figure}[h]
 \caption{Loss versus SNR and PNR for various RADE V1, and RADE V2 with and without estimators.}
@@ -90,7 +103,7 @@ Looking at the AWGN curves on the loss versus SNR plot, for any SNR above 5 \si{
 
 \subsection{AGC}
 
-The script \emph{./compare\_models\_inf.sh -p 260206\_inf} was used to generate loss versus SNR curves for 3 AGC conditions on the MPP channel:
+The script \emph{./compare\_models\_inf.sh -p 260206\_inf} was used to generate loss versus SNR curves for 3 AGC conditions (plotted in Figure \ref{fig:260206_inf_loss_SNR3k_models}) on the worst case MPP channel:
 \begin{enumerate}
 \item Baseline with no AGC.
 \item AGC enabled with +10 \si{dB} gain.
@@ -108,7 +121,7 @@ The AGC curves are coincident with the baseline curve, indicating AGC has a smal
 
 \subsection{Acquisition}
 
-Testing acquisition time using \emph{v2\_spot.sh}. Note we prepend 1 second of silence in these tests which is subtracted for the reported \emph{acq\_time} to obtain the results in the Table \ref{tab:time_to_acq}.  Acquisition time is longer as SNR drops, which is quite acceptable.  High SNR acquisition time on a good channel of 200 \si{ms} is a little slow (similar to RADE V1) given the latency of 40 \si{ms} so as further work it would be nice to improve this.  This is partially due to state machine design that is optimised for low SNR channels.  It maybe possible to modify the state machine to transition quickly if the probability of a valid signal is high.
+Acquisition time was characterised using \emph{v2\_spot.sh}. Note we prepend 1 second of silence in these tests which is subtracted for the reported \emph{acq\_time} to obtain the results in the Table \ref{tab:time_to_acq}.  Acquisition time becomes longer as SNR drops, which is quite acceptable.  High SNR acquisition time on a good channel of 200 \si{ms} is usable (similar to RADE V1) but a little slow given the latency of 40 \si{ms} so as further work it would be nice to improve this.  This is partially due to state machine design that is optimised for low SNR channels.  It maybe possible to modify the state machine to transition quickly if the probability of a valid signal is high, for example sum the probabilities until a threshold is reached rather than waiting $n$ symbols.
 
 \begin{table} [h]
 \caption{Time to acquisition $T_{aq}$.}
@@ -116,7 +129,7 @@ Testing acquisition time using \emph{v2\_spot.sh}. Note we prepend 1 second of s
 \centering
 \begin{tabular}{ c | c | r | r }
  \hline
- Channel & EbNodB & SNR & $T_{aq}$ (ms) \\
+ Channel & EbNodB & SNR (\si{dB}) & $T_{aq}$ (ms) \\
  \hline
  AWGN & 100 & 100 & 200 \\
  AWGN & 10 & 3.56 &  240 \\
@@ -127,10 +140,40 @@ Testing acquisition time using \emph{v2\_spot.sh}. Note we prepend 1 second of s
 \end{tabular}
 \end{table}
 
-\subsection{MPD results}
+The probability of false acquisition on noise was tested using \emph{v2\_acq.sh} which plays 600 seconds (10 minutes) of AWGN noise into the \emph{rx2.sh} receiver.  Over several runs there were zero acquisitions in 10 minutes giving mean time to false acquisition $T_{false} > 600 \si{s}$.
+
+The probability of fasle acquisition of noise plus an additive sine wave was also tested with \emph{v2\_acq.sh} using the \emph{--sine} option.  This tests the tendency of the receiver to start decoding audio when there is a carrier wave (e.g a station tuning up) and no valid signal.  A 10 second file of a 1000 Hz sine wave plus noise caused an immediate acquisition, which is a solid fail.  Further work is required to fix this issue and prevent acquisition on sine waves.  Some insight was obtained from a mesh plot of the \emph{Ry\_smooth} surface, which was quite uniform compared to a valid signal.  It may be possible to discard signals based on the surface shape.
+
+\subsection{AWGN, MPP and MPD results}
+
+We would like RADE V2 to successfully decode speech sent over Multipath Disturbed (MPD) channels, which have a Doppler of 2 \si{Hz} and Delay of 4 \si{ms}. Some additional loss over MPP is acceptable (e.g. equivalent to a few more \si{dB} for maintaining a constant loss), but complete breakdown is not.  The \emph{v2\_spot.sh} tool was used, and the loss from the \emph{rx2.sh} stage reported in Table \ref{tab:loss_by_channel}.  Both the loss and the decoded speech from the MPD channels was quite acceptable, meeting them requirements.
+ 
+\begin{table} [h]
+\caption{Loss by channel}
+\label{tab:loss_by_channel}
+\centering
+\begin{tabular}{ c | c | r | r }
+ \hline
+ Channel & EbNodB & SNR (\si{dB}) & Loss \\
+ \hline
+ AWGN & 100 & 100 & 200 \\
+ AWGN & 10 & 3.56 & 0.080 \\
+ MPP & 100 & 100 &  0.104\\
+ MPP & 10 & 3.56 & 0.182 \\
+ MPD & 100 & 100 & 0.107 \\
+ MPD & 10 &  3.56 & 0.193 \\
+ \hline
+\end{tabular}
+\end{table}
+
+TODO: Test acquisition and decode with an additive sine wave present, at x dB dBC.  Should still acquire, OK if some hit in performance.
 
 \section{Conclusion}
 
 Present test results against requirements.
 
+Further work:
+\begin{enumerate}
+\item False acquisition on noise 
+\end{enumerate}
 \end{document}
