@@ -47,6 +47,16 @@ jobs:
           cmake -DUNITTEST=1 ..
           make ch mksine tlininterp
 
+      - name: Install radae_nopy
+        shell: bash
+        working-directory: ${{github.workspace}}
+        run: |
+          git clone https://github.com/drowe67/radae_nopy.git
+          cd radae_nopy
+          mkdir build
+          cd build
+          cmake ..
+          make
 
       - name: build radae
         shell: bash
@@ -54,11 +64,11 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake ..
+          cmake -DRADAE_NOPY_BUILD_DIR=${{github.workspace}}/radae_nopy/build ..
           make
 
       - name: run ctests
         shell: bash
         working-directory: ${{github.workspace}}/radae/build
         run: |
-          ctest -V --output-on-failure
+          ctest -V --output-on-failure -R radae_nopy
