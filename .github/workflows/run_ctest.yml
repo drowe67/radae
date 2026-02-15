@@ -49,7 +49,7 @@ jobs:
 
       - name: Install radae_nopy
         shell: bash
-        working-directory: /home/runner/
+        working-directory: ${{github.workspace}}
         run: |
           git clone https://github.com/drowe67/radae_nopy.git
           cd radae_nopy
@@ -64,7 +64,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake ..
+          cmake -DRADAE_NOPY_BUILD_DIR=${{github.workspace}/radae_nopy/build ..
           make
 
       - name: run ctests
