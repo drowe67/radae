@@ -64,7 +64,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -DRADAE_NOPY_BUILD_DIR=${{github.workspace}/radae_nopy/build ..
+          cmake -DRADAE_NOPY_BUILD_DIR=${{github.workspace}}/radae_nopy/build ..
           make
 
       - name: run ctests
