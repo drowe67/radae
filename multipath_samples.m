@@ -12,6 +12,8 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="",H_complex=0)
         dopplerSpreadHz = 0.1; path_delay_s = 0.5E-3;
     elseif strcmp(ch,"mpp")
         dopplerSpreadHz = 1.0; path_delay_s = 2E-3;
+    elseif strcmp(ch,"mppa")
+        dopplerSpreadHz = 1.0; path_delay_s = 3E-3;
     elseif strcmp(ch,"mpd")
         dopplerSpreadHz = 2.0; path_delay_s = 4E-3;
     elseif strcmp(ch,"lmr60")
@@ -19,16 +21,28 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="",H_complex=0)
         fd = 450E6*(60*1E3/3600/3E8)
         dopplerSpreadHz = 2*fd;
         path_delay_s = 200E-6
+    elseif strcmp(ch,"mpp_low")
+        % test case at one end of MPP channel delay spread
+        dopplerSpreadHz = 0.0; path_delay_s = 2E-3;
+        G1 = ones(nsam,1); G2 = zeros(nsam,1);
+    elseif strcmp(ch,"mpp_high")
+        % test case at other end of MPP channel delay spread
+        dopplerSpreadHz = 0.0; path_delay_s = 2E-3;
+        G1 = zeros(nsam,1); G2 = ones(nsam,1);
     else
         printf("Unknown channel type!")
         return
     end
         
-    G1 = doppler_spread(dopplerSpreadHz, Fs, nsam).';
-    G2 = doppler_spread(dopplerSpreadHz, Fs, nsam).';
-    
-    % approximation to normalise power through HF channel
-    hf_gain = 1.0/sqrt(var(G1)+var(G2));
+    hf_gain = 1;
+    if dopplerSpreadHz
+      G1 = doppler_spread(dopplerSpreadHz, Fs, nsam).';
+      G2 = doppler_spread(dopplerSpreadHz, Fs, nsam).';
+      % approximation to normalise power through HF channel
+      hf_gain = 1.0/sqrt(var(G1)+var(G2));
+    end
+
+    printf("dopplerSpreadHz: %5.2f path_delay_s: %f hf_gain: %f\n",dopplerSpreadHz, path_delay_s,  hf_gain);
 
     % H matrix of magnitude samples, timesteps along rows, carrier alongs cols
     % sampled at rate Rs (one sample per symbol).
@@ -67,22 +81,25 @@ function multipath_samples(ch, Fs, Rs, Nc, Nseconds, H_fn, G_fn="",H_complex=0)
     else
       bytes_per_sample = 4
     end
-    printf("H file size is Nseconds*Rs*Nc*(%d bytes/sample) = %d*%d*%d*%d = %d bytes\n", bytes_per_sample,
-           Nseconds,Rs,Nc,bytes_per_sample, Nseconds*Rs*Nc*bytes_per_sample)
-    f=fopen(H_fn,"wb");
-    [r c] = size(H);
-    Hflat = reshape(H', 1, r*c);
-    if H_complex
-      tmp = zeros(2*length(Hflat),1);
-      tmp(1:2:end) = real(Hflat);
-      tmp(2:2:end) = imag(Hflat);
-      Hflat = tmp;
-    else
-      Hflat = abs(Hflat);
+    if length(H_fn)
+      printf("H file size is Nseconds*Rs*Nc*(%d bytes/sample) = %d*%d*%d*%d = %d bytes\n", bytes_per_sample,
+              Nseconds,Rs,Nc,bytes_per_sample, Nseconds*Rs*Nc*bytes_per_sample)
+      f=fopen(H_fn,"wb");
+      [r c] = size(H);
+      % non conjugation transpose first to get row major order in reshape 
+      Hflat = reshape(H.', 1, r*c);
+      if H_complex
+        tmp = zeros(2*length(Hflat),1);
+        tmp(1:2:end) = real(Hflat);
+        tmp(2:2:end) = imag(Hflat);
+        Hflat = tmp;
+      else
+        Hflat = abs(Hflat);
+      end
+      fwrite(f, Hflat, 'float32');
+      fclose(f);
     end
-    fwrite(f, Hflat, 'float32');
-    fclose(f);
-
+    
     if length(G_fn)
         % G matrix cols are G1 G2, rows timesteps, with hf_gain the first row,
         % stored as flat ...G1G2G1G2... complex samples 

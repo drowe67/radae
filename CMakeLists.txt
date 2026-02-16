@@ -176,13 +176,13 @@ add_test(NAME chirp_mpp
 # Low SNR ota_test.sh, with chirp measurement, AWGN
 add_test(NAME ota_test_awgn
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./test/ota_test_cal.sh ${CODEC2_DEV_BUILD_DIR} -21 0.4")
+                       ./test/ota_test_cal.sh ${CODEC2_DEV_BUILD_DIR} -24 0.4")
 
 # Low SNR ota_test.sh, with chirp measurement, MPP, high loss threshold as we only care about gross errors,
 # like stuck in false sync
 add_test(NAME ota_test_mpp
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./test/ota_test_cal.sh ${CODEC2_DEV_BUILD_DIR} -24 0.4 --mpp --freq -25")
+                       ./test/ota_test_cal.sh ${CODEC2_DEV_BUILD_DIR} -30 0.4 --mpp --freq -25")
 
 
 # Acquisition tests ------------------------------------------------------------------------------------
@@ -383,7 +383,7 @@ add_test(NAME radae_rx_dfs
 
 # Test ability to handle buffer slips due to sample clock offsets, rx ADC clock > tx ADC clock.  We make sample clock error larger than 200ppm spec
 # in order to exercise code.  Nice thing about "nin" design is it allows us to get meaningful "loss.py" results, ie no frames are lost.  We're
-# really just trying to exercise the slip code here, not too cocnerned about loss.  There should be a noticable transition in tmax in each test as
+# really just trying to exercise the slip code here, not too concerned about loss.  There should be a noticable transition in tmax in each test as
 # it hits the upper or lower limit
 add_test(NAME radae_rx_slip_plus
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
@@ -572,7 +572,7 @@ add_test(NAME c_decoder_aux_mpp
 
 # EOO data -------------------------------------------------------------------------------------------
 
-# Pythion Tx & Rx, no noise
+# Python Tx & Rx, no noise
 add_test(NAME radae_eoo_data_py
         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
                        ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
@@ -640,3 +640,73 @@ add_test(NAME bbfm_sc_bpf_loss
                        python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_rx_out.f32 --compare")
                        set_tests_properties(bbfm_sc_bpf_loss PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# RADE V2 -----------------------------------------------------------------------------------------------
+
+# rx2.sh "4 point" tests
+add_test(NAME v2_rx2_awgn_high
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       ./test/v2_spot.sh")
+         set_tests_properties(v2_rx2_awgn_high PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_rx2_awgn_low
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.03 ./test/v2_spot.sh --EbNodB 1")
+         set_tests_properties(v2_rx2_awgn_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_rx2_mpp_high
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       ./test/v2_spot.sh --g_file g_mpp.f32")
+         set_tests_properties(v2_rx2_mpp_high PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_rx2_mpp_low
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.03 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6")
+         set_tests_properties(v2_rx2_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+        
+# repeat v2_rx2_mpp_low with 20ms (half frame) time shift to repeat last test with opposite frame sync
+# to visualise FS metrics:
+# octave:377>  figure(4); frame_sync=load_f32('frame_sync.f32',2); plot(frame_sync(:,1)); hold on; plot(frame_sync(:,2)); hold off;
+add_test(NAME v2_rx2_oppfs
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.03 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6 --prepend_noise 0.98")
+         set_tests_properties(v2_rx2_oppfs PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# tests to exercise limits of timing est to decoder interface (Jan 2026 timing corner case)
+# we allow a little bit of extra loss at limits (delta=0.05), but want to trap a complete breakdown (like frame sync failing)
+
+add_test(NAME v2_timing_low_delta1
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh;
+                       delta=0.05 ./test/v2_timing.sh --g_file g_mpp_low.f32 --correct_time_offset -8 --fix_delta_hat 32 --quiet")
+         set_tests_properties(v2_timing_low_delta1 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_timing_low_delta2
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.05 ./test/v2_timing.sh --g_file g_mpp_low.f32 --correct_time_offset -8 --fix_delta_hat 48 --quiet")
+         set_tests_properties(v2_timing_low_delta2 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_timing_high_delta1
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.05 ./test/v2_timing.sh --g_file g_mpp_high.f32 --correct_time_offset -8 --fix_delta_hat 32 --quiet")
+         set_tests_properties(v2_timing_high_delta1 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_timing_high_delta2
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.05 ./test/v2_timing.sh --g_file g_mpp_high.f32 --correct_time_offset -8 --fix_delta_hat 48 --quiet")
+         set_tests_properties(v2_timing_high_delta2 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# spot checks with AGC
+
+add_test(NAME v2_rx2_agc_mpp_high
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       ./test/v2_spot.sh --g_file g_mpp.f32 --agc --gain 4")
+         set_tests_properties(v2_rx2_mpp_high PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_rx2_agc_mpp_low
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.03 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6 --agc --gain 0.25")
+         set_tests_properties(v2_rx2_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# rx2.sh with complex->real conversions, `ch` tool, and --agc, high SNR, note --gain need to get us in ballpark
+add_test(NAME v2_rx2_ch
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
+                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
+                       --ssb_bpf --write_rx brian_tx.f32; \
+         cat brian_tx.f32 | python3 f32toint16.py --real --scale 16383 | ~/codec2-dev/build_linux/src/ch - - | python3 int16tof32.py --zeropad > brian_rx.f32
+         ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725_ml_sync brian_rx.f32 /dev/null \
+         --latent-dim 56 --w1_dec 128 --agc --quiet --write_gain_smooth gain.f32 --gain 1.22E-4; \
+         python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 50 --clip_end 50")
+         set_tests_properties(v2_rx2_ch PROPERTIES PASS_REGULAR_EXPRESSION "PASS")

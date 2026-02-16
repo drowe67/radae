@@ -62,7 +62,7 @@ class complex_bpf():
 
    def bpf(self, x):
       n = len(x)
-
+      
       # Make sure length is less than the filter length
       assert(n <= self.n)
 

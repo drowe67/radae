@@ -47,7 +47,7 @@ def noise_quantize(x):
 
 
 # loss functions for vocoder features
-def distortion_loss(y_true, y_pred):
+def distortion_loss(y_true, y_pred, PAPR=0, peak_power=None):
 
     if y_true.size(-1) != 20 and y_true.size(-1) != 21:
         raise ValueError('distortion loss is designed to work with 20 or 21 features')
@@ -59,8 +59,10 @@ def distortion_loss(y_true, y_pred):
     data_error = 0
     if y_true.size(-1) == 21:
         data_error = y_pred[..., 20:21] - y_true[..., 20:21]
-    loss = torch.mean(ceps_error ** 2 + 3. * (10/18) * torch.abs(pitch_error) * pitch_weight + (1/18) * corr_error ** 2 + (0.5/18)*data_error ** 2, dim=-1)
-    loss = torch.mean(loss, dim=-1)
+    loss = torch.mean(ceps_error ** 2 + 3. * (10/18) * torch.abs(pitch_error) * pitch_weight + (1/18) * corr_error ** 2 + (0.25/18)*data_error ** 2, dim=-1)
+    loss = torch.mean(loss, dim=-1) + (0.125/18)*PAPR
+    if peak_power is not None:
+       loss = loss + (1.-peak_power)**2
 
     # reduce bias towards lower Eb/No when training over a range of Eb/No
     #loss = torch.mean(torch.sqrt(torch.mean(loss, dim=1)))
@@ -82,15 +84,16 @@ def n(x):
 
 #Wrapper for 1D conv layer
 class MyConv(nn.Module):
-    def __init__(self, input_dim, output_dim, dilation=1):
+    def __init__(self, input_dim, output_dim, dilation=1, kernel_size=2):
         super(MyConv, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.dilation=dilation
-        self.conv = nn.Conv1d(input_dim, output_dim, kernel_size=2, padding='valid', dilation=dilation)
+        self.kernel_size = kernel_size
+        self.conv = nn.Conv1d(input_dim, output_dim, kernel_size, padding='valid', dilation=dilation)
     def forward(self, x, state=None):
         device = x.device
-        conv_in = torch.cat([torch.zeros_like(x[:,0:self.dilation,:], device=device), x], -2).permute(0, 2, 1)
+        conv_in = torch.cat([torch.zeros_like(x[:,0:(self.dilation)*(self.kernel_size-1),:], device=device), x], -2).permute(0, 2, 1)
         return torch.tanh(self.conv(conv_in)).permute(0, 2, 1)
 
 # Wrapper for GRU layer that maintains state internally
@@ -155,9 +158,8 @@ class GLU(nn.Module):
 
 #Encoder takes input features and computes symbols to be transmitted
 class CoreEncoder(nn.Module):
-    FRAMES_PER_STEP = 4
 
-    def __init__(self, feature_dim, output_dim, bottleneck = 1):
+    def __init__(self, feature_dim, output_dim, bottleneck = 1, frames_per_step=4, w1 = 64, w2 = 96):
 
         super(CoreEncoder, self).__init__()
 
@@ -165,27 +167,29 @@ class CoreEncoder(nn.Module):
         self.feature_dim        = feature_dim
         self.output_dim         = output_dim
         self.bottleneck         = bottleneck
-        
+        self.frames_per_step   = frames_per_step
+
         # derived parameters
-        self.input_dim = self.FRAMES_PER_STEP * self.feature_dim
+        self.input_dim = self. frames_per_step * self.feature_dim
+        kernel = 2
 
         # Layers are organized like a DenseNet
-        self.dense_1 = nn.Linear(self.input_dim, 64)
-        self.gru1 = nn.GRU(64, 64, batch_first=True)
-        self.conv1 = MyConv(128, 96)
-        self.gru2 = nn.GRU(224, 64, batch_first=True)
-        self.conv2 = MyConv(288, 96, dilation=2)
-        self.gru3 = nn.GRU(384, 64, batch_first=True)
-        self.conv3 = MyConv(448, 96, dilation=2)
-        self.gru4 = nn.GRU(544, 64, batch_first=True)
-        self.conv4 = MyConv(608, 96, dilation=2)
-        self.gru5 = nn.GRU(704, 64, batch_first=True)
-        self.conv5 = MyConv(768, 96, dilation=2)
+        self.dense_1 = nn.Linear(self.input_dim, w1)
+        self.gru1 = nn.GRU(w1, w1, batch_first=True)
+        self.conv1 = MyConv(2*w1, w2, kernel_size=kernel)
+        self.gru2 = nn.GRU(2*w1+w2, w1, batch_first=True)
+        self.conv2 = MyConv(3*w1+w2, w2, dilation=2, kernel_size=kernel)
+        self.gru3 = nn.GRU(3*w1+2*w2, w1, batch_first=True)
+        self.conv3 = MyConv(4*w1+2*w2, w2, dilation=2, kernel_size=kernel)
+        self.gru4 = nn.GRU(4*w1+3*w2, w1, batch_first=True)
+        self.conv4 = MyConv(5*w1+3*w2, w2, dilation=2, kernel_size=kernel)
+        self.gru5 = nn.GRU(5*w1+4*w2, w1, batch_first=True)
+        self.conv5 = MyConv(6*w1+4*w2, w2, dilation=2, kernel_size=kernel)
 
-        self.z_dense = nn.Linear(864, self.output_dim)
+        self.z_dense = nn.Linear(6*w1+5*w2, self.output_dim)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        #print(f"encoder: {nb_params} weights", file=sys.stderr)
+        print(f"encoder: {nb_params:d}",file=sys.stderr)
 
         # initialize weights
         self.apply(init_weights)
@@ -196,7 +200,7 @@ class CoreEncoder(nn.Module):
         # Groups FRAMES_PER_STEP frames together in one bunch -- equivalent
         # to a learned transform of size FRAMES_PER_STEP across time. Outputs
         # fewer vectors than the input has because of that
-        x = torch.reshape(features, (features.size(0), features.size(1) // self.FRAMES_PER_STEP, self.FRAMES_PER_STEP * features.size(2)))
+        x = torch.reshape(features, (features.size(0), features.size(1) // self.frames_per_step, self.frames_per_step * features.size(2)))
 
         # run encoding layer stack
         x = n(torch.tanh(self.dense_1(x)))
@@ -221,9 +225,8 @@ class CoreEncoder(nn.Module):
 
 # Stateful version of Encoder
 class CoreEncoderStatefull(nn.Module):
-    FRAMES_PER_STEP = 4
 
-    def __init__(self, feature_dim, output_dim, bottleneck = 1):
+    def __init__(self, feature_dim, output_dim, bottleneck = 1, frames_per_step = 4):
 
         super(CoreEncoderStatefull, self).__init__()
 
@@ -231,9 +234,10 @@ class CoreEncoderStatefull(nn.Module):
         self.feature_dim        = feature_dim
         self.output_dim         = output_dim
         self.bottleneck         = bottleneck
-        
+        self.frames_per_step   = frames_per_step
+       
         # derived parameters
-        self.input_dim = self.FRAMES_PER_STEP * self.feature_dim
+        self.input_dim = self.frames_per_step * self.feature_dim
 
         # Layers are organized like a DenseNet
         self.dense_1 = nn.Linear(self.input_dim, 64)
@@ -251,8 +255,7 @@ class CoreEncoderStatefull(nn.Module):
         self.z_dense = nn.Linear(864, self.output_dim)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        #print(f"encoder: {nb_params} weights", file=sys.stderr)
-
+ 
         # initialize weights
         self.apply(init_weights)
 
@@ -262,7 +265,7 @@ class CoreEncoderStatefull(nn.Module):
         # Groups FRAMES_PER_STEP frames together in one bunch -- equivalent
         # to a learned transform of size FRAMES_PER_STEP across time. Outputs
         # fewer vectors than the input has because of that
-        x = torch.reshape(features, (features.size(0), features.size(1) // self.FRAMES_PER_STEP, self.FRAMES_PER_STEP * features.size(2)))
+        x = torch.reshape(features, (features.size(0), features.size(1) // self.frames_per_step, self.frames_per_step * features.size(2)))
 
         # run encoding layer stack
         x = n(torch.tanh(self.dense_1(x)))
@@ -290,43 +293,39 @@ class CoreEncoderStatefull(nn.Module):
 #Decode symbols to reconstruct the vocoder features
 class CoreDecoder(nn.Module):
 
-    FRAMES_PER_STEP = 4
-
-    def __init__(self, input_dim, output_dim):
-        """ core decoder for RADAE
-
-            Computes features from latents, initial state, and quantization index
-
-        """
-
+    def __init__(self, input_dim, output_dim, frames_per_step=4, w1=96, w2=32):
+ 
         super(CoreDecoder, self).__init__()
 
         # hyper parameters
         self.input_dim  = input_dim
         self.output_dim = output_dim
         self.input_size = self.input_dim
+        self.frames_per_step = frames_per_step
+        kernel = 2
 
         # Layers are organized like a DenseNet
-        self.dense_1    = nn.Linear(self.input_size, 96)
-        self.gru1 = nn.GRU(96, 96, batch_first=True)
-        self.conv1 = MyConv(192, 32)
-        self.gru2 = nn.GRU(224, 96, batch_first=True)
-        self.conv2 = MyConv(320, 32)
-        self.gru3 = nn.GRU(352, 96, batch_first=True)
-        self.conv3 = MyConv(448, 32)
-        self.gru4 = nn.GRU(480, 96, batch_first=True)
-        self.conv4 = MyConv(576, 32)
-        self.gru5 = nn.GRU(608, 96, batch_first=True)
-        self.conv5 = MyConv(704, 32)
-        self.output  = nn.Linear(736, self.FRAMES_PER_STEP * self.output_dim)
-        self.glu1 = GLU(96)
-        self.glu2 = GLU(96)
-        self.glu3 = GLU(96)
-        self.glu4 = GLU(96)
-        self.glu5 = GLU(96)
+        self.dense_1 = nn.Linear(self.input_size, w1)
+        self.gru1 = nn.GRU(w1, w1, batch_first=True)
+        self.conv1 = MyConv(2*w1, w2, kernel_size=kernel)
+        self.gru2 = nn.GRU(2*w1+w2, w1, batch_first=True)
+        self.conv2 = MyConv(3*w1+w2, w2, kernel_size=kernel)
+        self.gru3 = nn.GRU(3*w1+2*w2, w1, batch_first=True)
+        self.conv3 = MyConv(4*w1+2*w2, w2, kernel_size=kernel)
+        self.gru4 = nn.GRU(4*w1+3*w2, w1, batch_first=True)
+        self.conv4 = MyConv(5*w1+3*w2, w2, kernel_size=kernel)
+        self.gru5 = nn.GRU(5*w1+4*w2, w1, batch_first=True)
+        self.conv5 = MyConv(6*w1+4*w2, w2, kernel_size=kernel)
+        self.output  = nn.Linear(6*w1+5*w2, self.frames_per_step * self.output_dim)
+        self.glu1 = GLU(w1)
+        self.glu2 = GLU(w1)
+        self.glu3 = GLU(w1)
+        self.glu4 = GLU(w1)
+        self.glu5 = GLU(w1)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        #print(f"decoder: {nb_params} weights", file=sys.stderr)
+        print(f"decoder: {nb_params:d}",file=sys.stderr)
+
         # initialize weights
         self.apply(init_weights)
 
@@ -349,7 +348,7 @@ class CoreDecoder(nn.Module):
         # output layer and reshaping. We produce FRAMES_PER_STEP vocoder feature
         # vectors for every decoded vector of symbols
         x10 = self.output(x)
-        features = torch.reshape(x10, (x10.size(0), x10.size(1) * self.FRAMES_PER_STEP, x10.size(2) // self.FRAMES_PER_STEP))
+        features = torch.reshape(x10, (x10.size(0), x10.size(1) * self.frames_per_step, x10.size(2) // self.frames_per_step))
 
         return features
 
@@ -357,14 +356,7 @@ class CoreDecoder(nn.Module):
 # as short as one z vector, and maintains it's own internal state
 class CoreDecoderStatefull(nn.Module):
 
-    FRAMES_PER_STEP = 4
-
-    def __init__(self, input_dim, output_dim):
-        """ core decoder for RADAE
-
-            Computes features from latent z
-
-        """
+    def __init__(self, input_dim, output_dim, frames_per_step = 4):
 
         super(CoreDecoderStatefull, self).__init__()
 
@@ -372,6 +364,7 @@ class CoreDecoderStatefull(nn.Module):
         self.input_dim  = input_dim
         self.output_dim = output_dim
         self.input_size = self.input_dim
+        self.frames_per_step = frames_per_step
 
         # Layers are organized like a DenseNet
         self.dense_1    = nn.Linear(self.input_size, 96)
@@ -385,7 +378,7 @@ class CoreDecoderStatefull(nn.Module):
         self.conv4 = Conv1DStatefull(576, 32)
         self.gru5 = GRUStatefull(608, 96, batch_first=True)
         self.conv5 = Conv1DStatefull(704, 32)
-        self.output  = nn.Linear(736, self.FRAMES_PER_STEP * self.output_dim)
+        self.output  = nn.Linear(736, self.frames_per_step * self.output_dim)
         self.glu1 = GLU(96)
         self.glu2 = GLU(96)
         self.glu3 = GLU(96)
@@ -393,7 +386,6 @@ class CoreDecoderStatefull(nn.Module):
         self.glu5 = GLU(96)
 
         nb_params = sum(p.numel() for p in self.parameters())
-        #print(f"decoder: {nb_params} weights", file=sys.stderr)
         # initialize weights
         self.apply(init_weights)
 
@@ -412,7 +404,7 @@ class CoreDecoderStatefull(nn.Module):
         x = torch.cat([x, n(self.conv5(x))], -1)
         x = self.output(x)
 
-        features = torch.reshape(x,(1,z.shape[1]*self.FRAMES_PER_STEP,self.output_dim))
+        features = torch.reshape(x,(1,z.shape[1]*self.frames_per_step,self.output_dim))
         return features
 
     def reset(self):

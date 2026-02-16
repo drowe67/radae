@@ -43,6 +43,7 @@ from torch.nn.utils.parametrizations import weight_norm
 from matplotlib import pyplot as plt
 from collections import OrderedDict
 from . import radae_base
+from . import dsp
 
 # Generate pilots using Barker codes which have good correlation properties
 def barker_pilots(Nc):
@@ -80,7 +81,21 @@ class RADAE(nn.Module):
                  time_offset = 0,
                  coarse_mag = False,
                  correct_freq_offset = False,
-                 stateful_decoder = False
+                 stateful_decoder = False,
+                 txbpf_en = False,
+                 pilots2 = False,
+                 timing_rand = False,
+                 correct_time_offset = False,
+                 tanh_clipper = False,
+                 frames_per_step = 4,
+                 Nzmf = 3,                      # number of latent vectors in a modem frame
+                 ssb_bpf = False,
+                 w1_enc = 64,
+                 w2_enc = 96,
+                 w1_dec = 96,
+                 w2_dec = 32,
+                 peak = False,
+                 timing_jitter = 0.001
                 ):
 
         super(RADAE, self).__init__()
@@ -93,7 +108,7 @@ class RADAE(nn.Module):
         self.ber_test = ber_test
         self.multipath_delay = multipath_delay 
         self.rate_Fs = rate_Fs
-        assert bottleneck == 1 or bottleneck == 2 or bottleneck == 3
+        #assert bottleneck == 1 or bottleneck == 2 or bottleneck == 3
         self.bottleneck = bottleneck
         self.phase_offset = phase_offset
         self.freq_offset = freq_offset
@@ -110,17 +125,25 @@ class RADAE(nn.Module):
         self.coarse_mag = coarse_mag
         self.correct_freq_offset = correct_freq_offset
         self.stateful_decoder = stateful_decoder
+        self.txbpf_en = txbpf_en
+        self.pilots2 = pilots2
+        self.timing_rand = timing_rand
+        self.correct_time_offset = correct_time_offset
+        self.tanh_clipper = tanh_clipper
+        self.ssb_bpf = ssb_bpf
+        self.peak = peak
+        self.timing_jitter = timing_jitter
 
         # TODO: nn.DataParallel() shouldn't be needed
-        self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck))
-        self.core_decoder =  nn.DataParallel(radae_base.CoreDecoder(latent_dim, feature_dim))
-        self.core_encoder_statefull =  nn.DataParallel(radae_base.CoreEncoderStatefull(feature_dim, latent_dim, bottleneck=bottleneck))
-        self.core_decoder_statefull =  nn.DataParallel(radae_base.CoreDecoderStatefull(latent_dim, feature_dim))
+        self.core_encoder =  nn.DataParallel(radae_base.CoreEncoder(feature_dim, latent_dim, bottleneck=bottleneck, frames_per_step=frames_per_step, w1=w1_enc, w2=w2_enc))
+        self.core_decoder =  nn.DataParallel(radae_base.CoreDecoder(latent_dim, feature_dim, frames_per_step=frames_per_step, w1=w1_dec, w2=w2_dec))
+        self.core_encoder_statefull =  nn.DataParallel(radae_base.CoreEncoderStatefull(feature_dim, latent_dim, bottleneck=bottleneck, frames_per_step=frames_per_step))
+        self.core_decoder_statefull =  nn.DataParallel(radae_base.CoreDecoderStatefull(latent_dim, feature_dim, frames_per_step=frames_per_step))
         #self.core_encoder = CoreEncoder(feature_dim, latent_dim)
         #self.core_decoder = CoreDecoder(latent_dim, feature_dim)
 
-        self.enc_stride = radae_base.CoreEncoder.FRAMES_PER_STEP
-        self.dec_stride = radae_base.CoreDecoder.FRAMES_PER_STEP
+        self.enc_stride = frames_per_step
+        self.dec_stride = frames_per_step
 
         if self.dec_stride % self.enc_stride != 0:
             raise ValueError(f"get_decoder_chunks_generic: encoder stride does not divide decoder stride")
@@ -139,7 +162,6 @@ class RADAE(nn.Module):
         else:
             Ts = 0.02
         Rs = 1/Ts                                       # OFDM QPSK symbol rate
-        Nzmf = 3                                        # number of latent vectors in a modem frame
         Nsmf = Nzmf*self.latent_dim // bps              # total number of QPSK symbols in a modem frame across all carriers
         
         Ns = int(Nzmf*self.Tz / Ts)                     # duration of "modem frame" in QPSK symbols
@@ -199,7 +221,7 @@ class RADAE(nn.Module):
             self.pilot_gain = pilot_backoff*self.M/(Nc**0.5)
 
         self.d_samples = int(self.multipath_delay * self.Fs)         # multipath delay in samples
-        
+
         # set up End Of Over sequence
         # Normal frame ...PDDDDP... 
         # EOO frame    ...PE000E... 
@@ -217,11 +239,11 @@ class RADAE(nn.Module):
             if self.bottleneck == 3:
                 eoo = torch.tanh(torch.abs(eoo)) * torch.exp(1j*torch.angle(eoo))
             self.eoo = eoo
+        
+        print(f"d: {self.latent_dim} fs: {frames_per_step:d} Tz: {self.Tz:5.3f} Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}", file=sys.stderr)
 
         # experimental EOO data symbols (quick and dirty supplimentary txt channel)
         self.Nseoo = (Ns-1)*Nc  # number of EOO data symbols
-
-        print(f"Rs: {Rs:5.2f} Rs': {Rs_dash:5.2f} Ts': {Ts_dash:5.3f} Nsmf: {Nsmf:3d} Ns: {Ns:3d} Nc: {Nc:3d} M: {self.M:d} Ncp: {self.Ncp:d}", file=sys.stderr)
 
         self.Tmf = Tmf
         self.bps = bps
@@ -234,6 +256,44 @@ class RADAE(nn.Module):
         self.Nc = Nc
         self.Nzmf = Nzmf
 
+        if txbpf_en:
+            Ntap=51
+            #bandwidth = 1.2*(self.w[Nc-1] - self.w[0])*self.Fs/(2*torch.pi)
+            bandwidth = 1600
+            centre = (self.w[Nc-1] + self.w[0])*self.Fs/(2*torch.pi)/2
+            print(f"Tx BPF bandwidth: {bandwidth:f} centre: {centre:f}", file=sys.stderr)
+            # note we perform filtering using ML conv funcs in forward(), not complex_bpf.bpf(),
+            # so we just call constructor to create filter coeffs.  Same for ssb_bpf below
+            txbpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth, centre, 0)
+            self.txbpf_conv = nn.Conv1d(1, 1, kernel_size=len(txbpf.h), dtype=torch.complex64)
+            self.alpha = txbpf.alpha
+            self.txbpf_delay = int(Ntap // 2)
+            with torch.no_grad():
+                #print(self.txbpf_conv.weight.shape)
+                self.txbpf_conv.weight[0,0,:] = nn.Parameter(torch.from_numpy(txbpf.h))
+                #print(self.txbpf_conv.weight[0,0,:])
+                self.txbpf_conv.bias = nn.Parameter(torch.zeros(1,dtype=torch.complex64))
+                self.txbpf_conv.weight.requires_grad = False
+                self.txbpf_conv.bias.requires_grad = False
+
+        if ssb_bpf:
+            Ntap=101
+            bandwidth = 2700-300
+            centre = (2700+300)/2
+            print(f"SSB BPF bandwidth: {bandwidth:f} centre: {centre:f}")
+            ssb_bpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth, centre, 0)
+            self.ssb_bpf_conv = nn.Conv1d(1, 1, kernel_size=len(ssb_bpf.h), dtype=torch.complex64)
+            self.ssb_bpf_delay = int(Ntap // 2)
+            self.ssb_filt_alpha = ssb_bpf.alpha
+            with torch.no_grad():
+                #print(self.ssb_bpf_conv.weight.shape)
+                self.ssb_bpf_conv.weight[0,0,:] = nn.Parameter(torch.from_numpy(ssb_bpf.h))
+                #print(self.ssb_bpf_conv.weight[0,0,:])
+                self.ssb_bpf_conv.bias = nn.Parameter(torch.zeros(1,dtype=torch.complex64))
+                self.ssb_bpf_conv.weight.requires_grad = False
+                self.ssb_bpf_conv.bias.requires_grad = False
+
+           
     # Stateful decoder wasn't present during training, so we need to load weights from existing decoder
     def core_decoder_statefull_load_state_dict(self):
 
@@ -286,6 +346,7 @@ class RADAE(nn.Module):
    
     def move_device(self, device):
         # TODO: work out why we need this step
+        self.w = self.w.to(device)
         self.Winv = self.Winv.to(device)
         self.Wfwd = self.Wfwd.to(device)
  
@@ -384,7 +445,7 @@ class RADAE(nn.Module):
         return rx_sym_pilots
     
     # rate Fs receiver
-    def receiver(self, rx):
+    def receiver(self, rx, run_decoder=True):
         Ns = self.Ns
         if self.pilots:
             Ns = Ns + 1
@@ -408,6 +469,17 @@ class RADAE(nn.Module):
             rx_sym = torch.ones(1, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
             rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
 
+        if self.correct_time_offset:
+            #print(self.correct_time_offset)
+            # Use vector multiply to create a shape (batch,Nc) 2D tensor
+            phase_offset = -self.correct_time_offset*torch.reshape(self.w,(1,self.Nc))
+            phase_offset = torch.reshape(phase_offset,(1,self.Nc,1))
+        
+            # change to (batch,Nc,timestep), as all time steps get the same phase offset
+            rx_sym = rx_sym.permute(0,2,1)
+            rx_sym = rx_sym * torch.exp(1j*phase_offset)
+            rx_sym = rx_sym.permute(0,2,1)
+
         # demap QPSK symbols
         rx_sym = torch.reshape(rx_sym, (1, -1, self.latent_dim//2))
         z_hat = torch.zeros(1,rx_sym.shape[1], self.latent_dim)
@@ -416,17 +488,20 @@ class RADAE(nn.Module):
         z_hat[:,:,::2] = rx_sym.real
         z_hat[:,:,1::2] = rx_sym.imag
         
-        if self.stateful_decoder:
-            print("stateful!", file=sys.stderr)
-            features_hat = torch.empty(1,0,self.feature_dim)
-            for i in range(z_hat.shape[1]):
-                features_hat = torch.cat([features_hat, self.core_decoder_statefull(z_hat[:,i:i+1,:])],dim=1)
-        else:
-            features_hat = self.core_decoder(z_hat)
-        print(features_hat.shape,z_hat.shape, file=sys.stderr)
+        if run_decoder:
+            if self.stateful_decoder:
+                print("stateful!", file=sys.stderr)
+                features_hat = torch.empty(1,0,self.feature_dim)
+                for i in range(z_hat.shape[1]):
+                    features_hat = torch.cat([features_hat, self.core_decoder_statefull(z_hat[:,i:i+1,:])],dim=1)
+            else:
+                features_hat = self.core_decoder(z_hat)
+            print(features_hat.shape,z_hat.shape, file=sys.stderr)
         
-        return features_hat,z_hat
-    
+            return features_hat,z_hat
+        else:
+            return z_hat
+           
     # Estimate SNR given a vector r of M received pilot samples
     # rate_Fs/time domain, only works on 1D vectors (i.e. can broadcast or do multiple estimates)
     # unfortunately this doesn't work for multipath channels (good results for AWGN)
@@ -482,6 +557,13 @@ class RADAE(nn.Module):
         tx_sym = z[:,:,::2] + 1j*z[:,:,1::2]
         qpsk_shape = tx_sym.shape
 
+        # replace some elements of z with fixed pilots
+        if self.pilots2:
+            tx_sym[:,:,6::self.Ns] = 0.5*self.pilot_gain*(2**0.5)
+            #print(self.pilot_gain,self.P)
+            #print(tx_sym.shape)
+            #quit()
+
         # constrain magnitude of 2D complex symbols 
         if self.bottleneck == 2:
             tx_sym = torch.tanh(torch.abs(tx_sym))*torch.exp(1j*torch.angle(tx_sym))
@@ -523,8 +605,40 @@ class RADAE(nn.Module):
             # Constrain magnitude of complex rate Fs time domain signal, simulates Power
             # Amplifier (PA) that saturates at abs(tx) ~ 1
             if self.bottleneck == 3:
-                tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
+                if self.tanh_clipper:
+                    tx = torch.tanh(torch.abs(tx))*torch.exp(1j*torch.angle(tx))
+                else:
+                    tx = torch.exp(1j*torch.angle(tx))
+                if self.txbpf_en:
+                    phase_vec = torch.exp(-1j*self.alpha*torch.arange(0,tx.shape[1],device=tx.device))
+                    tx = tx*phase_vec
+
+                    tx = torch.concat((torch.zeros((num_batches,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,self.txbpf_delay),device=tx.device)),dim=1)
+                    tx = self.txbpf_conv(tx)
+                    tx = torch.exp(1j*torch.angle(tx))
+
+                    tx = torch.concat((torch.zeros((num_batches,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,self.txbpf_delay),device=tx.device)),dim=1)
+                    tx = self.txbpf_conv(tx)
+                    tx = torch.exp(1j*torch.angle(tx))
+                    
+                    tx = torch.concat((torch.zeros((num_batches,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,self.txbpf_delay),device=tx.device)),dim=1)
+                    tx = self.txbpf_conv(tx)
+                    #tx = torch.exp(1j*torch.angle(tx))
+                    
+                    tx = tx*torch.conj(phase_vec)
+
+            if self.ssb_bpf:
+                #print(tx.shape)
+                phase_vec = torch.exp(-1j*self.ssb_filt_alpha*torch.arange(0,tx.shape[1],device=tx.device))
+                tx = tx*phase_vec
+                tx = torch.concat((torch.zeros((num_batches,self.ssb_bpf_delay),device=tx.device),tx,torch.zeros((num_batches,self.ssb_bpf_delay),device=tx.device)),dim=1)
+                tx = self.ssb_bpf_conv(tx)
+                tx = tx*torch.conj(phase_vec)
+                #print(tx.shape)
+
             tx_before_channel = tx
+            PAPR = 0
+            peak_power = 0
 
             # rate Fs multipath model
             d = self.d_samples
@@ -567,7 +681,7 @@ class RADAE(nn.Module):
             EbNodB = torch.reshape(EbNodB,(num_batches,1))
             EbNo = 10**(EbNodB/10)
             
-            if self.bottleneck == 3:
+            if self.bottleneck == 3 or self.peak:
                 # determine sigma assuming rms power var(tx) = 1 (actually a fraction of a dB less in practice)
                 S = 1
                 sigma = (S*self.Fs/(EbNo*self.Rb))**(0.5)
@@ -590,41 +704,127 @@ class RADAE(nn.Module):
             rx_dash = torch.clone(rx)
             
             # inference time correction of freq offset, allows us to produce a rx.f32 file
-            # with a freq offset while decoding correcting here
+            # with a freq offset while decoding correctly here
             if self.freq_offset and self.correct_freq_offset:
                 rx_dash = rx_dash*torch.conj(lin_phase)
                 
             # remove cyclic prefix
             rx_dash = torch.reshape(rx_dash,(num_batches,num_timesteps_at_rate_Rs,self.M+self.Ncp))
             rx_dash = rx_dash[:,:,Ncp+self.time_offset:Ncp+self.time_offset+self.M]
-
+            
             # DFT to transform M time domain samples to Nc carriers
             rx_sym = torch.matmul(rx_dash, self.Wfwd)
         else:
             # Simulate channel at one sample per QPSK symbol (Fs=Rs) --------------------------------
 
+            num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*self.M
+            # Hybrid time & freq domain model - we need time domain to apply bottleneck
+            # IDFT to transform Nc carriers to M time domain samples
+            tx = torch.matmul(tx_sym, self.Winv)
+
+            # Optionally insert a cyclic prefix
+            Ncp = self.Ncp
+            if self.Ncp:
+                tx_cp = torch.zeros((num_batches,num_timesteps_at_rate_Rs,self.M+Ncp),dtype=torch.complex64,device=tx.device)
+                tx_cp[:,:,Ncp:] = tx
+                tx_cp[:,:,:Ncp] = tx_cp[:,:,-Ncp:]
+                tx = tx_cp
+                num_timesteps_at_rate_Fs = num_timesteps_at_rate_Rs*(self.M+Ncp)
+
             if self.bottleneck == 3:
-                # Hybrid time & freq domain model - we need time domain to apply bottleneck
-                # IDFT to transform Nc carriers to M time domain samples
-                tx = torch.matmul(tx_sym, self.Winv)
                 # Apply time domain magnitude bottleneck
-                tx = torch.tanh(torch.abs(tx)) * torch.exp(1j*torch.angle(tx))
-                tx_before_channel = tx
-                # DFT to transform M time domain samples to Nc carriers
-                tx_sym = torch.matmul(tx, self.Wfwd)
+                if self.tanh_clipper:
+                    tx = torch.tanh(torch.abs(tx))*torch.exp(1j*torch.angle(tx))
+                else:
+                    tx = torch.exp(1j*torch.angle(tx))
+
+            # apply BPF-clip stages to obtain a reasonable 99% power bandwidth at low PAPR.  BPF is implemented by
+            # shifting signal to baseband an applying a real LPF of bandwidth B/2.  Three stages gives us a 99% power BW
+            # of around 1200-1400 Hz at 0 PAPR, loss appears similar to previous waveforms.
+            if self.txbpf_en:
+                tx = torch.reshape(tx,(num_batches, 1, num_timesteps_at_rate_Fs))
+                phase_vec = torch.exp(-1j*self.alpha*torch.arange(0,tx.shape[2],device=tx.device))
+                tx = tx*phase_vec
+
+                tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
+                tx = self.txbpf_conv(tx)
+                tx = torch.exp(1j*torch.angle(tx))
+
+                tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
+                tx = self.txbpf_conv(tx)
+                tx = torch.exp(1j*torch.angle(tx))
+                
+                tx = torch.concat((torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.txbpf_delay),device=tx.device)),dim=2)
+                tx = self.txbpf_conv(tx)
+                #tx = torch.exp(1j*torch.angle(tx))
+                
+                tx = tx*torch.conj(phase_vec)
+                tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M+Ncp))
+
+            if self.ssb_bpf:
+                tx = torch.reshape(tx,(num_batches, 1, num_timesteps_at_rate_Fs))
+                phase_vec = torch.exp(-1j*self.ssb_filt_alpha*torch.arange(0,tx.shape[2],device=tx.device))
+                tx = tx*phase_vec
+                tx = torch.concat((torch.zeros((num_batches,1,self.ssb_bpf_delay),device=tx.device),tx,torch.zeros((num_batches,1,self.ssb_bpf_delay),device=tx.device)),dim=2)
+                tx = self.ssb_bpf_conv(tx)
+                tx = tx*torch.conj(phase_vec)
+                tx = torch.reshape(tx,(num_batches, num_timesteps_at_rate_Rs, self.M+Ncp))
+
+            tx_before_channel = tx
+
+            # find per batch PAPR
+            tx_before_channel = torch.reshape(tx_before_channel,(num_batches, num_timesteps_at_rate_Fs))
+            peak_power, indices = torch.max(torch.abs(tx_before_channel)**2,dim=1)
+            av_power = torch.mean(torch.abs(tx_before_channel)**2,dim=1)
+            PAPR = peak_power/av_power
+
+            # remove cyclic prefix
+            tx = tx[:,:,Ncp:Ncp+self.M]
+
+            # DFT to transform M time domain samples to Nc freq domain samples
+            tx_sym = torch.matmul(tx, self.Wfwd)
+                    
+            # note all further impairments are applied in the freq domain ...
                 
             if self.phase_offset:
                 phase = self.phase_offset*torch.ones_like(tx_sym)
                 phase = torch.exp(1j*phase)
                 tx_sym = tx_sym*phase
 
-            # multipath, multiply by per-carrier channel magnitudes at each OFDM modem timestep
+            # per-sequence random [-1,1] ms timing jitter, which results in a linear phase shift across frequency
+            # models fine timing errors
+            if self.timing_rand:
+                d = self.timing_jitter*(1 - 2*torch.rand((num_batches,1),device=tx_sym.device))
+                # Use vector multiply to create a shape (batch,Nc) 2D tensor
+                phase_offset = -d*torch.reshape(self.w,(1,self.Nc))*self.Fs
+                phase_offset = torch.reshape(phase_offset,(num_batches,self.Nc,1))
+            
+                # change to (batch,Nc,timestep), as all time steps get the same phase offset
+                tx_sym = tx_sym.permute(0,2,1)
+                tx_sym = tx_sym * torch.exp(1j*phase_offset)
+                tx_sym = tx_sym.permute(0,2,1)
+ 
+            # per sequence random [-2,2] fine frequency offset        
+            if self.freq_rand:
+                freq_offset = 4*torch.rand((num_batches,1),device=tx_sym.device) - 2.0
+                omega = freq_offset*2*torch.pi/self.Rs
+                # shape (num_batchs,num_timsteps)
+                phase = torch.zeros((num_batches,num_timesteps_at_rate_Rs),device=tx_sym.device)
+                # broadcast omega across timesteps
+                phase[:,] = omega
+                # integrate to get phase
+                phase = torch.cumsum(phase,dim=1)
+                phase = torch.reshape(phase,(num_batches,num_timesteps_at_rate_Rs,1))
+                # same freq offset/phase for each carrier
+                tx_sym = tx_sym*torch.exp(1j*phase)
+
+            # multipath, multiply by per-carrier channel magnitudes (and optionally phase) at each OFDM modem timestep
             # preserve tx_sym variable so we can return it to measure power after multipath channel
             tx_sym = tx_sym * H
 
             # AWGN noise ------------------
             # note noise power sigma**2 is split between real and imag channels
-            if self.bottleneck == 3:
+            if self.bottleneck == 3 or self.peak:
                 EbNo = 10**(EbNodB/10)
                 sigma = self.M/((2*self.Nc*EbNo)**(0.5))
                 sigma = sigma/(2**0.5)
@@ -639,9 +839,21 @@ class RADAE(nn.Module):
 
             if self.pilot_eq:
                 rx_sym_pilots = self.do_pilot_eq(num_modem_frames,rx_sym_pilots)
-
+                
             rx_sym = torch.ones(num_batches, num_modem_frames, self.Ns, self.Nc, dtype=torch.complex64)
-            rx_sym = rx_sym_pilots[:,:,1:self.Ns+1,:]
+            rx_sym = torch.reshape(rx_sym_pilots[:,:,1:self.Ns+1,:],(num_batches, num_modem_frames*self.Ns, self.Nc))
+
+        # genie based phase adjustment for time shift 
+        if self.correct_time_offset:
+            #print(self.correct_time_offset)
+            # Use vector multiply to create a shape (batch,Nc) 2D tensor
+            phase_offset = -self.correct_time_offset*torch.reshape(self.w,(1,self.Nc))
+            phase_offset = torch.reshape(phase_offset,(num_batches,self.Nc,1))
+        
+            # change to (batch,Nc,timestep), as all time steps get the same phase offset
+            rx_sym = rx_sym.permute(0,2,1)
+            rx_sym = rx_sym * torch.exp(1j*phase_offset)
+            rx_sym = rx_sym.permute(0,2,1)
 
         # demap QPSK symbols
         rx_sym = torch.reshape(rx_sym,qpsk_shape)
@@ -665,5 +877,7 @@ class RADAE(nn.Module):
             "tx"     : tx_before_channel,
             "rx"     : rx,
             "sigma"  : sigma.cpu().numpy(),
-            "EbNodB" : EbNodB.cpu().numpy()
+            "EbNodB" : EbNodB.cpu().numpy(),
+            "PAPR"   : PAPR,
+            "peak_power"   : peak_power
        }
