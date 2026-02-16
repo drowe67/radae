@@ -48,6 +48,6 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 $g_file $a_g_file
 
 ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync 250725_rx.f32 /dev/null --latent-dim 56 \
---w1_dec 128 --no_bpf --write_delta_hat delta_hat.int16 --write_delta_hat_pp delta_hat_pp.int16 $@
+--w1_dec 128 --no_bpf --write_delta_hat delta_hat.int16 $@
 
 python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 --clip_start 25 --compare --delta $delta

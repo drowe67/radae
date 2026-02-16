@@ -91,7 +91,7 @@ $g_file $a_g_file $EbNodB $a_EbNodB_value $sine_amp $a_sine_amp $sine_freq $a_si
 # 2) remove --quiet and look for state transitions (e.g. back to noise), which upsets alignment for loss.py
 ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync 250725_rx.f32 /dev/null --latent-dim 56 \
 --w1_dec 128 --hangover 100 --correct_time_offset -8 --quiet \
---write_sig_det sig_det.int16 --write_state state.int16 --write_freq_offset_smooth freq_offset_smooth.f32 \
+--write_sig_det sig_det.int16 --write_state state.int16 --write_freq_offset freq_offset_smooth.f32 \
 --write_frame_sync frame_sync.f32 $@
 
 # debug tip: run from cmd line with --plot

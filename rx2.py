@@ -64,11 +64,9 @@ parser.add_argument('--output_dim', type=int, help='Output dimension (fine timin
 parser.add_argument('--write_Ry_norm', type=str, default="", help='path to normalised autocorrelation output feature file dim (seq_len,Ncp+M) .c64 format')
 parser.add_argument('--write_Ry_smooth', type=str, default="", help='path to smoothed autocorrelation output feature file dim (seq_len,Ncp+M) .c64 format')
 parser.add_argument('--write_delta_hat', type=str, default="", help='path to delta_hat output file dim (seq_len) in .int16 format')
-parser.add_argument('--write_delta_hat_pp', type=str, default="", help='path to delta_hat_pp output file dim (seq_len) in .int16 format')
 parser.add_argument('--write_Ry_max', type=str, default="", help='path to Ty_max output file dim (seq_len) in .f32 format')
 parser.add_argument('--write_sig_det', type=str, default="", help='path to signal detection flag output file dim (seq_len) in .int16 format')
 parser.add_argument('--write_freq_offset', type=str, default="", help='path to freq offset est output file dim (seq_len) in .float32 format')
-parser.add_argument('--write_freq_offset_smooth', type=str, default="", help='path to smoothed freq offset est output file dim (seq_len) in .float32 format')
 parser.add_argument('--write_delta_hat_rx', type=str, default="", help='path to delta_hat_rx file dim (seq_len) in .f32 format')
 parser.add_argument('--write_state', type=str, default="", help='path to sync state machine output file dim (seq_len) in .int16 format')
 parser.add_argument('--write_frame_sync', type=str, default="", help='path to frame sync output file dim (seq_len,2) in .int16 format')
@@ -121,7 +119,11 @@ Nmf = int(Ns*(M+Ncp))   # number of samples in one modem frame
 Nc = model.Nc
 w = model.w.cpu().detach().numpy()
 Fs = float(model.Fs)
+
 alpha = 0.95
+alpha_agc = 0.995
+beta = 0.999
+Ts = 0.42
 
 # load rx rate_Fs samples
 rx = np.fromfile(args.rx, dtype=np.csingle)*args.gain
@@ -171,7 +173,6 @@ gain_smooth = np.ones(sequence_length,dtype=np.float32)
 if args.agc:
    # target RMS level is PAPR ~ 3 dB less than peak of 1.0
    target = 1.0*10**(-3/20)
-   alpha_agc = 0.995
    for s in np.arange(1,sequence_length):
       st = (s+1)*(Ncp+M)
       en = st + Ncp+M
@@ -198,67 +199,17 @@ if len(args.write_Ry_norm):
 
 # IIR smoothing
 Ry_smooth = np.zeros((sequence_length,Ncp+M),dtype=np.complex64)
-#Ry_smooth[0,:] = Ry_norm[0,:]
 for s in np.arange(1,sequence_length):
    Ry_smooth[s,:] = Ry_smooth[s-1,:]*alpha + Ry_norm[s,:]*(1.-alpha)
 if len(args.write_Ry_smooth):
    Ry_smooth.flatten().tofile(args.write_Ry_smooth)
 
-# extract timing and freq offset estimates, signal detection flag
-Ry_max = np.max(np.abs(Ry_smooth), axis=1)
-if args.fix_delta_hat:
-   delta_hat = args.fix_delta_hat*np.ones(sequence_length, dtype=np.int16)
-else:
-   delta_hat = np.int16(np.argmax(np.abs(Ry_smooth), axis=1))
-Ts=0.42
-sig_det = np.int16(Ry_max > Ts)
-
-# post process to smooth out symbol-symbol variations in timing
-# due to noise, but allowing big shifts during acquisition and 
-# tracking of slow timing changes due to clock offsets
-delta_hat_pp = np.zeros(sequence_length,dtype=np.float32)
-count = 0
-beta = 0.999
-thresh = Ncp//2
-for s in np.arange(1,sequence_length):
-   if np.abs(delta_hat[s]-delta_hat_pp[s-1]) > thresh:
-      count += 1
-      if count > 5:
-         delta_hat_pp[s] = delta_hat[s]
-         count = 0
-      else:
-         delta_hat_pp[s] = delta_hat_pp[s-1]*beta + np.float32(delta_hat[s])*(1-beta)
-   else:
-      count = 0
-      delta_hat_pp[s] = delta_hat_pp[s-1]*beta + np.float32(delta_hat[s])*(1-beta)
-
-# (raw) freq offset estimates
-freq_offset = np.zeros(sequence_length,dtype=np.float32)
-for s in np.arange(1,sequence_length):
-   delta_phi = np.angle(Ry_smooth[s,delta_hat[s]])
-   freq_offset[s] = -delta_phi*Fs/(2.*np.pi*M)
-
-if len(args.write_delta_hat):
-   delta_hat.tofile(args.write_delta_hat)
-if len(args.write_delta_hat_pp):
-   np.int16(delta_hat_pp).tofile(args.write_delta_hat_pp)
-if len(args.write_Ry_max):
-   Ry_max.tofile(args.write_Ry_max)
-if len(args.write_sig_det):
-   sig_det.tofile(args.write_sig_det)
-if len(args.write_freq_offset):
-   freq_offset.tofile(args.write_freq_offset)
-if len(args.write_gain_smooth):
-   gain_smooth.tofile(args.write_gain_smooth)
-# optionally read in external timing est, overrides internal estimator   
-if len(args.read_delta_hat):
-   delta_hat = np.fromfile(args.read_delta_hat, dtype=np.float32)
-
-# sync state machine, smooth freq offset ests when in sync
+# TODO: refactor, reorg all these variables and constants
+# TOOD: rationalise ilter constants
 state = "noise"
 count = 0
-freq_offset_smooth = np.zeros(sequence_length,dtype=np.float32)
 state_log = np.zeros(sequence_length,dtype=np.int16)
+
 frame_sync_log = np.zeros((sequence_length,2),dtype=np.float32)
 frame_sync_even = 0.
 frame_sync_odd = 0.
@@ -268,10 +219,18 @@ rx_i = torch.zeros((Ns*(Ncp+M)),dtype=torch.complex64)
 
 rx_phase = 1 + 1j*0
 rx_phase_vec = np.zeros(Ncp+M,np.csingle)
-Nframes = sequence_length//model.Ns
+
 z_hat = torch.zeros((1,sequence_length, model.latent_dim), dtype=torch.float32)
+
 i = 0
 n_acq = 0
+
+# these need to be floats as we IIR filter them over time
+freq_offset = np.zeros(sequence_length,dtype=np.float32)
+delta_hat = np.zeros(sequence_length,dtype=np.float32)
+
+sig_det = np.zeros(sequence_length,dtype=np.int16)
+delta_hat_1 = 0.
 
 for s in np.arange(1,sequence_length):
 
@@ -280,39 +239,59 @@ for s in np.arange(1,sequence_length):
 
    if state == "noise":
       state_log[s] = 0
+
+      delta_hat[s] = np.int16(np.argmax(np.abs(Ry_smooth[s,:])))
+      delta_phi = np.angle(Ry_smooth[s,int(delta_hat[s])])
+      freq_offset[s] = -delta_phi*Fs/(2.*np.pi*M)
+      Ry_max = np.abs(Ry_smooth[s,int(delta_hat[s])])
+
+      sig_det[s] = Ry_max > Ts
       if sig_det[s]:
          count += 1
-         if count == 5:
-            next_state = "signal"
-            count = 0
-            n_acq += 1
-            if args.nofreq_offset:
-               delta_phi = 0.
-            else:
-               delta_phi = np.angle(Ry_smooth[s,delta_hat[s]])
-            freq_offset_smooth[s] = -delta_phi*Fs/(2.*np.pi*M)
-            frame_sync_even = 0.
-            frame_sync_odd = 0.
-   if state == "signal":
-      state_log[s] = 1
-      if not sig_det[s]:
-         count += 1
-         if count == args.hangover:
-            next_state = "noise"
-            count = 0
       else:
          count = 0
-      if args.nofreq_offset:
-         delta_phi = 0.
+      if count == 5:
+         next_state = "signal"
+         count = 0
+         n_acq += 1
+         frame_sync_even = 0.
+         frame_sync_odd = 0.
+
+   if state == "signal":
+      state_log[s] = 1
+
+      # find delta_hat_1 over a reduced range
+      Ry_max = 0.
+      delta_hat_1 = 0.
+      for gamma in np.arange(int(delta_hat[s-1])-Ncp,int(delta_hat[s-1])+Ncp):
+         gamma1 = gamma
+         if gamma1 < 0:
+            gamma1 += M+Ncp
+         if gamma1 >= M+Ncp:
+            gamma1 -= M+Ncp
+         if np.abs(Ry_smooth[s,gamma1]) > Ry_max:
+            Ry_max = np.abs(Ry_smooth[s,gamma1])
+            delta_hat_1 = gamma1
+
+      delta_phi = np.angle(Ry_smooth[s,delta_hat_1])
+      freq_offset_1 = -delta_phi*Fs/(2.*np.pi*M)
+      sig_det[s] = Ry_max > Ts
+      delta_hat[s] = beta*delta_hat[s-1] + (1.-beta)*delta_hat_1
+      freq_offset[s] = beta*freq_offset[s-1] + (1.-beta)*freq_offset_1
+
+      if not sig_det[s]:
+         count += 1
       else:
-         delta_phi = np.angle(Ry_smooth[s,delta_hat[s]])
-      freq_offset_smooth[s] = beta*freq_offset_smooth[s-1] - (1-beta)*delta_phi*Fs/(2.*np.pi*M)
+         count = 0
+      if count == args.hangover:
+         next_state = "noise"
+         count = 0
       
       # adjust timing to point to start of symbol
-      delta_hat_rx = int(delta_hat_pp[s]-Ncp)
+      delta_hat_rx = int(delta_hat[s]-Ncp)
 
       # set up phase continous vector to correct freq offset
-      freq_offset_rx = freq_offset_smooth[s]
+      freq_offset_rx = freq_offset[s]
       w = 2*np.pi*freq_offset_rx/Fs
       for n in range(Ncp+M):
          rx_phase = rx_phase*np.exp(-1j*w)
@@ -353,14 +332,22 @@ for s in np.arange(1,sequence_length):
    if args.verbose or state != prev_state:
       print(f"{s:3d} {i:3d} state: {state:6s} sig_det: {sig_det[s]:1d} count: {count:1d} ", end='', file=sys.stderr)
       print(f"fs: {frame_sync_odd > frame_sync_even:d} ", end='', file=sys.stderr)
-      print(f"delta_hat: {delta_hat[s]:3.0f} delta_hat_pp: {delta_hat_pp[s]:3.0f} ", end='',file=sys.stderr)
-      print(f"f_off: {freq_offset_smooth[s]:5.2f}", file=sys.stderr)
+      print(f"delta_hat: {delta_hat[s]:3.0f} delta_hat_1: {delta_hat_1:3.0f} ", end='',file=sys.stderr)
+      print(f"f_off: {freq_offset[s]:5.2f}", file=sys.stderr)
 
 # truncate from max length
 z_hat = z_hat[:,:i,:]
 
-if len(args.write_freq_offset_smooth):
-   freq_offset_smooth.tofile(args.write_freq_offset_smooth)
+if len(args.write_delta_hat):
+   delta_hat.tofile(args.write_delta_hat)
+if len(args.write_Ry_max):
+   Ry_max.tofile(args.write_Ry_max)
+if len(args.write_sig_det):
+   sig_det.tofile(args.write_sig_det)
+if len(args.write_freq_offset):
+   freq_offset.tofile(args.write_freq_offset)
+if len(args.write_gain_smooth):
+   gain_smooth.tofile(args.write_gain_smooth)
 if len(args.write_state):
    state_log.tofile(args.write_state)
 if len(args.write_frame_sync):
