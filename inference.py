@@ -206,7 +206,7 @@ if __name__ == '__main__':
    SNR = EbNo*(model.Rb/B)
    SNRdB = 10*np.log10(SNR)
    CNodB = 10*np.log10(EbNo*model.Rb)
-   print(f"          Eb/No   C/No     SNR3k  Rb'    Eq     PAPR")
+   print(f"          Eb/No   C/No     SNR3k  Rb'    Eq     PAPR  PAPR(99.9%)")
    print(f"Target..: {args.EbNodB:6.2f}  {CNodB:6.2f}  {SNRdB:6.2f}  {int(model.Rb_dash):d}")
 
    # Lets check actual Eq/No, Eb/No and SNR, and monitor assumption |z| ~ 1, especially for multipath.
@@ -225,7 +225,11 @@ if __name__ == '__main__':
       EbNodB_meas = CNodB_meas + 10*np.log10(model.M/(model.Fs*model.Nc*model.bps))
       SNRdB_meas = CNodB_meas - 10*np.log10(B)               # SNR in B=3000
       PAPRdB = 20*np.log10(np.max(np.abs(tx))/np.sqrt(S))
-      print(f"Measured: {EbNodB_meas:6.2f}  {CNodB_meas:6.2f}  {SNRdB_meas:6.2f}                {PAPRdB:5.2f}")
+      # CCDF PAPR: find level exceeded by 0.1% of samples
+      tx_flat = np.abs(tx.flatten())
+      papr_ccdf_thresh = np.percentile(tx_flat**2/S, 99.9)
+      PAPRdB_ccdf = 10*np.log10(papr_ccdf_thresh)
+      print(f"Measured: {EbNodB_meas:6.2f}  {CNodB_meas:6.2f}  {SNRdB_meas:6.2f}                {PAPRdB:5.2f}  {PAPRdB_ccdf:5.2f}  n={len(tx_flat)}")
    else:
       # rate Rs simulation
       tx_sym = output["tx_sym"].cpu().detach().numpy()
