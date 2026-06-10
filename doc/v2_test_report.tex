@@ -162,15 +162,15 @@ The target channels for RADE V2 are AWGN and MPP (Doppler 1 \si{Hz}, Delay 2 \si
 
 \subsection{Occupied Bandwidth and PAPR}
 
-Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}). The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.
+Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}).  We measure PAPR using the peak magnitude over an entire sample (100\% CCDF) as even an occasional peak will depress a typical SSB transmitter ALC for several seconds.  The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.
 
 \begin{table} [h]
 \caption{Occupied Bandwidth and PAPR for \emph{all.wav}.}
 \label{tab:obw_papr}
 \centering
-\begin{tabular}{ c |  r | r }
+\begin{tabular}{ c |  r | c }
  \hline
- Waveform & OBW & PAPR \\
+ Waveform & OBW & PAPR (100\% CCDF) \\
  \hline
  RADE V1 & 2109 & 4.20  \\
  RADE V2 & 867 & 3.48 \\
@@ -448,7 +448,7 @@ It can be difficult to discern fine differences in speech samples using ad hoc l
 
 The OTC tests (e.g. v216) show very little impact on the loss metric, demonstrating that the signal processing through two typical HF radios (USB sound hardware, SSB filters, PA, up and down conversion) has very little impact on the RADE waveforms. This suggests loss measurements can be used as a metric for ``type approval" of RADE integration e.g. with a SDR, end user application, or hardware radio.
 
-\section{Phase C - Crowd Sourced Tests}
+\section{Phase C - Crowd Sourced OTA Tests}
 
 This section describes the test results collected from a crowd sourced OTA test campaign. The goals of this test campaign are:
 \begin{enumerate}

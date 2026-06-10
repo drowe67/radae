@@ -10,7 +10,7 @@ RADE V2 builds on V1 with several algorithmic improvements:
 | Equalisation | Classical DSP, pilot-aided | ML-based, no pilots required |
 | 99% Occupied Bandwidth | ~2100 Hz (SSB filter limited) | ~860 Hz |
 | Frame duration | ~180 ms | ~40 ms |
-| PAPR | 4.2 dB | 3.5 dB |
+| PAPR (100% CCDF) | 4.2 dB | 3.5 dB |
 | Frame sync | DSP | Neural network |
 | End-of-over detection | Pilot pend sequence | Channel sparsity metric |
 | Threshold SNR (AWGN) | -2 dB | ~-4.5 dB |
