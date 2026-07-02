@@ -175,7 +175,7 @@ Automatic Speech Recognition (ASR) is used as an objective speech quality metric
 
 1. Install dependencies:
    ```
-   pip3 install jiwer openai-whisper
+   pip3 install jiwer openai-whisper soundfile
    ```
 
 1. The LibriSpeech `test-clean` dataset (~400 MB) is downloaded automatically to `~/.cache/LibriSpeech/` on first run via `torchaudio`.
@@ -189,6 +189,7 @@ Automatic Speech Recognition (ASR) is used as an objective speech quality metric
    ```
    ./asr_test_top.sh ssb -n 100
    ./asr_test_top.sh rade -n 100
+   ./asr_test_top.sh radev2 -n 100
    ./asr_test_top.sh 700D -n 100
    ```
 
@@ -201,6 +202,7 @@ Automatic Speech Recognition (ASR) is used as an objective speech quality metric
 1. Plot WER curves in Octave:
    ```
    octave:1> radae_plots; plot_wer("241221","241221_asr_test.png")
+   octave:1> radae_plots; plot_wer_v2("250807","250807_bbfm_wer.png")
    ```
 
 # Testing RADE

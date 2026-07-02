@@ -736,6 +736,51 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   end  
 endfunction
 
+
+function plot_wer_v2(prefix_fn, png_fn="", epslatex="")
+  ssb_awgn_fn    = sprintf("%s_asr_awgn_ssb.txt",    prefix_fn);
+  radev1_awgn_fn = sprintf("%s_asr_awgn_rade.txt",   prefix_fn);
+  radev2_awgn_fn = sprintf("%s_asr_awgn_radev2.txt", prefix_fn);
+  ssb_mpp_fn     = sprintf("%s_asr_mpp_ssb.txt",     prefix_fn);
+  radev1_mpp_fn  = sprintf("%s_asr_mpp_rade.txt",    prefix_fn);
+  radev2_mpp_fn  = sprintf("%s_asr_mpp_radev2.txt",  prefix_fn);
+  controls_fn    = sprintf("%s_asr_c.txt",            prefix_fn);
+
+  ssb_awgn    = load(ssb_awgn_fn);
+  radev1_awgn = load(radev1_awgn_fn);
+  radev2_awgn = load(radev2_awgn_fn);
+  ssb_mpp     = load(ssb_mpp_fn);
+  radev1_mpp  = load(radev1_mpp_fn);
+  radev2_mpp  = load(radev2_mpp_fn);
+  c = load(controls_fn);
+
+  if length(epslatex)
+    [textfontsize linewidth] = set_fonts(20);
+  end
+
+  figure(1); clf;
+  plot(ssb_awgn(:,1),    ssb_awgn(:,3),    'b+-;SSB AWGN;');
+  hold on;
+  plot(radev1_awgn(:,1), radev1_awgn(:,3), 'r+-;RADE V1 AWGN;');
+  plot(radev2_awgn(:,1), radev2_awgn(:,3), 'g+-;RADE V2 AWGN;');
+  plot(ssb_mpp(:,1),     ssb_mpp(:,3),     'bo--;SSB MPP;');
+  plot(radev1_mpp(:,1),  radev1_mpp(:,3),  'ro--;RADE V1 MPP;');
+  plot(radev2_mpp(:,1),  radev2_mpp(:,3),  'go--;RADE V2 MPP;');
+  xmin=-5; xmax=20;
+  plot([xmin xmax],[c(2) c(2)],'m-;FARGAN;')
+  plot([xmin xmax],[c(1) c(1)],'c-;clean;')
+  hold off;
+  axis([xmin,xmax,0,60]); grid; ylabel('WER (\%)'); xlabel('SNR3k (dB)');
+  legend('boxoff'); legend('left');
+
+  if length(png_fn)
+    print("-dpng",png_fn,"-S800,600");
+  end
+  if length(epslatex)
+    print_eps_restore(epslatex,"-S250,250",textfontsize,linewidth);
+  end
+endfunction
+
 function plot_wer_bbfm(prefix_fn, png_fn="", epslatex="")
   fm_awgn_fn = sprintf("%s_asr_awgn_fm.txt",prefix_fn);
   rade_awgn_fn = sprintf("%s_asr_awgn_bbfm.txt",prefix_fn);

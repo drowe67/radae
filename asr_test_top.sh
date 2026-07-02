@@ -28,6 +28,17 @@ function rade {
     mv tmp.txt ${results_file}
 }
 
+function radev2 {
+    local results_file=$1
+    EbNodB_range=$2
+    for EbNodB in $EbNodB_range
+    do
+        ./asr_test.sh radev2 --EbNodB $EbNodB -n $n --results ${results_file} $3
+    done
+    cat ${results_file} | grep radev2 | sed -e "s/radev2//" > tmp.txt
+    mv tmp.txt ${results_file}
+}
+
 function freedv_700D {
     local results_file=$1
     No_range=$2
@@ -57,8 +68,10 @@ rm -f ${controls_file}
 cat ${controls_file} | awk '{print $NF}' > ${results_file}_c.txt
 
 
-ssb  ${results_file}_awgn_ssb.txt  "-100 -38 -35 -32 -29 -26 -23 -20 -17"
-rade ${results_file}_awgn_rade.txt "100 15 10 5 2.5 0 -2.5"
-ssb  ${results_file}_mpp_ssb.txt   "-100 -44 -39 -36 -33 -30 -27" "--g_file g_mpp.f32"
-rade ${results_file}_mpp_rade.txt  "100 15 10 5 2.5 0" "--g_file g_mpp.f32"
+ssb    ${results_file}_awgn_ssb.txt    "-100 -38 -35 -32 -29 -26 -23 -20 -17"
+rade   ${results_file}_awgn_rade.txt   "100 15 10 5 2.5 0 -2.5"
+radev2 ${results_file}_awgn_radev2.txt "100 15 10 5 2.5 0 -2.5"
+ssb    ${results_file}_mpp_ssb.txt    "-100 -44 -39 -36 -33 -30 -27" "--g_file g_mpp.f32"
+rade   ${results_file}_mpp_rade.txt   "100 15 10 5 2.5 0" "--g_file g_mpp.f32"
+radev2 ${results_file}_mpp_radev2.txt "100 15 10 5 2.5 0" "--g_file g_mpp.f32"
 

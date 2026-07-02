@@ -219,6 +219,50 @@ function process {
         CNo_mean=$(print_mean_text_file ${CNo_log})
     fi
 
+    if [ $mode == "radev2" ]; then
+        duration_log=""
+        flac_full=""
+        pushd $source > /dev/null;
+        for f in $flac
+        do
+          duration_log+=$(sox --info -D ${f})
+          duration_log+=" "
+          flac_full+="${source}/${f} /tmp/silence.wav "
+        done
+        popd > /dev/null;
+
+        sox $flac_full -t .s16 ${in}
+
+        ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth ${in} out.wav \
+        --rate_Fs --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 \
+        --auxdata --w1_dec 128 --ssb_bpf \
+        --EbNodB $EbNodB ${inference_args} | tee ${rade_log}
+        grep "Multipath Doppler spread file too short" $rade_log
+        if [ $? -eq 0 ]; then
+            echo "Error - fading file too short"
+            exit 1
+        fi
+
+        SNR_mean=$(cat $rade_log | grep "Measured" | tr -s ' ' | cut -d' ' -f4)
+        CNo_mean=$(cat $rade_log | grep "Measured" | tr -s ' ' | cut -d' ' -f3)
+
+        duration_array=( ${duration_log} )
+        i=0
+        st=0
+        for f in $flac
+        do
+          dur=${duration_array[i]}
+          dur=$(python3 -c "print($dur + ${sil})")
+          ((i++))
+          if [ $i -eq ${#duration_array[@]} ]; then
+            sox out.wav ${dest}/${f} trim $st
+          else
+            sox out.wav ${dest}/${f} trim $st $dur
+          fi
+          st=$(python3 -c "print($st + $dur)")
+        done
+    fi
+
     if [ $mode == "rade" ] || [ $mode == "fargan" ]; then
         # find length of each file
         duration_log=""
@@ -285,7 +329,7 @@ function process {
 
     python3 asr_wer.py test-other -n $n_samples --model turbo | tee > $asr_log
     wer=$(tail -n1 $asr_log | tr -s ' ' | cut -d' ' -f2)
-    if [ $mode == "ssb" ] || [ $mode == "rade" ] || [ $mode == "700D" ]; then
+    if [ $mode == "ssb" ] || [ $mode == "rade" ] || [ $mode == "radev2" ] || [ $mode == "700D" ]; then
       printf "%-6s %5.2f %5.2f %5.2f\n" $mode $SNR_mean $CNo_mean $wer | tee -a $results
     else
       printf "%-6s %5.2f\n" $mode $wer | tee -a $results
