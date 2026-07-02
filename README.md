@@ -193,16 +193,20 @@ Automatic Speech Recognition (ASR) is used as an objective speech quality metric
    ./asr_test_top.sh 700D -n 100
    ```
 
-1. For MPP channel, first generate fading samples (if not already present), then re-run with `--g_file`:
+1. For MPP channel, first generate the 1200s fading file (if not already present), then run MPP sweeps:
    ```
-   ./test/make_g.sh
-   ./asr_test_top.sh rade -n 100 --g_file g_mpp.f32
+   if [ ! -f g_mpp_1200s.f32 ]; then
+     DISPLAY="" echo "Fs=8000; Rs=50; Nc=20; multipath_samples('mpp', Fs, Rs, Nc, 1200, '','g_mpp_1200s.f32'); quit" | octave-cli -qf
+   fi
+   ./asr_test_top.sh ssb -n 100
+   ./asr_test_top.sh rade -n 100
+   ./asr_test_top.sh radev2 -n 100
    ```
 
 1. Plot WER curves in Octave:
    ```
-   octave:1> radae_plots; plot_wer("241221","241221_asr_test.png")
-   octave:1> radae_plots; plot_wer_v2("250807","250807_bbfm_wer.png")
+   octave:1> radae_plots; plot_wer("260702","260702_asr_test.png")
+   octave:1> radae_plots; plot_wer_v2("260702","260702_wer_v2.png")
    ```
 
 # Testing RADE

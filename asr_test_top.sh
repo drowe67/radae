@@ -3,7 +3,7 @@
 #
 # Top level ASR test script for AWGN and MPP channels
 set -x
-results_file=241221_asr
+results_file=260702_asr
 n=500
 mode=${1:-all}
 shift
@@ -75,16 +75,16 @@ fi
 
 if [ "$mode" == "ssb" ] || [ "$mode" == "all" ]; then
     ssb    ${results_file}_awgn_ssb.txt    "-100 -38 -35 -32 -29 -26 -23 -20 -17"
-    ssb    ${results_file}_mpp_ssb.txt    "-100 -44 -39 -36 -33 -30 -27" "--g_file g_mpp.f32"
+    ssb    ${results_file}_mpp_ssb.txt    "-100 -44 -39 -36 -33 -30 -27" "--g_file g_mpp_1200s.f32"
 fi
 
 if [ "$mode" == "rade" ] || [ "$mode" == "all" ]; then
-    rade   ${results_file}_awgn_rade.txt   "100 15 10 5 2.5 0 -2.5"
-    rade   ${results_file}_mpp_rade.txt   "100 15 10 5 2.5 0" "--g_file g_mpp.f32"
+    rade   ${results_file}_awgn_rade.txt   "100 15 10 6 5 3.75 2.5 1.25 0 -1.25 -2.5"
+    rade   ${results_file}_mpp_rade.txt   "100 15 10 6 5 3.75 2.5 1.25 0" "--g_file g_mpp_1200s.f32"
 fi
 
 if [ "$mode" == "radev2" ] || [ "$mode" == "all" ]; then
-    radev2 ${results_file}_awgn_radev2.txt "100 15 10 5 2.5 0 -2.5"
-    radev2 ${results_file}_mpp_radev2.txt  "100 15 10 5 2.5 0" "--g_file g_mpp.f32"
+    radev2 ${results_file}_awgn_radev2.txt "100 15 10 7.5 5 3.75 2.5 1.25 0 -1.25 -2.5"
+    radev2 ${results_file}_mpp_radev2.txt  "100 15 10 7.5 5 3.75 2.5 1.25 0 -1.25" "--g_file g_mpp_1200s.f32"
 fi
 
