@@ -6,7 +6,7 @@
 # a dataset with channel simulations (RADE, SSB etc) applied.
 
 CODEC2_DEV=${CODEC2_DEV:-${HOME}/codec2-dev}
-PATH=${PATH}:${CODEC2_DEV}/build_linux/src:${CODEC2_DEV}/build_linux/misc:${PWD}/build/src
+PATH=${PATH}:${PWD}/build/src:${CODEC2_DEV}/build_linux/src:${CODEC2_DEV}/build_linux/misc
 
 which ch >/dev/null || { printf "\n**** Can't find ch - check CODEC2_PATH **** \n\n"; exit 1; }
 
@@ -143,6 +143,8 @@ function process {
     rm -f ${snr_log}
     CNo_log=CNo_log.txt
     rm -f ${CNo_log}
+    cpapr_log=cpapr_log.txt
+    rm -f ${cpapr_log}
     sox -n -r 16000 -c 1 /tmp/silence.wav trim 0.0 ${sil}
 
     if [ $mode == "ssb" ] || [ $mode == "4kHz" ]; then
@@ -166,8 +168,10 @@ function process {
                 fi
                 snr=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
                 CNo=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f5)
+                cpapr=$(cat $ch_log | grep "CPAPR" | tr -s ' ' | cut -d' ' -f7)
                 echo $snr >> ${snr_log}
                 echo $CNo >> ${CNo_log}
+                echo $cpapr >> ${cpapr_log}
 
                 # advance through fading simulation file
                 dur=$(sox --info -D ${source}/${f})
@@ -180,9 +184,10 @@ function process {
         if [ $mode == "ssb" ]; then
           SNR_mean=$(print_mean_text_file ${snr_log})
           CNo_mean=$(print_mean_text_file ${CNo_log})
+          CPAPR_mean=$(print_mean_text_file ${cpapr_log})
         fi
     fi
-    
+
     if [ $mode == "700D" ]; then
         
         fading_adv=0
@@ -207,8 +212,10 @@ function process {
             fi
             snr=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f3)
             CNo=$(cat $ch_log | grep "SNR3k" | tr -s ' ' | cut -d' ' -f5)
+            cpapr=$(cat $ch_log | grep "CPAPR" | tr -s ' ' | cut -d' ' -f7)
             echo $snr >> ${snr_log}
             echo $CNo >> ${CNo_log}
+            echo $cpapr >> ${cpapr_log}
 
             # advance through fading simulation file
             dur=$(sox --info -D ${source}/${f})
@@ -217,6 +224,7 @@ function process {
         done
         SNR_mean=$(print_mean_text_file ${snr_log})
         CNo_mean=$(print_mean_text_file ${CNo_log})
+        CPAPR_mean=$(print_mean_text_file ${cpapr_log})
     fi
 
     if [ $mode == "radev2" ]; then
@@ -329,7 +337,9 @@ function process {
 
     python3 asr_wer.py test-other -n $n_samples --model turbo | tee > $asr_log
     wer=$(tail -n1 $asr_log | tr -s ' ' | cut -d' ' -f2)
-    if [ $mode == "ssb" ] || [ $mode == "rade" ] || [ $mode == "radev2" ] || [ $mode == "700D" ]; then
+    if [ $mode == "ssb" ] || [ $mode == "700D" ]; then
+      printf "%-6s %5.2f %5.2f %5.2f %5.2f\n" $mode $SNR_mean $CNo_mean $wer $CPAPR_mean | tee -a $results
+    elif [ $mode == "rade" ] || [ $mode == "radev2" ]; then
       printf "%-6s %5.2f %5.2f %5.2f\n" $mode $SNR_mean $CNo_mean $wer | tee -a $results
     else
       printf "%-6s %5.2f\n" $mode $wer | tee -a $results

@@ -21,7 +21,7 @@ function ssb {
     do
         ./asr_test.sh ssb --No $No -n $n --results ${results_file} $3
     done
-    cat ${results_file} | grep ssb | sed -e "s/ssb//" > tmp.txt 
+    { echo "# n=$n"; cat ${results_file} | grep ssb | sed -e "s/ssb//"; } > tmp.txt
     mv tmp.txt ${results_file}
 }
 
@@ -32,7 +32,7 @@ function rade {
     do
         ./asr_test.sh rade --EbNodB $EbNodB -n $n --results ${results_file} $3
     done
-    cat ${results_file} | grep rade | sed -e "s/rade//" > tmp.txt
+    { echo "# n=$n"; cat ${results_file} | grep rade | sed -e "s/rade//"; } > tmp.txt
     mv tmp.txt ${results_file}
 }
 
@@ -43,7 +43,7 @@ function radev2 {
     do
         ./asr_test.sh radev2 --EbNodB $EbNodB -n $n --results ${results_file} $3
     done
-    cat ${results_file} | grep radev2 | sed -e "s/radev2//" > tmp.txt
+    { echo "# n=$n"; cat ${results_file} | grep radev2 | sed -e "s/radev2//"; } > tmp.txt
     mv tmp.txt ${results_file}
 }
 
@@ -54,7 +54,7 @@ function freedv_700D {
     do
         ./asr_test.sh 700D --No $No -n $n --results ${results_file} $3
     done
-    cat ${results_file} | grep 700D | sed -e "s/700D//" > tmp.txt 
+    { echo "# n=$n"; cat ${results_file} | grep 700D | sed -e "s/700D//"; } > tmp.txt
     mv tmp.txt ${results_file}
 }
 

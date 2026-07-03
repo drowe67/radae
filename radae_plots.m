@@ -764,12 +764,17 @@ function plot_wer_v2(prefix_fn, png_fn="", epslatex="")
   plot(ssb_mpp(:,1),     ssb_mpp(:,3),     'bo--;SSB MPP;');
   plot(radev1_mpp(:,1),  radev1_mpp(:,3),  'ro--;RADE V1 MPP;');
   plot(radev2_mpp(:,1),  radev2_mpp(:,3),  'go--;RADE V2 MPP;');
-  xmin=-6; xmax=20;
+  if length(epslatex)
+    xmin=-5; xmax=20;
+    set(gca, 'xtick', xmin:5:xmax);
+  else
+    xmin=-6; xmax=20;
+    set(gca, 'xtick', xmin:2:xmax);
+  end
   plot([xmin xmax],[c(2) c(2)],'m-;FARGAN;')
   plot([xmin xmax],[c(1) c(1)],'c-;clean;')
   hold off;
   axis([xmin,xmax,0,60]); grid; ylabel('WER (\%)'); xlabel('SNR3k (dB)');
-  set(gca, 'xtick', xmin:2:xmax);
   legend('boxoff'); legend('left');
 
   if length(png_fn)
