@@ -754,7 +754,11 @@ function plot_wer_v2(prefix_fn, png_fn="", epslatex="")
   radev2_mpp  = load(radev2_mpp_fn);
   c = load(controls_fn);
 
-  [textfontsize linewidth] = set_fonts(16);
+  if length(epslatex)
+    [textfontsize linewidth] = set_fonts(30);
+  else
+    [textfontsize linewidth] = set_fonts(16);
+  end
 
   figure(1); clf;
   plot(ssb_awgn(:,1),    ssb_awgn(:,3),    'b+-;SSB AWGN;');
@@ -765,24 +769,30 @@ function plot_wer_v2(prefix_fn, png_fn="", epslatex="")
   plot(radev1_mpp(:,1),  radev1_mpp(:,3),  'ro--;RADE V1 MPP;');
   plot(radev2_mpp(:,1),  radev2_mpp(:,3),  'go--;RADE V2 MPP;');
   if length(epslatex)
-    xmin=-5; xmax=20;
+    xmin=-5; xmax=20; ymax=40;
     set(gca, 'xtick', xmin:5:xmax);
   else
-    xmin=-6; xmax=20;
+    xmin=-6; xmax=20; ymax=60;
     set(gca, 'xtick', xmin:2:xmax);
   end
   plot([xmin xmax],[c(2) c(2)],'m-;FARGAN;')
   plot([xmin xmax],[c(1) c(1)],'c-;clean;')
   hold off;
-  axis([xmin,xmax,0,60]); grid; ylabel('WER (\%)'); xlabel('SNR3k (dB)');
-  legend('boxoff'); legend('left');
+  axis([xmin,xmax,0,ymax]); grid; ylabel('WER (\%)'); xlabel('SNR3k (dB)');
+  lh = legend('boxoff');
+  legend('left');
+  if length(epslatex)
+    lpos = get(lh, 'position');
+    set(lh, 'position', [lpos(1)+0.10 lpos(2)+0.40 lpos(3) lpos(4)]);
+  end
 
   if length(png_fn)
     print("-dpng",png_fn,"-S1000,600");
-    set_fonts(textfontsize);
   end
   if length(epslatex)
-    print_eps_restore(epslatex,"-S250,250",textfontsize,linewidth);
+    print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
+  else
+    set_fonts(textfontsize);
   end
 endfunction
 
