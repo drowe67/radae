@@ -3,8 +3,9 @@
 #
 # Top level ASR test script for AWGN and MPP channels
 set -x
-results_file=260702_asr
-n=500
+results_file=260704_asr
+# n=500 choked a 64G RAM machine (inference.py processes all samples as one tensor, ~120G needed)
+n=200
 mode=${1:-all}
 shift
 while [[ $# -gt 0 ]]; do
@@ -75,16 +76,16 @@ fi
 
 if [ "$mode" == "ssb" ] || [ "$mode" == "all" ]; then
     ssb    ${results_file}_awgn_ssb.txt    "-100 -38 -35 -32 -29 -26 -23 -20 -17"
-    ssb    ${results_file}_mpp_ssb.txt    "-100 -44 -39 -36 -33 -30 -27" "--g_file g_mpp_1200s.f32"
+    ssb    ${results_file}_mpp_ssb.txt    "-100 -44 -39 -36 -33 -30 -27" "--g_file g_mpp_4000s.f32"
 fi
 
 if [ "$mode" == "rade" ] || [ "$mode" == "all" ]; then
     rade   ${results_file}_awgn_rade.txt   "100 15 10 6 5 3.75 2.5 1.25 0 -1.25 -2.5"
-    rade   ${results_file}_mpp_rade.txt   "100 15 10 6 5 3.75 2.5 1.25 0" "--g_file g_mpp_1200s.f32"
+    rade   ${results_file}_mpp_rade.txt   "100 15 10 6 5 3.75 2.5 1.25 0" "--g_file g_mpp_4000s.f32"
 fi
 
 if [ "$mode" == "radev2" ] || [ "$mode" == "all" ]; then
     radev2 ${results_file}_awgn_radev2.txt "100 15 10 7.5 5 3.75 2.5 1.25 0 -1.25 -2.5"
-    radev2 ${results_file}_mpp_radev2.txt  "100 15 10 7.5 5 3.75 2.5 1.25 0 -1.25" "--g_file g_mpp_1200s.f32"
+    radev2 ${results_file}_mpp_radev2.txt  "100 15 10 7.5 5 3.75 2.5 1.25 0 -1.25" "--g_file g_mpp_4000s.f32"
 fi
 

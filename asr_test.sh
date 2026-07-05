@@ -291,8 +291,8 @@ function process {
 
         if [ $mode == "rade" ]; then
             ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth ${in} out.wav \
-            --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata  --time_offset -16 \
-            --EbNodB $EbNodB ${inference_args} | tee ${rade_log}
+            --rate_Fs --pilots --pilot_eq --eq_ls --cp 0.004 --bottleneck 3 --auxdata --tanh_clipper --ssb_bpf \
+            --time_offset -16 --EbNodB $EbNodB ${inference_args} | tee ${rade_log}
             grep "Multipath Doppler spread file too short" $rade_log
             if [ $? -eq 0 ]; then
                 echo "Error - fading file too short"

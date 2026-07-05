@@ -769,8 +769,8 @@ function plot_wer_v2(prefix_fn, png_fn="", epslatex="")
   plot(radev1_mpp(:,1),  radev1_mpp(:,3),  'ro--;RADE V1 MPP;');
   plot(radev2_mpp(:,1),  radev2_mpp(:,3),  'go--;RADE V2 MPP;');
   if length(epslatex)
-    xmin=-5; xmax=20; ymax=40;
-    set(gca, 'xtick', xmin:5:xmax);
+    xmin=-6; xmax=20; ymax=40;
+    set(gca, 'xtick', -5:5:xmax);
   else
     xmin=-6; xmax=20; ymax=60;
     set(gca, 'xtick', xmin:2:xmax);

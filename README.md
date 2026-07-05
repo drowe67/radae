@@ -193,10 +193,10 @@ Automatic Speech Recognition (ASR) is used as an objective speech quality metric
    ./asr_test_top.sh 700D -n 100
    ```
 
-1. For MPP channel, first generate the 1200s fading file (if not already present), then run MPP sweeps:
+1. For MPP channel, first generate the 4000s fading file (if not already present), then run MPP sweeps:
    ```
-   if [ ! -f g_mpp_1200s.f32 ]; then
-     DISPLAY="" echo "Fs=8000; Rs=50; Nc=20; multipath_samples('mpp', Fs, Rs, Nc, 1200, '','g_mpp_1200s.f32'); quit" | octave-cli -qf
+   if [ ! -f g_mpp_4000s.f32 ]; then
+     DISPLAY="" echo "Fs=8000; Rs=50; Nc=20; multipath_samples('mpp', Fs, Rs, Nc, 4000, '','g_mpp_4000s.f32'); quit" | octave-cli -qf
    fi
    ./asr_test_top.sh ssb -n 100
    ./asr_test_top.sh rade -n 100
