@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
             fwrite(eoo_out, sizeof(float), n_eoo_bits, feoo);
         }
         nin = rade_nin(r);
-        fprintf(stderr, "SNR3k (dB): %d\n", rade_snrdB_3k_est(r));
+        fprintf(stderr, "SNR3k (dB): %.1f\n", rade_snrdB_3k_est(r));
     }
 
     rade_close(r);
