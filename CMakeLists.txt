@@ -1022,6 +1022,17 @@ add_test(NAME radae_nopy_v2_rx_snr_low
              python3 check_snr_est.py \$SNR3K snr_est_v2_c_low.f32 2.0")
          set_tests_properties(radae_nopy_v2_rx_snr_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+
+# V1 text round-trip test: callsign/gridsquare via EOO data channel
+add_test(NAME radae_nopy_v1_text
+         COMMAND ${RADAE_NOPY_BUILD_DIR}/src/rade_v1_text_test)
+         set_tests_properties(radae_nopy_v1_text PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# V2 text round-trip test: streaming text via BPSK data symbol channel
+add_test(NAME radae_nopy_v2_text
+         COMMAND ${RADAE_NOPY_BUILD_DIR}/src/rade_v2_text_test)
+         set_tests_properties(radae_nopy_v2_text PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 endif() # RADAE_NOPY_BUILD_DIR
 
 # RADE V2 -----------------------------------------------------------------------------------------------
