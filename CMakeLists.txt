@@ -1033,6 +1033,12 @@ add_test(NAME radae_nopy_v2_text
          COMMAND ${RADAE_NOPY_BUILD_DIR}/src/rade_v2_text_test)
          set_tests_properties(radae_nopy_v2_text PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# WAV pipeline sanity check: encode speech WAV → RADE WAV → decoded WAV, confirm sync+SNR
+add_test(NAME radae_nopy_v1_wav
+         COMMAND sh -c "${RADAE_NOPY_BUILD_DIR}/src/rade_tx_wav ${CMAKE_SOURCE_DIR}/wav/brian_g8sez.wav /tmp/rade_nopy_v1_wav_tx.wav && \
+                        ${RADAE_NOPY_BUILD_DIR}/src/rade_rx_wav /tmp/rade_nopy_v1_wav_tx.wav /tmp/rade_nopy_v1_wav_rx.wav")
+         set_tests_properties(radae_nopy_v1_wav PROPERTIES PASS_REGULAR_EXPRESSION "SNR: [0-9]")
+
 endif() # RADAE_NOPY_BUILD_DIR
 
 # RADE V2 -----------------------------------------------------------------------------------------------
