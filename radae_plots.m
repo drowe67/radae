@@ -736,6 +736,66 @@ function plot_wer(prefix_fn, png_fn="", epslatex="")
   end  
 endfunction
 
+
+function plot_wer_v2(prefix_fn, png_fn="", epslatex="")
+  ssb_awgn_fn    = sprintf("%s_asr_awgn_ssb.txt",    prefix_fn);
+  radev1_awgn_fn = sprintf("%s_asr_awgn_rade.txt",   prefix_fn);
+  radev2_awgn_fn = sprintf("%s_asr_awgn_radev2.txt", prefix_fn);
+  ssb_mpp_fn     = sprintf("%s_asr_mpp_ssb.txt",     prefix_fn);
+  radev1_mpp_fn  = sprintf("%s_asr_mpp_rade.txt",    prefix_fn);
+  radev2_mpp_fn  = sprintf("%s_asr_mpp_radev2.txt",  prefix_fn);
+  controls_fn    = sprintf("%s_asr_c.txt",            prefix_fn);
+
+  ssb_awgn    = load(ssb_awgn_fn);
+  radev1_awgn = load(radev1_awgn_fn);
+  radev2_awgn = load(radev2_awgn_fn);
+  ssb_mpp     = load(ssb_mpp_fn);
+  radev1_mpp  = load(radev1_mpp_fn);
+  radev2_mpp  = load(radev2_mpp_fn);
+  c = load(controls_fn);
+
+  if length(epslatex)
+    [textfontsize linewidth] = set_fonts(30);
+  else
+    [textfontsize linewidth] = set_fonts(16);
+  end
+
+  figure(1); clf;
+  plot(ssb_awgn(:,1),    ssb_awgn(:,3),    'b+-;SSB AWGN;');
+  hold on;
+  plot(radev1_awgn(:,1), radev1_awgn(:,3), 'r+-;RADE V1 AWGN;');
+  plot(radev2_awgn(:,1), radev2_awgn(:,3), 'g+-;RADE V2 AWGN;');
+  plot(ssb_mpp(:,1),     ssb_mpp(:,3),     'bo--;SSB MPP;');
+  plot(radev1_mpp(:,1),  radev1_mpp(:,3),  'ro--;RADE V1 MPP;');
+  plot(radev2_mpp(:,1),  radev2_mpp(:,3),  'go--;RADE V2 MPP;');
+  if length(epslatex)
+    xmin=-6; xmax=20; ymax=40;
+    set(gca, 'xtick', -5:5:xmax);
+  else
+    xmin=-6; xmax=20; ymax=60;
+    set(gca, 'xtick', xmin:2:xmax);
+  end
+  plot([xmin xmax],[c(2) c(2)],'m-;FARGAN;')
+  plot([xmin xmax],[c(1) c(1)],'c-;clean;')
+  hold off;
+  axis([xmin,xmax,0,ymax]); grid; ylabel('WER (\%)'); xlabel('SNR3k (dB)');
+  lh = legend('boxoff');
+  legend('left');
+  if length(epslatex)
+    lpos = get(lh, 'position');
+    set(lh, 'position', [lpos(1)+0.10 lpos(2)+0.40 lpos(3) lpos(4)]);
+  end
+
+  if length(png_fn)
+    print("-dpng",png_fn,"-S1000,600");
+  end
+  if length(epslatex)
+    print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
+  else
+    set_fonts(textfontsize);
+  end
+endfunction
+
 function plot_wer_bbfm(prefix_fn, png_fn="", epslatex="")
   fm_awgn_fn = sprintf("%s_asr_awgn_fm.txt",prefix_fn);
   rade_awgn_fn = sprintf("%s_asr_awgn_bbfm.txt",prefix_fn);

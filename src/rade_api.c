@@ -549,7 +549,7 @@ float rade_freq_offset(struct rade *r) {
   return 0;
 }
 
-RADE_EXPORT int rade_snrdB_3k_est(struct rade *r) {
+RADE_EXPORT float rade_snrdB_3k_est(struct rade *r) {
   assert(r != NULL);
-  return r->snr;
+  return (float)r->snr;
 }

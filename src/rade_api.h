@@ -126,7 +126,7 @@ RADE_EXPORT int rade_sync(struct rade *r);
 RADE_EXPORT float rade_freq_offset(struct rade *r);
 
 // returns the current SNR estimate (in dB) of the Rx signal ( when rade_sync()!=0 )
-RADE_EXPORT int rade_snrdB_3k_est(struct rade *r);
+RADE_EXPORT float rade_snrdB_3k_est(struct rade *r);
 
 #ifdef __cplusplus
 }

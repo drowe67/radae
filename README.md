@@ -10,7 +10,7 @@ RADE V2 builds on V1 with several algorithmic improvements:
 | Equalisation | Classical DSP, pilot-aided | ML-based, no pilots required |
 | 99% Occupied Bandwidth | ~2100 Hz (SSB filter limited) | ~860 Hz |
 | Frame duration | ~180 ms | ~40 ms |
-| PAPR | 4.2 dB | 3.5 dB |
+| PAPR (100% CCDF) | 4.2 dB | 3.5 dB |
 | Frame sync | DSP | Neural network |
 | End-of-over detection | Pilot pend sequence | Channel sparsity metric |
 | Threshold SNR (AWGN) | -2 dB | ~-4.5 dB |
@@ -175,7 +175,7 @@ Automatic Speech Recognition (ASR) is used as an objective speech quality metric
 
 1. Install dependencies:
    ```
-   pip3 install jiwer openai-whisper
+   pip3 install jiwer openai-whisper soundfile
    ```
 
 1. The LibriSpeech `test-clean` dataset (~400 MB) is downloaded automatically to `~/.cache/LibriSpeech/` on first run via `torchaudio`.
@@ -189,18 +189,24 @@ Automatic Speech Recognition (ASR) is used as an objective speech quality metric
    ```
    ./asr_test_top.sh ssb -n 100
    ./asr_test_top.sh rade -n 100
+   ./asr_test_top.sh radev2 -n 100
    ./asr_test_top.sh 700D -n 100
    ```
 
-1. For MPP channel, first generate fading samples (if not already present), then re-run with `--g_file`:
+1. For MPP channel, first generate the 4000s fading file (if not already present), then run MPP sweeps:
    ```
-   ./test/make_g.sh
-   ./asr_test_top.sh rade -n 100 --g_file g_mpp.f32
+   if [ ! -f g_mpp_4000s.f32 ]; then
+     DISPLAY="" echo "Fs=8000; Rs=50; Nc=20; multipath_samples('mpp', Fs, Rs, Nc, 4000, '','g_mpp_4000s.f32'); quit" | octave-cli -qf
+   fi
+   ./asr_test_top.sh ssb -n 100
+   ./asr_test_top.sh rade -n 100
+   ./asr_test_top.sh radev2 -n 100
    ```
 
 1. Plot WER curves in Octave:
    ```
-   octave:1> radae_plots; plot_wer("241221","241221_asr_test.png")
+   octave:1> radae_plots; plot_wer("260702","260702_asr_test.png")
+   octave:1> radae_plots; plot_wer_v2("260702","260702_wer_v2.png")
    ```
 
 # Testing RADE
