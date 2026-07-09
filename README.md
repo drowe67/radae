@@ -67,6 +67,7 @@ The RADE source code is released under the two-clause BSD license.
 | `loss.py` | Measures ML loss (speech distortion) between encoder and decoder feature vectors |
 | `compare_models_inf.sh` | Generates loss versus SNR curves across models and channel types |
 | `ota_test.sh` | Over-the-air/over-the-cable test: generates tx signal, decodes rx, measures loss |
+| `radev2_rx_wav.sh` | Decode an off-air RADE V2 WAV recording; outputs decoded speech and diagnostic plots |
 | `est_CNo.py` | C/No estimation from a received chirp signal |
 | `chirp.py` | Generates a chirp reference signal used for timing and level calibration in OTA tests |
 | `int16tof32.py` / `f32toint16.py` | Sample format converters between int16 and float32 |
@@ -115,6 +116,20 @@ A lot of the tests generate a float IQ sample file.  You can listen to this file
 cat rx.f32 | python3 f32toint16.py --real --scale 8192 | play -t .s16 -r 8000 -c 1 - bandpass 300 2000
 ```
 The scaling `--scale` is required as the low SNRs mean the noise peak amplitude can clip 16 bit samples if not carefully scaled.
+
+## Decoding an off air RADE V2 wave file
+
+To decode a WAV file received off air (e.g. from a KiwiSDR or similar SDR receiver):
+```
+./radev2_rx_wav.sh ~/Downloads/kiwi_sdr_rx.wav
+```
+All output artefacts are stored in a subdirectory named after the input file:
+```
+~/Downloads/kiwi_sdr_rx/kiwi_sdr_rx_rade2.wav   # decoded speech
+~/Downloads/kiwi_sdr_rx/kiwi_sdr_rx_plots.png   # sync state, SNR, freq offset, gain plots
+~/Downloads/kiwi_sdr_rx/report.txt               # terse per-frame decoder log
+```
+The input WAV can be any sample rate (resampled to 8kHz internally). Pass `--verbose` for the full decoder log including bash trace.
 
 ## Optional: RADE V1 C Port Tests (radae_nopy)
 
