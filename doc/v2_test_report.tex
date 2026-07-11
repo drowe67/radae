@@ -480,9 +480,9 @@ Table \ref{tab:phase_c_summary} summarises the test results. A total of 58 sampl
 \centering
 \begin{tabular}{ l | c | c }
  \hline
- Goal & Target Samples & Collected Samples \\
+ Goal & Target & Actual \\
  \hline
- Number of stored file OTA samples to collect & 20 & 58 \\
+ Number of samples collected & 20 & 58 \\
  Number of languages & 3 & 3 \\
  PAPR measurements & 3 & 1 \\
  \hline
@@ -490,7 +490,6 @@ Table \ref{tab:phase_c_summary} summarises the test results. A total of 58 sampl
 \end{tabular}
 \end{table}
 
-With respect to the test goals above:
 We achieved the goal of successful functional testing across a range of languages, radios, and HF channels, with no counter examples to the Phase A \& B results.
 No examples were found of complete breakdown of V2 when V1 worked.
 These tests established the functional goal of demonstrating that RADE V2 works (classical DSP and ML subsystems) over real world HF channels.
@@ -502,7 +501,7 @@ No evidence (in either V1 or V2 decoded samples) was found of the ``underwater" 
 
 \input ota_table.tex
 
-Only one PAPR measurement was submitted (Table \ref{tab:phase_c_take_papr}, thanks Take). This was on the baseband signal using Audacity and was consistent with the simulation results. As further work it would be desirable to obtain a measurement at the PA RF output.
+Only one PAPR measurement was submitted (Table \ref{tab:phase_c_take_papr}, thanks Take). This was on the baseband signal using Audacity and was consistent with the simulation results. As further work it would be useful to obtain PAPR measurements at the PA RF output.
 
 \begin{table} [h]
 \caption{Phase C PAPR results from Take}
@@ -525,11 +524,13 @@ Only one PAPR measurement was submitted (Table \ref{tab:phase_c_take_papr}, than
 This section describes the test results collected from the crowd sourced PTT OTA test campaign. The goals of this test campaign were:
 \begin{enumerate}
 \item Functional testing of RADE V2 OTA in real world PTT conversations.  It should acquire, sync and decode without major failures such as crashing or garbled speech.
-\item Gain experience in 3rd parties integrating and verifying RADE V2 operation in their application/radio. Use this information to improve the integration and verification procedure.
+\item Successful integration of the 40 \si{ms} delay, for example no clicks in audio (short buffers can stress sound drivers), and evaluating the PTT turn around compared to RADE V1 (180ms).
+\item Gain experience in 3rd parties integrating and verifying RADE V2 operation in their application/radio (e.g. software and over the cable loss tests). Use this information to improve the integration and verification procedure.
 \item Gather further examples of off air received signals and decoded V2 speech to support the previous test results, but in real time from a range of speakers, HF channels, radio hardware.
-\item If any issues are encountered, explore and fix bugs.
+\item If any issues are encountered from \emph{verified} integrations, explore and fix bugs.
 \item Measurements of PAPR at the PA output and compare to simulation.
 \item If encountered, explore the ``underwater" voice modulation artefact often heard on V1 samples posted on social media.
+\item It is not within the scope of this test phase to evaluate speech quality (e.g. compared to V1 or SSB), as no way of performing a controlled tests is possible.
 \end{enumerate}
 
 \begin{table} [h]
@@ -548,7 +549,7 @@ This section describes the test results collected from the crowd sourced PTT OTA
 \end{tabular}
 \end{table}
 
-The procedure for testing are documented \href{https://github.com/drowe67/radae/README.md#testing-rade}{here}.  Any PTT results must be from an application of radio that has RADE V2 integration verified using \href{https://github.com/drowe67/radae/README.md#verifying-rade-integration}{this} procedure.  
+The procedure for testing is documented \href{https://github.com/drowe67/radae/#testing-rade}{here}.  Any results must be from an application or radio that has RADE V2 integration verified using \href{https://github.com/drowe67/radae/#verifying-rade-integration}{this} procedure.  Any applications contributing to this test campaign must be capable of exporting a received off-air signal sample file, and a decoded V2 speech file.
 
 \section{Conclusion}
 
@@ -562,7 +563,7 @@ In Table \ref{tab:conclusion} the results from Phase A, B and C are summarised a
 \hline
 Requirement & Met & Comment \\
 \hline
-Speech quality v SNR $\ge$ RADE V1 on AWGN \& MPP. & Pass & $\approx 3$ \si{dB} gain in simulations, supported by OTA tests. \\
+Speech quality v SNR $\ge$ RADE V1 on AWGN \& MPP. & Pass & $\approx 3$ \si{dB} gain of V2/V1 in simulations, but statistical significance not reached in OTA tests (expected result). \\
 Handles MPD channel without breaking down & Pass & \\
 PAPR $< 1$ \si{dB}| through a typical SSB band pass filter. & Partial & This requirement was found to be in error, real world PAPR of RADE V1 was $>$ 4 \si{dB}.  We have achieved a PAPR of $\approx 3$ \si{dB} with V2, a 1 \si{dB} gain on V1. \\
 OBW $<$ 2000 \si{Hz} & Pass & V2 OBW measured as $\approx 860$ \si{Hz}, much cleaner spectrum. \\ 
