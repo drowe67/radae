@@ -203,34 +203,16 @@ Automatic Speech Recognition (ASR) is used as an objective speech quality metric
    octave:1> radae_plots; plot_wer("241221","241221_asr_test.png")
    ```
 
-# C Port of Core Encoder and Decoder
+# Exporting Weights for the C Port (radae_nopy)
 
-The following describes the V1 C port.  A V2 C port is planned as future work.
+The [radae_nopy](https://github.com/peterbmarks/radae_nopy) repo contains the full standalone C port of RADE. When a new model is trained, the weights need to be exported from Python and compiled into radae_nopy:
 
-The model weights can be compiled in or loaded at init-time from a binary blob.  The actual model is hard coded in `rade_enc.c` and `rade_dec.c`, and can't be easily changed.
-
-To compile-in the weights:
-1. Export weights:
+1. Export weights to C source files:
    ```
    cd radae
    python3 export_rade_weights.py model19_check3/checkpoints/checkpoint_epoch_100.pth src
    ```
-1. We need to make some manual changes to the weight files to support changing input dimension at run time.  In `rade_enc_dat.c`, the first call to `linear_init()` should look like:
-   ```
-   int init_radeenc(RADEEnc *model, const WeightArray *arrays, int input_dim) {
-     if (linear_init(&model->enc_dense1, arrays, "enc_dense1_bias", NULL, NULL,"enc_dense1_weights_float", NULL, NULL, NULL, input_dim, 64)) return 1;
-   ```
-   e.g. the fixed input dimension (84 for `model19_check3`, 80 for earlier models without auxdata) should be changed to the `input_dim` variable. This allows us to enable/disable `auxdata` at init time, without changing the C code for the model.
-1. Also make manual changes to support `output_dim` in `rade_dec_dat.c`, `init_radedec()`.
-3. Build C code.
-4. Run ctests.
-
-To export the compiled in weights to a binary blob:
-```
-cd radae/build
-./src/write_rade_weights ../bin/model05.bin
-```
-These can then be loaded at init-time, see examples in `src/test_rand_enc.c` and `src/test_rand_dec.c`.
+1. Copy the generated `rade_enc_data.c`, `rade_enc_data.h`, `rade_dec_data.c`, `rade_dec_data.h` into `radae_nopy/src/` and rebuild.
 
 # Testing RADE
 
