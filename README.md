@@ -26,7 +26,7 @@ This repo is the reference Python implementation for RADE V1 and V2. The current
 
 This repo is intended to support experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work. The focus is on waveform development, not software configuration. It is not intended to be packaged for general use or to work across multiple Linux distros and operating systems. Unless otherwise stated, the code in this repo is intended to run only on Ubuntu Linux 22-24 on a non-virtual machine.
 
-For deployment and distribution of RADE V1 please use the [C port](https://github.com/peterbmarks/radae_nopy).  RADE V2 is still under development but we hope to make an initial release soon.
+For deployment and distribution of RADE please use the [C port](https://github.com/freedv/rade_c).
 
 # Quickstart
 
@@ -131,15 +131,15 @@ All output artefacts are stored in a subdirectory named after the input file:
 ```
 The input WAV can be any sample rate (resampled to 8kHz internally). Pass `--verbose` for the full decoder log including bash trace.
 
-## Optional: RADE V1 C Port Tests (radae_nopy)
+## Optional: RADE C Port Tests (rade_c)
 
-The [radae_nopy](https://github.com/peterbmarks/radae_nopy) repo contains a C port of the RADE V1 receiver. Its ctests are optional and only enabled when `RADAE_NOPY_BUILD_DIR` is passed to cmake:
+The [rade_c](https://github.com/freedv/rade_c) repo contains the C port of RADE V1 and V2. Its ctests are optional and only enabled when `RADAE_NOPY_BUILD_DIR` is passed to cmake:
 ```
 cd ~
-git clone https://github.com/peterbmarks/radae_nopy.git
-cd radae_nopy && mkdir build && cd build && cmake .. && make
+git clone https://github.com/freedv/rade_c.git
+cd rade_c && mkdir build && cd build && cmake .. && make
 cd ~/radae/build
-cmake -DRADAE_NOPY_BUILD_DIR=~/radae_nopy/build ..
+cmake -DRADAE_NOPY_BUILD_DIR=~/rade_c/build ..
 ctest -R radae_nopy
 ```
 
