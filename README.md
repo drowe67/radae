@@ -224,6 +224,18 @@ Automatic Speech Recognition (ASR) is used as an objective speech quality metric
    octave:1> radae_plots; plot_wer_v2("260702","260702_wer_v2.png")
    ```
 
+# Exporting Weights for the C Port (rade_c)
+
+The [rade_c](https://github.com/freedv/rade_c) repo contains the full standalone C port of RADE. When a new model is trained, the weights need to be exported from Python and compiled into rade_c:
+
+1. Export weights to C source files:
+   ```
+   cd radae
+   python3 export_rade_weights.py model19_check3/checkpoints/checkpoint_epoch_100.pth src
+   ```
+1. Copy the generated `rade_enc_data.c`, `rade_enc_data.h`, `rade_dec_data.c`, `rade_dec_data.h` into `rade_c/src/` and rebuild.
+
+
 # Testing RADE
 
 You are welcome to join the RADE development effort by testing RADE, submitting bug reports or interesting test results.  There are several kinds of tests:
@@ -280,3 +292,59 @@ The decoded audio files `rx_ssb.wav`, `rx_rade1.wav`, and `rx_rade2.wav` are wri
 See `ota_test.sh` for more information.
 
 If submitting a test result to the RADE team, please email the input audio file (e.g. `brian_g8sez.wav`) and off air received audio file (e.g. `rx.wav`).  We can then use your files to reproduce your results.
+
+# Web based Stored File Processing
+
+This section contains some notes on setting up a web server to run `ota_test.sh`.  The idea is to make it easier for non-Linux users to contribute to the stored file test program.  The general idea is a CGI script interfaces to `ota_test.sh` to perform the Tx and Rx processing.  We configure the web server so that the HTML forms and CGI scripts run in `~/public_html`.  The notes below are for Apache on Ubuntu 22. 
+
+1. The Python packages need to be available system wide , so `www-data` can use them: 
+   ```
+   sudo pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+   sudo -u www-data python3 -c "import torch"
+   ```
+
+   ```
+   sudo pip3 install matplotlib
+   sudo -u www-data python3 -c "import matplotlib"
+   ```
+   The presence of the packages can be checked by mimicing the www-data user (the last line in each step above should not fail if all is well).
+
+1. Configure Apache for CGI and serving pages from our `~/public_html` dir.
+   ```
+   sudo a2enmod cgid
+   sudo a2enmod userdir
+   sudo systemctl restart apache2
+   ```
+   We want html and cgi to run out of ~/public_html, so permissions have to be `755` and `www-data` has to be added to the users group.
+   ```
+   mkdir ~/public_html
+   chmod 755 public_html
+   sudo usermod -a -G <username> www-data
+   ```
+   To let CGI scripts run from ~/public_html I placed this in my `/etc/apache2/apache2.conf`:
+   ```
+   <Directory "/home/<username>/public_html">
+      Options +ExecCGI
+      AddHandler cgi-script .cgi
+   </Directory>  
+   ```   
+   Then restart apache as above.
+
+1. Create sym links to HTML/CGI scripts in `radae` repo, this allows the script to be part of the RADAE repo:
+   ```
+   cd ~/public_html
+   ln -s ~/radae/public_html/tx_form.html tx_form.html
+   ln -s ~/radae/public_html/tx_process.cgi tx_process.cgi
+   ``` 
+
+1. Note that files created when the CGI process run (e.g. `/tmp/input.wav`) get put in a sandbox rather than directly in `/tmp`.  This is a systemd security feature.  You can find the files with:
+   ```
+   sudo find /tmp -name input.wav | xargs sudo ls -ld
+   -rw-r--r-- 1 www-data www-data 3918458 Aug 15 15:28 /tmp/systemd-private-2fcf85ad243b4da08d79d2e27e0375af-apache2.service-vDE2Dg/tmp/input.wav
+   ```
+
+1. Apache error log, good for viewing `ota_test.sh` progress and spotting any issues:
+   ```
+   tail -f /var/log/apache2/error.log
+   ```
+

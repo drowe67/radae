@@ -48,7 +48,6 @@ with open(f"/tmp/{form_filename}", 'wb') as f:
         f.write(chunk)
 
 my_env = os.environ.copy()
-my_env["CODEC2_DEV"] = "/home/david/codec2-dev"
 my_env["MPLCONFIGDIR"] = "/tmp" # stop matplotlib complaining abpout cache directory
 os.chdir('../radae')
 if form_processing == "tx":
@@ -60,8 +59,8 @@ else:
     # zip up files for return
     filename = Path(form_filename).stem
     #print("Content-type: text/html\n\n")
-    zip_test = subprocess.check_output(["zip","-j",f"/tmp/{filename}.zip",f"/tmp/{filename}_ssb.wav", f"/tmp/{filename}_radae.wav",
-                                        f"/tmp/{filename}_spec.jpg", f"/tmp/{filename}_report.txt"], encoding='utf-8').replace('\n','<br>')
+    zip_test = subprocess.check_output(["zip","-j",f"/tmp/{filename}.zip",f"/tmp/{filename}_ssb.wav", f"/tmp/{filename}_rade1.wav", f"/tmp/{filename}_rade2.wav", 
+                                        f"/tmp/{filename}_spec.jpg", f"/tmp/{filename}_report.txt", f"/tmp/{filename}_plots.png"], encoding='utf-8').replace('\n','<br>')
     print(zip_test, file=sys.stderr)
     print("finished!", file=sys.stderr)
     return_file(f"/tmp/{filename}.zip")

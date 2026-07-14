@@ -196,6 +196,10 @@ function process_rx {
       python3 loss.py ${speechfile_no_path_no_ext}_features_in.f32 ${speechfile_no_path_no_ext}_features_out_tx1.f32 --features_hat2 features_out_rx1.f32 --compare --clip_start 25 | sed -n '5p' | tee -a ${filename}_report.txt
       python3 loss.py ${speechfile_no_path_no_ext}_features_in.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 25 | sed -n '5p' | tee -a ${filename}_report.txt
     fi
+
+    # filter NNPACK awarning for old machine without AVX
+    filter_tmp=$(mktemp)
+    grep -v "NNPACK" ${filename}_report.txt > ${filter_tmp} && mv ${filter_tmp} ${filename}_report.txt
 }
 
 function tx_ssb_radio {
@@ -378,8 +382,8 @@ cat ${chirp}.f32 | python3 f32toint16.py --real > ${chirp}.raw
 # create compressed SSB signal
 speechfile_raw_8k=$(mktemp)
 tx_ssb=$(mktemp)
-tx_radae1=tx_rade1
-tx_radae2=tx_rade2
+tx_radae1=$(mktemp)
+tx_radae2=$(mktemp)
 # With 16kHz input files, we need an 8kHz version for SSB
 sox $speechfile -r 8000 -t .s16 -c 1 $speechfile_raw_8k
 analog_compressor $speechfile_raw_8k $tx_ssb $comp_gain
