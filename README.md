@@ -1,4 +1,4 @@
-# Radio Autoencoder V2
+# Radio Autoencoder
 
 RADE (Radio AutoEncoder) is a neural codec for transmitting speech over HF radio channels.  A neural encoder compresses speech into a latent vector which is modulated onto an OFDM waveform and transmitted.  At the receiver a neural decoder reconstructs the speech features, which are synthesised into audio by the [FARGAN](https://arxiv.org/abs/2405.21069) vocoder.  The system is trained end-to-end, jointly optimising the encoder, channel layer, and decoder for minimum speech distortion across a range of channel conditions.
 
@@ -26,7 +26,15 @@ This repo is the reference Python implementation for RADE V1 and V2. The current
 
 This repo is intended to support experimental work, with just enough information for the advanced experimenter to reproduce aspects of the work. The focus is on waveform development, not software configuration. It is not intended to be packaged for general use or to work across multiple Linux distros and operating systems. Unless otherwise stated, the code in this repo is intended to run only on Ubuntu Linux 22-24 on a non-virtual machine.
 
-For deployment and distribution of RADE V1 please use the [C port](https://github.com/peterbmarks/radae_nopy).  RADE V2 is still under development but we hope to make an initial release soon.
+For deployment and distribution of RADE please use the [C port](https://github.com/freedv/rade_c).
+
+## ⚠️ RADE V2 Status
+
+RADE V2 is under active development. The waveform, model weights, and API are subject to change without notice, and future versions will not be backwards compatible with the current implementation.
+
+Known issues are under investigation. On-air use is not recommended at this stage, and the FreeDV team is not able to provide support for pre-release V2 deployments. Any on-air V2 signals should be considered premature use of the development waveform and are not part of official FreeDV development activity.
+
+The official V2 status will be announced on the [FreeDV blog](https://freedv.org/blog/).
 
 # Quickstart
 
