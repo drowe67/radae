@@ -141,14 +141,14 @@ The input WAV can be any sample rate (resampled to 8kHz internally). Pass `--ver
 
 ## Optional: RADE C Port Tests (rade_c)
 
-The [rade_c](https://github.com/freedv/rade_c) repo contains the C port of RADE V1 and V2. Its ctests are optional and only enabled when `RADAE_NOPY_BUILD_DIR` is passed to cmake:
+The [rade_c](https://github.com/freedv/rade_c) repo contains the C port of RADE V1 and V2. Its ctests are optional and only enabled when `RADE_C_BUILD_DIR` is passed to cmake:
 ```
 cd ~
 git clone https://github.com/freedv/rade_c.git
 cd rade_c && mkdir build && cd build && cmake .. && make
 cd ~/radae/build
-cmake -DRADAE_NOPY_BUILD_DIR=~/rade_c/build ..
-ctest -R radae_nopy
+cmake -DRADE_C_BUILD_DIR=~/rade_c/build ..
+ctest -R rade_c
 ```
 
 
