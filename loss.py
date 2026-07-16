@@ -96,7 +96,7 @@ def find_loss(features_fn, features_hat_fn):
    print(f"  loss: {min_loss:5.3f} start: {min_start:d} acq_time: {acq_time:5.2f} s")
 
    # compute frame by frame loss for plotting
-   nframes = features_hat_seq_length - min_start
+   nframes = features_hat_seq_length
    #print(min_start,nframes)
    loss = np.zeros(nframes)
    for f in range(nframes):
