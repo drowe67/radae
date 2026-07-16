@@ -47,6 +47,10 @@ parser.add_argument('--acq_time_test', type=float, default=0, help='compare acqu
 parser.add_argument('--clip_start', type=int, default=0, help='remove this many feat vecs (e.g. frames x 4) from start (default 0)')
 parser.add_argument('--clip_end', type=int, default=0, help='remove this many feat vecs (e.g. frames x 4) (default 0)')
 parser.add_argument('--plot', action='store_true', help='plot loss versus time')
+parser.add_argument('--png', type=str, default='', help='save plot to PNG file instead of displaying')
+parser.add_argument('--stats', action='store_true', help='print per-frame loss statistics (mean, median, percentiles, outliers)')
+parser.add_argument('--hist', action='store_true', help='plot histogram of per-frame loss distribution')
+parser.add_argument('--outlier_threshold', type=float, default=0.0, help='loss threshold for outlier detection in --stats (default: 3x median)')
 parser.add_argument('--compare', action='store_true', help='compare features_hat and features_hat2')
 parser.add_argument('--delta', type=float, default=0.01, help='threshold for --compare')
 args = parser.parse_args()
@@ -120,24 +124,48 @@ if args.features_hat2:
       if np.abs(min_loss-min_loss2) < args.delta:
          print("PASS")
 
-if args.plot:
+if args.stats:
+   def print_stats(loss_arr, label):
+      threshold = args.outlier_threshold if args.outlier_threshold > 0.0 else 3.0 * np.median(loss_arr)
+      outliers = np.sum(loss_arr > threshold)
+      print(f"Stats for {label}:")
+      print(f"  mean:   {np.mean(loss_arr):6.3f}  median: {np.median(loss_arr):6.3f}")
+      print(f"  p95:    {np.percentile(loss_arr,95):6.3f}  p99:    {np.percentile(loss_arr,99):6.3f}")
+      print(f"  max:    {np.max(loss_arr):6.3f}  outlier threshold: {threshold:6.3f}")
+      print(f"  outliers (>{threshold:.3f}): {outliers:d} / {len(loss_arr):d} frames ({100*outliers/len(loss_arr):.1f}%)")
+   print_stats(loss, args.features_hat)
    if args.features_hat2:
-      plt.figure(1)
-      plt.plot(loss, "b-", label=args.features_hat)
+      print_stats(loss2, args.features_hat2)
+
+if args.plot or args.png:
+   plt.figure(1)
+   t = np.arange(len(loss)) * Tstep
+   plt.plot(t, loss, "b-", label=args.features_hat)
+   if args.features_hat2:
       acq_timestep = int(acq_time2/Tstep)
-      x = range(acq_timestep,acq_timestep+len(loss2))
-      plt.plot(x, loss2, "r-", label=args.features_hat2)
-      plt.legend(loc="upper left")
-      plt.figure(2)
-      ax = (0,len(loss),0,max(max(loss),max(loss2)))
-      plt.subplot(211)
-      plt.plot(loss, "b-", label=args.features_hat)
-      plt.axis(ax)
-      plt.legend(loc="upper left")
-      plt.subplot(212)
-      plt.plot(x, loss2, "r-", label=args.features_hat2)
-      plt.axis(ax)
-      plt.legend(loc="upper left")
+      t2 = np.arange(len(loss2)) * Tstep + acq_time2
+      plt.plot(t2, loss2, "r-", label=args.features_hat2)
+   plt.xlabel('Time (s)'); plt.ylabel('Loss'); plt.grid()
+   plt.legend(loc="upper right")
+   if args.png:
+      plt.savefig(args.png)
+      print(f"Saved plot to {args.png}")
    else:
-      plt.plot(loss, "b-", label=args.features_hat)
-   plt.show()
+      plt.show()
+
+if args.hist:
+   plt.figure(2)
+   threshold = args.outlier_threshold if args.outlier_threshold > 0.0 else 3.0 * np.median(loss)
+   plt.hist(loss, bins=50, color='b', alpha=0.7, label=args.features_hat)
+   if args.features_hat2:
+      plt.hist(loss2, bins=50, color='r', alpha=0.7, label=args.features_hat2)
+   plt.axvline(np.median(loss), color='b', linestyle='--', label=f'median {np.median(loss):.3f}')
+   plt.axvline(threshold, color='k', linestyle=':', label=f'outlier threshold {threshold:.3f}')
+   plt.xlabel('Loss'); plt.ylabel('Frame count'); plt.grid()
+   plt.legend(loc="upper right")
+   hist_png = args.png.replace('.png', '_hist.png') if args.png else ''
+   if hist_png:
+      plt.savefig(hist_png)
+      print(f"Saved histogram to {hist_png}")
+   else:
+      plt.show()
