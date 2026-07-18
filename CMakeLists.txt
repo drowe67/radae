@@ -859,6 +859,49 @@ add_test(NAME rade_c_v2_rx_snr_low
              python3 check_snr_est.py \$SNR3K snr_est_v2_c_low.f32 2.0")
          set_tests_properties(rade_c_v2_rx_snr_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# V2 C receiver AGC: gain mismatch on a clean (no channel impairment) signal,
+# C tx -> C rx. Mirrors v2_rx2_agc_mpp_high/low's gain values (4, 0.25) but on
+# a clean channel so a gain-staging regression isn't masked by channel noise.
+add_test(NAME rade_c_v2_rx_agc_clean_high
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             cat features_in.f32 | ${RADE_C_BUILD_DIR}/src/radae_tx --v2 > tx2_c.f32; \
+             cat tx2_c.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 --gain 4 > features_rx_v2_c.f32; \
+             python3 loss.py features_in.f32 features_rx_v2_c.f32 --loss_test 0.10 --clip_start 100 --clip_end 300")
+         set_tests_properties(rade_c_v2_rx_agc_clean_high PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+add_test(NAME rade_c_v2_rx_agc_clean_low
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             cat features_in.f32 | ${RADE_C_BUILD_DIR}/src/radae_tx --v2 > tx2_c.f32; \
+             cat tx2_c.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 --gain 0.25 > features_rx_v2_c.f32; \
+             python3 loss.py features_in.f32 features_rx_v2_c.f32 --loss_test 0.095 --clip_start 100 --clip_end 300")
+         set_tests_properties(rade_c_v2_rx_agc_clean_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# V2 C receiver AGC on MPP fading: Python tx (inference.sh, same as
+# rade_c_v2_rx_mpp/_low) since it's the C rx's AGC under test, not the tx.
+add_test(NAME rade_c_v2_rx_agc_mpp_high
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             test/make_g.sh; \
+             ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/all.wav /dev/null \
+             --rate_Fs --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 \
+             --auxdata --w1_dec 128 --write_rx rx_v2_nopy.f32 \
+             --prepend_noise 1 --append_noise 2 --freq_offset 25 --correct_freq_offset \
+             --g_file g_mpp.f32; \
+             cat rx_v2_nopy.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 --gain 4 > features_rx_v2_c.f32; \
+             python3 loss.py features_in.f32 features_rx_v2_c.f32 --loss_test 0.15 --clip_start 100 --clip_end 300")
+         set_tests_properties(rade_c_v2_rx_agc_mpp_high PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+add_test(NAME rade_c_v2_rx_agc_mpp_low
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             test/make_g.sh; \
+             ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/all.wav /dev/null \
+             --rate_Fs --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 \
+             --auxdata --w1_dec 128 --write_rx rx_v2_nopy.f32 \
+             --prepend_noise 1 --append_noise 2 --freq_offset 25 --correct_freq_offset \
+             --g_file g_mpp.f32 --EbNodB 6; \
+             cat rx_v2_nopy.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 --gain 0.25 > features_rx_v2_c.f32; \
+             python3 loss.py features_in.f32 features_rx_v2_c.f32 --loss_test 0.40 --clip_start 100 --clip_end 300")
+         set_tests_properties(rade_c_v2_rx_agc_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 
 # V1 text round-trip test: callsign/gridsquare via EOO data channel
 add_test(NAME rade_c_v1_text
