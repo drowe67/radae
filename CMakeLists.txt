@@ -864,6 +864,7 @@ add_test(NAME rade_c_v2_rx_snr_low
 # a clean channel so a gain-staging regression isn't masked by channel noise.
 add_test(NAME rade_c_v2_rx_agc_clean_high
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/all.wav features_in.f32; \
              cat features_in.f32 | ${RADE_C_BUILD_DIR}/src/radae_tx --v2 > tx2_c.f32; \
              cat tx2_c.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 --gain 4 > features_rx_v2_c.f32; \
              python3 loss.py features_in.f32 features_rx_v2_c.f32 --loss_test 0.10 --clip_start 100 --clip_end 300")
@@ -871,6 +872,7 @@ add_test(NAME rade_c_v2_rx_agc_clean_high
 
 add_test(NAME rade_c_v2_rx_agc_clean_low
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/all.wav features_in.f32; \
              cat features_in.f32 | ${RADE_C_BUILD_DIR}/src/radae_tx --v2 > tx2_c.f32; \
              cat tx2_c.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 --gain 0.25 > features_rx_v2_c.f32; \
              python3 loss.py features_in.f32 features_rx_v2_c.f32 --loss_test 0.095 --clip_start 100 --clip_end 300")
@@ -902,6 +904,30 @@ add_test(NAME rade_c_v2_rx_agc_mpp_low
              python3 loss.py features_in.f32 features_rx_v2_c.f32 --loss_test 0.40 --clip_start 100 --clip_end 300")
          set_tests_properties(rade_c_v2_rx_agc_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# V2 C receiver gain-staging verification: C tx -> C rx, clean channel,
+# +/-6dB gain mismatch vs a gain=1.0 baseline. Matches the magnitude of the
+# real freedv-gui/freedv-backend TX level mismatch found 260718 (rather than
+# the AGC tests' wider +/-12dB) -- models the kind of check a downstream
+# integrator's own verification suite should run against this API.
+add_test(NAME rade_c_v2_rx_gain_p6db
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/all.wav features_in.f32; \
+             cat features_in.f32 | ${RADE_C_BUILD_DIR}/src/radae_tx --v2 > tx2_c.f32; \
+             cat tx2_c.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 --gain 1.0 > features_rx_v2_c.f32; \
+             cat tx2_c.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 --gain 2.0 > features_rx_v2_c2.f32; \
+             python3 loss.py features_in.f32 features_rx_v2_c.f32 --features_hat2 features_rx_v2_c2.f32 \
+             --compare --delta 0.01 --clip_start 100 --clip_end 300")
+         set_tests_properties(rade_c_v2_rx_gain_p6db PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+add_test(NAME rade_c_v2_rx_gain_m6db
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/all.wav features_in.f32; \
+             cat features_in.f32 | ${RADE_C_BUILD_DIR}/src/radae_tx --v2 > tx2_c.f32; \
+             cat tx2_c.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 --gain 1.0 > features_rx_v2_c.f32; \
+             cat tx2_c.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 --gain 0.5 > features_rx_v2_c2.f32; \
+             python3 loss.py features_in.f32 features_rx_v2_c.f32 --features_hat2 features_rx_v2_c2.f32 \
+             --compare --delta 0.01 --clip_start 100 --clip_end 300")
+         set_tests_properties(rade_c_v2_rx_gain_m6db PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # V1 text round-trip test: callsign/gridsquare via EOO data channel
 add_test(NAME rade_c_v1_text
