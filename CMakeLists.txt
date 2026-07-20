@@ -958,6 +958,36 @@ add_test(NAME rade_c_v2_wav
              python3 loss.py /tmp/rade_c_v2_wav_features_tx.f32 /tmp/rade_c_v2_wav_features_rx.f32 --loss_test 0.088 --clip_start 100 --clip_end 300")
          set_tests_properties(rade_c_v2_wav PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# V2 real-valued WAV rx noise folding test (SNR3k ~6 dB operating point).
+# Re{tx+noise} aliases negative-frequency noise to positive frequencies, giving
+# the real rx ~3 dB less effective SNR than the complex IQ rx.
+# Path A: complex IQ rx at EbNodB=12 (SNR3k~5.6 dB).
+# Path B: real WAV rx at EbNodB=15 (+3 dB to compensate noise folding penalty).
+# Both should reach the same loss; delta threshold 0.005 (validated: correct 3 dB
+# offset gives delta~0.002, wrong 2.5 dB offset gives delta~0.011 -> FAIL).
+add_test(NAME rade_c_v2_wav_real
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/all.wav /dev/null \
+             --rate_Fs --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 \
+             --auxdata --w1_dec 128 --write_rx /tmp/rade_c_v2_wav_real_rx_iq.f32 \
+             --prepend_noise 1 --append_noise 2 --freq_offset 25 --correct_freq_offset \
+             --EbNodB 12 2>/dev/null; \
+             cat /tmp/rade_c_v2_wav_real_rx_iq.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 \
+             > /tmp/rade_c_v2_feat_iq.f32 2>/dev/null; \
+             ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/all.wav /dev/null \
+             --rate_Fs --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 \
+             --auxdata --w1_dec 128 --write_rx /tmp/rade_c_v2_wav_real_rx_real.f32 \
+             --prepend_noise 1 --append_noise 2 --freq_offset 25 --correct_freq_offset \
+             --EbNodB 15 2>/dev/null; \
+             python3 f32toint16.py --real --scale 16384 < /tmp/rade_c_v2_wav_real_rx_real.f32 | \
+             sox -r 8000 -c 1 -e signed-integer -b 16 -t raw - /tmp/rade_c_v2_wav_real.wav; \
+             ${RADE_C_BUILD_DIR}/src/rade_rx_wav --v2 /tmp/rade_c_v2_wav_real.wav /dev/null \
+             -f /tmp/rade_c_v2_feat_real.f32 2>/dev/null; \
+             python3 loss.py features_in.f32 /tmp/rade_c_v2_feat_iq.f32 \
+             --features_hat2 /tmp/rade_c_v2_feat_real.f32 \
+             --compare --delta 0.005 --clip_start 100 --clip_end 300")
+         set_tests_properties(rade_c_v2_wav_real PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 endif() # RADE_C_BUILD_DIR
 
 # RADE V2 -----------------------------------------------------------------------------------------------
