@@ -939,16 +939,24 @@ add_test(NAME rade_c_v2_text
          COMMAND ${RADE_C_BUILD_DIR}/src/rade_v2_text_test)
          set_tests_properties(rade_c_v2_text PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# WAV pipeline sanity check: encode speech WAV → RADE WAV → decoded WAV, confirm sync+SNR
+# WAV pipeline loss test: speech WAV -> RADE WAV -> decoded WAV, measure loss (no noise, nominal gain).
+# Models the verification procedure for third-party integrators of the RADE library.
+# Threshold: 5% above software-only (rade_c#989770e) baseline (V2: 0.084, V1: 0.113, AGC on, wav/all.wav).
+# Tighter than the 10% integrator criterion -- these are reference tools with no HW in the loop.
+# Baseline is a moving target if the model is retrained -- update threshold and hash accordingly.
 add_test(NAME rade_c_v1_wav
-         COMMAND sh -c "${RADE_C_BUILD_DIR}/src/rade_tx_wav ${CMAKE_SOURCE_DIR}/wav/brian_g8sez.wav /tmp/rade_nopy_v1_wav_tx.wav && \
-                        ${RADE_C_BUILD_DIR}/src/rade_rx_wav /tmp/rade_nopy_v1_wav_tx.wav /tmp/rade_nopy_v1_wav_rx.wav")
-         set_tests_properties(rade_c_v1_wav PROPERTIES PASS_REGULAR_EXPRESSION "SNR: [0-9]")
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             ${RADE_C_BUILD_DIR}/src/rade_tx_wav ${CMAKE_SOURCE_DIR}/wav/all.wav /tmp/rade_c_v1_wav_tx.wav -f /tmp/rade_c_v1_wav_features_tx.f32; \
+             ${RADE_C_BUILD_DIR}/src/rade_rx_wav /tmp/rade_c_v1_wav_tx.wav /tmp/rade_c_v1_wav_rx.wav -f /tmp/rade_c_v1_wav_features_rx.f32; \
+             python3 loss.py /tmp/rade_c_v1_wav_features_tx.f32 /tmp/rade_c_v1_wav_features_rx.f32 --loss_test 0.119 --clip_start 100 --clip_end 300")
+         set_tests_properties(rade_c_v1_wav PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 add_test(NAME rade_c_v2_wav
-         COMMAND sh -c "${RADE_C_BUILD_DIR}/src/rade_tx_wav --v2 ${CMAKE_SOURCE_DIR}/wav/brian_g8sez.wav /tmp/rade_nopy_v2_wav_tx.wav && \
-                        ${RADE_C_BUILD_DIR}/src/rade_rx_wav --v2 /tmp/rade_nopy_v2_wav_tx.wav /tmp/rade_nopy_v2_wav_rx.wav")
-         set_tests_properties(rade_c_v2_wav PROPERTIES PASS_REGULAR_EXPRESSION "SNR: [0-9]")
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             ${RADE_C_BUILD_DIR}/src/rade_tx_wav --v2 ${CMAKE_SOURCE_DIR}/wav/all.wav /tmp/rade_c_v2_wav_tx.wav -f /tmp/rade_c_v2_wav_features_tx.f32; \
+             ${RADE_C_BUILD_DIR}/src/rade_rx_wav --v2 /tmp/rade_c_v2_wav_tx.wav /tmp/rade_c_v2_wav_rx.wav -f /tmp/rade_c_v2_wav_features_rx.f32; \
+             python3 loss.py /tmp/rade_c_v2_wav_features_tx.f32 /tmp/rade_c_v2_wav_features_rx.f32 --loss_test 0.088 --clip_start 100 --clip_end 300")
+         set_tests_properties(rade_c_v2_wav PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 endif() # RADE_C_BUILD_DIR
 
