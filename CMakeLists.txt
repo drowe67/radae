@@ -958,6 +958,36 @@ add_test(NAME rade_c_v2_wav
              python3 loss.py /tmp/rade_c_v2_wav_features_tx.f32 /tmp/rade_c_v2_wav_features_rx.f32 --loss_test 0.088 --clip_start 100 --clip_end 300")
          set_tests_properties(rade_c_v2_wav PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# Smoke tests: run the exact README quick-start commands with voice.wav.
+# No loss threshold -- just verifies the example commands complete without error.
+add_test(NAME rade_c_readme_smoke_wav
+         COMMAND sh -c "\
+             ${RADE_C_BUILD_DIR}/src/rade_tx_wav ${RADE_C_BUILD_DIR}/../voice.wav /tmp/rade_c_smoke_v1_tx.wav && \
+             ${RADE_C_BUILD_DIR}/src/rade_rx_wav /tmp/rade_c_smoke_v1_tx.wav /tmp/rade_c_smoke_v1_rx.wav && \
+             ${RADE_C_BUILD_DIR}/src/rade_tx_wav --v2 ${RADE_C_BUILD_DIR}/../voice.wav /tmp/rade_c_smoke_v2_tx.wav && \
+             ${RADE_C_BUILD_DIR}/src/rade_rx_wav --v2 /tmp/rade_c_smoke_v2_tx.wav /tmp/rade_c_smoke_v2_rx.wav && \
+             echo PASS")
+         set_tests_properties(rade_c_readme_smoke_wav PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+add_test(NAME rade_c_readme_smoke_iq
+         COMMAND sh -c "\
+             sox ${RADE_C_BUILD_DIR}/../voice.wav -r 16000 -t .s16 -c 1 - | \
+             ${RADE_C_BUILD_DIR}/src/lpcnet_demo -features /dev/stdin - | \
+             ${RADE_C_BUILD_DIR}/src/radae_tx > /tmp/rade_c_smoke_v1.iq && \
+             cat /tmp/rade_c_smoke_v1.iq | \
+             ${RADE_C_BUILD_DIR}/src/radae_rx | \
+             ${RADE_C_BUILD_DIR}/src/lpcnet_demo -fargan-synthesis /dev/stdin - | \
+             sox -t .s16 -r 16000 -c 1 - /tmp/rade_c_smoke_v1_dec.wav && \
+             sox ${RADE_C_BUILD_DIR}/../voice.wav -r 16000 -t .s16 -c 1 - | \
+             ${RADE_C_BUILD_DIR}/src/lpcnet_demo -features /dev/stdin - | \
+             ${RADE_C_BUILD_DIR}/src/radae_tx --v2 > /tmp/rade_c_smoke_v2.iq && \
+             cat /tmp/rade_c_smoke_v2.iq | \
+             ${RADE_C_BUILD_DIR}/src/radae_rx --v2 | \
+             ${RADE_C_BUILD_DIR}/src/lpcnet_demo -fargan-synthesis /dev/stdin - | \
+             sox -t .s16 -r 16000 -c 1 - /tmp/rade_c_smoke_v2_dec.wav && \
+             echo PASS")
+         set_tests_properties(rade_c_readme_smoke_iq PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 # V2 real-valued WAV rx noise folding test (SNR3k ~6 dB operating point).
 # Re{tx+noise} aliases negative-frequency noise to positive frequencies, giving
 # the real rx ~3 dB less effective SNR than the complex IQ rx.
