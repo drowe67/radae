@@ -22,7 +22,7 @@ parser.add_argument('--initial-checkpoint', type=str, help='initial checkpoint t
 parser.add_argument('--save_model', type=str, default="", help='filename of model to save')
 parser.add_argument('--inference', type=str, default="", help='Inference only with filename of saved model (default training mode)')
 parser.add_argument('--fte_ml', type=str, help='optional file to save fine time errors from ML')
-parser.add_argument('--fte_dsp', type=str, help='optional file to save fine time errors from clasical DSP argmax(Ry)')
+parser.add_argument('--fte_dsp', type=str, help='optional file to save fine time errors from classical DSP argmax(Ry)')
 parser.add_argument('--Ncp', type=int, default=32, help='length of cyclic prefix in samples, used as outlier threshold (default 32)')
 parser.add_argument('--Nacq', type=int, default=0, help='remove samples from start of estimates due to acquisition (default 0)')
 
@@ -192,4 +192,3 @@ else:
         f_fte_ml.close()
     if args.fte_dsp:
         f_fte_dsp.close()
-
