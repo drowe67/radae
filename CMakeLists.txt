@@ -962,29 +962,29 @@ add_test(NAME rade_c_v2_wav
 # No loss threshold -- just verifies the example commands complete without error.
 add_test(NAME rade_c_readme_smoke_wav
          COMMAND sh -c "\
-             ${RADE_C_BUILD_DIR}/src/rade_tx_wav ${RADE_C_BUILD_DIR}/../voice.wav /tmp/rade_c_smoke_v1_tx.wav && \
-             ${RADE_C_BUILD_DIR}/src/rade_rx_wav /tmp/rade_c_smoke_v1_tx.wav /tmp/rade_c_smoke_v1_rx.wav && \
-             ${RADE_C_BUILD_DIR}/src/rade_tx_wav --v2 ${RADE_C_BUILD_DIR}/../voice.wav /tmp/rade_c_smoke_v2_tx.wav && \
-             ${RADE_C_BUILD_DIR}/src/rade_rx_wav --v2 /tmp/rade_c_smoke_v2_tx.wav /tmp/rade_c_smoke_v2_rx.wav && \
+             ${RADE_C_BUILD_DIR}/src/rade_tx_wav ${RADE_C_BUILD_DIR}/../input_sample.wav /tmp/rade_c_smoke_wav_v1_tx.wav && \
+             ${RADE_C_BUILD_DIR}/src/rade_rx_wav /tmp/rade_c_smoke_wav_v1_tx.wav /tmp/rade_c_smoke_wav_v1_rx.wav && \
+             ${RADE_C_BUILD_DIR}/src/rade_tx_wav --v2 ${RADE_C_BUILD_DIR}/../input_sample.wav /tmp/rade_c_smoke_wav_v2_tx.wav && \
+             ${RADE_C_BUILD_DIR}/src/rade_rx_wav --v2 /tmp/rade_c_smoke_wav_v2_tx.wav /tmp/rade_c_smoke_wav_v2_rx.wav && \
              echo PASS")
          set_tests_properties(rade_c_readme_smoke_wav PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 add_test(NAME rade_c_readme_smoke_iq
          COMMAND sh -c "\
-             sox ${RADE_C_BUILD_DIR}/../voice.wav -r 16000 -t .s16 -c 1 - | \
+             sox ${RADE_C_BUILD_DIR}/../input_sample.wav -r 16000 -t .s16 -c 1 - | \
              ${RADE_C_BUILD_DIR}/src/lpcnet_demo -features /dev/stdin - | \
-             ${RADE_C_BUILD_DIR}/src/radae_tx > /tmp/rade_c_smoke_v1.iq && \
-             cat /tmp/rade_c_smoke_v1.iq | \
+             ${RADE_C_BUILD_DIR}/src/radae_tx > /tmp/rade_c_smoke_iq_v1.iq && \
+             cat /tmp/rade_c_smoke_iq_v1.iq | \
              ${RADE_C_BUILD_DIR}/src/radae_rx | \
              ${RADE_C_BUILD_DIR}/src/lpcnet_demo -fargan-synthesis /dev/stdin - | \
-             sox -t .s16 -r 16000 -c 1 - /tmp/rade_c_smoke_v1_dec.wav && \
-             sox ${RADE_C_BUILD_DIR}/../voice.wav -r 16000 -t .s16 -c 1 - | \
+             sox -t .s16 -r 16000 -c 1 - /tmp/rade_c_smoke_iq_v1_dec.wav && \
+             sox ${RADE_C_BUILD_DIR}/../input_sample.wav -r 16000 -t .s16 -c 1 - | \
              ${RADE_C_BUILD_DIR}/src/lpcnet_demo -features /dev/stdin - | \
-             ${RADE_C_BUILD_DIR}/src/radae_tx --v2 > /tmp/rade_c_smoke_v2.iq && \
-             cat /tmp/rade_c_smoke_v2.iq | \
+             ${RADE_C_BUILD_DIR}/src/radae_tx --v2 > /tmp/rade_c_smoke_iq_v2.iq && \
+             cat /tmp/rade_c_smoke_iq_v2.iq | \
              ${RADE_C_BUILD_DIR}/src/radae_rx --v2 | \
              ${RADE_C_BUILD_DIR}/src/lpcnet_demo -fargan-synthesis /dev/stdin - | \
-             sox -t .s16 -r 16000 -c 1 - /tmp/rade_c_smoke_v2_dec.wav && \
+             sox -t .s16 -r 16000 -c 1 - /tmp/rade_c_smoke_iq_v2_dec.wav && \
              echo PASS")
          set_tests_properties(rade_c_readme_smoke_iq PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
