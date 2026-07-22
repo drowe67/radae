@@ -258,24 +258,30 @@ Any test results must be reproducible using the RADE command line tools (our ver
 
 ## Verifying RADE Integration
 
-Application (and radio) developers - to confirm that RADE is successfully integrated into your application, please perform a loss test based on the feature vectors at the input of the RADE encoder at the Tx, and output of the RADE decoder at the Rx.  The Python tool `loss.py` can be used for this test.  You may need to modify your application (or radio) to dump these vectors to a disk file.
+Before contributing OTA test results or deploying RADE in an application,
+integration must be verified using a loss-based test procedure. This confirms
+the signal path is clean — no dropped buffers, no unintended DSP, no scaling
+errors — so that any on-air results reflect RADE performance, not integration
+issues.
 
-Radio developers should perform a complete end-to-end over the cable test to demonstrate successful integration. Over the air tests are not meaningful as the channel will impact the loss in unpredictable and unrepeatable fashion.
+The full procedure, including a checklist template for submitting results, is
+in [doc/verification/verification_procedure.md](doc/verification/verification_procedure.md).
 
-The loss test will tease out gross errors like dropped buffers of samples, and more subtle issues such as distortion in signal processing steps.  There are many examples of loss tests in the RADE ctests, and `ota_test.sh` can use real radio and SDRs to perform loss tests over the cable.
-
-The [V2 test report](doc/v2_test_report.pdf) Table 10 has some examples of over the cable (OTC) loss test results (v216 line).  A pass is defined as +\- 10% of the software only loss result with the 56 second file `all.wav`.
-
-To establish the software-only loss baseline, run the V2 transmitter and receiver on `all.wav` with no channel noise (actually a very high SNR set by the default EbNodB=100). In this example `lpcnet_demo` is used to produce the input feature file `features_in.f32`.  The file `tx.f32` is the Fs=8 kHz IQ float samples sent over the "channel".  We are using the reference Python implementation:
+A software-only loss baseline must be established using the current version
+of the code under test — loss values shift slightly between model versions.
+We use the reference Python implementation and `wav/all.wav` to establish
+the baseline; re-run with the latest version to obtain the current baseline:
 ```
 lpcnet_demo -features wav/all.wav features_in.f32
 python3 tx2.py 250725/checkpoints/checkpoint_epoch_200.pth features_in.f32 tx.f32
 python3 rx2.py 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync tx.f32 features_rx.f32 --quiet
 python3 loss.py features_in.f32 features_rx.f32 --clip_start 100 --clip_end 300
-<snip>
-loss: 0.081 start: 224 acq_time:  1.24 s 
 ```
-Record the loss value printed by `loss.py` (in this example 0.081) — this is your software-only reference.  When testing RADE integrated into your application (or radio), a loss within ±10% of this figure is considered a pass. 
+Example output (Python reference, `wav/all.wav`, model `250725`, commit `b549586`):
+```
+loss: 0.081 start: 224 acq_time:  1.24 s
+```
+Record the current baseline loss value. A pass is within ±10% of the baseline.
 
 ## Stored File Tests
 
