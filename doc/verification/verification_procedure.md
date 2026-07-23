@@ -27,6 +27,17 @@ the RADE team before being submitted as results.
 
 ## Test Levels
 
+### Scope
+
+We need to test the full application including DAC/ADC hardware and drivers, as this is a common source of bugs (dropped buffers, sample rate mismatches, bit depth errors). For laptop/Desktop/mobile device applications that use sound card I/O, this should include the sound cards.  In this case, consider an OTAC and/or OTC test (as an OTC test includes all of the application driver code and ADC/DAC hardware).
+
+For SDRs or hardware radios, or applications that connect to board ADC/DAC hardware on radios (e.g. internal USB sound cards), an Over the Cable (OTC) may be the only possible choice.
+
+**At least one of Level 2 or Level 3 is mandatory; doing both is optional.**
+
+**Over The Air (OTA) tests are not part of this procedure.** The radio channel
+introduces uncontrolled variables that make loss measurements unrepeatable.
+
 ### Level 1 — Software Loopback (mandatory)
 
 File in → application Tx → application Rx → file out, no hardware.
@@ -34,18 +45,12 @@ File in → application Tx → application Rx → file out, no hardware.
 Establishes that the application's RADE signal path is correct in software
 before any hardware is introduced.
 
-**At least one of Level 2 or Level 3 is mandatory for hardware integrations.**
-
-**Over The Air (OTA) tests are not part of this procedure.** The radio channel
-introduces uncontrolled variables that make loss measurements unrepeatable.
-
 ### Level 2 — Over The Audio Cable / OTAC
 
 Speech WAV → application → **sound card out → audio cable → sound card in** →
 application → decoded WAV.
 
-Tests the complete audio path including sound drivers, which are a common source
-of bugs (dropped buffers, sample rate mismatches, bit depth errors).
+Tests the complete audio path including sound drivers, which are a common source of bugs (dropped buffers, sample rate mismatches, bit depth errors).
 
 ### Level 3 — Over The Coax / OTC
 
