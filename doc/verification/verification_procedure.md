@@ -149,48 +149,6 @@ the reference baseline. `--clip_start 100` (1 s) and `--clip_end 300` (3 s)
 are conservative defaults; your integration may need different values
 depending on acquisition time. Use `--plot` to check.
 
-## Worked Example of Loss Tests
-
-The following example uses the rade_c WAV tools as the device under test
-to demonstrate the full loss measurement workflow, including how to identify
-and clip start/end transients. You may notice similar transients when testing
-your own application or radio — it is good practice to remove them, as they
-inflate the mean loss and can mask the true integration performance.
-
-Run a V2 software loopback from the `rade_c/build` directory, exporting
-feature vectors at both ends:
-
-```
-./src/rade_tx_wav --v2 -f features_tx.f32 ../wav/all.wav tx.wav
-./src/rade_rx_wav --v2 -f features_rx.f32 tx.wav decoded.wav
-```
-
-First pass — no clipping, `--plot` to inspect the loss curve:
-
-```
-python3 ~/radae/loss.py features_tx.f32 features_rx.f32 \
-    --plot --png loss_unclipped.png
-```
-
-![Loss before clipping](loss_unclipped.png)
-
-The spike at the start (~22) is the RADE acquisition transient; the smaller
-spike at the end (~3) is the end-of-over frame. Both are expected behaviour
-from the state machine. Clip them out and re-run:
-
-```
-python3 ~/radae/loss.py features_tx.f32 features_rx.f32 \
-    --clip_start 100 --clip_end 300 \
-    --plot --png loss_clipped.png
-```
-
-![Loss after clipping](loss_clipped.png)
-
-With transients removed, loss drops from 0.113 to 0.082 — consistent with
-the reference baseline. `--clip_start 100` (1 s) and `--clip_end 300` (3 s)
-are conservative defaults; your integration may need different values
-depending on acquisition time. Use `--plot` to check.
-
 ### Automated pass/fail
 
 To compare your application against the rade_c software reference without
