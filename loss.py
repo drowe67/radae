@@ -30,6 +30,7 @@
 """
 
 import os
+import sys
 import argparse
 import numpy as np
 import torch
@@ -108,12 +109,12 @@ min_loss, acq_time, loss = find_loss(args.features, args.features_hat)
 if args.loss_test > 0.0:
    if min_loss > args.loss_test:
       print("FAIL")
-      quit()
+      sys.exit(1)
 if args.acq_time_test > 0:
    # one feature vector every 10ms
    if acq_time > args.acq_time_test:
       print("FAIL")
-      quit()
+      sys.exit(1)
 if args.loss_test > 0.0 or args.acq_time_test:
    print("PASS")
 
@@ -123,6 +124,9 @@ if args.features_hat2:
       print(f"loss1: {min_loss:5.3f} loss2: {min_loss2:5.3f} delta: {np.abs(min_loss-min_loss2):5.3f}")
       if np.abs(min_loss-min_loss2) < args.delta:
          print("PASS")
+      else:
+         print("FAIL")
+         sys.exit(1)
 
 if args.stats:
    def print_stats(loss_arr, label):
