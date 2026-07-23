@@ -18,6 +18,12 @@ the RADE team before being submitted as results.
   input (Tx) and RADE decoder output (Rx) to disk files, for use with `loss.py`.
   See `rade_tx_wav -f` and `rade_rx_wav -f` in the rade_c repo, and the
   `rade_c_v2_wav` ctest, for worked examples.
+- **RX-only applications** (no transmit capability) should use `tx2.py` from
+  this repository as the reference transmitter, generating the TX WAV at
+  test time so it tracks any model changes. For OTAC and OTC tests, the TX
+  WAV must be played using a simple command-line tool with no signal
+  processing (e.g. `aplay`, `afplay`, or `ffplay`). See the RX-only worked
+  example below.
 - The signal path must have a transfer function of 1 in both directions —
   **no additional signal processing** (AGC, noise gate, resampler, EQ,
   compression) between WAV file input and RADE encoder input, or between
@@ -178,6 +184,41 @@ PASS
 `loss.py` prints `PASS` or `FAIL` and exits with code 0 or 1 respectively,
 making it suitable for use in CI scripts. A `--delta` of 0.008 corresponds
 to approximately ±10% of the V2 software loopback baseline (0.082).
+
+### RX-only application
+
+For applications with no transmit capability, use `tx2.py` to generate the
+reference TX signal, then convert to a real-valued WAV for playback or
+loopback testing. The `tx.f32` IQ file is already generated in Step 1.
+
+Convert to a real-valued 8 kHz mono WAV:
+
+```
+python3 f32toint16.py --real --scale 16384 < tx.f32 | \
+    sox -t s16 -r 8000 -c 1 - tx_real.wav
+```
+
+For a software loopback test, feed `tx_real.wav` directly to your
+application's RX input and export `features_rx.f32`. For OTAC or OTC tests,
+play `tx_real.wav` via a command-line audio player:
+
+```
+aplay tx_real.wav      # Linux
+afplay tx_real.wav     # macOS
+ffplay tx_real.wav     # Windows / cross-platform
+```
+
+Then measure loss against the TX features from Step 1:
+
+```
+python3 loss.py features_in.f32 features_rx.f32 \
+    --clip_start 100 --clip_end 300
+```
+
+Expected output (V2, software loopback, `wav/all.wav`):
+```
+loss: 0.083 start: 224 acq_time:  1.24 s
+```
 
 ## Submitting Results
 
