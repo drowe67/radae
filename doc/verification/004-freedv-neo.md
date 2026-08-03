@@ -10,7 +10,8 @@
 | Tester name / callsign | Peter Marks VK3TPM |
 | Date | 2026-07-28 |
 | radae repo commit hash | 25d58fe30e3765444d8e2a70133f7f39095c50ca |
-| rade_c repo commit hash | Via freedv-backend 5a4210b7548426571b2dd7635e1585dfb7fad098 |
+| rade_c repo commit hash | a36161bce0fb37daf3f4602344b095f6817dddb1 |
+| freedv-backend commit hash | 5a4210b7548426571b2dd7635e1585dfb7fad098 |
 
 ## Signal Path Declaration
 
