@@ -325,7 +325,7 @@ class RADEv2Receiver:
          f"c: {self.count:2d} nsd: {int(self.new_sig_delta_hat):1d} "
          f"nsf: {int(self.new_sig_f_hat):1d} c1: {self.count1:2d} "
          f"fs: {int(self.frame_sync_odd > self.frame_sync_even):d} "
-         f"delta_hat: {self.delta_hat:3.0f} delta_hat_g: {self.delta_hat_g:3.0f} "
+         f"delta_hat: {self.delta_hat:6.2f} delta_hat_g: {self.delta_hat_g:3.0f} "
          f"f_off: {self.freq_offset:5.2f} f_off_g: {self.freq_offset_g:5.2f} "
          f"Ry_max: {self.Ry_max:5.2f} Ry_min: {self.Ry_min:5.2f} "
          f"snr_est: {self.snr_est_dB:5.1f} dB "
