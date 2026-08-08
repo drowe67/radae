@@ -143,7 +143,7 @@ if args.stats:
 
 if args.plot or args.png:
    plt.figure(1)
-   t = np.arange(len(loss)) * Tstep
+   t = np.arange(len(loss)) * Tstep + acq_time
    plt.plot(t, loss, "b-", label=args.features_hat)
    if args.features_hat2:
       acq_timestep = int(acq_time2/Tstep)
