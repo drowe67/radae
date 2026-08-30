@@ -440,8 +440,8 @@ if [ $plot == "260203_inf" ]; then
             						   "g+-;250725 AWGN rx2;" "go--;250725 MPP rx2;")
 fi
 
-# V2 curves to examine effect of AGC
-if [ $plot == "260206_inf" ]; then
+# V2 curves to examine effect of AGC (latest IIR filtered AGC late Aug 2026)
+if [ $plot == "260830_inf" ]; then
   # RADE V1 as run OTA today
   run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --ssb_bpf --g_file g_mpp_1200s.f32
 

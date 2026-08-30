@@ -12,6 +12,7 @@ PATH=${PATH}:${RADE_C}
 WAV=${WAV:-wav/all.wav}
 RX_OPTS=${RX_OPTS:-}
 PY_OPTS=${PY_OPTS:-}
+INF_OPTS=${INF_OPTS:-}
 
 if [ -n "$2" ] && [ -n "$3" ]; then
     delays=$(python3 -c "
@@ -26,11 +27,11 @@ fi
 declare -a summary
 
 for delay in $delays; do
-    echo "--- delay=$delay ---" >&2
+    echo "--- WAV=$WAV delay=$delay ---" >&2
 
     ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth $WAV /dev/null \
     --rate_Fs --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 \
-    --auxdata --w1_dec 128 --write_rx rx_v2_nopy.f32 --prepend_noise $delay &>/dev/null
+    --auxdata --w1_dec 128 --write_rx rx_v2_nopy.f32 --prepend_noise $delay &>/dev/null $INF_OPTS
 
     ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync rx_v2_nopy.f32 /dev/null \
         $PY_OPTS >/dev/null 2>py_debug.txt
@@ -57,3 +58,21 @@ for row in "${summary[@]}"; do
     read -r d pd cd pl cl <<< "$row"
     printf "%-12s %-12s %-12s %-10s %-10s\n" "$d" "$pd" "$cd" "$pl" "$cl"
 done
+
+declare -a py_losses c_losses
+for row in "${summary[@]}"; do
+    read -r d pd cd pl cl <<< "$row"
+    py_losses+=("$pl")
+    c_losses+=("$cl")
+done
+py_csv=$(IFS=,; echo "${py_losses[*]}")
+c_csv=$(IFS=,; echo "${c_losses[*]}")
+stddevs=$(python3 -c "
+import numpy as np
+py = np.array([$py_csv])
+c = np.array([$c_csv])
+print(f'{py.std():.4f} {c.std():.4f}')
+")
+read -r py_std c_std <<< "$stddevs"
+printf "%-12s %-12s %-12s %-10s %-10s\n" "------------" "------------" "------------" "----------" "----------"
+printf "%-12s %-12s %-12s %-10s %-10s\n" "" "" "stddev:" "$py_std" "$c_std"
