@@ -155,9 +155,9 @@ function process_rx {
     fi
     
     start_rade1=$(python3 -c "start_rade1=6+${x}+0.5; print(\"%f\" % start_rade1)")
-    len_rade=$(python3 -c "len_rade=${x}+1.5; print(\"%f\" % len_rade)")
-    start_rade2=$(python3 -c "start_rade2=8+2*${x}; print(\"%f\" % start_rade2)")
-    len_rade2=$(python3 -c "len_rade2=${x}+2.5; print(\"%f\" % len_rade2)")
+    len_rade=$(python3 -c "len_rade=${x}+1; print(\"%f\" % len_rade)")
+    start_rade2=$(python3 -c "start_rade2=$start_rade1+2+${x}; print(\"%f\" % start_rade2)")
+    len_rade2=$(python3 -c "len_rade2=${x}+1; print(\"%f\" % len_rade2)")
     rx_rade1=$(mktemp)
     rx_rade2=$(mktemp)
     sox $rx ${filename}_ssb.wav trim 5 $x
