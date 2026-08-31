@@ -904,6 +904,17 @@ add_test(NAME rade_c_v2_rx_agc_mpp_low
              python3 loss.py features_in.f32 features_rx_v2_c.f32 --loss_test 0.40 --clip_start 100 --clip_end 300")
          set_tests_properties(rade_c_v2_rx_agc_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# V2 C receiver regression test for Issue #8 (loss varying with timing delay).
+# Sweeps 3 points spanning the documented worst-case window (~16.8-17.8ms) and
+# checks C receiver loss stddev stays well below the ~0.0026 seen before the
+# AGC IIR-smoothing fix (empirically confirmed to catch the pre-fix bug).
+add_test(NAME v2_c_loss_vs_delay
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             RADE_C=${RADE_C_BUILD_DIR}/src RESULTS=v2_c_loss_vs_delay.txt \
+             ./test/v2_c_timing.sh 0.010 0.020 2 2>&1 | \
+             awk '/stddev:/{print ($NF<0.002)?\"PASS\":\"FAIL c_std=\"$NF}'")
+         set_tests_properties(v2_c_loss_vs_delay PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 # V2 C receiver gain-staging verification: C tx -> C rx, clean channel,
 # +/-6dB gain mismatch vs a gain=1.0 baseline. Matches the magnitude of the
 # real freedv-gui/freedv-backend TX level mismatch found 260718 (rather than

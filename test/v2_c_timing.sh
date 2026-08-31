@@ -48,14 +48,15 @@ for delay in $delays; do
         py_debug.txt)
 
     cat rx_v2_nopy.f32 | radae_rx --v2 -v 3 $RX_OPTS > features_rx_v2_c.f32 2>c_debug.txt
-    c_delta_hat=$(grep "extract_symbol:" c_debug.txt | tail -1 | sed 's/.*delta_hat=\([0-9.]*\).*/\1/')
+    c_delta_hat=$(awk '/delta_hat:/{for(i=1;i<=NF;i++) if($i=="delta_hat:") val=$(i+1)} END{print val}' \
+        c_debug.txt)
 
     loss_out=$(python3 loss.py features_in.f32 features_out_rx2.f32 \
         --features_hat2 features_rx_v2_c.f32 --clip_start 100 --clip_end 300)
     py_loss=$(echo "$loss_out" | grep "^ *loss:" | head -1 | awk '{print $2}')
     c_loss=$(echo  "$loss_out" | grep "^ *loss:" | tail -1 | awk '{print $2}')
 
-    summary+=("$delay $py_delta_hat $c_delta_hat $py_loss $c_loss")
+    summary+=("$delay ${py_delta_hat:-NA} ${c_delta_hat:-NA} ${py_loss:-NA} ${c_loss:-NA}")
 done
 
 rm -f py_debug.txt c_debug.txt
