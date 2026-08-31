@@ -6,6 +6,11 @@
 #   Single point:  ./test/v2_c_timing.sh 0.012
 #   Sweep:         ./test/v2_c_timing.sh 0 0.02 4
 #                  (5 points: 0, 0.005, 0.01, 0.015, 0.02)
+#
+# RESULTS=file.txt   write (delay_ms, py_loss, c_loss) to file.txt (sweep or single point)
+# PLOT=basename       generate basename.png and basename.eps/.tex (LaTeX-includable) from
+#                     RESULTS -- requires a sweep (end_delay/n_steps given), e.g.:
+#   RESULTS=260831_delay_loss.txt PLOT=260831_delay_loss ./test/v2_c_timing.sh 0 0.02 20
 
 RADE_C=${HOME}/rade_c/build/src
 PATH=${PATH}:${RADE_C}
@@ -13,8 +18,12 @@ WAV=${WAV:-wav/all.wav}
 RX_OPTS=${RX_OPTS:-}
 PY_OPTS=${PY_OPTS:-}
 INF_OPTS=${INF_OPTS:-}
+RESULTS=${RESULTS:-}
+PLOT=${PLOT:-}
 
+is_sweep=0
 if [ -n "$2" ] && [ -n "$3" ]; then
+    is_sweep=1
     delays=$(python3 -c "
 import numpy as np
 for d in np.linspace($1, $2, int($3) + 1):
@@ -76,3 +85,17 @@ print(f'{py.std():.4f} {c.std():.4f}')
 read -r py_std c_std <<< "$stddevs"
 printf "%-12s %-12s %-12s %-10s %-10s\n" "------------" "------------" "------------" "----------" "----------"
 printf "%-12s %-12s %-12s %-10s %-10s\n" "" "" "stddev:" "$py_std" "$c_std"
+
+if [ -n "$RESULTS" ]; then
+    rm -f "$RESULTS"
+    for row in "${summary[@]}"; do
+        read -r d pd cd pl cl <<< "$row"
+        delay_ms=$(python3 -c "print(f'{$d*1000:.3f}')")
+        printf "%s\t%s\t%s\n" "$delay_ms" "$pl" "$cl" >> "$RESULTS"
+    done
+fi
+
+if [ -n "$PLOT" ] && [ $is_sweep -eq 1 ]; then
+    echo "radae_plots; loss_delay_plot('${PLOT}','',\"${RESULTS}\"); quit" | octave-cli -qf
+    echo "radae_plots; loss_delay_plot('','${PLOT}',\"${RESULTS}\"); quit" | octave-cli -qf
+fi

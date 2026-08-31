@@ -238,7 +238,7 @@ class RADEv2Receiver:
       az_hat = self._extract_symbol()
 
       # Check for end of over
-      if self._detect_eoo():
+      if self.args.eoo and self._detect_eoo():
          if self.args.verbose:
             print("EOO detected", file=sys.stderr)
          self.count      = 0

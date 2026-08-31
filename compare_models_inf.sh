@@ -78,6 +78,8 @@ function run_model_rx2() {
   results=${model}_${chan}_loss_SNR3k.txt
   g_file=""
   a_g_file=""
+  prepend_noise=""
+  a_prepend_noise=""
   POSITIONAL=()
   while [[ $# -gt 0 ]]
   do
@@ -85,12 +87,18 @@ function run_model_rx2() {
   case $key in
       --g_file)
           g_file="--g_file"
-          a_g_file="$2"	
+          a_g_file="$2"
+          shift
+          shift
+      ;;
+      --prepend_noise)
+          prepend_noise="--prepend_noise"
+          a_prepend_noise="$2"
           shift
           shift
       ;;
       --results)
-          results="$2"	
+          results="$2"
           shift
           shift
       ;;
@@ -118,7 +126,7 @@ function run_model_rx2() {
     do
       log=$(./inference.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${input_file} /dev/null --rate_Fs \
 						   --latent-dim ${dim} --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata \
-						   --w1_dec 128 --write_rx ${rx} --EbNodB ${aEbNodB} $g_file $a_g_file)
+						   --w1_dec 128 --write_rx ${rx} --EbNodB ${aEbNodB} $g_file $a_g_file $prepend_noise $a_prepend_noise)
       SNR3k=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f4)
       PAPR=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f5)
       loss_inf=$(echo "$log" | grep "loss:" | tr -s ' ' | cut -d' ' -f2)
@@ -445,15 +453,30 @@ if [ $plot == "260830_inf" ]; then
   # RADE V1 as run OTA today
   run_model model19_check3 80 100 mpp 0 --tanh_clipper --cp 0.004 --time_offset -16 --auxdata --pilots --pilot_eq --eq_ls --ssb_bpf --g_file g_mpp_1200s.f32
 
-  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200
-  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200 --results 250725_mpp_agc1_loss_SNR3k.txt --agc --gain 10
-  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200 --results 250725_mpp_agc2_loss_SNR3k.txt --agc --gain 0.1
+  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200 --no_eoo
+  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200 --results 250725_mpp_agc1_loss_SNR3k.txt --agc --gain 10 --no_eoo
+  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200 --results 250725_mpp_agc2_loss_SNR3k.txt --agc --gain 0.1 --no_eoo
 
   model_list='model19_check3_mpp_0Hz 250725_mpp 250725_mpp_agc1 250725_mpp_agc2'
   declare -a model_legend=("bo--;RADE V1 MPP;" \
                            "g+--;250725 MPP rx2;" \
                            "ro--;250725 MPP AGC 10 rx2;" \
                            "co--;250725 MPP AGC 0.1 rx2;")
+
+fi
+
+# V2 curves to examine effect of timing delay (Issue #8 fix) on loss versus SNR,
+# same AGC/no_eoo settings as 260830_inf but with a single fixed gain and
+# varying --prepend_noise instead of varying gain.
+if [ $plot == "260831_inf" ]; then
+  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200 --agc --no_eoo --results 250725_mpp_delay0_loss_SNR3k.txt
+  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200 --agc --no_eoo --prepend_noise 0.010 --results 250725_mpp_delay10_loss_SNR3k.txt
+  run_model_rx2 250725 250725a_ml_sync 56 200 mpp --g_file g_mpp_1200s.f32 --hangover 200 --agc --no_eoo --prepend_noise 0.017 --results 250725_mpp_delay17_loss_SNR3k.txt
+
+  model_list='250725_mpp_delay0 250725_mpp_delay10 250725_mpp_delay17'
+  declare -a model_legend=("g+--;250725 MPP delay=0ms;" \
+                           "ro--;250725 MPP delay=10ms;" \
+                           "co--;250725 MPP delay=17ms;")
 
 fi
 

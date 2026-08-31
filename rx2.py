@@ -95,6 +95,8 @@ parser.set_defaults(limit_pitch=True)
 parser.add_argument('--nolimit_pitch', action='store_false', dest='limit_pitch', help='disable limiting (clip) lower end of pitch feature to prevent synthesis pops with some speakers/channels (default enabled)')
 parser.set_defaults(mute=False)
 parser.add_argument('--mute', action='store_false',  dest='mute', help='enable mute when sig lost (default disabled)')
+parser.set_defaults(eoo=True)
+parser.add_argument('--no_eoo', action='store_false', dest='eoo', help='disable EOO (end of over) detection (default enabled)')
 args = parser.parse_args()
 
 # make sure we don't use a GPU

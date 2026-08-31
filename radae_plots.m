@@ -253,6 +253,31 @@ function loss_SNR3k_plot(pnsr=0,png_fn, epslatex, varargin)
     end
 endfunction
 
+% Plot loss versus timing delay (e.g. --prepend_noise sweep) at a fixed SNR,
+% from a single results file with columns: delay_ms py_loss c_loss
+% usage:
+%   radae_plots; loss_delay_plot('delay_loss','',fn)          % PNG
+%   radae_plots; loss_delay_plot('','delay_loss_models',fn)   % EPS+tex for LaTeX
+function loss_delay_plot(png_fn, epslatex, fn)
+    if length(epslatex)
+        [textfontsize linewidth] = set_fonts(20);
+    end
+    data = load(fn);
+    figure(1); clf; hold on;
+    plot(data(:,1), data(:,2), 'g+-;Python rx2;');
+    plot(data(:,1), data(:,3), 'ro-;C rx (radae_rx);');
+    hold off; grid('minor');
+    xlabel('delay (ms)');
+    ylabel('loss');
+    legend('boxoff');
+    if length(png_fn)
+        print("-dpng",png_fn);
+    end
+    if length(epslatex)
+        print_eps_restore(epslatex,"-S300,300",textfontsize,linewidth);
+    end
+endfunction
+
 % usage:
 %   radae_plots; ofdm_sync_plots("","ofdm_sync.txt","go-;genie;","ofdm_sync_pilot_eq.txt","r+-;mean6;","ofdm_sync_pilot_eq_f2.txt","bx-;mean6 2 Hz;","ofdm_sync_pilot_eq_g0.1.txt","gx-;mean6 gain 0.1;","ofdm_sync_pilot_eq_ls.txt","ro-;LS;","ofdm_sync_pilot_eq_ls_f2.txt","bo-;LS 2 Hz;")
 
