@@ -337,7 +337,7 @@ AGC operation is limited to $\pm 20$  \si{dB} from the nominal peak level of $A=
 
 Figure \ref{fig:v2_delay_loss} and Table \ref{tab:delay_loss} were generated with:
 \begin{verbatim}
-RESULTS=v2_delay_loss.txt PLOT=v2_delay_loss ./test/v2_c_timing.sh 0 0.04 40
+PY_OPTS="--agc" RESULTS=v2_delay_loss.txt PLOT=v2_delay_loss ./test/v2_c_timing.sh 0 0.04 40
 \end{verbatim}
 
 \begin{figure}[h]
