@@ -265,10 +265,11 @@ function loss_delay_plot(png_fn, epslatex, fn)
     data = load(fn);
     figure(1); clf; hold on;
     plot(data(:,1), data(:,2), 'g+-;Python rx2;');
-    plot(data(:,1), data(:,3), 'ro-;C rx (radae_rx);');
+    plot(data(:,1), data(:,3), 'ro-;C rx (radae\_rx);');
     hold off; grid('minor');
     xlabel('delay (ms)');
     ylabel('loss');
+    axis([min(data(:,1)) max(data(:,1)) 0.05 0.1]);
     legend('boxoff');
     if length(png_fn)
         print("-dpng",png_fn);

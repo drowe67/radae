@@ -310,23 +310,45 @@ This generates signal2 (-25 \si{Hz} frequency offset) which is placed just befor
 
 \subsection{Automatic Gain Control (AGC)}
 
-ML networks tend to operate over a limited dynamic range so an AGC is required.  The script \emph{./compare\_models\_inf.sh -p 260206\_inf} was used to generate loss versus SNR curves for 3 AGC conditions (plotted in Figure \ref{fig:260206_inf_loss_SNR3k_models}) on the worst case MPP channel:
+ML networks tend to operate over a limited dynamic range so an AGC is required.  The script \emph{./compare\_models\_inf.sh -p 260830\_inf} was used to generate loss versus SNR curves for the first three AGC conditions below, and \emph{./compare\_models\_inf.sh -p 260831\_inf} for the fourth (plotted in Figure \ref{fig:260206_inf_loss_SNR3k_models}) on the worst case MPP channel:
 \begin{enumerate}
 \item Baseline with no AGC.
 \item AGC enabled with +20 \si{dB} gain (linear gain of 10).
 \item AGC enabled with -20 \si{dB} gain (linear gain of 0.1).
+\item AGC enabled with 0 \si{dB} gain (linear gain of 1.0) with three different delays (timing offsets).
 \end{enumerate}
-The AGC curves are coincident with the baseline curve, indicating AGC has a small impact on performance.
+This section (Figures \ref{fig:260206_inf_loss_SNR3k_models}, \ref{fig:v2_delay_loss} and Table \ref{tab:delay_loss}) was regenerated using \emph{radae} commit \texttt{73f7183} and \emph{rade\_c} commit \texttt{6d89585} on 1 Sep 2026, both later than the campaign configuration in Table \ref{tab:time_to_acq}.
+
+The AGC curves are coincident with the baseline curve, indicating AGC has a small impact on performance over a range of gains and timing offsets.  Table \ref{tab:delay_loss} presents results for a fine grained sweep of loss against delay for a high SNR, to confirm the loss obtained from the \href{https://github.com/drowe67/radae/#verifying-rade-integration}{verification procedure} will be insensitive to arbitrary timing offsets found in real time systems.
 
 AGC operation is limited to $\pm 20$  \si{dB} from the nominal peak level of $A=1.0$ or $0.1<A<10.0$ .  Therefore a manual gain term may be required to scale from a typical $\pm 2^{15}$ peak level common with deployments to the range $0.1<A<10.0$ at input of the V2 receiver.  In terms of RMS levels, given a 3 \si{dB} PAPR, we would like $A_{rms}=0.707$ at the receiver input. 
 
 \begin{figure}[h]
 \caption{Loss versus SNR for various AGC conditions.}
 \label{fig:260206_inf_loss_SNR3k_models}
+\label{fig:260831_inf_loss_SNR3k_models}
 \begin{center}
-\scalebox{.9}{\input {260206_inf_loss_SNR3k_models.tex}}
+\scalebox{.9}{\input {260830_inf_loss_SNR3k_models.tex}}
+\scalebox{.9}{\input {260831_inf_loss_SNR3k_models.tex}}
 \end{center}
 \end{figure}
+
+\clearpage
+
+Figure \ref{fig:v2_delay_loss} and Table \ref{tab:delay_loss} were generated with:
+\begin{verbatim}
+RESULTS=v2_delay_loss.txt PLOT=v2_delay_loss ./test/v2_c_timing.sh 0 0.04 40
+\end{verbatim}
+
+\begin{figure}[h]
+\caption{}
+\label{fig:v2_delay_loss}
+\begin{center}
+\scalebox{.9}{\input {v2_delay_loss.tex}}
+\end{center}
+\end{figure}
+
+\input{v2_delay_loss_table.tex}
 
 \subsection{Sample clock and freq drift tests}
 
