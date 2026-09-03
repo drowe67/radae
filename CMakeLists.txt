@@ -915,6 +915,17 @@ add_test(NAME v2_c_loss_vs_delay
              awk '/stddev:/{print ($NF<0.002)?\"PASS\":\"FAIL c_std=\"$NF}'")
          set_tests_properties(v2_c_loss_vs_delay PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# ota_test.sh with rade_c's rade_tx_wav/rade_rx_wav (--v2_c) instead of Python for
+# RADE V2, exercising the same "ideal application" chirp-SSB-V1-V2 pipeline used for
+# the real OTC hardware tests. Mirrors ota_test_awgn/ota_test_mpp above.
+add_test(NAME ota_test_v2_c_awgn
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       RADE_C=${RADE_C_BUILD_DIR}/src V2_C=1 ./test/ota_test_cal.sh ${CMAKE_BINARY_DIR} wav/brian_g8sez.wav -24 0.4")
+
+add_test(NAME ota_test_v2_c_mpp
+        COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+                       RADE_C=${RADE_C_BUILD_DIR}/src V2_C=1 ./test/ota_test_cal.sh ${CMAKE_BINARY_DIR} wav/brian_g8sez.wav -30 0.45 --mpp --freq -25")
+
 # V2 C receiver gain-staging verification: C tx -> C rx, clean channel,
 # +/-6dB gain mismatch vs a gain=1.0 baseline. Matches the magnitude of the
 # real freedv-gui/freedv-backend TX level mismatch found 260718 (rather than

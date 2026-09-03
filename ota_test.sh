@@ -66,6 +66,8 @@ peak=1
 tx_path="."
 just_tx=0
 loss_input_wav_file=""
+v2_c=0
+RADE_C=${RADE_C:-~/rade_c/build/src}
 
 source utils.sh
 
@@ -90,6 +92,7 @@ function print_help {
     echo "    --rms                     Equalise RMS power of RADAE and SSB (default is equal peak power)"
     echo "    --tx_path                 optional path to tx.raw/tx.wav"
     echo "    -t SSBRadioFile.raw       Tx SSBRadioFile.raw over SSB radio (e.g. tx.wav or RADAE encoded file), no pre-processing"
+    echo "    --v2_c                    Use rade_c's rade_tx_wav/rade_rx_wav (production API) for RADE V2 instead of Python"
     echo
     exit
 }
@@ -178,23 +181,29 @@ function process_rx {
     rade1_foff=$(python3 -c "import numpy as np; foff_samples=np.loadtxt(\"${rade1_foff_samples}\"); print(f\"{np.mean(foff_samples)}\") ")
 
     # RADE2 Rx
-    cat ${rx_rade2}.raw | python3 int16tof32.py --zeropad > ${rx_rade2}.f32
-    ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync ${rx_rade2}.f32 ${filename}_rade2.wav \
-    --latent-dim 56 --w1_dec 128 --gain 1.22E-4 --agc --correct_time_offset -8 \
-    --write_state state.int16 --write_delta_hat delta_hat.f32 --write_delta_hat_g delta_hat_g.f32 \
-    --write_gain gain.f32 --write_freq_offset freq_offset.f32 --write_snr_est snr_est.f32 2>>${filename}_report.txt
-    DISPLAY=""; echo "warning('off', 'all'); \
-      radae_plots; \
-      plot_v2_logs('${filename}_plots.png', 'state.int16', 'delta_hat.f32','delta_hat_g.f32','freq_offset.f32','gain.f32','snr_est.f32'); \
-      quit;" | octave-cli -qf > /dev/null
+    if [ $v2_c -eq 1 ]; then
+        sox -t .s16 -r 8000 -c 1 ${rx_rade2}.raw ${rx_rade2}.wav
+        ${RADE_C}/rade_rx_wav --v2 -f features_out_rx2.f32 ${rx_rade2}.wav ${filename}_rade2.wav 2>>${filename}_report.txt
+        # note: rade_rx_wav doesn't yet expose delta_hat/gain/freq_offset/snr_est diagnostics -- no plot for the C path yet
+    else
+        cat ${rx_rade2}.raw | python3 int16tof32.py --zeropad > ${rx_rade2}.f32
+        ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync ${rx_rade2}.f32 ${filename}_rade2.wav \
+        --latent-dim 56 --w1_dec 128 --gain 1.22E-4 --agc --correct_time_offset -8 \
+        --write_state state.int16 --write_delta_hat delta_hat.f32 --write_delta_hat_g delta_hat_g.f32 \
+        --write_gain gain.f32 --write_freq_offset freq_offset.f32 --write_snr_est snr_est.f32 2>>${filename}_report.txt
+        DISPLAY=""; echo "warning('off', 'all'); \
+          radae_plots; \
+          plot_v2_logs('${filename}_plots.png', 'state.int16', 'delta_hat.f32','delta_hat_g.f32','freq_offset.f32','gain.f32','snr_est.f32'); \
+          quit;" | octave-cli -qf > /dev/null
+    fi
 
     # optionally calculate loss using feature files derived from input wave file basename
     if [ ! ${loss_input_wav_file} == "" ]; then
       speechfile_no_path_no_ext="${loss_input_wav_file##*/}" # Removes path
       speechfile_no_path_no_ext="${speechfile_no_path_no_ext%.*}" # Removes extension
       # optional loss measurements
-      python3 loss.py ${speechfile_no_path_no_ext}_features_in.f32 ${speechfile_no_path_no_ext}_features_out_tx1.f32 --features_hat2 features_out_rx1.f32 --compare --clip_start 25 | sed -n '5p' | tee -a ${filename}_report.txt
-      python3 loss.py ${speechfile_no_path_no_ext}_features_in.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 25 | sed -n '5p' | tee -a ${filename}_report.txt
+      python3 loss.py ${speechfile_no_path_no_ext}_features_in_tx1.f32 ${speechfile_no_path_no_ext}_features_out_tx1.f32 --features_hat2 features_out_rx1.f32 --compare --clip_start 25 | sed -n '5p' | tee -a ${filename}_report.txt
+      python3 loss.py ${speechfile_no_path_no_ext}_features_in_tx2.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 25 | sed -n '5p' | tee -a ${filename}_report.txt
     fi
 
     # filter NNPACK awarning for old machine without AVX
@@ -311,6 +320,10 @@ case $key in
         just_tx=1
         shift
     ;;
+    --v2_c)
+        v2_c=1
+        shift
+    ;;
     -h)
         print_help	
     ;;
@@ -397,19 +410,28 @@ echo "Creating RADE V1"
 ./inference.sh model19_check3/checkpoints/checkpoint_epoch_100.pth $speechfile_pad /dev/null --end_of_over --auxdata --EbNodB 100 \
 --bottleneck 3 --pilots --cp 0.004 --rate_Fs --tanh --ssb_bpf --write_rx ${tx_radae1}.f32
 # save features in/out for later "loss.py" measurments
-cp features_in.f32 ${speechfile_no_path_no_ext}_features_in.f32
+cp features_in.f32 ${speechfile_no_path_no_ext}_features_in_tx1.f32
 cp features_out.f32 ${speechfile_no_path_no_ext}_features_out_tx1.f32
 # extract real (I) channel
 cat ${tx_radae1}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae1}.raw 
 
 # create modulated radae V2 signal
 echo "Creating RADE V2"
-./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth $speechfile_pad /dev/null --rate_Fs --latent-dim 56 --peak --ssb_bpf --end_of_over_v2 \
---cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --write_rx ${tx_radae2}.f32
-# save features in/out for later "loss.py" measurments
-cp features_out.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32
-# extract real (I) channel
-cat ${tx_radae2}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae2}.raw 
+if [ $v2_c -eq 1 ]; then
+    ${RADE_C}/rade_tx_wav --v2 -f ${speechfile_no_path_no_ext}_features_in_tx2.f32 $speechfile_pad ${tx_radae2}.wav
+    # Run decoder to get the idea decoded features (with Python inference.sh does this automatically).
+    ${RADE_C}/rade_rx_wav --v2 -f ${speechfile_no_path_no_ext}_features_out_tx2.f32 ${tx_radae2}.wav /dev/null
+    sox ${tx_radae2}.wav -t .s16 ${tx_radae2}.raw
+    python3 loss.py ${speechfile_no_path_no_ext}_features_in_tx2.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32 --clip_start 25
+else
+    ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth $speechfile_pad /dev/null --rate_Fs --latent-dim 56 --peak --ssb_bpf --end_of_over_v2 \
+    --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --write_rx ${tx_radae2}.f32
+    # save features in/out for later "loss.py" measurments
+    cp features_in.f32 ${speechfile_no_path_no_ext}_features_in_tx2.f32
+    cp features_out.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32
+    # extract real (I) channel
+    cat ${tx_radae2}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae2}.raw
+fi
 
 # Make power of both signals the same, by adjusting the levels to meet the setpoint
 if [ $peak -eq 1 ]; then

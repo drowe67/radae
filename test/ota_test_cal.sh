@@ -19,13 +19,17 @@ loss_thresh=$4
 shift; shift; shift;
 GAIN=0.25 # allow some headroom for noise and fading to prevent clipping
 silence_duration=1
+V2_C_OPT=""
+if [ "${V2_C:-0}" -eq 1 ]; then
+  V2_C_OPT="--v2_c"
+fi
 
 printf "\nMake fading samples .... \n\n"
 source test/make_g.sh
 cp -f g_mpp.f32 fast_fading_samples.float
 
 printf "\nGenerate tx file and add noise ... \n\n"
-./ota_test.sh -x $wav --peak
+./ota_test.sh -x $wav --peak ${V2_C_OPT}
 # add 1 second of silence to start to give est_CNo.py a work out
 dd if=/dev/zero of=/dev/stdout bs=16000 count=${silence_duration} | sox -t .s16 -r 8000 -c 1 - sil.wav
 sox sil.wav tx.wav tx_pad.wav
@@ -40,7 +44,7 @@ CNodB_ch=$(cat ${ch_log} | grep "C/No" | tr -s ' ' | cut -d' ' -f5)
 printf "\nRun V1 and V2 Rx and check ML "loss" is OK ... \n\n"
 rm -f features_rx_out_rx1.f32 features_rx_out_rx2.f32
 rx_log=$(mktemp)
-./ota_test.sh -d -r rx.wav -l $wav >${rx_log}
+./ota_test.sh -d -r rx.wav -l $wav ${V2_C_OPT} >${rx_log}
 python3 loss.py features_in.f32 features_out_rx1.f32 --loss_test ${loss_thresh} --clip_start 150  | tee /dev/stderr | grep "PASS" 
 if [ $? -ne 0 ]; then
   exit 1
