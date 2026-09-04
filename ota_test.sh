@@ -424,11 +424,11 @@ if [ $v2_c -eq 1 ]; then
     sox ${tx_radae2}.wav -t .s16 ${tx_radae2}.raw
     python3 loss.py ${speechfile_no_path_no_ext}_features_in_tx2.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32 --clip_start 25
 else
-    ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth $speechfile_pad /dev/null --rate_Fs --latent-dim 56 --peak --ssb_bpf --end_of_over_v2 \
-    --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 --write_rx ${tx_radae2}.f32
-    # save features in/out for later "loss.py" measurments
+    ./tx2.sh 250725/checkpoints/checkpoint_epoch_200.pth $speechfile_pad ${tx_radae2}.f32
     cp features_in.f32 ${speechfile_no_path_no_ext}_features_in_tx2.f32
-    cp features_out.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32
+    # Run decoder to get the genie decoded features (tx2.py is Tx-only).
+    ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync ${tx_radae2}.f32 /dev/null --quiet
+    cp features_out_rx2.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32
     # extract real (I) channel
     cat ${tx_radae2}.f32 | python3 f32toint16.py --real --scale 16383 > ${tx_radae2}.raw
 fi
