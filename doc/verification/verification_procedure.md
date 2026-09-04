@@ -75,7 +75,8 @@ slightly between model versions.
 
 ```
 cd ~/radae
-lpcnet_demo -features wav/all.wav features_in.f32
+./build/src/lpcnet_demo -features wav/all.wav features_in.f32
+# a python environment is needed with torch numpy matplotlib
 python3 tx2.py 250725/checkpoints/checkpoint_epoch_200.pth features_in.f32 tx.f32
 python3 rx2.py 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync tx.f32 features_rx.f32 --quiet
 python3 loss.py features_in.f32 features_rx.f32 --clip_start 100 --clip_end 300
