@@ -48,6 +48,7 @@ class RADEv2Receiver:
    TSIN      = 4.0    # sine-wave detection ratio threshold
    TEOO      = 0.75   # smoothed pend correlation threshold for EOO detection
    ALPHA_EOO = 0.70   # IIR filter coefficient for EOO pend correlation smoother
+   AGC_ALPHA = 0.99875   # IIR filter coeff for AGC power estimate, tau~0.1s @ Fs=8000
 
    def __init__(self, model, frame_sync_nn, args):
       self.model          = model
@@ -61,6 +62,7 @@ class RADEv2Receiver:
 
       # target RMS is PAPR (~3 dB) below peak of 1.0
       self.agc_target = 1.0 * 10 ** (-3 / 20)
+      self.agc_power  = self.agc_target ** 2   # persistent IIR power estimate state
 
       # State machine
       self.state      = "idle"
@@ -143,8 +145,11 @@ class RADEv2Receiver:
    def _compute_gain(self, rx_in):
       if not self.args.agc:
          return 1.0
-      gain = self.agc_target / (np.sqrt(np.mean(np.abs(rx_in) ** 2)) + 1e-6)
-      return float(np.clip(gain, 0.1, 10.0))
+      p = self.agc_power
+      for x in rx_in:
+         p = self.AGC_ALPHA * p + (1.0 - self.AGC_ALPHA) * (np.abs(x) ** 2)
+      self.agc_power = p
+      return float(np.clip(self.agc_target / (np.sqrt(p) + 1e-6), 0.1, 10.0))
 
    def _update_rx_buf(self, rx_in, nin, gain):
       self.rx_buf[:3 * self.sym_len - nin] = self.rx_buf[nin:]
@@ -233,7 +238,7 @@ class RADEv2Receiver:
       az_hat = self._extract_symbol()
 
       # Check for end of over
-      if self._detect_eoo():
+      if self.args.eoo and self._detect_eoo():
          if self.args.verbose:
             print("EOO detected", file=sys.stderr)
          self.count      = 0
@@ -325,7 +330,7 @@ class RADEv2Receiver:
          f"c: {self.count:2d} nsd: {int(self.new_sig_delta_hat):1d} "
          f"nsf: {int(self.new_sig_f_hat):1d} c1: {self.count1:2d} "
          f"fs: {int(self.frame_sync_odd > self.frame_sync_even):d} "
-         f"delta_hat: {self.delta_hat:3.0f} delta_hat_g: {self.delta_hat_g:3.0f} "
+         f"delta_hat: {self.delta_hat:6.2f} delta_hat_g: {self.delta_hat_g:3.0f} "
          f"f_off: {self.freq_offset:5.2f} f_off_g: {self.freq_offset_g:5.2f} "
          f"Ry_max: {self.Ry_max:5.2f} Ry_min: {self.Ry_min:5.2f} "
          f"snr_est: {self.snr_est_dB:5.1f} dB "

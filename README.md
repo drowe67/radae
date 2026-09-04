@@ -10,7 +10,7 @@ RADE V2 builds on V1 with several algorithmic improvements:
 | Equalisation | Classical DSP, pilot-aided | ML-based, no pilots required |
 | 99% Occupied Bandwidth | ~2100 Hz (SSB filter limited) | ~860 Hz |
 | Frame duration | ~180 ms | ~40 ms |
-| PAPR | 4.2 dB | 3.5 dB |
+| PAPR (100% CCDF) | 4.2 dB | 3.5 dB |
 | Frame sync | DSP | Neural network |
 | End-of-over detection | Pilot pend sequence | Channel sparsity metric |
 | Threshold SNR (AWGN) | -2 dB | ~-4.5 dB |
@@ -75,6 +75,7 @@ The RADE source code is released under the two-clause BSD license.
 | `loss.py` | Measures ML loss (speech distortion) between encoder and decoder feature vectors |
 | `compare_models_inf.sh` | Generates loss versus SNR curves across models and channel types |
 | `ota_test.sh` | Over-the-air/over-the-cable test: generates tx signal, decodes rx, measures loss |
+| `radev2_rx_wav.sh` | Decode an off-air RADE V2 WAV recording; outputs decoded speech and diagnostic plots |
 | `est_CNo.py` | C/No estimation from a received chirp signal |
 | `chirp.py` | Generates a chirp reference signal used for timing and level calibration in OTA tests |
 | `int16tof32.py` / `f32toint16.py` | Sample format converters between int16 and float32 |
@@ -124,16 +125,30 @@ cat rx.f32 | python3 f32toint16.py --real --scale 8192 | play -t .s16 -r 8000 -c
 ```
 The scaling `--scale` is required as the low SNRs mean the noise peak amplitude can clip 16 bit samples if not carefully scaled.
 
-## Optional: RADE V1 C Port Tests (radae_nopy)
+## Decoding an off air RADE V2 wave file
 
-The [radae_nopy](https://github.com/peterbmarks/radae_nopy) repo contains a C port of the RADE V1 receiver. Its ctests are optional and only enabled when `RADAE_NOPY_BUILD_DIR` is passed to cmake:
+To decode a WAV file received off air (e.g. from a KiwiSDR or similar SDR receiver):
+```
+./radev2_rx_wav.sh ~/Downloads/kiwi_sdr_rx.wav
+```
+All output artefacts are stored in a subdirectory named after the input file:
+```
+~/Downloads/kiwi_sdr_rx/kiwi_sdr_rx_rade2.wav   # decoded speech
+~/Downloads/kiwi_sdr_rx/kiwi_sdr_rx_plots.png   # sync state, SNR, freq offset, gain plots
+~/Downloads/kiwi_sdr_rx/report.txt               # terse per-frame decoder log
+```
+The input WAV can be any sample rate (resampled to 8kHz internally). Pass `--verbose` for the full decoder log including bash trace.
+
+## Optional: RADE C Port Tests (rade_c)
+
+The [rade_c](https://github.com/freedv/rade_c) repo contains the C port of RADE V1 and V2. Its ctests are optional and only enabled when `RADE_C_BUILD_DIR` is passed to cmake:
 ```
 cd ~
-git clone https://github.com/peterbmarks/radae_nopy.git
-cd radae_nopy && mkdir build && cd build && cmake .. && make
+git clone https://github.com/freedv/rade_c.git
+cd rade_c && mkdir build && cd build && cmake .. && make
 cd ~/radae/build
-cmake -DRADAE_NOPY_BUILD_DIR=~/radae_nopy/build ..
-ctest -R radae_nopy
+cmake -DRADE_C_BUILD_DIR=~/rade_c/build ..
+ctest -R rade_c
 ```
 
 
@@ -183,7 +198,7 @@ Automatic Speech Recognition (ASR) is used as an objective speech quality metric
 
 1. Install dependencies:
    ```
-   pip3 install jiwer openai-whisper
+   pip3 install jiwer openai-whisper soundfile
    ```
 
 1. The LibriSpeech `test-clean` dataset (~400 MB) is downloaded automatically to `~/.cache/LibriSpeech/` on first run via `torchaudio`.
@@ -197,30 +212,37 @@ Automatic Speech Recognition (ASR) is used as an objective speech quality metric
    ```
    ./asr_test_top.sh ssb -n 100
    ./asr_test_top.sh rade -n 100
+   ./asr_test_top.sh radev2 -n 100
    ./asr_test_top.sh 700D -n 100
    ```
 
-1. For MPP channel, first generate fading samples (if not already present), then re-run with `--g_file`:
+1. For MPP channel, first generate the 4000s fading file (if not already present), then run MPP sweeps:
    ```
-   ./test/make_g.sh
-   ./asr_test_top.sh rade -n 100 --g_file g_mpp.f32
+   if [ ! -f g_mpp_4000s.f32 ]; then
+     DISPLAY="" echo "Fs=8000; Rs=50; Nc=20; multipath_samples('mpp', Fs, Rs, Nc, 4000, '','g_mpp_4000s.f32'); quit" | octave-cli -qf
+   fi
+   ./asr_test_top.sh ssb -n 100
+   ./asr_test_top.sh rade -n 100
+   ./asr_test_top.sh radev2 -n 100
    ```
 
 1. Plot WER curves in Octave:
    ```
-   octave:1> radae_plots; plot_wer("241221","241221_asr_test.png")
+   octave:1> radae_plots; plot_wer("260702","260702_asr_test.png")
+   octave:1> radae_plots; plot_wer_v2("260702","260702_wer_v2.png")
    ```
 
-# Exporting Weights for the C Port (radae_nopy)
+# Exporting Weights for the C Port (rade_c)
 
-The [radae_nopy](https://github.com/peterbmarks/radae_nopy) repo contains the full standalone C port of RADE. When a new model is trained, the weights need to be exported from Python and compiled into radae_nopy:
+The [rade_c](https://github.com/freedv/rade_c) repo contains the full standalone C port of RADE. When a new model is trained, the weights need to be exported from Python and compiled into rade_c:
 
 1. Export weights to C source files:
    ```
    cd radae
    python3 export_rade_weights.py model19_check3/checkpoints/checkpoint_epoch_100.pth src
    ```
-1. Copy the generated `rade_enc_data.c`, `rade_enc_data.h`, `rade_dec_data.c`, `rade_dec_data.h` into `radae_nopy/src/` and rebuild.
+1. Copy the generated `rade_enc_data.c`, `rade_enc_data.h`, `rade_dec_data.c`, `rade_dec_data.h` into `rade_c/src/` and rebuild.
+
 
 # Testing RADE
 
@@ -236,24 +258,30 @@ Any test results must be reproducible using the RADE command line tools (our ver
 
 ## Verifying RADE Integration
 
-Application (and radio) developers - to confirm that RADE is successfully integrated into your application, please perform a loss test based on the feature vectors at the input of the RADE encoder at the Tx, and output of the RADE decoder at the Rx.  The Python tool `loss.py` can be used for this test.  You may need to modify your application (or radio) to dump these vectors to a disk file.
+Before contributing OTA test results or deploying RADE in an application,
+integration must be verified using a loss-based test procedure. This confirms
+the signal path is clean — no dropped buffers, no unintended DSP, no scaling
+errors — so that any on-air results reflect RADE performance, not integration
+issues.
 
-Radio developers should perform a complete end-to-end over the cable test to demonstrate successful integration. Over the air tests are not meaningful as the channel will impact the loss in unpredictable and unrepeatable fashion.
+The full procedure, including a checklist template for submitting results, is
+in [doc/verification/verification_procedure.md](doc/verification/verification_procedure.md).
 
-The loss test will tease out gross errors like dropped buffers of samples, and more subtle issues such as distortion in signal processing steps.  There are many examples of loss tests in the RADE ctests, and `ota_test.sh` can use real radio and SDRs to perform loss tests over the cable.
-
-The [V2 test report](doc/v2_test_report.pdf) Table 10 has some examples of over the cable (OTC) loss test results (v216 line).  A pass is defined as +\- 10% of the software only loss result with the 56 second file `all.wav`.
-
-To establish the software-only loss baseline, run the V2 transmitter and receiver on `all.wav` with no channel noise (actually a very high SNR set by the default EbNodB=100). In this example `lpcnet_demo` is used to produce the input feature file `features_in.f32`.  The file `tx.f32` is the Fs=8 kHz IQ float samples sent over the "channel".  We are using the reference Python implementation:
+A software-only loss baseline must be established using the current version
+of the code under test — loss values shift slightly between model versions.
+We use the reference Python implementation and `wav/all.wav` to establish
+the baseline; re-run with the latest version to obtain the current baseline:
 ```
 lpcnet_demo -features wav/all.wav features_in.f32
 python3 tx2.py 250725/checkpoints/checkpoint_epoch_200.pth features_in.f32 tx.f32
 python3 rx2.py 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync tx.f32 features_rx.f32 --quiet
 python3 loss.py features_in.f32 features_rx.f32 --clip_start 100 --clip_end 300
-<snip>
-loss: 0.081 start: 224 acq_time:  1.24 s 
 ```
-Record the loss value printed by `loss.py` (in this example 0.081) — this is your software-only reference.  When testing RADE integrated into your application (or radio), a loss within ±10% of this figure is considered a pass. 
+Example output (Python reference, `wav/all.wav`, model `250725`, commit `b549586`):
+```
+loss: 0.081 start: 224 acq_time:  1.24 s
+```
+Record the current baseline loss value. A pass is within ±10% of the baseline.
 
 ## Stored File Tests
 

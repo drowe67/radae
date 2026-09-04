@@ -1,0 +1,22 @@
+% Requires: \usepackage{booktabs}
+% n=58 evaluations (3 evaluators, on-air HF paths)
+% Ranking: 1=best, 3=worst
+\begin{table}
+  \centering
+  \caption{Subjective ranking results ($n=58$, 1=best, 3=worst).}
+  \label{tab:ota_table}
+  \begin{tabular}{lrrrr}
+    \toprule
+    & \shortstack{Mean\\rank} & \shortstack{Std\\~} & \multicolumn{2}{c}{vs SSB} \\
+    \cmidrule(lr){4-5}
+    &  & & Win / Loss / Tie & $p$ \\
+    \midrule
+    SSB  & 3.00 & 0.00 & \textcolor{gray}{---} & \textcolor{gray}{---} \\
+    V1   & 1.48 & 0.50 & 58 / 0 / 0  & $<0.001$ \\
+    V2   & 1.33 & 0.47 & 58 / 0 / 0  & $<0.001$ \\
+    \midrule
+    \multicolumn{3}{l}{V2 vs V1} & 28 / 19 / 11 & 0.12 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+

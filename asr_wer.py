@@ -8,7 +8,14 @@ import torch
 import pandas as pd
 import whisper
 import torchaudio
+import soundfile as sf
 from tqdm.notebook import tqdm
+
+# torchaudio >= 2.6 requires torchcodec which may not be available; fall back to soundfile
+def _soundfile_load(uri, *args, **kwargs):
+    data, sr = sf.read(uri, dtype='float32', always_2d=True)
+    return torch.tensor(data.T), sr
+torchaudio.load = _soundfile_load
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 

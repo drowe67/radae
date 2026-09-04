@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
     int            frames, i, j, k, Fs, ret, nclipped, noutclipped, ssbfilt_en,
                    complex_out, ctest, impulse_en, impulse_clock, impulse_wait_samples,
                    impulse_state, after_fade;
-    float          sam, peak, clip, papr, CNo, snr3k, gain, impulse_period;
+    float          sam, peak, clip, papr, CNo, snr3k, gain, impulse_period, fading_adv;
 
     if (argc < 3) {
     helpmsg:
@@ -115,6 +115,7 @@ int main(int argc, char *argv[])
                         "[--No dBHz]            AWGN Noise density dB/Hz (default -100)\n"
                         "[--impulse ms]         simulate impulse noise with mean ms\n"
                         "[--after_fade]         Measure power after fading modem (default before)\n"
+                        "[--fading_adv sec]     Start sampling fading from sec seconds (default 0)\n"
                         "\n"
                 , argv[0]);
         exit(1);
@@ -138,9 +139,9 @@ int main(int argc, char *argv[])
     Fs = 8000; foff_hz = 0.0; fading_en = 0; ctest = 0;
     clip =32767; gain = 1.0;
     ssbfilt_en = 1; complex_out = 0;
-    impulse_en = 0; impulse_period = 0.0; impulse_state = 0;    
+    impulse_en = 0; impulse_period = 0.0; impulse_state = 0;
     fading_dir = strdup(DEFAULT_FADING_DIR); user_multipath_delay = -1.0;
-    after_fade = 0;
+    after_fade = 0; fading_adv = 0.0;
 
     int o = 0;
     int opt_idx = 0;
@@ -162,14 +163,18 @@ int main(int argc, char *argv[])
             {"No",              required_argument,  0, 'n'},
             {"impulse",         required_argument,  0, 'j'},
             {"after_fade",      no_argument,        0, 'a'},
+            {"fading_adv",      required_argument,  0, 'b'},
            {0, 0, 0, 0}
         };
 
-        o = getopt_long(argc,argv,"c:df:g:im:n:opr:s:tu:hj:",long_opts,&opt_idx);
+        o = getopt_long(argc,argv,"c:df:g:im:n:opr:s:tu:hj:b:",long_opts,&opt_idx);
         
         switch(o) {
         case 'a':
             after_fade = 1;
+            break;
+        case 'b':
+            fading_adv = atof(optarg);
             break;
         case 'c':
             clip = atof(optarg);
@@ -292,6 +297,12 @@ int main(int argc, char *argv[])
         for (i=0; i<4; i++)
             ret = fread(&hf_gain, sizeof(float), 1, ffading);
         //fprintf(stderr, "hf_gain: %f\n", hf_gain);
+
+        /* optionally advance into fading file */
+        if (fading_adv > 0.0) {
+            long offset = (long)(fading_adv*Fs*sizeof(COMP)*2.0);
+            fseek(ffading, offset, SEEK_CUR);
+        }
     }
 
     assert(HT_N == sizeof(ht_coeff)/sizeof(COMP));

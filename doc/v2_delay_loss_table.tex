@@ -1,0 +1,13 @@
+\begin{table} [h]
+\caption{Loss versus timing delay, EbNodB=100 (AWGN, effectively no channel noise), wav/all.wav, 0-40ms sweep (41 points, spans more than two symbol periods, $M=128$ samples $=16$~ms).}
+\label{tab:delay_loss}
+\centering
+\begin{tabular}{ l | c | c | c | c }
+ \hline
+ Receiver & Min Loss & Max Loss & Mean Loss & Std Dev \\
+ \hline
+ Python (rx2.py)     & 0.080 & 0.082 & 0.0815 & 0.0006 \\
+ C (radae\_rx --v2)  & 0.079 & 0.082 & 0.0810 & 0.0005 \\
+ \hline
+\end{tabular}
+\end{table}

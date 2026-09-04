@@ -50,7 +50,6 @@ parser.add_argument('rx', type=str, help='path to input file of rate Fs rx sampl
 parser.add_argument('features_hat', type=str, help='path to output feature file in .f32 format')
 parser.add_argument('--latent-dim', type=int, help="number of symbols produces by encoder, default: 56", default=56)
 parser.add_argument('--write_latent', type=str, default="", help='path to output file of latent vectors z[latent_dim] in .f32 format')
-parser.add_argument('--bottleneck', type=int, default=3, help='1-1D rate Rs, 2-2D rate Rs, 3-2D rate Fs time domain (default 3)')
 parser.add_argument('--cp', type=float, default=0.004, help='Length of cyclic prefix in seconds [--Ncp..0], (default 0.04)')
 parser.add_argument('--no_bpf', action='store_false', dest='bpf', help='disable BPF')
 parser.add_argument('--freq_offset', type=float, default=0, help='correct for this frequency offset')
@@ -96,6 +95,8 @@ parser.set_defaults(limit_pitch=True)
 parser.add_argument('--nolimit_pitch', action='store_false', dest='limit_pitch', help='disable limiting (clip) lower end of pitch feature to prevent synthesis pops with some speakers/channels (default enabled)')
 parser.set_defaults(mute=False)
 parser.add_argument('--mute', action='store_false',  dest='mute', help='enable mute when sig lost (default disabled)')
+parser.set_defaults(eoo=True)
+parser.add_argument('--no_eoo', action='store_false', dest='eoo', help='disable EOO (end of over) detection (default enabled)')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
@@ -111,7 +112,7 @@ if args.auxdata:
 
 # load RADE model
 model = RADAE(num_features, latent_dim, EbNodB=100, Nzmf = 1,
-              rate_Fs=True, bottleneck=args.bottleneck, cyclic_prefix=args.cp,
+              rate_Fs=True, bottleneck=0, cyclic_prefix=args.cp,
               time_offset=args.time_offset, correct_time_offset=args.correct_time_offset,
               stateful_decoder=args.stateful, w1_dec=args.w1_dec, w1_dec_stateful=args.w1_dec)
 checkpoint = torch.load(args.model_name, map_location='cpu', weights_only=True)

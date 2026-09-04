@@ -11,6 +11,7 @@
 \usepackage{siunitx}  
 \usepackage{xstring}
 \usepackage{catchfile}
+\usepackage{booktabs,multirow}
 
 \CatchFileDef{\headfull}{../.git/HEAD}{}
 \StrGobbleRight{\headfull}{1}[\head]
@@ -48,7 +49,7 @@ pinstyle/.style = {pin edge={to-,thin,black}}
 
 \section{Introduction}
 
-This document describes the tests performed on the RADE V2 waveform, and presents the test results.  Tests have been performed by the author using software simulation (Phase A), the author using radios and HF radio channels (Phase B), and by crowd sourcing over the air results from the Amateur Radio community (Phase C).
+This document describes the tests performed on the RADE V2 waveform, and presents the test results.  Tests have been performed by the author using software simulation (Phase A), the author using radios and HF radio channels (Phase B), and by crowd sourcing stored file (Phase C) and real time PTT (Phase D) over the air results from the Amateur Radio community.
 
 The RADE concept evolved from a discussion between Jean-Marc Valin and David Rowe, after which Jean-Marc quickly put together an initial proof-of-concept demo in late 2023. Over 2024 David built on this work to develop a practical over the air waveform for speech over HF radio channels. This waveform is denoted RADE V1. 
 Over the course of 2025 and early 2026 David has been developing RADE V2, which has several innovations that are novel to both amateur and indeed professional radio communications:
@@ -162,15 +163,15 @@ The target channels for RADE V2 are AWGN and MPP (Doppler 1 \si{Hz}, Delay 2 \si
 
 \subsection{Occupied Bandwidth and PAPR}
 
-Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}). The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.
+Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}).  We measure PAPR using the peak magnitude over an entire sample (100\% CCDF) as even an occasional peak will depress a typical SSB transmitter ALC for several seconds.  The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.
 
 \begin{table} [h]
 \caption{Occupied Bandwidth and PAPR for \emph{all.wav}.}
 \label{tab:obw_papr}
 \centering
-\begin{tabular}{ c |  r | r }
+\begin{tabular}{ c |  r | c }
  \hline
- Waveform & OBW & PAPR \\
+ Waveform & OBW & PAPR (100\% CCDF) \\
  \hline
  RADE V1 & 2109 & 4.20  \\
  RADE V2 & 867 & 3.48 \\
@@ -309,23 +310,45 @@ This generates signal2 (-25 \si{Hz} frequency offset) which is placed just befor
 
 \subsection{Automatic Gain Control (AGC)}
 
-ML networks tend to operate over a limited dynamic range so an AGC is required.  The script \emph{./compare\_models\_inf.sh -p 260206\_inf} was used to generate loss versus SNR curves for 3 AGC conditions (plotted in Figure \ref{fig:260206_inf_loss_SNR3k_models}) on the worst case MPP channel:
+ML networks tend to operate over a limited dynamic range so an AGC is required.  The script \emph{./compare\_models\_inf.sh -p 260830\_inf} was used to generate loss versus SNR curves for the first three AGC conditions below, and \emph{./compare\_models\_inf.sh -p 260831\_inf} for the fourth (plotted in Figure \ref{fig:260206_inf_loss_SNR3k_models}) on the worst case MPP channel:
 \begin{enumerate}
 \item Baseline with no AGC.
 \item AGC enabled with +20 \si{dB} gain (linear gain of 10).
 \item AGC enabled with -20 \si{dB} gain (linear gain of 0.1).
+\item AGC enabled with 0 \si{dB} gain (linear gain of 1.0) with three different delays (timing offsets).
 \end{enumerate}
-The AGC curves are coincident with the baseline curve, indicating AGC has a small impact on performance.
+This section (Figures \ref{fig:260206_inf_loss_SNR3k_models}, \ref{fig:v2_delay_loss} and Table \ref{tab:delay_loss}) was regenerated using \emph{radae} commit \texttt{73f7183} and \emph{rade\_c} commit \texttt{6d89585} on 1 Sep 2026, both later than the campaign configuration in Table \ref{tab:time_to_acq}.
+
+The AGC curves are coincident with the baseline curve, indicating AGC has a small impact on performance over a range of gains and timing offsets.  Table \ref{tab:delay_loss} presents results for a fine grained sweep of loss against delay for a high SNR, to confirm the loss obtained from the \href{https://github.com/drowe67/radae/#verifying-rade-integration}{verification procedure} will be insensitive to arbitrary timing offsets found in real time systems.
 
 AGC operation is limited to $\pm 20$  \si{dB} from the nominal peak level of $A=1.0$ or $0.1<A<10.0$ .  Therefore a manual gain term may be required to scale from a typical $\pm 2^{15}$ peak level common with deployments to the range $0.1<A<10.0$ at input of the V2 receiver.  In terms of RMS levels, given a 3 \si{dB} PAPR, we would like $A_{rms}=0.707$ at the receiver input. 
 
 \begin{figure}[h]
 \caption{Loss versus SNR for various AGC conditions.}
 \label{fig:260206_inf_loss_SNR3k_models}
+\label{fig:260831_inf_loss_SNR3k_models}
 \begin{center}
-\scalebox{.9}{\input {260206_inf_loss_SNR3k_models.tex}}
+\scalebox{.9}{\input {260830_inf_loss_SNR3k_models.tex}}
+\scalebox{.9}{\input {260831_inf_loss_SNR3k_models.tex}}
 \end{center}
 \end{figure}
+
+\clearpage
+
+Figure \ref{fig:v2_delay_loss} and Table \ref{tab:delay_loss} were generated with:
+\begin{verbatim}
+PY_OPTS="--agc" RESULTS=v2_delay_loss.txt PLOT=v2_delay_loss ./test/v2_c_timing.sh 0 0.04 40
+\end{verbatim}
+
+\begin{figure}[h]
+\caption{}
+\label{fig:v2_delay_loss}
+\begin{center}
+\scalebox{.9}{\input {v2_delay_loss.tex}}
+\end{center}
+\end{figure}
+
+\input{v2_delay_loss_table.tex}
 
 \subsection{Sample clock and freq drift tests}
 
@@ -448,11 +471,11 @@ It can be difficult to discern fine differences in speech samples using ad hoc l
 
 The OTC tests (e.g. v216) show very little impact on the loss metric, demonstrating that the signal processing through two typical HF radios (USB sound hardware, SSB filters, PA, up and down conversion) has very little impact on the RADE waveforms. This suggests loss measurements can be used as a metric for ``type approval" of RADE integration e.g. with a SDR, end user application, or hardware radio.
 
-\section{Phase C - Crowd Sourced Tests}
+\section{Phase C - Crowd Sourced Stored File OTA Tests}
 
-This section describes the test results collected from a crowd sourced OTA test campaign. The goals of this test campaign are:
+This section describes the test results collected from the crowd sourced stored file OTA test campaign. The goals of this test campaign were:
 \begin{enumerate}
-\item Gather further stored file OTA samples to support the Phase A \& B results, but from a wider range of speakers, HF channels, radio hardware, and applications integrating RADE V2.
+\item Gather further stored file OTA samples to support the Phase A \& B results, but from a wider range of speakers, HF channels, radio hardware.
 \item If any counter examples to the Phase A \& B results are encountered, explore and fix bugs if found.
 \item Measurements of PAPR from other radios and test equipment.
 \item If encountered, explore the ``underwater" voice modulation artefact often heard on V1 samples posted on social media.
@@ -460,28 +483,99 @@ This section describes the test results collected from a crowd sourced OTA test 
 \item Gain experience in 3rd parties integrating and verifying RADE V2 operation in their application/radio. Use this information to improve the integration and verification procedure.
 \end{enumerate}
 
+Licensed Amateur Radio operators from around the world were invited to record a 10\nobreakdash-60 second input sample of their own voice. 
+This was converted to a RADE V1 and V2 waveform sample, and concatenated with a Hilbert-compressed version of the same input sample to emulate an analog SSB signal with a 6\nobreakdash-8~dB PAPR.
+Participants then played the concatenated sample through their SSB transmitters over real world HF Radio channels to remote KiwiSDR receivers of their choice (KiwiSDRs are SSB radio receivers that are connected to the public Internet). 
+The received off air signal was processed to obtain a file of SSB and RADE output speech samples, and an estimate of channel SNR. 
+The use of stored files enabled the same Tx signal to be transmitted to different KiwiSDR receivers under different channel conditions, and different transmit power levels.
+The \emph{ota\_test.sh} script performed the Tx and Rx processing using the reference Python implementation of RADE V2. For convenience, this was configured to run from a web server.
+
+The procedures for stored file tests are documented \href{https://github.com/drowe67/radae/blob/main/README.md#testing-rade}{here}.  
+
+Samples submitted included the source audio fed to the RADE encoder, plus the received off air signal.  The idea is to have enough information to reproduce the results (e.g. by passing through the RADE decoder) and measure the loss compared to a software simulation reference. They have been archived on the FreeDV project shared drive.
+
+Table \ref{tab:phase_c_summary} summarises the test results. A total of 58 samples were collected.  Special thanks to to Rick W7YC, Kanda JH0PCF (long samples), Yuichi JH0VEQ and Take JS1MAV for your samples.
+ 
 \begin{table} [h]
-\caption{Phase C Test Goals.}
-\label{tab:phase3_goals}
+\caption{Phase C Test Results}
+\label{tab:phase_c_summary}
 \centering
 \begin{tabular}{ l | c | c }
  \hline
- Goal & Target Samples & Collected Samples \\
+ Goal & Target & Actual \\
  \hline
- Number of stored file OTA samples to collect & 20 \\
- Number of languages & 3 \\
- Real Time PTT conversations & 10 \\
- PAPR measurements & 3 \\
+ Number of samples collected & 20 & 58 \\
+ Number of languages & 3 & 3 \\
+ PAPR measurements & 3 & 1 \\
  \hline
  \hline
 \end{tabular}
 \end{table}
 
-The procedures for stored file and PTT tests are documented \href{https://github.com/drowe67/radae/blob/0b1279995f79e00007237ec709a560b256f7daa0/README.md#testing-rade}{here}.  Any PTT results must be from an application of radio that has RADE V2 integration verified using \href{https://github.com/drowe67/radae/blob/0b1279995f79e00007237ec709a560b256f7daa0/README.md#verifying-rade-integration}{this} procedure.  Samples submitted must include the source audio fed to the RADE encoder, plus the received off air signal.  The idea is to have enough information to reproduce the results (e.g. by passing through the RADE decoder) and measure the loss compared to a software simulation reference. For the PAPR measurements it would be useful to have the source audio so we can measure the PAPR of the software only signal.
+We achieved the goal of successful functional testing across a range of languages, radios, and HF channels, with no counter examples to the Phase A \& B results.
+No examples were found of complete breakdown of V2 when V1 worked.
+These tests established the functional goal of demonstrating that RADE V2 works (classical DSP and ML subsystems) over real world HF channels.
+Participants were asked to rank (unblinded) each sample and a simple binomial statistical test applied (Table \ref{tab:ota_table}).
+There was a clear preference for both RADE V1 and V2 over SSB ($p < 0.001$), however the preference for V2 over V1 did not reach statistical significance ($p = 0.12$).
+This result is expected, a 3dB difference is difficult for the human ear to resolve, especially over real world non-stationary HF channels.
+Within statistical limits, the ranking is consistent with the simulation results above.
+No evidence (in either V1 or V2 decoded samples) was found of the ``underwater" voice modulation artefact that has previously been heard on YouTube samples of RADE V1.
+
+\input ota_table.tex
+
+Only one PAPR measurement was submitted (Table \ref{tab:phase_c_take_papr}, thanks Take). This was on the baseband signal using Audacity and was consistent with the simulation results. As further work it would be useful to obtain PAPR measurements at the PA RF output.
+
+\begin{table} [h]
+\caption{Phase C PAPR results from Take}
+\label{tab:phase_c_take_papr}
+\centering
+\begin{tabular}{ l | c | c | c | c}
+ \hline	
+      & CHIRP & SSB & RADE V1 & RADE V2 \\
+ \hline
+      & 0 & 7 & 4.20 & 3.50	\\
+ PEAK & -6.02 & -6.02 & -6.02 & -6.02 \\	
+ RMS & -9.03 & -18.29 & -12.66 & -12.26 \\
+ PAPR(dB) & 0.00 & 9.26 & 3.63 & 3.23 \\
+ \hline
+\end{tabular}
+\end{table}
+
+\section{Phase D - Real Time PTT OTA Tests}
+
+This section describes the test results collected from the crowd sourced PTT OTA test campaign. The goals of this test campaign were:
+\begin{enumerate}
+\item Functional testing of RADE V2 OTA in real world PTT conversations.  It should acquire, sync and decode without major failures such as crashing or garbled speech.
+\item Successful integration of the 40 \si{ms} delay, for example no clicks in audio (short buffers can stress sound drivers), and evaluating the PTT turn around compared to RADE V1 (180ms).
+\item Gain experience in 3rd parties integrating and verifying RADE V2 operation in their application/radio (e.g. software and over the cable loss tests). Use this information to improve the integration and verification procedure.
+\item Gather further examples of off air received signals and decoded V2 speech to support the previous test results, but in real time from a range of speakers, HF channels, radio hardware.
+\item If any issues are encountered from \emph{verified} integrations, explore and fix bugs.
+\item Measurements of PAPR at the PA output and compare to simulation.
+\item If encountered, explore the ``underwater" voice modulation artefact often heard on V1 samples posted on social media.
+\item It is not within the scope of this test phase to evaluate speech quality (e.g. compared to V1 or SSB), as no way of performing a controlled tests is possible.
+\end{enumerate}
+
+\begin{table} [h]
+\caption{Phase D Test Summary (TBC).}
+\label{tab:phase_d_summary}
+\centering
+\begin{tabular}{ l | c | c }
+ \hline
+ Goal & Target Samples & Collected Samples \\
+ \hline
+ Number of OTA samples to collect & 20 &  \\
+ Number of languages & 3 &  \\
+ PAPR measurements & 3 &  \\
+ \hline
+ \hline
+\end{tabular}
+\end{table}
+
+The procedure for testing is documented \href{https://github.com/drowe67/radae/#testing-rade}{here}.  Any results must be from an application or radio that has RADE V2 integration verified using \href{https://github.com/drowe67/radae/#verifying-rade-integration}{this} procedure.  Any applications contributing to this test campaign must be capable of exporting a received off-air signal sample file, and a decoded V2 speech file.
 
 \section{Conclusion}
 
-In Table \ref{tab:conclusion} the results from Phase A and B are summarised and compared to requirements extracted from FreeDV-038.  Phase C is a work in progress.  Only performance and functional requirements have been extracted (e.g. we don't consider implementation issues like a C port or packaging).
+In Table \ref{tab:conclusion} the results from Phase A, B and C are summarised and compared to requirements extracted from FreeDV-038.  Phase D is a work in progress.  Only performance and functional requirements have been extracted (e.g. we don't consider implementation issues like a C port or packaging).
 
 \begin{table} [h]
 \caption{Test results compared to performance requirements}
@@ -491,7 +585,7 @@ In Table \ref{tab:conclusion} the results from Phase A and B are summarised and 
 \hline
 Requirement & Met & Comment \\
 \hline
-Speech quality v SNR $\ge$ RADE V1 on AWGN \& MPP. & Pass & $\approx 3$ \si{dB} gain in simulations, supported by OTA tests. \\
+Speech quality v SNR $\ge$ RADE V1 on AWGN \& MPP. & Pass & $\approx 3$ \si{dB} gain of V2/V1 in simulations, but statistical significance not reached in OTA tests (expected result). \\
 Handles MPD channel without breaking down & Pass & \\
 PAPR $< 1$ \si{dB}| through a typical SSB band pass filter. & Partial & This requirement was found to be in error, real world PAPR of RADE V1 was $>$ 4 \si{dB}.  We have achieved a PAPR of $\approx 3$ \si{dB} with V2, a 1 \si{dB} gain on V1. \\
 OBW $<$ 2000 \si{Hz} & Pass & V2 OBW measured as $\approx 860$ \si{Hz}, much cleaner spectrum. \\ 
@@ -511,7 +605,6 @@ Topics for future development. It may be possible to attend to these in parallel
 \item Improved EOO performance at lower SNRs.
 \item Completion of streaming text feature by addition of external library for framing and error correction of 25 bits/s BPSK symbol stream.
 \item Extend range of frequency offset estimation to $\pm 50 \si{Hz}$.
-\item Write a ``type approval" procedure to allow 3rd parties to verify their integration of RADE V2.
 \end{enumerate}
 
 \end{document}
