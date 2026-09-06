@@ -28,7 +28,14 @@
 #    ./ota_test.sh wav/peter.wav -x
 #    build/src/ch tx.wav - --No -20 | sox -t .s16 -r 8000 -c 1 - rx.wav
 #    ./ota_test.sh -r rx.wav
+#    cat rx_report.txt
 #    aplay rx_ssb.wav rx_radae1.wav rx_radae2.wav
+#
+# 1A. File based I/O example and measure "loss" metric (C version of RADE V2):
+#    ./ota_test.sh wav/all.wav --v2_c -x
+#    ./ota_test.sh --v2_c -r tx.wav -l wav/all.wav
+#    cat tx_report.txt
+#    Note to correctly calculate "loss" from the C tools, you must use --v2_c at both the Tx and Rx side
 #
 # 2. Use IC-7200 SSB radio to Tx (first generate tx.raw, then tx it on 7160 kHz)
 #    ./ota_test.sh wav/david_vk5dgr.wav -x -d
@@ -92,7 +99,7 @@ function print_help {
     echo "    --rms                     Equalise RMS power of RADAE and SSB (default is equal peak power)"
     echo "    --tx_path                 optional path to tx.raw/tx.wav"
     echo "    -t SSBRadioFile.raw       Tx SSBRadioFile.raw over SSB radio (e.g. tx.wav or RADAE encoded file), no pre-processing"
-    echo "    --v2_c                    Use rade_c's rade_tx_wav/rade_rx_wav (production API) for RADE V2 instead of Python"
+    echo "    --v2_c                    Use rade_c's rade_tx_wav/rade_rx_wav (production C port) for RADE V2 instead of reference Python"
     echo
     exit
 }
@@ -202,8 +209,11 @@ function process_rx {
       speechfile_no_path_no_ext="${loss_input_wav_file##*/}" # Removes path
       speechfile_no_path_no_ext="${speechfile_no_path_no_ext%.*}" # Removes extension
       # optional loss measurements
-      python3 loss.py ${speechfile_no_path_no_ext}_features_in_tx1.f32 ${speechfile_no_path_no_ext}_features_out_tx1.f32 --features_hat2 features_out_rx1.f32 --compare --clip_start 25 | sed -n '5p' | tee -a ${filename}_report.txt
-      python3 loss.py ${speechfile_no_path_no_ext}_features_in_tx2.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 25 | sed -n '5p' | tee -a ${filename}_report.txt
+      printf "%-6s%-10s%-10s\n" "" "Target" "Measured" | tee -a ${filename}_report.txt
+      v1_loss=$(python3 loss.py ${speechfile_no_path_no_ext}_features_in_tx1.f32 ${speechfile_no_path_no_ext}_features_out_tx1.f32 --features_hat2 features_out_rx1.f32 --compare --clip_start 25 | sed -n '5p')
+      printf "%-6s%-10s%-10s%s\n" "V1:" "$(echo $v1_loss | awk '{print $2}')" "$(echo $v1_loss | awk '{print $4}')" "$(echo $v1_loss | awk '{print $5, $6}')" | tee -a ${filename}_report.txt
+      v2_loss=$(python3 loss.py ${speechfile_no_path_no_ext}_features_in_tx2.f32 ${speechfile_no_path_no_ext}_features_out_tx2.f32 --features_hat2 features_out_rx2.f32 --compare --clip_start 25 | sed -n '5p')
+      printf "%-6s%-10s%-10s%s\n" "V2:" "$(echo $v2_loss | awk '{print $2}')" "$(echo $v2_loss | awk '{print $4}')" "$(echo $v2_loss | awk '{print $5, $6}')" | tee -a ${filename}_report.txt
     fi
 
     # filter NNPACK awarning for old machine without AVX
