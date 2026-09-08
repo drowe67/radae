@@ -190,8 +190,13 @@ function process_rx {
     # RADE2 Rx
     if [ $v2_c -eq 1 ]; then
         sox -t .s16 -r 8000 -c 1 ${rx_rade2}.raw ${rx_rade2}.wav
-        ${RADE_C}/rade_rx_wav --v2 -f features_out_rx2.f32 ${rx_rade2}.wav ${filename}_rade2.wav 2>>${filename}_report.txt
-        # note: rade_rx_wav doesn't yet expose delta_hat/gain/freq_offset/snr_est diagnostics -- no plot for the C path yet
+        ${RADE_C}/rade_rx_wav --v2 -v 2 -f features_out_rx2.f32 ${rx_rade2}.wav ${filename}_rade2.wav \
+        --write_state state.int16 --write_delta_hat delta_hat.f32 --write_delta_hat_g delta_hat_g.f32 \
+        --write_freq_offset freq_offset.f32 --write_gain gain.f32 --write_snr_est snr_est.f32 2>>${filename}_report.txt
+        DISPLAY=""; echo "warning('off', 'all'); \
+          radae_plots; \
+          plot_v2_logs('${filename}_plots.png', 'state.int16', 'delta_hat.f32','delta_hat_g.f32','freq_offset.f32','gain.f32','snr_est.f32'); \
+          quit;" | octave-cli -qf > /dev/null
     else
         cat ${rx_rade2}.raw | python3 int16tof32.py --zeropad > ${rx_rade2}.f32
         ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync ${rx_rade2}.f32 ${filename}_rade2.wav \
