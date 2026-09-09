@@ -7,10 +7,12 @@ or hardware radio. The goal is to confirm the signal path is clean — no droppe
 sample buffers, no unintended DSP, no scaling errors — so that any on-air results
 reflect RADE performance, not integration issues.
 
-**Scope:** This procedure tests integration correctness only. It does not
-evaluate speech quality, compare V1 vs V2, or directly assess radio hardware
-performance. Any additional tests beyond this procedure should be agreed with
-the RADE team before being submitted as results.
+**Scope:** This procedure assumes the application under test integrates the
+`rade_c` library (C port of reference Python). It tests integration correctness
+only — it does not evaluate speech quality, compare V1 vs V2, or directly
+assess radio hardware performance. Any additional tests beyond this
+procedure should be agreed with the RADE team before being submitted as
+results.
 
 ## Requirements
 
@@ -18,8 +20,8 @@ the RADE team before being submitted as results.
   input (Tx) and RADE decoder output (Rx) to disk files, for use with `loss.py`.
   See `rade_tx_wav -f` and `rade_rx_wav -f` in the rade_c repo, and the
   `rade_c_v2_wav` ctest, for worked examples.
-- **RX-only applications** (no transmit capability) should use `tx2.py` from
-  this repository as the reference transmitter, generating the TX WAV at
+- **RX-only applications** (no transmit capability) should use `rade_c`'s
+  `rade_tx_wav` as the reference transmitter, generating the TX WAV at
   test time so it tracks any model changes. For OTAC and OTC tests, the TX
   WAV must be played using a simple command-line tool with no signal
   processing (e.g. `aplay`, `afplay`, or `ffplay`). See the RX-only worked
@@ -69,25 +71,28 @@ Tests the complete hardware chain.
 
 ### Step 1 — Establish the current baseline
 
-Re-run the following with the latest version of this repository to obtain the
-current software-only baseline. Do not use a cached value — the baseline shifts
-slightly between model versions.
+Re-run the following with the latest version of `rade_c` to obtain the
+current software-only baseline. Do not use a cached value — the baseline
+shifts slightly between model versions.
 
 ```
-cd ~/radae
-lpcnet_demo -features wav/all.wav features_in.f32
-python3 tx2.py 250725/checkpoints/checkpoint_epoch_200.pth features_in.f32 tx.f32
-python3 rx2.py 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync tx.f32 features_rx.f32 --quiet
-python3 loss.py features_in.f32 features_rx.f32 --clip_start 100 --clip_end 300
+cd ~/rade_c/build
+./src/rade_tx_wav --v2 -f features_tx.f32 ../wav/all.wav tx.wav
+./src/rade_rx_wav --v2 -f features_rx.f32 tx.wav decoded.wav
+python3 ~/radae/loss.py features_tx.f32 features_rx.f32 --clip_start 100 --clip_end 300
 ```
 
-Example output (Python reference, `wav/all.wav`, model `250725`, commit `b549586`):
+Example output (`rade_c` reference, `wav/all.wav`, model `250725`):
 ```
-loss: 0.081 start: 224 acq_time:  1.24 s
+loss: 0.079 start: 224 acq_time:  1.24 s
 ```
 
-Record the current baseline loss value and the git commit hash used
+Record the current baseline loss value and the `rade_c` git commit hash used
 (e.g. `git log --oneline -1` → `cafebabe`). **A pass is within ±10% of the baseline.**
+
+See [Worked Example of Loss Tests](#worked-example-of-loss-tests) below for
+guidance on choosing `--clip_start`/`--clip_end` and an automated pass/fail
+pattern using `--compare`.
 
 ### Step 2 — Level 1: Software loopback
 
@@ -138,8 +143,8 @@ python3 ~/radae/loss.py features_tx.f32 features_rx.f32 \
 
 ![Loss before clipping](loss_unclipped.png)
 
-The spike at the start (~22) is the RADE acquisition transient; the smaller
-spike at the end (~3) is the end-of-over frame. Both are expected behaviour
+The spike at the start (~28) is the RADE acquisition transient; the smaller
+spike at the end (~2.5) is the end-of-over frame. Both are expected behaviour
 from the state machine. Clip them out and re-run:
 
 ```
@@ -150,7 +155,7 @@ python3 ~/radae/loss.py features_tx.f32 features_rx.f32 \
 
 ![Loss after clipping](loss_clipped.png)
 
-With transients removed, loss drops from 0.113 to 0.082 — consistent with
+With transients removed, loss drops from 0.111 to 0.079 — consistent with
 the reference baseline. `--clip_start 100` (1 s) and `--clip_end 300` (3 s)
 are conservative defaults; your integration may need different values
 depending on acquisition time. Use `--plot` to check.
@@ -177,47 +182,40 @@ python3 ~/radae/loss.py features_tx.f32 features_rx_ref.f32 \
 
 Output:
 ```
-loss1: 0.082 loss2: 0.082 delta: 0.000
+loss1: 0.079 loss2: 0.079 delta: 0.000
 PASS
 ```
 
 `loss.py` prints `PASS` or `FAIL` and exits with code 0 or 1 respectively,
 making it suitable for use in CI scripts. A `--delta` of 0.008 corresponds
-to approximately ±10% of the V2 software loopback baseline (0.082).
+to approximately ±10% of the V2 software loopback baseline (0.079).
 
 ### RX-only application
 
-For applications with no transmit capability, use `tx2.py` to generate the
-reference TX signal, then convert to a real-valued WAV for playback or
-loopback testing. The `tx.f32` IQ file is already generated in Step 1.
+For applications with no transmit capability, use `rade_tx_wav` to generate
+the reference TX WAV — `tx.wav` and `features_tx.f32` are already generated
+in Step 1, no format conversion needed.
 
-Convert to a real-valued 8 kHz mono WAV:
-
-```
-python3 f32toint16.py --real --scale 16384 < tx.f32 | \
-    sox -t s16 -r 8000 -c 1 - tx_real.wav
-```
-
-For a software loopback test, feed `tx_real.wav` directly to your
-application's RX input and export `features_rx.f32`. For OTAC or OTC tests,
-play `tx_real.wav` via a command-line audio player:
+For a software loopback test, feed `tx.wav` directly to your application's
+RX input and export `features_rx.f32`. For OTAC or OTC tests, play `tx.wav`
+via a command-line audio player:
 
 ```
-aplay tx_real.wav      # Linux
-afplay tx_real.wav     # macOS
-ffplay tx_real.wav     # Windows / cross-platform
+aplay tx.wav      # Linux
+afplay tx.wav     # macOS
+ffplay tx.wav     # Windows / cross-platform
 ```
 
 Then measure loss against the TX features from Step 1:
 
 ```
-python3 loss.py features_in.f32 features_rx.f32 \
+python3 ~/radae/loss.py features_tx.f32 features_rx.f32 \
     --clip_start 100 --clip_end 300
 ```
 
 Expected output (V2, software loopback, `wav/all.wav`):
 ```
-loss: 0.083 start: 224 acq_time:  1.24 s
+loss: 0.079 start: 224 acq_time:  1.24 s
 ```
 
 ## Submitting Results

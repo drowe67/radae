@@ -369,33 +369,15 @@ A Rx frequency offset drifting at -5 \si{Hz} per minute was tested. No significa
 
 This section describes the End of Over (EOO) system performance.  When the transmission is about to cease, a special EOO frame is sent to instruct the receiver to immediately stop decoding.  This prevents decoding of spurious received signal and unwanted ``R2D2" tones emerging from the decoder at the end of a transmission.  The design goal is reliable operation in high SNR benign channels.  In poor channels (e.g. low SNR MPP), it is acceptable to have a lower probability of EOO detection, as clean end of over behaviour is a secondary requirement in the low SNR use case.  In all channels, should the EOO frame not be detected, the hangover counter in the receiver state machine will eventually stop decoding after a few seconds.
 
-The script \emph{eoo\_detect\_prob.sh} generates $N=20$ by 9 \si{s} duration samples (extracted from \emph{all.wav}) each terminated in an EOO frame.  The number of successful EOO detections is counted to determine the probability of EOO detection for each condition.  The 9 \si{s} duration is chosen to ensure the alignment shifts between \emph{all.wav} and \emph{g\_mpp.f32} as the trials modulo rotate around each file.  Note the sharp knee in the AWGN performance at around 1 \si{dB} SNR.
+The script \emph{eoo\_detect\_prob.sh} generates $N=20$ by 9 \si{s} duration samples (extracted from \emph{all.wav}) each terminated in an EOO frame, transmitted through \emph{tx2.py} $\to$ \emph{ch} $\to$ \emph{rx2.py} so that both the payload and the EOO frame are genuinely faded and filtered by the channel (an earlier version of this test spliced an AWGN-only EOO tail onto the channel output, so multipath fading never actually reached the EOO frame -- see Issue \#1). The number of successful EOO detections is counted to determine the probability of EOO detection for each condition. The 9 \si{s} duration is chosen to ensure the alignment shifts between \emph{all.wav} and \emph{g\_mpp.f32} as the trials modulo rotate around each file. AWGN detection probability declines steadily from 65\% at 4.3 \si{dB} SNR to 5\% at 0.3 \si{dB} SNR; MPP is weaker at comparable SNR, declining from 55\% at 8.3 \si{dB} SNR to 10\% at 2.3 \si{dB} SNR, since a real fade can occasionally land on the EOO frame itself.
 
-\begin{table} [h]
-\caption{End of Over Probability of Detection over $N=20$ trials}
-\label{tab:eoo_p_detetc}
-\centering
-\begin{tabular}{ c | c | r | r }
- \hline
- Channel & EbNodB & SNR (\si{dB}) & P(detect) \\
- \hline
- AWGN & 100 & 100 & 1.00 \\
- AWGN & 10 & 3.5 & 1.0 \\
- AWGN & 8 &  1.5 & 1.0 \\
- AWGN & 6 & -0.5 & 0.0 \\
- MPP & 100 & 100 &  1.0 \\
- MPP & 10 & 4.5 & 1.0 \\
- MPP & 6 & -0.5 & 0.3 \\
- MPP & 3 & -3.5 & 0.0 \\
- \hline
-\end{tabular}
-\end{table}
+\input{v2_test_report_eoo.tex}
 
-The script \emph{eoo\_false\_prob.sh} counts how many times the EOO detection system detects a EOO frame when none is present (false detection), e.g. due to the regular payload V2 OFDM symbols resembling an EOO frame. This is undesirable as the receiver would stop decoding mid-over and have to re-acquire. The longest source file tested was \emph{librispeech.wav} (used for ASR testing) at 540 seconds with no false detections.  The source file \emph{all.wav} was also tested with various channel conditions (e.g. 10 trials over a MPP channel at 3.5 dB SNR) with no false detections.
+The script \emph{eoo\_false\_prob.sh} counts how many times the EOO detection system detects a EOO frame when none is present (false detection), e.g. due to the regular payload V2 OFDM symbols resembling an EOO frame. This is undesirable as the receiver would stop decoding mid-over and have to re-acquire. The longest source file tested was \emph{librispeech.wav} (used for ASR testing) at 540 seconds with no false detections.  Over $N=20$ trials each, no false detections were observed on \emph{all.wav} at 4.4 \si{dB} SNR over AWGN or 5.4 \si{dB} SNR over MPP.
 
 Sample command lines:
 \begin{verbatim}
- ./test/eoo_detect_prob.sh --channel mpp --EbNodB 10
+ ./test/eoo_detect_prob.sh --channel mpp --No -25
  ./test/eoo_false_prob.sh
 \end{verbatim}
 
