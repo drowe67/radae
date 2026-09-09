@@ -1225,21 +1225,33 @@ add_test(NAME v2_eoo_awgn_low
                        2>&1 | grep 'EOO detected' && echo PASS || echo FAIL")
          set_tests_properties(v2_eoo_awgn_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# V2 EOO detection under real MPP fading: tx2.py -> ch -> rx2.py.
+# inference.py's --end_of_over_v2 splice only ever applies flat AWGN to the
+# EOO tail regardless of channel flags (never real H/G fading, never the SSB
+# BPF) -- tx2.py's continuous data+EOO stream through ch fades/filters both
+# genuinely. Scale 8192 (not 16383) avoids clipping from multipath anti-fade
+# peaks. --No -25 matches inference.py's --EbNodB 8 target C/No (39.46dB-Hz)
+# for this file; "high" uses ch's default (no --No) -- both this and
+# inference.py's default --EbNodB are so far into the noiseless regime
+# (SNR3k 80-96dB) that AWGN is negligible either way and MPP fading is the
+# only real impairment in both.
 add_test(NAME v2_eoo_mpp_high
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
-                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
-                       --end_of_over_v2 --write_rx v2_eoo_tx.f32 --append_noise 1 --g_file g_mpp.f32; \
-                       ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync v2_eoo_tx.f32 /dev/null \
+                       test/make_g.sh; \
+                       ./tx2.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav v2_eoo_mpp_high_tx2.f32; \
+                       cat v2_eoo_mpp_high_tx2.f32 | python3 f32toint16.py --real --scale 8192 | \
+                       ${CMAKE_BINARY_DIR}/src/ch - - --mpp --fading_dir . | python3 int16tof32.py --zeropad > v2_eoo_mpp_high_rx2.f32; \
+                       ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync v2_eoo_mpp_high_rx2.f32 /dev/null \
                        2>&1 | grep 'EOO detected' && echo PASS || echo FAIL")
          set_tests_properties(v2_eoo_mpp_high PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 add_test(NAME v2_eoo_mpp_low
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
-                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
-                       --end_of_over_v2 --write_rx v2_eoo_tx.f32 --append_noise 1 --g_file g_mpp.f32 --EbNodB 8; \
-                       ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync v2_eoo_tx.f32 /dev/null \
+                       test/make_g.sh; \
+                       ./tx2.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav v2_eoo_mpp_low_tx2.f32; \
+                       cat v2_eoo_mpp_low_tx2.f32 | python3 f32toint16.py --real --scale 8192 | \
+                       ${CMAKE_BINARY_DIR}/src/ch - - --No -25 --mpp --fading_dir . | python3 int16tof32.py --zeropad > v2_eoo_mpp_low_rx2.f32; \
+                       ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync v2_eoo_mpp_low_rx2.f32 /dev/null \
                        2>&1 | grep 'EOO detected' && echo PASS || echo FAIL")
          set_tests_properties(v2_eoo_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
