@@ -5,10 +5,10 @@
 | Field | Value |
 |---|---|
 | Application name | FreeDV |
-| Application version / git hash | 3.0.0-dev (git 0b12785) |
+| Application version / git hash | 3.0.0-dev (git 69473b0) |
 | Platform (OS + version) | Microsoft Windows Server 2022 Datacenter 10.0.20348 (build 20348) AMD64 (loopback)<br/>Microsoft Windows 11 Home 25H2 26200.9445 AMD64 (OTAC test) |
 | Tester name / callsign | Mooneer Salem / K6AQ |
-| Date | 2026-09-14 |
+| Date | 2026-09-16 |
 | radae repo commit hash | 758e825182f3a216922fb4bbd7f9a4f5c6fe4288 |
 | rade_c repo commit hash | 7eda42f0f10ec5df6ff409527f5855d5b3ed1c94 |
 
@@ -43,7 +43,7 @@ python3 loss.py baseline_txfeatures.f32 baseline_rxfeatures.f32 --clip_start 100
 
 | Field | Value |
 |---|---|
-| Loss result | 0.082  (PASS) |
+| Loss result | 0.084  (PASS) |
 
 Command used / reproduction notes:
 ```
@@ -66,7 +66,7 @@ python loss.py txfeatures.f32 rxfeatures.f32 `
 
 | Field | Value |
 |---|---|
-| Loss result | 0.082 |
+| Loss result | 0.083 |
 | Sound card (Tx) | Generalplus USB Audio Device (USB VID 0x1B3F, PID 0x2008) + USB isolator |
 | Sound card (Rx) | Generalplus USB Audio Device (USB VID 0x1B3F, PID 0x2008) + USB isolator |
 | Cable description | ~1 meter cable with 3.5mm ends |
