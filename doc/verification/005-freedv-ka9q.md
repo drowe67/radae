@@ -122,7 +122,7 @@ Reproduction notes:
 | Level | Result |
 |---|---|
 | Level 1 — Software loopback | PASS |
-| Level 2 — OTAC | PASS / FAIL / N/A |
+| Level 2 — OTAC | PASS |
 | Level 3 — OTC | N/A |
 
 Additional notes:
