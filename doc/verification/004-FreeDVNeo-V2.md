@@ -12,7 +12,7 @@ Following https://github.com/drowe67/radae/blob/dr-tx-bpf/doc/verification/verif
 | Application version / git hash | 1.2.18 a354254 |
 | Platform (OS + version) | macOS 27 |
 | Tester name / callsign | Peter Marks VK3TPM |
-| Date | 2026-09-16 |
+| Date | 2026-09-22 |
 | radae repo commit hash | 758e825182f3 |
 | rade_c repo commit hash | 262a980842 |
 
@@ -117,12 +117,12 @@ Loss between /Users/marksp/Desktop/encoded_features_V2.f32 and /Users/marksp/Des
 
 ## Level 3 — OTC: Over The Coax (optional)
 
-- [ ] Pass (loss within ±10% of baseline)
+- [X] Pass (loss within ±10% of baseline)
 - [ ] Not performed
 
 | Field | Value |
 |---|---|
-| Loss result | 0.088 |
+| Loss result | 0.082 |
 | Tx radio | IC-705 |
 | Rx radio | Xiegu X6200 |
 | Attenuator(s) | 40dB + 40dB + 20dB |
@@ -132,9 +132,9 @@ Photo of test setup:
 
 Reproduction notes:
 ```
-(venv) marksp@Mac radae % python3 loss.py ~/Desktop/encoded_features_V2.f32 ~/Desktop/decoded_features_V2.f32 --clip_start 100 --clip_end 300 --plot
+(venv) marksp@Peters-M4-Mini radae % python3 loss.py ~/Desktop/encoded_features_V2.f32 ~/Desktop/decoded_features_V2.f32 --clip_start 10 --clip_end 10 --plot
 Loss between /Users/marksp/Desktop/encoded_features_V2.f32 and /Users/marksp/Desktop/decoded_features_V2.f32
-  loss: 0.088 start: 224 acq_time:  1.24 s
+  loss: 0.082 start: 134 acq_time:  0.34 s
 ```
 
 ![004-RADEV2_OTC_loss](004-RADEV2_OTC_loss.png) 
@@ -145,6 +145,9 @@ Loss between /Users/marksp/Desktop/encoded_features_V2.f32 and /Users/marksp/Des
 |---|---|
 | Level 1 — Software loopback | PASS |
 | Level 2 — OTAC | PASS |
-| Level 3 — OTC | FAIL |
+| Level 3 — OTC | PASS |
 
 Additional notes:
+
+My first over the cable (OTC) test failed as outside the 10% limit. I was over-driving
+the transmitter into ALC. Reducing drive to just a little ALC improved the result.
