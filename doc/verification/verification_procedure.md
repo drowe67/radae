@@ -8,11 +8,11 @@ sample buffers, no unintended DSP, no scaling errors — so that any on-air resu
 reflect RADE performance, not integration issues.
 
 **Scope:** This procedure assumes the application under test integrates the
-`rade_c` library (C port of reference Python). It tests integration correctness
-only — it does not evaluate speech quality, compare V1 vs V2, or directly
-assess radio hardware performance. Any additional tests beyond this
-procedure should be agreed with the RADE team before being submitted as
-results.
+`rade_c` library (C port of reference Python). It is intended for use with
+RADE V2. It tests integration correctness only — it does not evaluate speech
+quality, compare V1 vs V2, or directly assess radio hardware performance. Any
+additional tests beyond this procedure should be agreed with the RADE team
+before being submitted as results.
 
 ## Requirements
 
