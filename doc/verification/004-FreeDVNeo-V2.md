@@ -105,7 +105,7 @@ Loss between /Users/marksp/Desktop/encoded_features_V2.f32 and /Users/marksp/Des
 | Cable description | 3.5mm 0.3m audio cable |
 
 Photo of test setup:
-![004-RADEV2_OTC](004-RADEV2_OTC.jpeg)
+![004-RADEV2_OTAC](004-RADEV2_OTAC.jpeg)
 
 Reproduction notes:
 ```
