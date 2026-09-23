@@ -367,14 +367,17 @@ class RADEv2Transmitter:
 
       self.ssb_bpf_en = model.ssb_bpf
       if self.ssb_bpf_en:
-         # Streaming complex BPF with same parameters as model
+         # Streaming complex BPF, same 300-2700Hz SSB radio front end the model
+         # was trained under (radae.py's ssb_bpf) -- applied to both regular
+         # frames and the EOO sequence via the same continuous filter state,
+         # since a real SSB radio's passband doesn't distinguish data from EOO.
          from radae import complex_bpf as ComplexBPF
          Ntap      = 101
-         w         = model.w.cpu().numpy()
          Fs        = float(model.Fs)
-         bandwidth = 1.2 * (w[model.Nc - 1] - w[0]) * Fs / (2 * np.pi)
-         centre    = (w[model.Nc - 1] + w[0]) * Fs / (2 * np.pi) / 2
-         frame_len = self.Ns * self.sym_len
+         bandwidth = 2700 - 300
+         centre    = (2700 + 300) / 2
+         eoo_len   = model.eoo_v2.numel()
+         frame_len = max(self.Ns * self.sym_len, eoo_len)
          self._ssb_bpf = ComplexBPF(Ntap, Fs, bandwidth, centre, frame_len)
 
    def transmit_frame(self, features):
@@ -412,4 +415,7 @@ class RADEv2Transmitter:
 
    def eoo(self):
       """Return the V2 end-of-over sequence as complex64 IQ samples."""
-      return self.model.eoo_v2.numpy().flatten().astype(np.csingle)
+      eoo = self.model.eoo_v2.numpy().flatten().astype(np.csingle)
+      if self.ssb_bpf_en:
+         eoo = self._ssb_bpf.bpf(eoo)
+      return eoo

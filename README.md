@@ -267,22 +267,6 @@ issues.
 The full procedure, including a checklist template for submitting results, is
 in [doc/verification/verification_procedure.md](doc/verification/verification_procedure.md).
 
-A software-only loss baseline must be established using the current version
-of the code under test — loss values shift slightly between model versions.
-We use the reference Python implementation and `wav/all.wav` to establish
-the baseline; re-run with the latest version to obtain the current baseline:
-```
-lpcnet_demo -features wav/all.wav features_in.f32
-python3 tx2.py 250725/checkpoints/checkpoint_epoch_200.pth features_in.f32 tx.f32
-python3 rx2.py 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync tx.f32 features_rx.f32 --quiet
-python3 loss.py features_in.f32 features_rx.f32 --clip_start 100 --clip_end 300
-```
-Example output (Python reference, `wav/all.wav`, model `250725`, commit `b549586`):
-```
-loss: 0.081 start: 224 acq_time:  1.24 s
-```
-Record the current baseline loss value. A pass is within ±10% of the baseline.
-
 ## Stored File Tests
 
 The `ota_test.sh` script supports stored-file over-the-air and over-the-cable testing.  It assembles a transmit file containing a chirp reference, compressed SSB, RADE V1, and RADE V2 signals in sequence, which can be sent over a real HF channel or processed through a channel simulator.  The script performs a *controlled* test of SSB, RADE V1, and RADE V2 over real-world channels.

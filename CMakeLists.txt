@@ -737,7 +737,11 @@ add_test(NAME rade_c_v2_dec
          set_tests_properties(rade_c_v2_dec PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # Test V2 C transmitter: compare IQ output to tx2.py reference using RMS difference
-# EOO max diff threshold: 1e-4 (essentially float32 precision)
+# EOO max diff threshold: 0.01 -- the SSB BPF is one continuous filter spanning the
+# data->EOO boundary, so its memory carries the pre-existing ~1.2% data-side encoder
+# float difference into the start of the EOO window as a decaying transient (observed
+# peak ~0.006, decaying to ~1e-5 by the end of the 960-sample EOO window); a tight
+# near-float32-precision threshold is no longer the right expectation here.
 # Data diff_rms/sig_rms threshold: 3% (encoder float differences are ~1.2%)
 add_test(NAME rade_c_v2_tx
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
@@ -756,7 +760,7 @@ diff_rms=np.sqrt(np.mean(np.abs(data_py-data_c)**2)); \
 sig_rms=np.sqrt(np.mean(np.abs(data_py)**2)); \
 eoo_max=np.max(np.abs(eoo_py-eoo_c)); \
 print(f'diff_rms/sig_rms: {diff_rms/sig_rms:.4f}  eoo_max_diff: {eoo_max:.2e}'); \
-ok = diff_rms/sig_rms < 0.03 and eoo_max < 1e-4; \
+ok = diff_rms/sig_rms < 0.03 and eoo_max < 0.01; \
 print('PASS' if ok else 'FAIL')\"")
          set_tests_properties(rade_c_v2_tx PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
@@ -820,16 +824,37 @@ add_test(NAME rade_c_v2_rx_mpp_low
              python3 loss.py features_in.f32 features_rx_v2_c.f32 --loss_test 0.40 --clip_start 100 --clip_end 300")
          set_tests_properties(rade_c_v2_rx_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# V2 C receiver EOO detection: MPP channel at EbNodB=8 (mirrors v2_eoo_mpp_low)
+# V2 C receiver EOO detection: tx2.py -> ch -> C rx, AWGN channel.
 add_test(NAME rade_c_v2_rx_eoo
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-             test/make_g.sh; \
-             ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null \
-             --rate_Fs --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 \
-             --auxdata --w1_dec 128 --end_of_over_v2 --write_rx rx_v2_eoo_test.f32 \
-             --append_noise 1 --g_file g_mpp.f32 --EbNodB 8; \
-             cat rx_v2_eoo_test.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 2>&1 >/dev/null")
+             ./tx2.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav v2_eoo_tx2.f32; \
+             cat v2_eoo_tx2.f32 | python3 f32toint16.py --real --scale 16383 | \
+             ${CMAKE_BINARY_DIR}/src/ch - - --No -24 | python3 int16tof32.py --zeropad > v2_eoo_rx2.f32; \
+             cat v2_eoo_rx2.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 2>&1 >/dev/null")
          set_tests_properties(rade_c_v2_rx_eoo PROPERTIES PASS_REGULAR_EXPRESSION "End-of-over detected")
+
+# V2 C receiver EOO detection: tx2.py -> ch -> C rx, MPP fading channel.
+# scale 8192 (rather than 16383) + No -30 gives the same ~10dB SNR3k as the AWGN
+# test above with zero clipping from multipath anti-fade peaks (16383 clips ~0.09%).
+add_test(NAME rade_c_v2_rx_eoo_mpp
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             test/make_g.sh; \
+             ./tx2.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav v2_eoo_mpp_tx2.f32; \
+             cat v2_eoo_mpp_tx2.f32 | python3 f32toint16.py --real --scale 8192 | \
+             ${CMAKE_BINARY_DIR}/src/ch - - --No -30 --mpp --fading_dir . | python3 int16tof32.py --zeropad > v2_eoo_mpp_rx2.f32; \
+             cat v2_eoo_mpp_rx2.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 2>&1 >/dev/null")
+         set_tests_properties(rade_c_v2_rx_eoo_mpp PROPERTIES PASS_REGULAR_EXPRESSION "End-of-over detected")
+
+# V2 C receiver EOO detection: C tx (radae_tx) -> ch -> C rx, MPP fading channel.
+add_test(NAME rade_c_v2_tx_eoo_mpp
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
+             test/make_g.sh; \
+             ${CMAKE_CURRENT_BINARY_DIR}/src/lpcnet_demo -features wav/brian_g8sez.wav features_in.f32; \
+             cat features_in.f32 | ${RADE_C_BUILD_DIR}/src/radae_tx --v2 > v2_eoo_ctx.f32; \
+             cat v2_eoo_ctx.f32 | python3 f32toint16.py --real --scale 8192 | \
+             ${CMAKE_BINARY_DIR}/src/ch - - --No -30 --mpp --fading_dir . | python3 int16tof32.py --zeropad > v2_eoo_ctx_rx.f32; \
+             cat v2_eoo_ctx_rx.f32 | ${RADE_C_BUILD_DIR}/src/radae_rx --v2 -v 0 2>&1 >/dev/null")
+         set_tests_properties(rade_c_v2_tx_eoo_mpp PROPERTIES PASS_REGULAR_EXPRESSION "End-of-over detected")
 
 # V2 C receiver SNR estimator: high SNR (EbNodB=12, mirrors v2_snr_est_high)
 add_test(NAME rade_c_v2_rx_snr_high
@@ -1200,21 +1225,33 @@ add_test(NAME v2_eoo_awgn_low
                        2>&1 | grep 'EOO detected' && echo PASS || echo FAIL")
          set_tests_properties(v2_eoo_awgn_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# V2 EOO detection under real MPP fading: tx2.py -> ch -> rx2.py.
+# inference.py's --end_of_over_v2 splice only ever applies flat AWGN to the
+# EOO tail regardless of channel flags (never real H/G fading, never the SSB
+# BPF) -- tx2.py's continuous data+EOO stream through ch fades/filters both
+# genuinely. Scale 8192 (not 16383) avoids clipping from multipath anti-fade
+# peaks. --No -25 matches inference.py's --EbNodB 8 target C/No (39.46dB-Hz)
+# for this file; "high" uses ch's default (no --No) -- both this and
+# inference.py's default --EbNodB are so far into the noiseless regime
+# (SNR3k 80-96dB) that AWGN is negligible either way and MPP fading is the
+# only real impairment in both.
 add_test(NAME v2_eoo_mpp_high
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
-                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
-                       --end_of_over_v2 --write_rx v2_eoo_tx.f32 --append_noise 1 --g_file g_mpp.f32; \
-                       ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync v2_eoo_tx.f32 /dev/null \
+                       test/make_g.sh; \
+                       ./tx2.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav v2_eoo_mpp_high_tx2.f32; \
+                       cat v2_eoo_mpp_high_tx2.f32 | python3 f32toint16.py --real --scale 8192 | \
+                       ${CMAKE_BINARY_DIR}/src/ch - - --mpp --fading_dir . | python3 int16tof32.py --zeropad > v2_eoo_mpp_high_rx2.f32; \
+                       ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync v2_eoo_mpp_high_rx2.f32 /dev/null \
                        2>&1 | grep 'EOO detected' && echo PASS || echo FAIL")
          set_tests_properties(v2_eoo_mpp_high PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 add_test(NAME v2_eoo_mpp_low
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
-                       ./inference.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav /dev/null --rate_Fs \
-                       --latent-dim 56 --peak --cp 0.004 --time_offset -16 --correct_time_offset -16 --auxdata --w1_dec 128 \
-                       --end_of_over_v2 --write_rx v2_eoo_tx.f32 --append_noise 1 --g_file g_mpp.f32 --EbNodB 8; \
-                       ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync v2_eoo_tx.f32 /dev/null \
+                       test/make_g.sh; \
+                       ./tx2.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav v2_eoo_mpp_low_tx2.f32; \
+                       cat v2_eoo_mpp_low_tx2.f32 | python3 f32toint16.py --real --scale 8192 | \
+                       ${CMAKE_BINARY_DIR}/src/ch - - --No -25 --mpp --fading_dir . | python3 int16tof32.py --zeropad > v2_eoo_mpp_low_rx2.f32; \
+                       ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync v2_eoo_mpp_low_rx2.f32 /dev/null \
                        2>&1 | grep 'EOO detected' && echo PASS || echo FAIL")
          set_tests_properties(v2_eoo_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
@@ -1274,7 +1311,7 @@ add_test(NAME v2_tx2
                        ./tx2.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav v2_tx2_rx.f32; \
                        python3 inference.py 250725/checkpoints/checkpoint_epoch_200.pth features_in.f32 features_out.f32 \
                        --latent-dim 56 --w1_dec 128 --auxdata --rate_Fs --cp 0.004 \
-                       --time_offset -16 --correct_time_offset -8 --peak; \
+                       --time_offset -16 --correct_time_offset -8 --peak --ssb_bpf; \
                        ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync v2_tx2_rx.f32 /dev/null --quiet; \
                        python3 loss.py features_in.f32 features_out.f32 --features_hat2 features_out_rx2.f32 \
                        --clip_start 100 --clip_end 300 --compare --delta 0.05")
@@ -1291,7 +1328,7 @@ add_test(NAME v2_tx2_ch
                        ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync v2_tx2ch_inf_rx.f32 /dev/null \
                        --agc --gain 1.22E-4 --quiet; \
                        cp features_out_rx2.f32 features_out_rx2_inf.f32; \
-                       ./tx2.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav v2_tx2ch_tx.f32 --ssb_bpf; \
+                       ./tx2.sh 250725/checkpoints/checkpoint_epoch_200.pth wav/brian_g8sez.wav v2_tx2ch_tx.f32; \
                        cat v2_tx2ch_tx.f32 | python3 f32toint16.py --real --scale 16383 | ${CMAKE_BINARY_DIR}/src/ch - - --No -20 | python3 int16tof32.py --zeropad > v2_tx2ch_rx.f32; \
                        ./rx2.sh 250725/checkpoints/checkpoint_epoch_200.pth 250725a_ml_sync v2_tx2ch_rx.f32 /dev/null \
                        --agc --gain 1.22E-4 --quiet; \

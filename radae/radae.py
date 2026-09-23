@@ -293,7 +293,6 @@ class RADAE(nn.Module):
             Ntap=101
             bandwidth = 2700-300
             centre = (2700+300)/2
-            print(f"SSB BPF bandwidth: {bandwidth:f} centre: {centre:f}")
             ssb_bpf = dsp.complex_bpf(Ntap, self.Fs, bandwidth, centre, 0)
             self.ssb_bpf_conv = nn.Conv1d(1, 1, kernel_size=len(ssb_bpf.h), dtype=torch.complex64)
             self.ssb_bpf_delay = int(Ntap // 2)
