@@ -97,6 +97,11 @@ parser.set_defaults(mute=False)
 parser.add_argument('--mute', action='store_false',  dest='mute', help='enable mute when sig lost (default disabled)')
 parser.set_defaults(eoo=True)
 parser.add_argument('--no_eoo', action='store_false', dest='eoo', help='disable EOO (end of over) detection (default enabled)')
+parser.set_defaults(timing_pi=True)
+parser.add_argument('--timing_iir', action='store_false', dest='timing_pi', help='use legacy one pole IIR timing loop (default PI (type 2) timing loop, tracks sample clock offsets)')
+parser.add_argument('--timing_kp', type=float, default=0.002, help='PI timing loop proportional gain (default 0.002)')
+parser.add_argument('--timing_ki', type=float, default=2E-6, help='PI timing loop integral gain (default 2E-6)')
+parser.add_argument('--timing_rate_max_ppm', type=float, default=250, help='PI timing loop clamp on tracked sample clock offset in ppm (default 250)')
 args = parser.parse_args()
 
 # make sure we don't use a GPU
