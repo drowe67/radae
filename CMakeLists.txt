@@ -824,6 +824,31 @@ add_test(NAME rade_c_v2_rx_mpp_low
              python3 loss.py features_in.f32 features_rx_v2_c.f32 --loss_test 0.40 --clip_start 100 --clip_end 300")
          set_tests_properties(rade_c_v2_rx_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# V2 C receiver sample clock offset (rade_c Issue #27): no significant loss at +/-125 ppm,
+# sync and decode at +/-250 ppm high SNR. The +/-125 ppm high SNR tests also check the
+# rade_clock_offset_ppm() estimate. With the legacy IIR timing loop (radae_rx --timing_iir)
+# all fail (PI/IIR loss: clean +/-125 ppm 0.09/0.12, MPP 0.30/0.8-1.0, +/-250 ppm 0.10/2.3-3.6).
+add_test(NAME rade_c_v2_rx_samclk_slow
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 7999 0.10 -125 15")
+         set_tests_properties(rade_c_v2_rx_samclk_slow PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+add_test(NAME rade_c_v2_rx_samclk_fast
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 8001 0.10 125 15")
+         set_tests_properties(rade_c_v2_rx_samclk_fast PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+add_test(NAME rade_c_v2_rx_samclk_slow_mpp
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh; \
+             INF_OPTS='--g_file g_mpp.f32 --EbNodB 6' ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 7999 0.35")
+         set_tests_properties(rade_c_v2_rx_samclk_slow_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+add_test(NAME rade_c_v2_rx_samclk_fast_mpp
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh; \
+             INF_OPTS='--g_file g_mpp.f32 --EbNodB 6' ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 8001 0.35")
+         set_tests_properties(rade_c_v2_rx_samclk_fast_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+add_test(NAME rade_c_v2_rx_samclk_slow_250
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 7998 0.15")
+         set_tests_properties(rade_c_v2_rx_samclk_slow_250 PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+add_test(NAME rade_c_v2_rx_samclk_fast_250
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 8002 0.15")
+         set_tests_properties(rade_c_v2_rx_samclk_fast_250 PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+
 # V2 C receiver EOO detection: tx2.py -> ch -> C rx, AWGN channel.
 add_test(NAME rade_c_v2_rx_eoo
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \

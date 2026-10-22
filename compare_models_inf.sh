@@ -531,6 +531,21 @@ if [ $plot == "261022_inf" ]; then
   exit 0
 fi
 
+# PI timing loop only versions of the 261022_inf plots for the V2 test report (IIR curves are
+# historical). Uses the results files from 261022_inf, run that first.
+if [ $plot == "261022_pi" ]; then
+  for chan in awgn mpp; do
+    vargs=""
+    colours=(b m c r g); offsets=(8000 8000.72 7999.28 8001 7999); ppm=("0" "+90" "-90" "+125" "-125")
+    for i in 0 1 2 3 4; do
+      vargs="${vargs},'250725_${chan}_pi_${offsets[i]}_loss_SNR3k.txt','${colours[i]}o--;${chan^^} ${ppm[i]} ppm;'"
+    done
+    echo "radae_plots; loss_SNR3k_plot(psnr=0,'${plot}_${chan}_loss_SNR3k_models',''${vargs}); quit" | octave-cli -qf
+    echo "radae_plots; loss_SNR3k_plot(psnr=0,'','${plot}_${chan}_loss_SNR3k_models'${vargs}); quit" | octave-cli -qf
+  done
+  exit 0
+fi
+
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
 vargs=""
 i=0
