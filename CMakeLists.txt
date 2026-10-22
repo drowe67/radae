@@ -824,6 +824,31 @@ add_test(NAME rade_c_v2_rx_mpp_low
              python3 loss.py features_in.f32 features_rx_v2_c.f32 --loss_test 0.40 --clip_start 100 --clip_end 300")
          set_tests_properties(rade_c_v2_rx_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# V2 C receiver sample clock offset (rade_c Issue #27): no significant loss at +/-125 ppm,
+# sync and decode at +/-250 ppm high SNR. The +/-125 ppm high SNR tests also check the
+# rade_clock_offset_ppm() estimate. With the legacy IIR timing loop (radae_rx --timing_iir)
+# all fail (PI/IIR loss: clean +/-125 ppm 0.09/0.12, MPP 0.30/0.8-1.0, +/-250 ppm 0.10/2.3-3.6).
+add_test(NAME rade_c_v2_rx_samclk_slow
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 7999 0.10 -125 15")
+         set_tests_properties(rade_c_v2_rx_samclk_slow PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+add_test(NAME rade_c_v2_rx_samclk_fast
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 8001 0.10 125 15")
+         set_tests_properties(rade_c_v2_rx_samclk_fast PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+add_test(NAME rade_c_v2_rx_samclk_slow_mpp
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh; \
+             INF_OPTS='--g_file g_mpp.f32 --EbNodB 6' ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 7999 0.35")
+         set_tests_properties(rade_c_v2_rx_samclk_slow_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+add_test(NAME rade_c_v2_rx_samclk_fast_mpp
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh; \
+             INF_OPTS='--g_file g_mpp.f32 --EbNodB 6' ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 8001 0.35")
+         set_tests_properties(rade_c_v2_rx_samclk_fast_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+add_test(NAME rade_c_v2_rx_samclk_slow_250
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 7998 0.15")
+         set_tests_properties(rade_c_v2_rx_samclk_slow_250 PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+add_test(NAME rade_c_v2_rx_samclk_fast_250
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 8002 0.15")
+         set_tests_properties(rade_c_v2_rx_samclk_fast_250 PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+
 # V2 C receiver EOO detection: tx2.py -> ch -> C rx, AWGN channel.
 add_test(NAME rade_c_v2_rx_eoo
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
@@ -1158,17 +1183,41 @@ add_test(NAME v2_rx2_samclk_fwd
                        ./test/v2_spot.sh --pad_samples 90 --write_Ry_smooth Ry_smooth.c64")
          set_tests_properties(v2_rx2_samclk_fwd PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# rx sample clock 25 ppm slower than tx, --pad_samples adjusted for a shift delta forwards
+# Sample clock offset requirement (rade_c Issue #27): no significant loss at +/-125 ppm (same as
+# RADE V1), sync held and decoding (with some extra loss) at +/-250 ppm.
+
+# rx sample clock 125 ppm slower than tx, --pad_samples adjusted for a shift delta forwards
 add_test(NAME v2_rx2_samclk_slow
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
-                       ./test/v2_spot.sh --sample_clock_offset 7999.8 --write_Ry_smooth Ry_smooth.c64 --write_delta_hat delta_hat.f32 --pad_samples 120")
+                       ./test/v2_spot.sh --sample_clock_offset 7999 --write_Ry_smooth Ry_smooth.c64 --write_delta_hat delta_hat.f32 --pad_samples 120")
          set_tests_properties(v2_rx2_samclk_slow PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
-# rx sample clock 25 ppm faster than tx, --pad_samples adjusted for a shift delta backwards
+# rx sample clock 125 ppm faster than tx, --pad_samples adjusted for a shift delta backwards
 add_test(NAME v2_rx2_samclk_fast
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
-                       ./test/v2_spot.sh --sample_clock_offset 8000.2 --write_Ry_smooth Ry_smooth.c64 --write_delta_hat delta_hat.f32 --pad_samples 35")
+                       ./test/v2_spot.sh --sample_clock_offset 8001 --write_Ry_smooth Ry_smooth.c64 --write_delta_hat delta_hat.f32 --pad_samples 35")
          set_tests_properties(v2_rx2_samclk_fast PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# +/-125 ppm on low SNR MPP channel, same conditions as v2_rx2_mpp_low but delta 0.04 (PI delta
+# ~0.03). The legacy one pole IIR timing loop (--timing_iir) lags the drift and fails these (~0.6-0.75).
+add_test(NAME v2_rx2_samclk_slow_mpp
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.04 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6 --hangover 100 --sample_clock_offset 7999")
+         set_tests_properties(v2_rx2_samclk_slow_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_rx2_samclk_fast_mpp
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.04 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6 --hangover 100 --sample_clock_offset 8001")
+         set_tests_properties(v2_rx2_samclk_fast_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# +/-250 ppm high SNR AWGN, larger delta allows some extra loss but traps loss of sync
+add_test(NAME v2_rx2_samclk_slow_250
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.05 ./test/v2_spot.sh --sample_clock_offset 7998")
+         set_tests_properties(v2_rx2_samclk_slow_250 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_rx2_samclk_fast_250
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
+                       delta=0.05 ./test/v2_spot.sh --sample_clock_offset 8002")
+         set_tests_properties(v2_rx2_samclk_fast_250 PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
 # frequency drift of -5 Hz/minute, 3.5dB SNR MPP channel
 add_test(NAME v2_rx2_freq_drift

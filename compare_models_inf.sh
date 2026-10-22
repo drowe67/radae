@@ -80,11 +80,18 @@ function run_model_rx2() {
   a_g_file=""
   prepend_noise=""
   a_prepend_noise=""
+  sample_clock_offset=""
   POSITIONAL=()
   while [[ $# -gt 0 ]]
   do
   key="$1"
   case $key in
+      --sample_clock_offset)
+          # rx sample rate in Hz, e.g. 8001 for a +125 ppm rx sample clock offset
+          sample_clock_offset="$2"
+          shift
+          shift
+      ;;
       --g_file)
           g_file="--g_file"
           a_g_file="$2"
@@ -111,7 +118,8 @@ function run_model_rx2() {
   set -- "${POSITIONAL[@]}" # restore positional parameters
 
   # EbNodB_list='0 1.5 3 4.5 6 9 12 15 18 21 24'
-  EbNodB_list='1 3 6 9 12 18 24'
+  # can be overridden from the environment for quick spot checks, e.g. EbNodB_list_rx2="9"
+  EbNodB_list=${EbNodB_list_rx2:-'1 3 6 9 12 18 24'}
   
   # return if results file already exists
   if [ $rebuild -eq 0 ]; then
@@ -130,11 +138,20 @@ function run_model_rx2() {
       SNR3k=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f4)
       PAPR=$(echo "$log" | grep "Measured:" | tr -s ' ' | cut -d' ' -f5)
       loss_inf=$(echo "$log" | grep "loss:" | tr -s ' ' | cut -d' ' -f2)
+      # optional sample clock offset: resample the rx signal (same method as test/v2_spot.sh)
+      if [ -n "$sample_clock_offset" ]; then
+        tmp=$(mktemp)
+        cat ${rx} | python3 f32toint16.py --scale 8192 | sox -t .s16 -r 8000 -c 2 - -t .s16 -r ${sample_clock_offset} -c 2 - | \
+          python3 int16tof32.py --scale 1.22E-4 > $tmp
+        mv $tmp ${rx}
+      fi
       # use a long hangover to avoid breaking sync and messing up loss measurements
-	    ./rx2.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${model_sync} \
-               ${rx} /dev/null --latent-dim 56 --w1_dec 128  --correct_time_offset -8 --quiet $@
+	    rx2_log=$(./rx2.sh ${model}/checkpoints/checkpoint_epoch_${epoch}.pth ${model_sync} \
+               ${rx} /dev/null --latent-dim 56 --w1_dec 128  --correct_time_offset -8 --quiet $@ 2>&1)
 	    loss_rx2=$(python3 loss.py features_in.f32 features_out_rx2.f32 --clip_start 25 | grep 'loss' | tr -s ' ' | cut -d' ' -f3)
-      printf "%f\t%f\t%f\t%f\n" $SNR3k $loss_rx2 $PAPR $loss_inf >> $results
+      # 5th column: number of acquisitions, > 1 means a resync, which makes whole file loss unreliable
+      n_acq=$(echo "$rx2_log" | grep -oE "n_acq: [0-9]+" | tail -1 | cut -d' ' -f2)
+      printf "%f\t%f\t%f\t%f\t%d\n" $SNR3k $loss_rx2 $PAPR $loss_inf ${n_acq:-0} >> $results
     done
 }
 
@@ -478,6 +495,55 @@ if [ $plot == "260831_inf" ]; then
                            "ro--;250725 MPP delay=10ms;" \
                            "co--;250725 MPP delay=17ms;")
 
+fi
+
+# V2 timing loop: loss v SNR for several rx sample clock offsets, one pole IIR timing loop
+# versus PI (default) loop (rade_c Issue #27). rx Fs 8000.72/8001 is +90/+125 ppm.
+if [ $plot == "261022_inf" ]; then
+  # --no_eoo: on long input files false EOO detections cause resyncs that invalidate whole file loss.
+  # Set env chans_261022="mpp" (or "awgn") to (re)run just one channel; plots use whatever results exist.
+  for loop in iir pi; do
+    if [ $loop == "iir" ]; then loop_arg="--timing_iir"; else loop_arg=""; fi
+    for sco in 8000 8000.72 7999.28 8001 7999; do
+      for chan in ${chans_261022:-awgn mpp}; do
+        if [ $chan == "mpp" ]; then chan_args="--g_file g_mpp_1200s.f32 --hangover 200"; else chan_args=""; fi
+        run_model_rx2 250725 250725a_ml_sync 56 200 $chan $chan_args --no_eoo --sample_clock_offset $sco $loop_arg \
+          --results 250725_${chan}_${loop}_${sco}_loss_SNR3k.txt
+      done
+    done
+  done
+
+  # one plot per channel. Colour = clock offset, solid/+ = IIR, dashed/o = PI. Wider y axis as the
+  # IIR fails (loss > 1) at some offsets.
+  for chan in awgn mpp; do
+    vargs=""
+    colours=(b m c r g); offsets=(8000 8000.72 7999.28 8001 7999); ppm=("0" "+90" "-90" "+125" "-125")
+    for loop in iir pi; do
+      if [ $loop == "iir" ]; then style="+-"; else style="o--"; fi
+      for i in 0 1 2 3 4; do
+        vargs="${vargs},'250725_${chan}_${loop}_${offsets[i]}_loss_SNR3k.txt','${colours[i]}${style};${loop^^} ${ppm[i]} ppm;'"
+      done
+    done
+    title="RADE V2 ${chan^^}: IIR vs PI timing loop, rx sample clock offsets"
+    echo "global loss_plot_axis loss_plot_title; loss_plot_axis=[-5 20 0 2]; loss_plot_title='${title}'; radae_plots; loss_SNR3k_plot(psnr=0,'${plot}_${chan}_loss_SNR3k_models',''${vargs}); quit" | octave-cli -qf
+    echo "global loss_plot_axis loss_plot_title; loss_plot_axis=[-5 20 0 2]; loss_plot_title='${title}'; radae_plots; loss_SNR3k_plot(psnr=0,'','${plot}_${chan}_loss_SNR3k_models'${vargs}); quit" | octave-cli -qf
+  done
+  exit 0
+fi
+
+# PI timing loop only versions of the 261022_inf plots for the V2 test report (IIR curves are
+# historical). Uses the results files from 261022_inf, run that first.
+if [ $plot == "261022_pi" ]; then
+  for chan in awgn mpp; do
+    vargs=""
+    colours=(b m c r g); offsets=(8000 8000.72 7999.28 8001 7999); ppm=("0" "+90" "-90" "+125" "-125")
+    for i in 0 1 2 3 4; do
+      vargs="${vargs},'250725_${chan}_pi_${offsets[i]}_loss_SNR3k.txt','${colours[i]}o--;${chan^^} ${ppm[i]} ppm;'"
+    done
+    echo "radae_plots; loss_SNR3k_plot(psnr=0,'${plot}_${chan}_loss_SNR3k_models',''${vargs}); quit" | octave-cli -qf
+    echo "radae_plots; loss_SNR3k_plot(psnr=0,'','${plot}_${chan}_loss_SNR3k_models'${vargs}); quit" | octave-cli -qf
+  done
+  exit 0
 fi
 
 # Generate the plots in PNG and EPS form, file names have suffix of ${plot}
