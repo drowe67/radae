@@ -400,7 +400,7 @@ Sample command line:
 
 \subsection{Streaming Text}
 
-The RADE V2 waveform provides a 1 BPSK symbol/frame (25 bit/s) for auxiliary text information such as callsign and grid square.  At the stage of writing this report this feature is incomplete, as no library for framing and error correction exists.  Table \ref{tab:bpsk_ber} presents the uncoded BER performance of the BPSK bit stream.  The 49 second wave file \emph{all.wav} was used for the source speech (1400 bits total).
+The RADE V2 waveform provides a 1 BPSK symbol/frame (25 bit/s) for auxiliary text information such as callsign and grid square.  An external library is required for framing and error correction.  Table \ref{tab:bpsk_ber} presents the uncoded BER performance of the BPSK bit stream.  The 49 second wave file \emph{all.wav} was used for the source speech (1400 bits total).
  
 \begin{table} [h]
 \caption{BPSK bit error rate (BER) for various channels}
@@ -585,10 +585,11 @@ Requirement & Met & Comment \\
 Speech quality v SNR $\ge$ RADE V1 on AWGN \& MPP. & Pass & $\approx 3$ \si{dB} gain of V2/V1 in simulations, but statistical significance not reached in OTA tests (expected result). \\
 Handles MPD channel without breaking down & Pass & \\
 PAPR $< 1$ \si{dB}| through a typical SSB band pass filter. & Partial & This requirement was found to be in error, real world PAPR of RADE V1 was $>$ 4 \si{dB}.  We have achieved a PAPR of $\approx 3$ \si{dB} with V2, a 1 \si{dB} gain on V1. \\
-OBW $<$ 2000 \si{Hz} & Pass & V2 OBW measured as $\approx 860$ \si{Hz}, much cleaner spectrum. \\ 
+OBW $<$ 2000 \si{Hz} & Pass & V2 OBW measured as $\approx 860$ \si{Hz}, much cleaner spectrum. \\
+Sample clock offsets $\pm 125$ ppm & Pass & No significant loss at $\pm 125$ ppm, syncs and decodes at $\pm 250$ ppm. \\
 Frequency Offsets $\pm 50$ \si{Hz} & Partial & Current algorithm natively handles $\pm 32$ \si{Hz}, should be possible to extend this with further work.  A Phase D sample with a $+44$ \si{Hz} offset caused a false sync. \\
 Clean end of over detection within 100 ms & Pass & EOO works well at moderate to high SNRs. \\
-25 bit/s streaming text for callsign & Partial & Waveform can send 1 bit/frame over channel, but streaming text support not implemented yet. \\
+25 bit/s streaming text for callsign & Pass & Waveform can send 1 bit/frame over channel, streaming text supported by external library. \\
 SNR estimation & Pass & Error of 1.5 dB RMS ($\pm 3 \si{dB}$ max) over -5 to +5 \si{dB}. \\
 \hline
 \end{tabular}
@@ -600,7 +601,6 @@ Topics for future development. It may be possible to attend to these in parallel
 \begin{enumerate}
 \item Reduce acquisition time for benign channels.
 \item Improved EOO performance at lower SNRs.
-\item Completion of streaming text feature by addition of external library for framing and error correction of 25 bits/s BPSK symbol stream.
 \item Extend range of frequency offset estimation to $\pm 50 \si{Hz}$.
 \end{enumerate}
 
