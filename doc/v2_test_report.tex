@@ -534,30 +534,45 @@ This section describes the test results collected from the crowd sourced PTT OTA
 \item If any issues are encountered from \emph{verified} integrations, explore and fix bugs.
 \item Measurements of PAPR at the PA output and compare to simulation.
 \item If encountered, explore the ``underwater" voice modulation artefact often heard on V1 samples posted on social media.
-\item It is not within the scope of this test phase to evaluate speech quality (e.g. compared to V1 or SSB), as no way of performing a controlled tests is possible.
+\item It is not within the scope of this test phase to evaluate speech quality (e.g. compared to V1 or SSB), as no way of performing controlled tests is possible.
 \end{enumerate}
 
+The procedure for testing is documented \href{https://github.com/drowe67/radae/#testing-rade}{here}.  Any results must be from an application or radio that has RADE V2 integration verified using \href{https://github.com/drowe67/radae/#verifying-rade-integration}{this} procedure.  Any applications contributing to this test campaign must be capable of exporting a received off-air signal sample file, and a decoded V2 speech file.
+
+As real time PTT samples have no reference input, the loss cannot be measured, so the Phase D results are qualitative.  The campaign ran for about three weeks.  Table \ref{tab:phase_d_summary} summarises the samples collected, which fell short of the targets.  Thank you to all the Hams that participated and special thanks to Rick W7YC, Yuichi JH0VEQ and Taku Kudo JK1GPC for their samples.
+
 \begin{table} [h]
-\caption{Phase D Test Summary (TBC).}
+\caption{Phase D Test Summary.}
 \label{tab:phase_d_summary}
 \centering
 \begin{tabular}{ l | c | c }
  \hline
  Goal & Target Samples & Collected Samples \\
  \hline
- Number of OTA samples to collect & 20 &  \\
- Number of languages & 3 &  \\
- PAPR measurements & 3 &  \\
+ Number of OTA samples to collect & 20 & 12 \\
+ Number of languages & 3 & 2 \\
+ PAPR measurements & 3 & 0 \\
  \hline
  \hline
 \end{tabular}
 \end{table}
 
-The procedure for testing is documented \href{https://github.com/drowe67/radae/#testing-rade}{here}.  Any results must be from an application or radio that has RADE V2 integration verified using \href{https://github.com/drowe67/radae/#verifying-rade-integration}{this} procedure.  Any applications contributing to this test campaign must be capable of exporting a received off-air signal sample file, and a decoded V2 speech file.
+The results against each goal were:
+\begin{enumerate}
+\item Functional testing: five testers reported a pass, and no failures were reported, across conversations with many other stations.  Some testers used Thetis, an integration that has not been verified, with similar results to freedv-gui.
+\item 40 \si{ms} delay and PTT turn around: Rick W7YC reported good PTT turn around times, faster than RADE V1, including rapid Tx/Rx exchanges over a 66 \si{km} NVIS path with flat and frequency selective fading.  No issues such as audio clicks were reported.
+\item 3rd party integration: integration and verification of freedv-gui and FreeDV Neo (internal to the FreeDV project) found bugs in V2 and helped tune the verification procedure.  No 3rd party applications were verified.
+\item Off air samples: Rick W7YC provided samples from several radios (Flex, IC-7300, IC-7100) on 20 and 80 m, including 2 to 200 W signals received by remote WebSDR and KiwiSDR receivers, and two way contacts.  Yuichi JH0VEQ and Taku Kudo JK1GPC provided Japanese language samples.  The decoded samples were consistent with the previous test results.
+\item Issues: one issue was found, a false sync when the tuning error exceeds the $\pm 32$ \si{Hz} range of the V2 frequency offset estimator.  In Yuichi's Japan to Australia sample, a $+44$ \si{Hz} tuning error was aliased to $-18.5$ \si{Hz}, and V2 synced confidently on the wrong frequency, producing garbled speech, while V1 decoded the same signal.  After correcting the frequency offset in software, the V2 samples decoded successfully.  This is a corner case affecting a small number of contacts.  It is in the classical DSP, so a fix would not break compatibility (no retraining).
+\item PAPR: no PAPR measurements were provided by the test team.
+\item ``Underwater" artefact: some of Rick's samples may contain examples of this artefact, however the root cause is still unknown.  Simulations suggest it may be speaker dependent, but the results are not conclusive.  Notably, the operator in question described the RADE speech quality as very good.
+\end{enumerate}
+
+Apart from the frequency offset false sync corner case, we conclude RADE V2 is working for real world PTT OTA conversations.
 
 \section{Conclusion}
 
-In Table \ref{tab:conclusion} the results from Phase A, B and C are summarised and compared to requirements extracted from FreeDV-038.  Phase D is a work in progress.  Only performance and functional requirements have been extracted (e.g. we don't consider implementation issues like a C port or packaging).
+In Table \ref{tab:conclusion} the results from Phase A, B, C and D are summarised and compared to requirements extracted from FreeDV-038.  Only performance and functional requirements have been extracted (e.g. we don't consider implementation issues like a C port or packaging).
 
 \begin{table} [h]
 \caption{Test results compared to performance requirements}
@@ -571,7 +586,7 @@ Speech quality v SNR $\ge$ RADE V1 on AWGN \& MPP. & Pass & $\approx 3$ \si{dB} 
 Handles MPD channel without breaking down & Pass & \\
 PAPR $< 1$ \si{dB}| through a typical SSB band pass filter. & Partial & This requirement was found to be in error, real world PAPR of RADE V1 was $>$ 4 \si{dB}.  We have achieved a PAPR of $\approx 3$ \si{dB} with V2, a 1 \si{dB} gain on V1. \\
 OBW $<$ 2000 \si{Hz} & Pass & V2 OBW measured as $\approx 860$ \si{Hz}, much cleaner spectrum. \\ 
-Frequency Offsets $\pm 50$ \si{Hz} & Partial & Current algorithm natively handles $\pm 32$ \si{Hz}, should be possible to extend this with further work. \\
+Frequency Offsets $\pm 50$ \si{Hz} & Partial & Current algorithm natively handles $\pm 32$ \si{Hz}, should be possible to extend this with further work.  A Phase D sample with a $+44$ \si{Hz} offset caused a false sync. \\
 Clean end of over detection within 100 ms & Pass & EOO works well at moderate to high SNRs. \\
 25 bit/s streaming text for callsign & Partial & Waveform can send 1 bit/frame over channel, but streaming text support not implemented yet. \\
 SNR estimation & Pass & Error of 1.5 dB RMS ($\pm 3 \si{dB}$ max) over -5 to +5 \si{dB}. \\
