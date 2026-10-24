@@ -163,7 +163,7 @@ The target channels for RADE V2 are AWGN and MPP (Doppler 1 \si{Hz}, Delay 2 \si
 
 \subsection{Occupied Bandwidth and PAPR}
 
-Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}).  We measure PAPR using the peak magnitude over an entire sample (100\% CCDF) as even an occasional peak will depress a typical SSB transmitter ALC for several seconds.  The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.
+Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}).  We measure PAPR using the peak magnitude over an entire sample (100\% CCDF) as even an occasional peak will depress a typical SSB transmitter ALC for several seconds.  The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.  OTA measurements of OBW in Phase D (Section \ref{sec:obw_measured}) are a close match to these simulated results.
 
 \begin{table} [h]
 \caption{Occupied Bandwidth and PAPR for \emph{all.wav}.}
@@ -400,7 +400,7 @@ Sample command line:
 
 \subsection{Streaming Text}
 
-The RADE V2 waveform provides a 1 BPSK symbol/frame (25 bit/s) for auxiliary text information such as callsign and grid square.  At the stage of writing this report this feature is incomplete, as no library for framing and error correction exists.  Table \ref{tab:bpsk_ber} presents the uncoded BER performance of the BPSK bit stream.  The 49 second wave file \emph{all.wav} was used for the source speech (1400 bits total).
+The RADE V2 waveform provides a 1 BPSK symbol/frame (25 bit/s) for auxiliary text information such as callsign and grid square.  An external library is required for framing and error correction.  Table \ref{tab:bpsk_ber} presents the uncoded BER performance of the BPSK bit stream.  The 49 second wave file \emph{all.wav} was used for the source speech (1400 bits total).
  
 \begin{table} [h]
 \caption{BPSK bit error rate (BER) for various channels}
@@ -534,30 +534,75 @@ This section describes the test results collected from the crowd sourced PTT OTA
 \item If any issues are encountered from \emph{verified} integrations, explore and fix bugs.
 \item Measurements of PAPR at the PA output and compare to simulation.
 \item If encountered, explore the ``underwater" voice modulation artefact often heard on V1 samples posted on social media.
-\item It is not within the scope of this test phase to evaluate speech quality (e.g. compared to V1 or SSB), as no way of performing a controlled tests is possible.
+\item It is not within the scope of this test phase to evaluate speech quality (e.g. compared to V1 or SSB), as no way of performing controlled tests is possible.
 \end{enumerate}
 
+The procedure for testing is documented \href{https://github.com/drowe67/radae/#testing-rade}{here}.  Any results must be from an application or radio that has RADE V2 integration verified using \href{https://github.com/drowe67/radae/#verifying-rade-integration}{this} procedure.  Any applications contributing to this test campaign must be capable of exporting a received off-air signal sample file, and a decoded V2 speech file.
+
+As real time PTT samples have no reference input, the loss cannot be measured, so the Phase D results are qualitative.  The campaign ran for about three weeks.  Table \ref{tab:phase_d_summary} summarises the samples collected, which fell short of the targets.  Thank you to all the Hams that participated and special thanks to Rick W7YC, Yuichi JH0VEQ and Taku Kudo JK1GPC for their samples.
+
 \begin{table} [h]
-\caption{Phase D Test Summary (TBC).}
+\caption{Phase D Test Summary.}
 \label{tab:phase_d_summary}
 \centering
 \begin{tabular}{ l | c | c }
  \hline
  Goal & Target Samples & Collected Samples \\
  \hline
- Number of OTA samples to collect & 20 &  \\
- Number of languages & 3 &  \\
- PAPR measurements & 3 &  \\
+ Number of OTA samples to collect & 20 & 12 \\
+ Number of languages & 3 & 2 \\
+ PAPR measurements & 3 & 0 \\
  \hline
  \hline
 \end{tabular}
 \end{table}
 
-The procedure for testing is documented \href{https://github.com/drowe67/radae/#testing-rade}{here}.  Any results must be from an application or radio that has RADE V2 integration verified using \href{https://github.com/drowe67/radae/#verifying-rade-integration}{this} procedure.  Any applications contributing to this test campaign must be capable of exporting a received off-air signal sample file, and a decoded V2 speech file.
+The results against each goal were:
+\begin{enumerate}
+\item Functional testing: five testers reported a pass, and no failures were reported, across conversations with many other stations.  Some testers used Thetis, an integration that has not been verified, with similar results to freedv-gui.
+\item 40 \si{ms} delay and PTT turn around: Rick W7YC reported good PTT turn around times, faster than RADE V1, including rapid Tx/Rx exchanges over a 66 \si{km} NVIS path with flat and frequency selective fading.  No issues such as audio clicks were reported.
+\item 3rd party integration: integration and verification of freedv-gui and FreeDV Neo (internal to the FreeDV project) found bugs in V2 and helped tune the verification procedure.  No 3rd party applications were verified.
+\item Off air samples: Rick W7YC provided samples from several radios (Flex, IC-7300, IC-7100) on 20 and 80 m, including 2 to 200 W signals received by remote WebSDR and KiwiSDR receivers, and two way contacts.  Yuichi JH0VEQ and Taku Kudo JK1GPC provided Japanese language samples.  The decoded samples were consistent with the previous test results.
+\item Issues: one issue was found, a false sync when the tuning error exceeds the $\pm 32$ \si{Hz} range of the V2 frequency offset estimator.  In Yuichi's Japan to Australia sample, a $+44$ \si{Hz} tuning error was aliased to $-18.5$ \si{Hz}, and V2 synced confidently on the wrong frequency, producing garbled speech, while V1 decoded the same signal.  After correcting the frequency offset in software, the V2 samples decoded successfully.  This is a corner case affecting a small number of contacts.  It is in the classical DSP, so a fix would not break compatibility (no retraining).
+\item PAPR: no PAPR measurements were provided by the test team.
+\item ``Underwater" artefact: some of Rick's samples may contain examples of this artefact, however the root cause is still unknown.  Simulations suggest it may be speaker dependent, but the results are not conclusive.  Notably, the operator in question described the RADE speech quality as very good.
+\end{enumerate}
+
+Apart from the frequency offset false sync corner case, we conclude RADE V2 is working for real world PTT OTA conversations.
+
+\subsection{Measured Occupied Bandwidth}
+\label{sec:obw_measured}
+
+Although not one of the Phase D goals, Rick W7YC independently measured the 99\% power occupied bandwidth (OBW) of the transmitted RADE V1 and V2 signals using an Advantest U3641 spectrum analyser (Figure \ref{fig:obw_w7yc}).  The signals were transmitted on 80 m by an IC-7300 with a 2000 \si{Hz} (500-2500 \si{Hz}) transmit SSB filter.  The analyser settings were 10 \si{kHz} span, 100 \si{Hz} resolution and video bandwidth, and a 5 second sweep.  Multiple runs varied slightly, but not significantly.
+
+Table \ref{tab:obw_measured} compares the measurements to the simulated results in Table \ref{tab:obw_papr}.  As expected, the RADE V1 OBW is set by the bandwidth of the transmit SSB filter, which is a little narrower than the simulated SSB filter.  The RADE V2 measurement is a close match to simulation.  The OBW will vary a little with the source material (e.g. different speakers) and the averaging time.
+
+\begin{table} [h]
+\caption{Measured and simulated 99\% Occupied Bandwidth.}
+\label{tab:obw_measured}
+\centering
+\begin{tabular}{ c | c | c }
+ \hline
+ Waveform & Measured OBW (\si{Hz}) & Simulated OBW (\si{Hz}) \\
+ \hline
+ RADE V1 & 1950 & 2109 \\
+ RADE V2 & 857 & 867 \\
+ \hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\caption{Measured 99\% OBW of RADE V1 (left, 1.95 \si{kHz}) and RADE V2 (right, 857 \si{Hz}) transmitted by an IC-7300, courtesy of Rick W7YC.}
+\label{fig:obw_w7yc}
+\begin{center}
+\includegraphics[height=0.385\textwidth]{radev1_obw_w7yc.jpg}
+\includegraphics[height=0.385\textwidth]{radev2_obw_w7yc.jpg}
+\end{center}
+\end{figure}
 
 \section{Conclusion}
 
-In Table \ref{tab:conclusion} the results from Phase A, B and C are summarised and compared to requirements extracted from FreeDV-038.  Phase D is a work in progress.  Only performance and functional requirements have been extracted (e.g. we don't consider implementation issues like a C port or packaging).
+In Table \ref{tab:conclusion} the results from Phase A, B, C and D are summarised and compared to requirements extracted from FreeDV-038.  Only performance and functional requirements have been extracted (e.g. we don't consider implementation issues like a C port or packaging).
 
 \begin{table} [h]
 \caption{Test results compared to performance requirements}
@@ -570,10 +615,11 @@ Requirement & Met & Comment \\
 Speech quality v SNR $\ge$ RADE V1 on AWGN \& MPP. & Pass & $\approx 3$ \si{dB} gain of V2/V1 in simulations, but statistical significance not reached in OTA tests (expected result). \\
 Handles MPD channel without breaking down & Pass & \\
 PAPR $< 1$ \si{dB}| through a typical SSB band pass filter. & Partial & This requirement was found to be in error, real world PAPR of RADE V1 was $>$ 4 \si{dB}.  We have achieved a PAPR of $\approx 3$ \si{dB} with V2, a 1 \si{dB} gain on V1. \\
-OBW $<$ 2000 \si{Hz} & Pass & V2 OBW measured as $\approx 860$ \si{Hz}, much cleaner spectrum. \\ 
-Frequency Offsets $\pm 50$ \si{Hz} & Partial & Current algorithm natively handles $\pm 32$ \si{Hz}, should be possible to extend this with further work. \\
+OBW $<$ 2000 \si{Hz} & Pass & V2 OBW measured as $\approx 860$ \si{Hz}, much cleaner spectrum. \\
+Sample clock offsets $\pm 125$ ppm & Pass & No significant loss at $\pm 125$ ppm, syncs and decodes at $\pm 250$ ppm. \\
+Frequency Offsets $\pm 50$ \si{Hz} & Partial & Current algorithm natively handles $\pm 32$ \si{Hz}, should be possible to extend this with further work.  A Phase D sample with a $+44$ \si{Hz} offset caused a false sync. \\
 Clean end of over detection within 100 ms & Pass & EOO works well at moderate to high SNRs. \\
-25 bit/s streaming text for callsign & Partial & Waveform can send 1 bit/frame over channel, but streaming text support not implemented yet. \\
+25 bit/s streaming text for callsign & Pass & Waveform can send 1 bit/frame over channel, streaming text supported by external library. \\
 SNR estimation & Pass & Error of 1.5 dB RMS ($\pm 3 \si{dB}$ max) over -5 to +5 \si{dB}. \\
 \hline
 \end{tabular}
@@ -585,7 +631,6 @@ Topics for future development. It may be possible to attend to these in parallel
 \begin{enumerate}
 \item Reduce acquisition time for benign channels.
 \item Improved EOO performance at lower SNRs.
-\item Completion of streaming text feature by addition of external library for framing and error correction of 25 bits/s BPSK symbol stream.
 \item Extend range of frequency offset estimation to $\pm 50 \si{Hz}$.
 \end{enumerate}
 
