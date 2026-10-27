@@ -1111,6 +1111,34 @@ add_test(NAME v2_rx2_mpp_low
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; 
                        delta=0.03 ./test/v2_spot.sh --g_file g_mpp.f32 --EbNodB 6 --hangover 100")
          set_tests_properties(v2_rx2_mpp_low PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
+# Wrong carrier detector: freq offsets outside +/-31.25 Hz alias the freq estimate by one carrier (62.5 Hz).
+# Out of range (oor): no sync, and the mistune indication has the sign of the offset. In range (in): normal
+# sync with no vetoes or in sync drops.
+add_test(NAME v2_wrong_k_awgn_pos
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh 45 oor")
+         set_tests_properties(v2_wrong_k_awgn_pos PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_wrong_k_awgn_neg
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh -80 oor")
+         set_tests_properties(v2_wrong_k_awgn_neg PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_wrong_k_mpp_pos
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh 62.5 oor --g_file g_mpp.f32 --EbNodB 6")
+         set_tests_properties(v2_wrong_k_mpp_pos PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_wrong_k_mpp_neg
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh -45 oor --g_file g_mpp.f32 --EbNodB 6")
+         set_tests_properties(v2_wrong_k_mpp_neg PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+add_test(NAME v2_wrong_k_mpp_in
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh 25 in --g_file g_mpp.f32 --EbNodB 6")
+         set_tests_properties(v2_wrong_k_mpp_in PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+# in range with an interfering sine wave at ~-11 dBc (amplitude 0.2) inside the V2 spectrum, as per the
+# V2 test report: we still expect to sync
+add_test(NAME v2_wrong_k_mpp_sine
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh 25 sync --g_file g_mpp.f32 --EbNodB 6 --sine_amp 0.2 --sine_freq 1505")
+         set_tests_properties(v2_wrong_k_mpp_sine PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+# detector disabled: the out of range signal false syncs (the original problem)
+add_test(NAME v2_wrong_k_disabled
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; RX2_OPTS=--no_wrong_k ./test/v2_wrong_k.sh 45 sync")
+         set_tests_properties(v2_wrong_k_disabled PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
         
 # repeat v2_rx2_mpp_low with 20ms (half frame) time shift to repeat last test with opposite frame sync
 # to visualise FS metrics:
