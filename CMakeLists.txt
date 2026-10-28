@@ -849,6 +849,20 @@ add_test(NAME rade_c_v2_rx_samclk_fast_250
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_c_samclk.sh ${RADE_C_BUILD_DIR}/src 8002 0.15")
          set_tests_properties(rade_c_v2_rx_samclk_fast_250 PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
 
+# V2 C receiver wrong carrier detector. The algorithm is tested by the v2_wrong_k_* Python tests; these
+# check the C port matches. (1) C vs Python on the same signal: per-symbol rho within 0.01, identical
+# acquisition veto and mistune decisions (AGC off in both, rx2.py's default)
+add_test(NAME rade_c_v2_wrong_k_compare
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh; \
+             ./test/v2_c_wrong_k_compare.sh ${RADE_C_BUILD_DIR}/src -45 --g_file g_mpp.f32 --EbNodB 6")
+         set_tests_properties(rade_c_v2_wrong_k_compare PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+# (2) all C chain over a real valued channel, default AGC on: radae_tx -> ch (-80 Hz, MPP, ~10 dB SNR3k)
+# -> radae_rx. PASS if no sync and rade_mistune() = -1
+add_test(NAME rade_c_v2_wrong_k_ch_mpp_neg
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh; \
+             ./test/v2_c_wrong_k_ch.sh ${RADE_C_BUILD_DIR}/src -80 oor --mpp --fading_dir .")
+         set_tests_properties(rade_c_v2_wrong_k_ch_mpp_neg PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+
 # V2 C receiver EOO detection: tx2.py -> ch -> C rx, AWGN channel.
 add_test(NAME rade_c_v2_rx_eoo
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
@@ -1114,7 +1128,8 @@ add_test(NAME v2_rx2_mpp_low
 
 # Wrong carrier detector: freq offsets outside +/-31.25 Hz alias the freq estimate by one carrier (62.5 Hz).
 # Out of range (oor): no sync, and the mistune indication has the sign of the offset. In range (in): normal
-# sync with no vetoes or in sync drops.
+# sync with no vetoes or in sync drops. The MPP tests run rx2.py with its AGC on (as rade_c does by default),
+# as the AGC gain varies over the rho window on fading channels.
 add_test(NAME v2_wrong_k_awgn_pos
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh 45 oor")
          set_tests_properties(v2_wrong_k_awgn_pos PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
@@ -1122,18 +1137,18 @@ add_test(NAME v2_wrong_k_awgn_neg
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh -80 oor")
          set_tests_properties(v2_wrong_k_awgn_neg PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 add_test(NAME v2_wrong_k_mpp_pos
-         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh 62.5 oor --g_file g_mpp.f32 --EbNodB 6")
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; RX2_OPTS=--agc ./test/v2_wrong_k.sh 62.5 oor --g_file g_mpp.f32 --EbNodB 6")
          set_tests_properties(v2_wrong_k_mpp_pos PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 add_test(NAME v2_wrong_k_mpp_neg
-         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh -45 oor --g_file g_mpp.f32 --EbNodB 6")
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; RX2_OPTS=--agc ./test/v2_wrong_k.sh -45 oor --g_file g_mpp.f32 --EbNodB 6")
          set_tests_properties(v2_wrong_k_mpp_neg PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 add_test(NAME v2_wrong_k_mpp_in
-         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh 25 in --g_file g_mpp.f32 --EbNodB 6")
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; RX2_OPTS=--agc ./test/v2_wrong_k.sh 25 in --g_file g_mpp.f32 --EbNodB 6")
          set_tests_properties(v2_wrong_k_mpp_in PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 # in range with an interfering sine wave at ~-11 dBc (amplitude 0.2) inside the V2 spectrum, as per the
 # V2 test report: we still expect to sync
 add_test(NAME v2_wrong_k_mpp_sine
-         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_wrong_k.sh 25 sync --g_file g_mpp.f32 --EbNodB 6 --sine_amp 0.2 --sine_freq 1505")
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; RX2_OPTS=--agc ./test/v2_wrong_k.sh 25 sync --g_file g_mpp.f32 --EbNodB 6 --sine_amp 0.2 --sine_freq 1505")
          set_tests_properties(v2_wrong_k_mpp_sine PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 # detector disabled: the out of range signal false syncs (the original problem)
 add_test(NAME v2_wrong_k_disabled
