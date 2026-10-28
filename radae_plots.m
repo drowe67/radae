@@ -648,7 +648,9 @@ function plot_ber_EbNodB(lin_fn,mse_fn="",phase_fn="",png="", epslatex="")
 
 end
 
-function plot_v2_logs(png_fn, state_fn, delta_hat_fn, delta_hat_g_fn, freq_offset_fn, gain_fn, snr_fn)
+% optional mistune_fn: per-symbol tuning indicator (.int16, -1/0/+1, e.g. rade_rx_wav --write_mistune),
+% plotted with the sync state
+function plot_v2_logs(png_fn, state_fn, delta_hat_fn, delta_hat_g_fn, freq_offset_fn, gain_fn, snr_fn, mistune_fn="")
   state = load_raw(state_fn);
   delta_hat = load_f32(delta_hat_fn,1);
   delta_hat_g = load_f32(delta_hat_g_fn,1);
@@ -658,7 +660,14 @@ function plot_v2_logs(png_fn, state_fn, delta_hat_fn, delta_hat_g_fn, freq_offse
   l = length(state);
   figure(1); clf;
   subplot(6,1,1); plot(state,'b;state;');
-  axis([0 l -0.1 1.1]); legend('boxoff')
+  if length(mistune_fn)
+    mistune = load_raw(mistune_fn);
+    hold on; plot(mistune,'r;mistune;'); hold off;
+    axis([0 l -1.1 1.1]);
+  else
+    axis([0 l -0.1 1.1]);
+  end
+  legend('boxoff')
   subplot(6,1,2:3);
   plot(delta_hat,'g;delta\_hat;'); 
   hold on;
