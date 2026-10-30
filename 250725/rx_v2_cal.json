@@ -1,0 +1,5 @@
+{
+  "model": "250725",
+  "dir_bias": 1.74,
+  "note": "mistune direction slope (deg/sample) with carriers aligned, measured over in range runs; recalibrate for each new encoder"
+}
