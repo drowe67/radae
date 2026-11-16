@@ -863,6 +863,11 @@ add_test(NAME rade_c_v2_wrong_k_ch_mpp_neg
              ./test/v2_c_wrong_k_ch.sh ${RADE_C_BUILD_DIR}/src -80 oor --mpp --fading_dir .")
          set_tests_properties(rade_c_v2_wrong_k_ch_mpp_neg PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
 
+# V2 C receiver: NaN, Inf and huge input samples are discarded and the receiver keeps working.
+add_test(NAME rade_c_v2_rx_nonfinite
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; ./test/v2_c_nonfinite.sh ${RADE_C_BUILD_DIR}/src")
+         set_tests_properties(rade_c_v2_rx_nonfinite PROPERTIES PASS_REGULAR_EXPRESSION "PASS" FAIL_REGULAR_EXPRESSION "FAIL")
+
 # V2 C receiver EOO detection: tx2.py -> ch -> C rx, AWGN channel.
 add_test(NAME rade_c_v2_rx_eoo
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; \
