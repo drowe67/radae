@@ -76,6 +76,7 @@ class RADEv2Receiver:
       # Tracking estimates
       self.freq_offset       = 0.0
       self.delta_hat         = 0.0
+      self.delta_rate        = 0.0   # PI timing loop: estimated drift, samples/symbol
       self.delta_hat_g       = 0
       self.freq_offset_g     = 0.0
       self.new_sig_delta_hat = False
@@ -190,6 +191,7 @@ class RADEv2Receiver:
       if self.count == 5:
          delta_phi            = np.angle(self.Ry_smooth[int(self.delta_hat_g)])
          self.delta_hat       = self.delta_hat_g
+         self.delta_rate      = 0.0
          self.freq_offset     = -delta_phi * self.Fs / (2.0 * np.pi * self.M)
          self.count           = 0
          self.count1          = 0
@@ -209,7 +211,20 @@ class RADEv2Receiver:
       # IIR-track timing and frequency offset
       delta_phi          = np.angle(self.Ry_smooth[self.delta_hat_g])
       self.freq_offset_g = -delta_phi * self.Fs / (2.0 * np.pi * self.M)
-      self.delta_hat     = self.BETA * self.delta_hat + (1.0 - self.BETA) * self.delta_hat_g
+      if self.args.timing_pi:
+         # Proportional + integral (type 2) timing loop. delta_rate learns the
+         # sample clock drift, so a steady drift leaves no steady state lag.
+         # The one pole IIR below lags a drift by (drift/symbol)/(1-BETA).
+         # The integrator is frozen when no signal is detected, so it doesn't
+         # wander on noise during fades.
+         delta_err = self.delta_hat_g - self.delta_hat
+         if sig_det:
+            self.delta_rate += self.args.timing_ki * delta_err
+            rate_max = self.args.timing_rate_max_ppm * 1E-6 * self.sym_len
+            self.delta_rate = np.clip(self.delta_rate, -rate_max, rate_max)
+         self.delta_hat += self.delta_rate + self.args.timing_kp * delta_err
+      else:
+         self.delta_hat = self.BETA * self.delta_hat + (1.0 - self.BETA) * self.delta_hat_g
       self.freq_offset   = self.BETA * self.freq_offset + (1.0 - self.BETA) * self.freq_offset_g
 
       # Check for sustained signal loss -> return to idle

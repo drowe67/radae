@@ -217,6 +217,9 @@ endfunction
 % Plots loss v SNR3k curves from text files dumped by inference.py, see compare_models_inf.py
 % pnsr flag optionally includes PAPR
 function loss_SNR3k_plot(pnsr=0,png_fn, epslatex, varargin)
+    % optional: set global loss_plot_axis (e.g. [-5 20 0 2]) to override the default axis,
+    % and global loss_plot_title for a plot title
+    global loss_plot_axis loss_plot_title
     if length(epslatex)
         [textfontsize linewidth] = set_fonts(20);
     end
@@ -243,7 +246,14 @@ function loss_SNR3k_plot(pnsr=0,png_fn, epslatex, varargin)
     end
     ylabel('loss');
     mn = floor(mn);
-    axis([-5 20 0.05 0.35])
+    if isempty(loss_plot_axis)
+      axis([-5 20 0.05 0.35])
+    else
+      axis(loss_plot_axis)
+    end
+    if !isempty(loss_plot_title)
+      title(loss_plot_title)
+    end
     legend('boxoff');
     if length(png_fn)
         print("-dpng",png_fn);
