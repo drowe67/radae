@@ -706,6 +706,15 @@ add_test(NAME rade_c_v1_ber_mpp
          COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/rade_c_ber_mpp.sh ${RADE_C_BUILD_DIR}")
          set_tests_properties(rade_c_v1_ber_mpp PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
 
+# MPP at high SNR: noise is negligible, so BER is set by how well the pilot EQ tracks
+# the fading phase. Catches EQ regressions: correct interpolation 0.0007, one symbol
+# lag (rade_c 667390a) 0.0023. Fixed limit, as the fading error floor is above theory.
+add_test(NAME rade_c_v1_ber_mpp_high_snr
+         COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}; test/make_g.sh; \
+                        ${RADE_C_BUILD_DIR}/src/rade_ber_test --EbNodB 30 --frames 2000 --g_file g_mpp.f32 | \
+                        awk '/BER/ { print; if ($2 < 0.0012) print \"PASS\" }'")
+         set_tests_properties(rade_c_v1_ber_mpp_high_snr PROPERTIES PASS_REGULAR_EXPRESSION "PASS")
+
 # V2 C port tests ----------------------------------------------------------------
 
 # Test V2 C encoder: C encoder output fed to Python stateful decoder, check loss
