@@ -8,7 +8,8 @@ bits_per_frame = len(tx_bits)
 n_frames = len(rx_bits)//bits_per_frame
 n_ok_frames = 0
 for f in range(n_frames):
-    n_errors = sum(rx_bits[f*bits_per_frame:(f+1)*bits_per_frame]*tx_bits < 0)
+    # <= 0: a zero (missing) soft bit is an error, not a correct bit
+    n_errors = sum(rx_bits[f*bits_per_frame:(f+1)*bits_per_frame]*tx_bits <= 0)
     ber = n_errors/bits_per_frame
     print(f"frame received! BER: {ber:5.2f}")
     if ber < 0.05:
