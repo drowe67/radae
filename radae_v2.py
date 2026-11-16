@@ -50,6 +50,21 @@ class RADEv2Receiver:
    ALPHA_EOO = 0.70   # IIR filter coefficient for EOO pend correlation smoother
    AGC_ALPHA = 0.99875   # IIR filter coeff for AGC power estimate, tau~0.1s @ Fs=8000
 
+   # Wrong carrier detector, see _update_wrong_k(). The CP autocorrelation freq estimate
+   # only covers +/-Fs/(2M) (+/-31.25 Hz); a larger offset aliases by a multiple k of the
+   # carrier spacing Fs/M, leaving the carriers off by k (usually +/-1), which decodes as
+   # garbled speech ("R2D2").
+   WK_N          = 16     # rho block length (symbols)
+   WK_T          = 0.08   # idle: veto acquisition when rho is below this
+   WK_SYNC_ALPHA = 0.96   # sync: IIR coeff for smoothed rho (~0.5 s)
+   WK_SYNC_T     = -0.05  # sync: drop to idle when smoothed rho is below this
+   DIR_D         = 4      # mistune direction: lags 2(Ncp+M) +/- DIR_D samples
+   DIR_T         = 1.0    # mistune direction: decision threshold on |slope - bias| (deg/sample)
+   DIR_NMIN      = 50     # mistune direction: min symbols of evidence
+   DIR_TIMEOUT   = 100    # mistune direction: symbols after last veto/drop it stays active
+   DIR_BIAS      = 1.74   # mistune direction: slope with carriers aligned (deg/sample), model
+                          # specific, overridden by the model's rx_v2_cal.json sidecar
+
    def __init__(self, model, frame_sync_nn, args):
       self.model          = model
       self.frame_sync_nn  = frame_sync_nn
@@ -118,6 +133,23 @@ class RADEv2Receiver:
       self.snr_corr_b = 3.33253932
       self.snr_est_dB = 0.0
 
+      # Wrong carrier detector and mistune direction (see _update_wrong_k())
+      cal = getattr(args, "rx_cal", None) or {}
+      self.wrong_k_en  = getattr(args, "wrong_k", True)
+      self.dir_bias    = float(cal.get("dir_bias", self.DIR_BIAS))
+      self.fc          = float(np.mean(w)) * self.Fs / (2.0 * np.pi)   # centre of carriers (Hz)
+      self.wk_buf      = np.zeros((self.WK_N + 2) * self.sym_len + self.DIR_D, dtype=np.complex64)
+      self.rho         = 0.0      # frame to frame correlation over the last WK_N symbols
+      self.rho_sync    = 0.0      # smoothed rho while in sync
+      self.wrong_k     = False    # rho says carriers misaligned
+      self.n_veto      = 0        # acquisitions vetoed
+      self.n_wk_drop   = 0        # syncs dropped by the in sync check
+      self.dir_Q       = 0j       # mistune direction evidence
+      self.dir_n       = 0
+      self.dir_last    = -10**9   # symbol of last veto or in sync drop
+      self.dir_slope   = 0.0
+      self.mistune     = 0        # +1 signal too high in freq, -1 too low, 0 unknown/OK
+
    # ------------------------------------------------------------------
    # Helpers
    # ------------------------------------------------------------------
@@ -132,6 +164,7 @@ class RADEv2Receiver:
 
       self._compute_autocorr()
       sig_det, sine_det = self._detect_signal()
+      self._update_wrong_k()
 
       next_state = self.state
       features_hat = None
@@ -155,6 +188,8 @@ class RADEv2Receiver:
    def _update_rx_buf(self, rx_in, nin, gain):
       self.rx_buf[:3 * self.sym_len - nin] = self.rx_buf[nin:]
       self.rx_buf[3 * self.sym_len - nin:] = rx_in * gain
+      self.wk_buf[:len(self.wk_buf) - nin] = self.wk_buf[nin:]
+      self.wk_buf[len(self.wk_buf) - nin:] = rx_in * gain
 
    def _compute_autocorr(self):
       M, Ncp, sym_len = self.M, self.Ncp, self.sym_len
@@ -182,11 +217,62 @@ class RADEv2Receiver:
       self.snr_est_dB = self.snr_corr_a * snr_raw + self.snr_corr_b
       return sig_det, sine_det
 
+   def _update_wrong_k(self):
+      """Wrong carrier detector and mistune direction, time domain, no timing or DFT.
+
+      rho is the normalised autocorrelation of the received signal at a lag of one
+      frame, 2(Ncp+M) samples, over the last WK_N symbols. The encoder output is
+      smooth from frame to frame, so rho > 0 when the carriers are aligned. A freq
+      error of k carriers (k*Fs/M Hz) rotates each carrier by 2 pi k Fs/M 2(Ncp+M)/Fs
+      = 5 pi k per frame, so rho changes sign for k = +/-1 (k = +/-2 is not detected).
+
+      Mistune direction: at lags 2(Ncp+M) +/- d (d inside the CP) each carrier adds a
+      phase proportional to its frequency, so angle(R(+d) R(-d)*)/(2d) measures where
+      the frame to frame correlated energy sits, ~360 Fs/M/Fs deg/sample per carrier
+      of offset. Accumulated while acquisition is being vetoed."""
+      if self.state == "idle":
+         f = -np.angle(self.Ry_smooth[int(self.delta_hat_g)]) * self.Fs / (2.0 * np.pi * self.M)
+      else:
+         f = self.freq_offset
+      L, N, y = self.sym_len, self.WK_N, self.wk_buf
+      lag = 2 * L
+      n0  = len(y) - N * L
+      a   = y[n0:]
+      b   = y[n0 - lag:len(y) - lag]
+      c   = np.exp(-1j * 2.0 * np.pi * f * lag / self.Fs) * np.sum(a * np.conj(b))
+      p   = 0.5 * (np.sum(np.abs(a) ** 2) + np.sum(np.abs(b) ** 2)) + 1e-12
+      self.rho     = float(np.real(c) / p)
+      self.wrong_k = self.rho < self.WK_T
+
+      # mistune direction, active for DIR_TIMEOUT symbols after a veto or in sync drop
+      if not self.wrong_k_en or self.state != "idle" or self.s - self.dir_last > self.DIR_TIMEOUT:
+         self.dir_Q, self.dir_n, self.mistune = 0j, 0, 0
+         return
+      R = []
+      for d in (self.DIR_D, -self.DIR_D):
+         bd = y[n0 - lag - d:len(y) - lag - d]
+         R.append(np.exp(-1j * 2.0 * np.pi * (f * (lag + d) + self.fc * d) / self.Fs) * np.sum(a * np.conj(bd)))
+      self.dir_Q += R[0] * np.conj(R[1])
+      self.dir_n += 1
+      self.dir_slope = float(np.degrees(np.angle(self.dir_Q))) / (2 * self.DIR_D) - self.dir_bias
+      if self.dir_n >= self.DIR_NMIN and abs(self.dir_slope) > self.DIR_T:
+         self.mistune = int(np.sign(self.dir_slope))
+      else:
+         self.mistune = 0
+
    def _process_idle(self, sig_det, sine_det):
       if sig_det and not sine_det:
          self.count += 1
       else:
          self.count = 0
+
+      # carriers off by one (freq offset outside +/-Fs/(2M)): don't sync. Reset Ry_smooth
+      # (like EOO) so it must build up again before the next attempt.
+      if self.count == 5 and self.wrong_k_en and self.wrong_k:
+         self.count     = 0
+         self.n_veto   += 1
+         self.dir_last  = self.s
+         self.Ry_smooth = np.zeros(self.sym_len, dtype=np.complex64)
 
       if self.count == 5:
          delta_phi            = np.angle(self.Ry_smooth[int(self.delta_hat_g)])
@@ -198,6 +284,7 @@ class RADEv2Receiver:
          self.frame_sync_even = 0.0
          self.frame_sync_odd  = 0.0
          self.eoo_smooth      = 0.0
+         self.rho_sync        = self.rho
          if self.args.reset_output_on_resync:
             self.i = 0
          self.n_acq += 1
@@ -248,6 +335,20 @@ class RADEv2Receiver:
          next_state  = "idle"
          self.count  = 0
          self.count1 = 0
+
+      # A wrong carrier sync that got past the idle veto (e.g. an interfering tone
+      # corrupted the freq estimate) gives a sustained -ve rho: drop back to idle
+      if self.wrong_k_en:
+         a = self.WK_SYNC_ALPHA
+         self.rho_sync = a * self.rho_sync + (1.0 - a) * self.rho
+         if self.rho_sync < self.WK_SYNC_T:
+            next_state       = "idle"
+            self.count       = 0
+            self.count1      = 0
+            self.n_wk_drop  += 1
+            self.rho_sync    = 0.0
+            self.dir_last    = self.s
+            self.Ry_smooth   = np.zeros(self.sym_len, dtype=np.complex64)
 
       # Extract symbol and update frame sync (even when transitioning to idle)
       az_hat = self._extract_symbol()
@@ -349,6 +450,7 @@ class RADEv2Receiver:
          f"f_off: {self.freq_offset:5.2f} f_off_g: {self.freq_offset_g:5.2f} "
          f"Ry_max: {self.Ry_max:5.2f} Ry_min: {self.Ry_min:5.2f} "
          f"snr_est: {self.snr_est_dB:5.1f} dB "
+         f"rho: {self.rho:5.2f} mistune: {self.mistune:2d} "
          f"eoo: {self.eoo_smooth:.3f} corr: {self._eoo_corr:.3f}",
          file=sys.stderr
       )

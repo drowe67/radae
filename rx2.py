@@ -33,7 +33,7 @@
 """
 
 import os,sys
-import argparse
+import argparse, json
 import numpy as np
 from matplotlib import pyplot as plt
 import torch
@@ -101,8 +101,24 @@ parser.set_defaults(timing_pi=True)
 parser.add_argument('--timing_iir', action='store_false', dest='timing_pi', help='use legacy one pole IIR timing loop (default PI (type 2) timing loop, tracks sample clock offsets)')
 parser.add_argument('--timing_kp', type=float, default=0.002, help='PI timing loop proportional gain (default 0.002)')
 parser.add_argument('--timing_ki', type=float, default=2E-6, help='PI timing loop integral gain (default 2E-6)')
+parser.set_defaults(wrong_k=True)
+parser.add_argument('--no_wrong_k', action='store_false', dest='wrong_k', help='disable wrong carrier detection (acquisition veto, in sync check, mistune direction) (default enabled)')
+parser.add_argument('--rx_cal', type=str, default="auto", help='receiver calibration sidecar (.json) for the model, "auto": rx_v2_cal.json in the model directory if present, else built in defaults')
+parser.add_argument('--write_wrong_k', type=str, default="", help='path to wrong carrier detector output file dim (seq_len,3) .f32: rho, acquisition vetoed (0/1), mistune (-1,0,+1)')
 parser.add_argument('--timing_rate_max_ppm', type=float, default=250, help='PI timing loop clamp on tracked sample clock offset in ppm (default 250)')
 args = parser.parse_args()
+
+# receiver calibration sidecar, model specific constants (e.g. mistune direction bias)
+rx_cal_file = args.rx_cal
+if rx_cal_file == "auto":
+   rx_cal_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(args.model_name))), "rx_v2_cal.json")
+   if not os.path.exists(rx_cal_file):
+      rx_cal_file = ""
+args.rx_cal = {}
+if rx_cal_file:
+   with open(rx_cal_file) as f:
+      args.rx_cal = json.load(f)
+   print(f"rx_cal: {rx_cal_file} {args.rx_cal}", file=sys.stderr)
 
 # make sure we don't use a GPU
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
@@ -195,7 +211,9 @@ features_hat = torch.zeros((1, sequence_length * model.dec_stride, num_features)
 # Diagnostic logs (indexed by symbol number)
 sl = sequence_length
 sym_len = receiver.sym_len
+mistune_last    = 0
 state_log       = np.zeros(sl, dtype=np.int16)
+wrong_k_log     = np.zeros((sl, 3), dtype=np.float32)
 frame_sync_log  = np.zeros((sl, 2), dtype=np.float32)
 Ry_norm_log     = np.zeros((sl, sym_len), dtype=np.complex64)
 Ry_smooth_log   = np.zeros((sl, sym_len), dtype=np.complex64)
@@ -215,11 +233,13 @@ while prx + nin < len(rx):
    prx   += nin
 
    prev_state = receiver.state
+   n_veto = receiver.n_veto
    next_state, features_hat_slice, nin, sig_det, sine_det, gain = receiver._process_symbol(rx[st:en], nin)
 
    s = receiver.s
    if s < sl:
       state_log[s]         = 0 if receiver.state == "idle" else 1
+      wrong_k_log[s]       = [receiver.rho, receiver.n_veto > n_veto, receiver.mistune]
       gain_log[s]          = gain
       snr_est_dB_log[s]    = receiver.snr_est_dB
       Ry_norm_log[s]       = receiver.Ry_norm
@@ -230,6 +250,8 @@ while prx + nin < len(rx):
       freq_offset_log[s]   = receiver.freq_offset
       frame_sync_log[s, 0] = receiver.frame_sync_even
       frame_sync_log[s, 1] = receiver.frame_sync_odd
+   if receiver.mistune:
+      mistune_last = receiver.mistune
 
    if receiver.args.verbose or receiver.state != prev_state:
       receiver._print_status(sig_det, sine_det, nin)
@@ -268,12 +290,15 @@ if len(args.write_snr_est):
    snr_est_dB_log.tofile(args.write_snr_est)
 if len(args.write_state):
    state_log.tofile(args.write_state)
+if len(args.write_wrong_k):
+   wrong_k_log.flatten().tofile(args.write_wrong_k)
 if len(args.write_frame_sync):
    frame_sync_log.flatten().tofile(args.write_frame_sync)
 
 rx = np.concatenate((rx,np.zeros(Ncp+M,dtype=np.complex64)))
 z_hat.shape
 print(f"n_acq: {receiver.n_acq:d}",file=sys.stderr)
+print(f"n_veto: {receiver.n_veto:d} n_wk_drop: {receiver.n_wk_drop:d} mistune: {mistune_last:d}",file=sys.stderr)
 print(f"latent vectors: {z_hat.shape[1]:d}",file=sys.stderr)
 
 features_hat_out = np.zeros(0)

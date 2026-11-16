@@ -95,8 +95,8 @@ class complex_bpf():
       # Save filter state for next time
       self.mem = self.x_mem[0:len(self.mem) + len(x_baseband)][-(self.Ntap-1):]
 
-      # Save phase state for next time
-      self.phase = phase_vec[-1]
+      # Save phase state for next time, normalised so rounding errors don't make |phase| drift over long runs
+      self.phase = phase_vec[-1]/np.abs(phase_vec[-1])
 
       # Mix back up to center frequency
       return self.x_filt[0:n]*np.conj(phase_vec)

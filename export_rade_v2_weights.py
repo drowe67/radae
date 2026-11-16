@@ -185,6 +185,21 @@ def c_export(args, model, frame_sync_nn):
     # Constants
     # -------------------------------------------------------------------------
     num_features = model.feature_dim
+
+    # Receiver calibration constants (model specific), from the rx_v2_cal.json sidecar in the
+    # model directory, as loaded by rx2.py
+    import json
+    cal_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(args.checkpoint))), "rx_v2_cal.json")
+    if os.path.exists(cal_file):
+        with open(cal_file) as f:
+            cal = json.load(f)
+        print(f"rx_cal: {cal_file} {cal}")
+    else:
+        cal = {}
+        print(f"WARNING: no {cal_file}, using default receiver calibration constants - "
+              f"recalibrate the wrong carrier detector (dir_bias) for this model", file=sys.stderr)
+    dir_bias = float(cal.get("dir_bias", 1.74))
+
     constants_writer.header.write(
 f"""
 #define RADE_V2_FRAMES_PER_STEP {model.enc_stride}
@@ -200,6 +215,8 @@ f"""
 #define RADE_V2_DEC_MAX_RNN_NEURONS {dec_max_rnn_units}
 
 #define RADE_V2_DEC_MAX_CONV_INPUTS {dec_max_conv_inputs}
+
+#define RADE_V2_DIR_BIAS {dir_bias}f
 
 """
     )
@@ -241,7 +258,7 @@ if __name__ == "__main__":
 
     # Load FrameSyncNet
     frame_sync_nn = FrameSyncNet(args.latent_dim)
-    frame_sync_nn.load_state_dict(torch.load(args.ml_sync_model, weights_only=True))
+    frame_sync_nn.load_state_dict(torch.load(args.ml_sync_model, map_location='cpu', weights_only=True))
     frame_sync_nn.eval()
 
     c_export(args, model, frame_sync_nn)
