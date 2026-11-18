@@ -139,17 +139,9 @@ All output artefacts are stored in a subdirectory named after the input file:
 ```
 The input WAV can be any sample rate (resampled to 8kHz internally). Pass `--verbose` for the full decoder log including bash trace.
 
-## Optional: RADE C Port Tests (rade_c)
+## RADE C Port Tests (rade_c)
 
-The [rade_c](https://github.com/freedv/rade_c) repo contains the C port of RADE V1 and V2. Its ctests are optional and only enabled when `RADE_C_BUILD_DIR` is passed to cmake:
-```
-cd ~
-git clone https://github.com/freedv/rade_c.git
-cd rade_c && mkdir build && cd build && cmake .. && make
-cd ~/radae/build
-cmake -DRADE_C_BUILD_DIR=~/rade_c/build ..
-ctest -R rade_c
-```
+The [rade_c](https://github.com/freedv/rade_c) repo contains the C port of RADE V1 and V2. Its ctests live in rade_c ([test/ctests.cmake](https://github.com/freedv/rade_c/blob/main/test/ctests.cmake)) and use this repo's Python reference, models and tools, at the radae commit pinned in rade_c's CI. See the rade_c README for how to run them.
 
 
 # Training
