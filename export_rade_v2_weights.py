@@ -1,6 +1,6 @@
 """
 Export RADE V2 encoder, decoder and frame-sync weights to C source files
-suitable for use in the radae_nopy C port.
+suitable for use in the rade_c C port.
 
 Usage:
     python3 export_rade_v2_weights.py <model_checkpoint> <ml_sync_model> <output_dir>
