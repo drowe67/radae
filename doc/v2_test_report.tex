@@ -551,7 +551,7 @@ As real time PTT samples have no reference input, the loss cannot be measured, s
  \hline
  Number of OTA samples to collect & 20 & 12 \\
  Number of languages & 3 & 2 \\
- PAPR measurements & 3 & 0 \\
+ PAPR measurements & 3 & 2 \\
  \hline
  \hline
 \end{tabular}
@@ -564,7 +564,7 @@ The results against each goal were:
 \item 3rd party integration: integration and verification of freedv-gui and FreeDV Neo (internal to the FreeDV project) found bugs in V2 and helped tune the verification procedure.  No 3rd party applications were verified.
 \item Off air samples: Rick W7YC provided samples from several radios (Flex, IC-7300, IC-7100) on 20 and 80 m, including 2 to 200 W signals received by remote WebSDR and KiwiSDR receivers, and two way contacts.  Yuichi JH0VEQ and Taku Kudo JK1GPC provided Japanese language samples.  The decoded samples were consistent with the previous test results.
 \item Issues: one issue was found, a false sync when the tuning error exceeds the $\pm 32$ \si{Hz} range of the V2 frequency offset estimator.  In Yuichi's Japan to Australia sample, a $+44$ \si{Hz} tuning error was aliased to $-18.5$ \si{Hz}, and V2 synced confidently on the wrong frequency, producing garbled speech, while V1 decoded the same signal.  After correcting the frequency offset in software, the V2 samples decoded successfully.  This is a corner case affecting a small number of contacts.  It is in the classical DSP, so a fix would not break compatibility (no retraining).
-\item PAPR: no PAPR measurements were provided by the test team.
+\item PAPR: Taku JK1GPC and Babis SV1UH provided PAPR measurements after the campaign, see Section \ref{sec:papr_measured}.
 \item ``Underwater" artefact: some of Rick's samples may contain examples of this artefact, however the root cause is still unknown.  Simulations suggest it may be speaker dependent, but the results are not conclusive.  Notably, the operator in question described the RADE speech quality as very good.
 \end{enumerate}
 
@@ -600,6 +600,111 @@ Table \ref{tab:obw_measured} compares the measurements to the simulated results 
 \end{center}
 \end{figure}
 
+\subsection{Measured PAPR}
+\label{sec:papr_measured}
+
+After the campaign, Taku JK1GPC and Babis SV1UH measured the PAPR of the transmitted V2 signal by sampling the RF with an SDR, which prompted the measurements in this section (thanks also to Take JS1MAV, Helmut DC6NY and Rick W7YC for the discussion).  The goal was to measure the PAPR at the PA output of real SSB radios, and to separate the effects of the radio from the waveform.
+
+Figure \ref{fig:papr_setup} shows the test setup.  The test signal was \emph{david\_vk5dgr.wav} (11.6 seconds) modulated with \texttt{rade\_tx\_wav --v2}, played into the radio's USB audio interface with \texttt{aplay}, with the radio in data mode (LSB-D) on 7.175 \si{MHz}, the radio's speech compressor off, and the RF power control at maximum.  The drive level was set by the audio level.  PTT and the radio's meters (power, ALC, SWR, supply current) were controlled and logged over CAT with Hamlib.  An RF sampler, attenuator and splitter provided $\approx 80$ \si{dB} of coupling to a HackRF One (\texttt{hackrf\_transfer -f 7100000 -s 2500000 -a 0 -l 32 -g 20}), keeping its input below $-25$ \si{dBm} at 100 \si{W}.  The coupling was calibrated with a tracking generator, and the absolute power is accurate to about $\pm 0.5$ \si{dB}.  Two 100 \si{W} radios were tested, an IC-7200 and an IC-7300.
+
+\begin{figure}[h]
+\caption{PAPR test setup.}
+\label{fig:papr_setup}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.8cm]
+\node [block] (pc) {PC};
+\node [block, right=1.0cm of pc] (radio) {SSB Radio};
+\node [block, right=0.8cm of radio] (sampler) {RF Sampler};
+\node [block, right=0.8cm of sampler] (load) {100 \si{W} Dummy Load};
+\node [block, below=1.0cm of sampler] (atten) {30 \si{dB} Atten \& Splitter};
+\node [block] (hackrf) at (pc |- atten) {HackRF One};
+\draw [->] (pc) -- node[above,text width=1.2cm,font=\footnotesize] {Audio} node[below,text width=1.2cm,font=\footnotesize] {CAT} (radio);
+\draw [->] (radio) -- (sampler);
+\draw [->] (sampler) -- (load);
+\draw [->] (sampler) -- (atten);
+\draw [->] (atten) -- node[above,text width=2.2cm,font=\footnotesize] {$\approx -80$ \si{dB} total} (hackrf);
+\draw [->] (hackrf) -- node[left,text width=1.5cm,font=\footnotesize] {IQ 2.5 \si{MS/s}} (pc);
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
+The IQ samples were mixed to baseband, decimated to 100 \si{kHz}, and band limited to 4 \si{kHz} (zero phase) centred on the signal.  In simulation the PAPR is unchanged for measurement bandwidths above 1.6 \si{kHz}, and the measured SNR in 4 \si{kHz} was 46 to 55 \si{dB}, enough to keep the noise contribution to PAPR below 0.02 \si{dB}.  The first second after PTT was excluded, as the gain of both radios settled by about 1 \si{dB} over this period.  As a check, at full drive a single tone measured 0.06 \si{dB} PAPR (ideal 0 \si{dB}), and a two tone signal was within 0.1 \si{dB} of the ideal 3.01 \si{dB}.  The captures were also time aligned with the transmitted signal, so we could measure the radio's AM-AM and AM-PM response, and decode the captured signals to measure loss.
+
+Table \ref{tab:papr_config} lists the configuration used for these tests.
+
+\begin{table}[h]
+\caption{Configuration for PAPR tests.}
+\label{tab:papr_config}
+\centering
+\begin{tabular}{ l | p{7.5cm} }
+ \hline
+ Date & November 2026 \\
+ RADE Tx & rade\_c \texttt{rade\_tx\_wav --v2}, git 54613bb (signal identical to main 4a31f25) \\
+ Loss measurement & radae \texttt{loss.py}, git e5d4c15 \\
+ ML encoder/decoder & 250725 \\
+ Test signal & \emph{david\_vk5dgr.wav}, 11.6 s \\
+ SDR & HackRF One, \texttt{hackrf\_transfer} git-1408473 \\
+ Radio control & Hamlib 4.3.1 \texttt{rigctl} \\
+ \hline
+\end{tabular}
+\end{table}
+
+Table \ref{tab:papr_measured} summarises the results, with 100\% CCDF (peak) and 0.1\% CCDF PAPR values, ranging from low to high power.  Figures \ref{fig:papr_ccdf} and \ref{fig:papr_amam} show the IC-7300 CCDF and AM-AM results at four power levels.
+
+\begin{table}[h]
+\caption{Measured PAPR of RADE V2 at 100\% and 0.1\% CCDF, ranging from low to high average power.}
+\label{tab:papr_measured}
+\centering
+\small
+\begin{tabular}{ l | l | c | c | c }
+ \hline
+ Source & Transmitter & Power (\si{W}) & 100\% (\si{dB}) & 0.1\% (\si{dB}) \\
+ \hline
+ Sim. \emph{all.wav} & - & - & 3.48 & 3.06 \\
+ Sim. \emph{david\_vk5dgr.wav} & - & - & 3.36 & 3.12 \\
+ Taku JK1GPC & IC-7300MK2 & 10 - 80 & 5.5 - 4.5 & - \\
+ Babis SV1UH & - & 0.5 - 60 & 8.4 - 6.5 & 5.3 - 4.6 \\
+ This work & IC-7200 & 7 - 44 & 5.0 - 3.5 & 4.2 - 3.2 \\
+ This work & IC-7300 & 8 - 54 & 5.6 - 3.5 & 4.1 - 3.1 \\
+ \hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\caption{Measured CCDF of the IC-7300 RADE V2 signal at four average power levels, compared to simulation.  The PAPR is the power at which the curve meets the bottom axis (100\% CCDF).}
+\label{fig:papr_ccdf}
+\begin{center}
+\includegraphics[width=0.9\textwidth]{v2_papr_ccdf.png}
+\end{center}
+\end{figure}
+
+\begin{figure}[h]
+\caption{Measured AM-AM response of the IC-7300 at four average power levels.  The rising curves show gain expansion; at 43 and 54 \si{W} the PA compresses the peaks.}
+\label{fig:papr_amam}
+\begin{center}
+\includegraphics[width=0.9\textwidth]{v2_papr_amam.png}
+\end{center}
+\end{figure}
+
+\noindent Our results were:
+\begin{enumerate}
+\item The measured PAPR falls with increasing power, consistent with Taku's results.  At low to medium power both radios show gain expansion (Figure \ref{fig:papr_amam}), the gain rising by $\approx 2.5$ \si{dB} from low amplitudes to the peaks, which raises the PAPR by $\approx 1$ \si{dB}.  Near full drive the PA compresses the peaks, cancelling the expansion, and the PAPR approaches the simulated value.  The radios' transmit filtering adds 0.2 to 0.5 \si{dB}, and the AM-PM is negligible ($< 2^{\circ}$).  Two tone tests gave 3rd order IMD of -23 to -35 \si{dBc}, typical of HF SSB transmitters.
+\item With 100 \si{W} peaks and no ALC action, both radios delivered 43 to 45 \si{W} average power, i.e. the peak power less the PAPR.  With the drive increased until the ALC just responds the IC-7300 delivered 54 \si{W}, and 59 \si{W} when driven 6 \si{dB} into the ALC, with mild ALC ``pumping" ($\approx 1$ \si{dB} gain variation).
+\item The decoder loss of the captured signals matched the clean simulated signal at all drive levels (including 6 \si{dB} into the ALC) and at all SNRs tested.  On these radios at least, RADE V2 appears insensitive to the drive level.  A simple set up procedure is to set the RF power control to maximum, and increase the audio drive until the ALC just responds.
+\item For comparison we transmitted the same speech as SSB through the IC-7300 at the same peak power.  Uncompressed SSB averaged 2 to 4 \si{W}, the Hilbert compressed SSB used in our simulations (\texttt{ota\_test.sh}) 21 to 27 \si{W}, and the author's voice via the microphone with the Icom speech compressor 12.5 \si{W}.  RADE V2 delivers about 6 \si{dB} more average power than real world compressed SSB.  The SSB peaks also briefly exceeded the ALC set point (117 to 163 \si{W}), a source of splatter.
+\item Babis measured off air with an SDRplay receiver, so his results include noise and HF channel effects that tend to increase the measured PAPR.
+\item PA heating: for a class B PA the DC current is proportional to the RF amplitude $a$ and the RF power to $a^2$, so the dissipation is proportional to $a-a^2$, which peaks at $a \approx 0.64$ of the maximum amplitude.  With a PAPR of $\approx 3$ \si{dB}, the RMS amplitude of RADE V2 is $\approx 0.7$ of the peak, close to this worst case.  From the IC-7300's supply voltage and current, the radio dissipated 178 to 190 \si{W} with RADE V2 at 43 to 59 \si{W} average, compared to 134 to 141 \si{W} for a steady carrier at 89 to 100 \si{W}.  Like other continuous duty digital modes, long overs at high average power stress the PA thermally more than SSB speech.
+\end{enumerate}
+
+\noindent Recommendations for operating RADE V2 with an SSB radio:
+\begin{enumerate}
+\item Use data mode with the speech compressor off, set the RF power control to maximum, and increase the audio drive until the ALC just responds.  Overdriving a little costs little.
+\item Ensure a low resistance DC supply connection and a good match (e.g. check any internal tuner).  During these tests a high resistance DC lead (11 \si{V} at the radio) and a mistuned internal tuner (SWR 2:1, 2 \si{dB} loss) were found and fixed.
+\item Expect $\approx 45$ to 55 \si{\%} of the rated peak power as average power, and for the radio's power meter to fluctuate.  The first second of each over is not representative, as the radio's gain settles.
+\item For long overs, consider reducing the RF power to manage PA heating.  The decoded speech quality is not very sensitive to power on good links.
+\item Further work: test radios with different PA and ALC designs (e.g. non-Icom, SDR based).
+\end{enumerate}
+
 \section{Conclusion}
 
 In Table \ref{tab:conclusion} the results from Phase A, B, C and D are summarised and compared to requirements extracted from FreeDV-038.  Only performance and functional requirements have been extracted (e.g. we don't consider implementation issues like a C port or packaging).
@@ -614,7 +719,7 @@ Requirement & Met & Comment \\
 \hline
 Speech quality v SNR $\ge$ RADE V1 on AWGN \& MPP. & Pass & $\approx 3$ \si{dB} gain of V2/V1 in simulations, but statistical significance not reached in OTA tests (expected result). \\
 Handles MPD channel without breaking down & Pass & \\
-PAPR $< 1$ \si{dB}| through a typical SSB band pass filter. & Partial & This requirement was found to be in error, real world PAPR of RADE V1 was $>$ 4 \si{dB}.  We have achieved a PAPR of $\approx 3$ \si{dB} with V2, a 1 \si{dB} gain on V1. \\
+PAPR $< 1$ \si{dB}| through a typical SSB band pass filter. & Partial & This requirement was found to be in error, real world PAPR of RADE V1 was $>$ 4 \si{dB}.  We have achieved a PAPR of $\approx 3$ \si{dB} with V2, a 1 \si{dB} gain on V1.  Measured 3.1 to 3.5 \si{dB} at the PA output at full drive. \\
 OBW $<$ 2000 \si{Hz} & Pass & V2 OBW measured as $\approx 860$ \si{Hz}, much cleaner spectrum. \\
 Sample clock offsets $\pm 125$ ppm & Pass & No significant loss at $\pm 125$ ppm, syncs and decodes at $\pm 250$ ppm. \\
 Frequency Offsets $\pm 50$ \si{Hz} & Partial & Current algorithm natively handles $\pm 32$ \si{Hz}, should be possible to extend this with further work.  A Phase D sample with a $+44$ \si{Hz} offset caused a false sync. \\
