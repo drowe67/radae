@@ -98,7 +98,7 @@ The FreeDV Project Leadership Team and many others have helped with support and 
 
 \begin{table} [h]
 \caption{Configuration for test campaign.}
-\label{tab:time_to_acq}
+\label{tab:config}
 \centering
 \begin{tabular}{ l | l }
  \hline
@@ -163,7 +163,7 @@ The target channels for RADE V2 are AWGN and MPP (Doppler 1 \si{Hz}, Delay 2 \si
 
 \subsection{Occupied Bandwidth and PAPR}
 
-Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}).  We measure PAPR using the peak magnitude over an entire sample (100\% CCDF) as even an occasional peak will depress a typical SSB transmitter ALC for several seconds.  The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.  OTA measurements of OBW in Phase D (Section \ref{sec:obw_measured}) are a close match to these simulated results.
+Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}).  We quote the peak PAPR, the ratio of the maximum instantaneous power over an entire sample to the average power, as even an occasional peak will depress a typical SSB transmitter ALC for several seconds.  Where noted we also quote the PAPR at 0.1\% CCDF, the power level exceeded 0.1\% of the time (the 99.9th percentile of the instantaneous power), a common metric for OFDM signals.  The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.  OTA measurements of OBW in Phase D (Section \ref{sec:obw_measured}) are a close match to these simulated results.
 
 \begin{table} [h]
 \caption{Occupied Bandwidth and PAPR for \emph{all.wav}.}
@@ -171,7 +171,7 @@ Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PA
 \centering
 \begin{tabular}{ c |  r | c }
  \hline
- Waveform & OBW & PAPR (100\% CCDF) \\
+ Waveform & OBW & Peak PAPR \\
  \hline
  RADE V1 & 2109 & 4.20  \\
  RADE V2 & 867 & 3.48 \\
@@ -317,7 +317,7 @@ ML networks tend to operate over a limited dynamic range so an AGC is required. 
 \item AGC enabled with -20 \si{dB} gain (linear gain of 0.1).
 \item AGC enabled with 0 \si{dB} gain (linear gain of 1.0) with three different delays (timing offsets).
 \end{enumerate}
-This section (Figures \ref{fig:260206_inf_loss_SNR3k_models}, \ref{fig:v2_delay_loss} and Table \ref{tab:delay_loss}) was regenerated using \emph{radae} commit \texttt{73f7183} and \emph{rade\_c} commit \texttt{6d89585} on 1 Sep 2026, both later than the campaign configuration in Table \ref{tab:time_to_acq}.
+This section (Figures \ref{fig:260206_inf_loss_SNR3k_models}, \ref{fig:v2_delay_loss} and Table \ref{tab:delay_loss}) was regenerated using \emph{radae} commit \texttt{73f7183} and \emph{rade\_c} commit \texttt{6d89585} on 1 Sep 2026, both later than the campaign configuration in Table \ref{tab:config}.
 
 The AGC curves are coincident with the baseline curve, indicating AGC has a small impact on performance over a range of gains and timing offsets.  Table \ref{tab:delay_loss} presents results for a fine grained sweep of loss against delay for a high SNR, to confirm the loss obtained from the \href{https://github.com/drowe67/radae/#verifying-rade-integration}{verification procedure} will be insensitive to arbitrary timing offsets found in real time systems.
 
@@ -352,11 +352,10 @@ PY_OPTS="--agc" RESULTS=v2_delay_loss.txt PLOT=v2_delay_loss ./test/v2_c_timing.
 
 \subsection{Sample clock and freq drift tests}
 
-A Tx/Rx sample clock offset of $\pm 25$ ppm (e.g. $Fs=8000$ \si{Hz} at the Tx and $Fs=8000.2$ \si{Hz} at the Rx) was tested over the 56 second \emph{all.wav} sample. No significant change in loss was observed and the receiver remained in sync.
+Tx/Rx sample clock offsets were tested with the C receiver over the 56 second \emph{all.wav} sample.  There was no significant loss at $\pm 125$ ppm (e.g. $Fs=8000$ \si{Hz} at the Tx and $Fs=8001$ \si{Hz} at the Rx), with a loss of 0.09 at high SNR and 0.30 on MPP at $E_b/N_0 = 6$ dB.  The receiver synced and decoded at $\pm 250$ ppm (loss 0.10 at high SNR).  Example for $+125$ ppm at high SNR, run from the \emph{radae} directory:
 
 \begin{verbatim}
-./test/v2_spot.sh --sample_clock_offset 7999.8 --write_Ry_smooth Ry_smooth.c64
- --write_delta_hat delta_hat.f32 --pad_samples 120
+~/rade_c/test/v2_c_samclk.sh ~/rade_c/build/src 8001 0.10 125 15
 \end{verbatim}
 
 A Rx frequency offset drifting at -5 \si{Hz} per minute was tested. No significant change in loss was observed and the receiver remained in sync.
@@ -600,6 +599,16 @@ Table \ref{tab:obw_measured} compares the measurements to the simulated results 
 \end{center}
 \end{figure}
 
+Helmut DC6NY independently measured an OBW of 806 \si{Hz} for RADE V2 using an R\&S FSE30 spectrum analyser with a 10 \si{Hz} resolution bandwidth (Figure \ref{fig:obw_dc6ny}), in line with the regulatory guidance of an RBW of 1-3\% of the signal bandwidth, and consistent with Rick's measurement and the simulated result.
+
+\begin{figure}[H]
+\caption{Measured 99\% OBW of RADE V2 (805.6 \si{Hz}) with 10 \si{Hz} RBW, measured at 145 \si{MHz}, courtesy of Helmut DC6NY.}
+\label{fig:obw_dc6ny}
+\begin{center}
+\includegraphics[width=0.8\textwidth]{radev2_obw_dc6ny.jpg}
+\end{center}
+\end{figure}
+
 \subsection{Measured PAPR}
 \label{sec:papr_measured}
 
@@ -649,16 +658,16 @@ Table \ref{tab:papr_config} lists the configuration used for these tests.
 \end{tabular}
 \end{table}
 
-Table \ref{tab:papr_measured} summarises the results, with 100\% CCDF (peak) and 0.1\% CCDF PAPR values, ranging from low to high power.  Figures \ref{fig:papr_ccdf} and \ref{fig:papr_amam} show the IC-7300 CCDF and AM-AM results at four power levels.
+Table \ref{tab:papr_measured} summarises the results, with the peak PAPR and the PAPR at 0.1\% CCDF, ranging from low to high power.  Figures \ref{fig:papr_ccdf} and \ref{fig:papr_amam} show the IC-7300 CCDF and AM-AM results at four power levels.
 
 \begin{table}[h]
-\caption{Measured PAPR of RADE V2 at 100\% and 0.1\% CCDF, ranging from low to high average power.}
+\caption{Measured peak PAPR and PAPR at 0.1\% CCDF of RADE V2 (\si{dB}), ranging from low to high average power.}
 \label{tab:papr_measured}
 \centering
 \small
 \begin{tabular}{ l | l | c | c | c }
  \hline
- Source & Transmitter & Power (\si{W}) & 100\% (\si{dB}) & 0.1\% (\si{dB}) \\
+ Source & Radio & Power (\si{W}) & Peak & 0.1\% CCDF \\
  \hline
  Sim. \emph{all.wav} & - & - & 3.48 & 3.06 \\
  Sim. \emph{david\_vk5dgr.wav} & - & - & 3.36 & 3.12 \\
@@ -671,7 +680,7 @@ Table \ref{tab:papr_measured} summarises the results, with 100\% CCDF (peak) and
 \end{table}
 
 \begin{figure}[h]
-\caption{Measured CCDF of the IC-7300 RADE V2 signal at four average power levels, compared to simulation.  The PAPR is the power at which the curve meets the bottom axis (100\% CCDF).}
+\caption{Measured CCDF of the IC-7300 RADE V2 signal at four average power levels, compared to simulation.  The curve ends at the peak PAPR, and crosses $10^{-1}$\% at the PAPR at 0.1\% CCDF.}
 \label{fig:papr_ccdf}
 \begin{center}
 \includegraphics[width=0.9\textwidth]{v2_papr_ccdf.png}
@@ -693,7 +702,7 @@ Table \ref{tab:papr_measured} summarises the results, with 100\% CCDF (peak) and
 \item The decoder loss of the captured signals matched the clean simulated signal at all drive levels (including 6 \si{dB} into the ALC) and at all SNRs tested.  On these radios at least, RADE V2 appears insensitive to the drive level.  A simple set up procedure is to set the RF power control to maximum, and increase the audio drive until the ALC just responds.
 \item For comparison we transmitted the same speech as SSB through the IC-7300 at the same peak power.  Uncompressed SSB averaged 2 to 4 \si{W}, the Hilbert compressed SSB used in our simulations (\texttt{ota\_test.sh}) 21 to 27 \si{W}, and the author's voice via the microphone with the Icom speech compressor 12.5 \si{W}.  RADE V2 delivers about 6 \si{dB} more average power than real world compressed SSB.  The SSB peaks also briefly exceeded the ALC set point (117 to 163 \si{W}), a source of splatter.
 \item Babis measured off air with an SDRplay receiver, so his results include noise and HF channel effects that tend to increase the measured PAPR.
-\item PA heating: for a class B PA the DC current is proportional to the RF amplitude $a$ and the RF power to $a^2$, so the dissipation is proportional to $a-a^2$, which peaks at $a \approx 0.64$ of the maximum amplitude.  With a PAPR of $\approx 3$ \si{dB}, the RMS amplitude of RADE V2 is $\approx 0.7$ of the peak, close to this worst case.  From the IC-7300's supply voltage and current, the radio dissipated 178 to 190 \si{W} with RADE V2 at 43 to 59 \si{W} average, compared to 134 to 141 \si{W} for a steady carrier at 89 to 100 \si{W}.  Like other continuous duty digital modes, long overs at high average power stress the PA thermally more than SSB speech.
+\item PA heating: for a class B (or AB) PA the DC current is proportional to the RF envelope amplitude, plus a bias current.  We measured the IC-7300 supply current with a clamp meter, and from the voltage drop across the DC lead.  The radio's own current meter reads high (by $\approx 35$\%) on signals with a varying envelope, as does its power meter.  The radio dissipated $\approx 54$ \si{W} when keyed with no RF, $\approx 125$ \si{W} with RADE V2 at 43 \si{W} average power, $\approx 124$ \si{W} with a carrier at 39 \si{W}, and $\approx 139$ \si{W} with a carrier at 89 \si{W}.  Compressed SSB (\texttt{ota\_test.sh}) at 23 \si{W} average dissipated $\approx 99$ \si{W} (estimated from its envelope, confirmed by measurement).  The heat therefore depends mainly on the average power, plus a large fixed overhead.  RADE V2 dissipates about the same as a carrier of the same average power, less than a full power carrier, and more than SSB only because it transmits more average power.
 \end{enumerate}
 
 \noindent Recommendations for operating RADE V2 with an SSB radio:
@@ -701,8 +710,7 @@ Table \ref{tab:papr_measured} summarises the results, with 100\% CCDF (peak) and
 \item Use data mode with the speech compressor off, set the RF power control to maximum, and increase the audio drive until the ALC just responds.  Overdriving a little costs little.
 \item Ensure a low resistance DC supply connection and a good match (e.g. check any internal tuner).  During these tests a high resistance DC lead (11 \si{V} at the radio) and a mistuned internal tuner (SWR 2:1, 2 \si{dB} loss) were found and fixed.
 \item Expect $\approx 45$ to 55 \si{\%} of the rated peak power as average power, and for the radio's power meter to fluctuate.  The first second of each over is not representative, as the radio's gain settles.
-\item For long overs, consider reducing the RF power to manage PA heating.  The decoded speech quality is not very sensitive to power on good links.
-\item Further work: test radios with different PA and ALC designs (e.g. non-Icom, SDR based).
+\item RADE V2 is a continuous duty mode, with an average power between compressed SSB and full power FT8 or RTTY.  Reducing the RF power lowers the radio's dissipation only modestly ($\approx 25$\% for a 3 \si{dB} reduction), due to the fixed overhead.  Antenna components such as baluns, EFHW transformers and small tuners are often rated for the low average power of SSB, so check their continuous power ratings.
 \end{enumerate}
 
 \section{Conclusion}
@@ -722,7 +730,7 @@ Handles MPD channel without breaking down & Pass & \\
 PAPR $< 1$ \si{dB}| through a typical SSB band pass filter. & Partial & This requirement was found to be in error, real world PAPR of RADE V1 was $>$ 4 \si{dB}.  We have achieved a PAPR of $\approx 3$ \si{dB} with V2, a 1 \si{dB} gain on V1.  Measured 3.1 to 3.5 \si{dB} at the PA output at full drive. \\
 OBW $<$ 2000 \si{Hz} & Pass & V2 OBW measured as $\approx 860$ \si{Hz}, much cleaner spectrum. \\
 Sample clock offsets $\pm 125$ ppm & Pass & No significant loss at $\pm 125$ ppm, syncs and decodes at $\pm 250$ ppm. \\
-Frequency Offsets $\pm 50$ \si{Hz} & Partial & Current algorithm natively handles $\pm 32$ \si{Hz}, should be possible to extend this with further work.  A Phase D sample with a $+44$ \si{Hz} offset caused a false sync. \\
+Frequency Offsets $\pm 50$ \si{Hz} & Partial & Acquires and tracks offsets within $\pm 32$ \si{Hz}.  Offsets from $\pm 32$ to $\pm 94$ \si{Hz} are detected and sync is blocked (no false sync), with a mistune indication so the operator can retune. \\
 Clean end of over detection within 100 ms & Pass & EOO works well at moderate to high SNRs. \\
 25 bit/s streaming text for callsign & Pass & Waveform can send 1 bit/frame over channel, streaming text supported by external library. \\
 SNR estimation & Pass & Error of 1.5 dB RMS ($\pm 3 \si{dB}$ max) over -5 to +5 \si{dB}. \\
@@ -732,11 +740,11 @@ SNR estimation & Pass & Error of 1.5 dB RMS ($\pm 3 \si{dB}$ max) over -5 to +5 
 
 \subsection{Further Work}
 
-Topics for future development. It may be possible to attend to these in parallel with crowd sourced V2 testing, as they have little impact of core requirements such as speech quality and robustness.
+Topics for future development.
 \begin{enumerate}
 \item Reduce acquisition time for benign channels.
 \item Improved EOO performance at lower SNRs.
-\item Extend range of frequency offset estimation to $\pm 50 \si{Hz}$.
+\item Measure the PAPR and PA output of radios with different PA, ALC and transmit filter designs, including radios with digital predistortion (e.g. IC-7760, OpenHPSDR PureSignal).
 \end{enumerate}
 
 \end{document}
