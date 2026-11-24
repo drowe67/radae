@@ -8,9 +8,10 @@
 \usepackage{float}
 \usepackage{array}
 \usepackage{bm}
-\usepackage{siunitx}  
+\usepackage{siunitx}
 \usepackage{xstring}
 \usepackage{catchfile}
+\usepackage{graphicx}
 
 \CatchFileDef{\headfull}{../.git/HEAD}{}
 \StrGobbleRight{\headfull}{1}[\head]
@@ -29,144 +30,291 @@
 
 \tikzset{
 block/.style = {draw, fill=white, rectangle, minimum height=3em, minimum width=3em},
-tmp/.style  = {coordinate}, 
+tmp/.style  = {coordinate},
 circ/.style= {draw, fill=white, circle, node distance=1cm, minimum size=0.6cm},
 input/.style = {coordinate},
 output/.style= {coordinate},
 pinstyle/.style = {pin edge={to-,thin,black}}
 }
 
-\title{FreeDV-036 Radio Autoencoder (RADE) V1 Introduction and Waveform Description}
+\title{FreeDV-036 Radio Autoencoder (RADE) Introduction and Operator Guide}
 \author{David Rowe VK5DGR}
 \date{\today \quad Git: \texttt{\gitrevision} on branch \texttt{\branch}\\}
 \maketitle
 
 \section{Introduction}
 
-The purpose of the Radio Autoencoder (RADE) V1 is to send speech over a HF radio channel. The speech signal has an audio bandwidth of 8kHz, but the RADE V1 signal requires just 1500Hz of RF bandwidth. The Peak to Average Power Ratio (PAPR) is less than 1dB, allowing efficient use of transmitter power amplifiers. Our testing indicates RADE works well on low and high SNR HF radio channels, and has impressive speech quality compared to SSB and traditional digital voice over radio systems. RADE V1 requires more memory and CPU than a traditional digital voice system, but will run just fine with the resources of a typical PC.
+The Radio Autoencoder (RADE) sends speech over HF radio channels.  It combines machine learning with classical signal processing to deliver high quality speech (8 \si{kHz} audio bandwidth) in a narrow RF bandwidth, and keeps working at low signal to noise ratios (SNR) where SSB becomes difficult to copy.  The speech quality degrades gradually as the SNR drops, rather than abruptly as with many digital voice systems.
 
-You can run RADE on a Windows PC or laptop using the FreeDV-GUI application V2.0 and above.
+There are two versions of RADE.  RADE V1 was released in 2024, and RADE V2 in 2026.  V2 has a narrower bandwidth, lower latency, better low SNR performance, and a low peak to average power ratio (PAPR) that makes more efficient use of your transmitter's power.  The two versions are different waveforms and cannot decode each other.
 
-This document is an introduction to Version 1 of RADE, and a description of the waveform. The target audience is the Radio Amateur and regulatory organisations that govern Amateur Radio.
+RADE is open source.  It is available as a software library that application developers can use, and several applications now support RADE.  This document describes RADE itself rather than any particular application; please refer to your application's documentation for installation and set up details.
+
+This document is aimed at Radio Amateurs, and the regulatory organisations that govern Amateur Radio.  It gives a short introduction to RADE technology, describes V1 and V2, helps you identify RADE signals on the air, and provides tips for operating RADE with an SSB transceiver.  More detailed technical information is available in the RADE V2 test report (FreeDV-060) and the papers listed on the RADE web site.
 
 \subsection{Acknowledgements}
 
-The RADE concept evolved from a discussion between Jean-Marc Valin and David Rowe, after which Jean-Marc quickly put together an initial proof-of-concept demo. Over a period of several months David built on this work to develop a practical over the air waveform for speech over HF radio channels.  Mooneer Salem is handling integration of RADE into the FreeDV GUI application. The FreeDV Project Leadership Team and many others have helped with support and testing over the course of 2024. The contributions from David, Mooneer and the FreeDV PLT was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
+The RADE concept evolved from a discussion between Jean-Marc Valin and David Rowe, after which Jean-Marc quickly put together an initial proof-of-concept demo.  David built on this work to develop practical over the air waveforms for speech over HF radio channels.  Mooneer Salem integrated RADE into the FreeDV GUI application.  Peter Marks pioneered the agentic AI assisted port of the Python reference implementation to C.  The FreeDV Project Leadership Team and many Radio Amateurs have helped with support and testing, in particular the crowd sourced V2 testers and reviewers.  The work was generously supported by a grant from Amateur Radio Digital Communications (ARDC).
 
-\section{Radio Autoencoder}
+\section{How RADE Works}
 
-\begin{figure}
-\caption{Traditional Digital Voice at left, RADE at right.}
+\begin{figure}[htbp]
+\caption{Traditional digital voice (top) and RADE (bottom).  The RADE Encoder and Decoder replace the quantisation, error protection (FEC) and modulation stages.}
 \label{fig:radae_block}
 \begin{center}
-\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=2cm]
-
-% Classical DSP System
-
-\node [input] (rinput1) {};
-\node [block, below of=rinput1, node distance=1cm,text width=2cm] (feature_ext) {Feature Extraction};
-\node [block, below of=feature_ext,node distance=1.5cm] (quant) {Quantisation};
-\node [block, below of=quant,node distance=1.5cm] (fec_enc) {FEC Encode};
-\node [block, below of=fec_enc,node distance=1.5cm] (mod1) {Modulator};
-\node [block, below of=mod1,node distance=1.5cm] (channel1) {Radio Channel};
-\node [block, below of=channel1,node distance=1.5cm] (demod1) {Demodulator};
-\node [block, below of=demod1,node distance=1.5cm] (fec_dec) {FEC Decode};
-\node [block, below of=fec_dec,node distance=1.5cm] (dequant) {De-Quant};
-\node [block, below of=dequant,node distance=1.5cm] (synth) {Speech Synth};
-\node [output, below of=synth,node distance=1cm] (routput1) {};
-
-\draw [->] node[above,text width=2cm] {Input Speech} (rinput1) -- (feature_ext);
-\draw [->] (feature_ext) -- (quant);
-\draw [->] (quant) -- (fec_enc);
-\draw [->] (fec_enc) -- (mod1);
-\draw [->] (mod1) -- (channel1);
-\draw [->] (channel1) -- (demod1);
-\draw [->] (demod1) -- (fec_dec);
-\draw [->] (fec_dec) -- (dequant);
-\draw [->] (dequant) -- (synth);
-\draw [->] (synth) -- (routput1) node[below,text width=1.5cm] {Output Speech};
-
-% RADE System
-
-\node [input] [right of=rinput1, node distance=3cm] (rinput2) {};
-\node [block, below of=rinput2, node distance=1cm] (feature_ext2) {Feature Extraction};
-\node [block, right of=fec_enc,node distance=3cm] (radae_enc) {\emph{RADE} Encoder};
-\node [block, right of=channel1,node distance=3cm] (channel2) {Radio Channel};
-\node [block, right of=fec_dec,node distance=3cm] (radae_dec) {\emph{RADE} Decoder};
-\node [block, right of=synth,node distance=3cm] (fargan) {\scalebox{0.8}[0.8]{FARGAN}};
-\node [output, below of=fargan,node distance=1cm] (routput2) {};
-
-\draw [->] (rinput2) node[above,text width=2cm] {Input Speech} -- (feature_ext2);
-\draw [->] (feature_ext2) -- (radae_enc);
-\draw [->] (radae_enc) -- (channel2);
-\draw [->] (channel2) -- (radae_dec);
-\draw [->] (radae_dec) -- (fargan);
-\draw [->] (fargan) -- (routput2) node[below,text width=1.5cm] {Output Speech};
-
-
+\begin{tikzpicture}[>=stealth,align=center,font=\footnotesize,
+  box/.style={draw, fill=black!8, rectangle, minimum height=1.1cm, text width=1.12cm, inner sep=1pt},
+  wide/.style={draw, fill=blue!15, rectangle, minimum height=1.1cm, minimum width=3.86cm, inner sep=1pt},
+  ml/.style={fill=blue!15}, chan/.style={fill=orange!20}]
+\def\dx{1.37}
+% Traditional digital voice
+\node [box] (fe1) at (0*\dx,0) {Feature Extract};
+\node [box] (q)   at (1*\dx,0) {Quan-\\tise};
+\node [box] (fe)  at (2*\dx,0) {FEC Encode};
+\node [box] (mod) at (3*\dx,0) {Modu-\\late};
+\node [box,chan] (ch1) at (4*\dx,0) {Radio Channel};
+\node [box] (dem) at (5*\dx,0) {Demod};
+\node [box] (fd)  at (6*\dx,0) {FEC Decode};
+\node [box] (dq)  at (7*\dx,0) {De-quant};
+\node [box] (syn) at (8*\dx,0) {Speech Synth};
+\foreach \a/\b in {fe1/q,q/fe,fe/mod,mod/ch1,ch1/dem,dem/fd,fd/dq,dq/syn} \draw [->] (\a) -- (\b);
+\node [anchor=south west,inner sep=0] at (-0.6,0.7) {\textbf{Traditional digital voice}};
+% RADE
+\def\y{-2.3}
+\node [box] (fe2) at (0*\dx,\y) {Feature Extract};
+\node [wide] (enc) at (2*\dx,\y) {\emph{RADE} Encoder};
+\node [box,chan] (ch2) at (4*\dx,\y) {Radio Channel};
+\node [wide] (dec) at (6*\dx,\y) {\emph{RADE} Decoder};
+\node [box, ml, text width=1.3cm] (far) at (8*\dx+0.05,\y) {FARGAN Synth};
+\foreach \a/\b in {fe2/enc,enc/ch2,ch2/dec,dec/far} \draw [->] (\a) -- (\b);
+\node [anchor=south west,inner sep=0] at (-0.6,\y+0.7) {\textbf{RADE}};
+% key
+\def\k{-3.55}
+\node [draw, fill=black!8, minimum width=0.4cm, minimum height=0.3cm] (k1) at (2.2,\k) {};
+\node [anchor=west] at (k1.east) {Classical DSP};
+\node [draw, fill=blue!15, minimum width=0.4cm, minimum height=0.3cm] (k2) at (5.0,\k) {};
+\node [anchor=west] at (k2.east) {Machine learning};
+\node [draw, fill=orange!20, minimum width=0.4cm, minimum height=0.3cm] (k3) at (8.1,\k) {};
+\node [anchor=west] at (k3.east) {HF channel};
 \end{tikzpicture}
 \end{center}
 \end{figure}
 
 Figure \ref{fig:radae_block} compares a traditional digital speech over radio system to RADE.
-In conventional digital speech systems, the speech encoder extracts features like pitch, voicing, and short term spectrum, and quantises them to a fixed number of bits, e.g. 700 bits/s.  Forward Error Correction adds extra bits to protect the encoded speech from bit errors.  The FEC encoded bit stream is then passed to a modulator that generates an analog signal we can send through a radio transmitter over the channel.  The demodulator takes the received signal, and converts it to a stream of bits.  Some of these bits will have errors, which the FEC decoder will attempt to correct.  Finally, the bits are converted back to vocoder features (De-quantised), and speech is synthesised.
+In conventional digital speech systems, the speech encoder extracts features like pitch, voicing, and short term spectrum, and quantises them to a fixed number of bits, e.g. 700 bits/s.  Forward Error Correction (FEC) adds extra bits to protect the encoded speech from bit errors.  The FEC encoded bit stream is then passed to a modulator that generates an analog signal we can send through a radio transmitter over the channel.  The demodulator takes the received signal, and converts it to a stream of bits.  Some of these bits will have errors, which the FEC decoder will attempt to correct.  Finally, the bits are converted back to vocoder features (De-quantised), and speech is synthesised.
 
-RADE takes a novel twist – the Encoder converts vocoder features directly to Phase Shift Keyed (PSK) symbols. It effectively combines quantisation, FEC coding, and modulation.  The RADE Decoder converts received PSK symbols back to features that are synthesised using the high quality FARGAN synthesis engine. The RADE encoder, decoder, and FARGAN synthesiser are built using modern machine learning techniques.  RADE has been trained to produce good quality speech even with the distortion of the HF radio channel. Not shown on Figure \ref{fig:radae_block} is some traditional DSP that converts the PSK symbols to and from an OFDM signal, and house keeping tasks like synchronisation. The PSK symbols are sent over the channel at 2000 symbols/second.
+RADE takes a novel twist -- the Encoder converts vocoder features directly to Phase Shift Keyed (PSK) symbols.  It effectively combines quantisation, FEC coding, and modulation.  The RADE Decoder converts received PSK symbols back to features that are synthesised using the high quality FARGAN synthesis engine.  The RADE encoder, decoder, and FARGAN synthesiser are built using modern machine learning techniques, and have been trained using many examples of speech and HF channels to produce good quality speech even with the distortion of the HF radio channel.  Classical signal processing converts the PSK symbols to and from an OFDM signal (many narrow carriers sent in parallel), and handles house keeping tasks such as synchronisation.
 
 \begin{figure}[h]
-\caption{Constellation plot of RADE Encoder PSK symbols.  Compared to traditional QPSK, the constellation looks like noise.}
+\caption{Constellation plot of RADE V2 Encoder PSK symbols.  Compared to traditional QPSK, the constellation looks like shaped noise.}
 \label{fig:psk_scatter}
 \begin{center}
-\input model19_aux3_z_scatter.tex
+\includegraphics[width=3.2in]{rade_v2_scatter.png}
 \end{center}
 \end{figure}
 
-As shown in Figure \ref{fig:psk_scatter} the PSK symbols from RADE are not discrete constellation points like traditional digital modems, instead they appear to be positioned at random.  This constellation was ``designed" by training the Autoencoder using many examples of speech and HF channels. Interestingly, there are no ``bits" anywhere in the RADE system.  The values from the features extractor, PSK symbols, through to synthesis are floating point numbers. The RADE signal can be seen as a form of sampled, analog PSK, built with a combination of machine learning and classical DSP techniques.
+As shown in Figure \ref{fig:psk_scatter} the PSK symbols from RADE are not discrete constellation points like traditional digital modems, instead they appear to be positioned at random.  This constellation was ``designed" by training.  Interestingly, there are no ``bits" anywhere in the RADE system.  The values from the feature extractor, PSK symbols, through to synthesis are floating point numbers.  The RADE signal can be seen as a form of sampled, analog PSK, built with a combination of machine learning and classical DSP techniques.
 
-Figure \ref{fig:rade_psd} is the spectrum of the RADE V1 signal. This is similar to other OFDM waveforms, with a RF bandwidth of 1500 Hz. The spectral ``grass" at the low and high frequency edges is high at around -12dB from the peak, as suppression of this has not been optimised in the V1 release.  The bandwidth of the signal is effectively set by the SSB Radio Tx filter.  This will be improved in future releases of RADE.
-  
-\begin{figure}[h]
-\caption{Spectrum of RADE V1 Signal.}
-\label{fig:rade_psd}
+\section{RADE V1 and V2}
+
+\textbf{RADE V1} (2024) was the first practical RADE waveform.  It uses 30 OFDM carriers, and occupies a minimum of 1.5 \si{kHz} (in practice the transmitter's SSB filter sets the 99\% power occupied bandwidth).
+
+\textbf{RADE V2} (2026) was developed using lessons learnt from V1.  The machine learning network has been trained to produce a narrow signal (about 860 \si{Hz}) with a low peak to average power ratio (PAPR), so it makes efficient use of your transmitter's power amplifier.  V2 has lower latency (40 \si{ms}) which gives faster PTT turn around.  It performs 3 \si{dB} better than V1 at low SNRs: 2 \si{dB} from better decoding at the receiver, and 1 \si{dB} from its lower PAPR, which puts more average power into the transmitted signal.
+
+Your transmitter is limited by its peak power.  The Peak to Average Power Ratio (PAPR) sets how much average power you get from those peaks.  SSB speech has a high PAPR (7 to 10 \si{dB} even with a compressor), while RADE V2 is designed for just 3.5 \si{dB}.  Figure \ref{fig:avg_power} shows the result: from the same 100 \si{W} radio, RADE V2 delivers around 54 \si{W} average, two to four times that of compressed SSB, which means a stronger signal at the receiver.
+
+\begin{figure}[htbp]
+\caption{Average power from the same IC-7300 transmitter at 100 \si{W} peak power, for SSB speech and RADE V2 (measured, except the simulated CESSB bar).}
+\label{fig:avg_power}
 \begin{center}
-\input model19_aux3_z_psd.tex
+\includegraphics[width=0.85\textwidth]{rade_v2_ssb_avg_power.png}
 \end{center}
 \end{figure}
 
-\section{Waveform Description}
+Both versions provide an end of over indication, an SNR estimate, and a way to send your callsign.  Table \ref{tab:v1_v2} summarises the main differences.
+
+\begin{table}[htbp]
+\caption{Comparison of RADE V1 and V2.}
+\label{tab:v1_v2}
+\centering
+\begin{tabular}{ >{\raggedright\arraybackslash}m{4cm} | >{\raggedright\arraybackslash}m{3.3cm} | >{\raggedright\arraybackslash}m{3.3cm} }
+ \hline
+ & RADE V1 & RADE V2 \\
+ \hline
+ 99\% power bandwidth & 2 \si{kHz} (set by Tx filter) & 860 \si{Hz} \\
+ Peak to Average Power Ratio & 4.5 \si{dB} & 3.5 \si{dB} \\
+ Latency & 120 \si{ms} & 40 \si{ms} \\
+ Lowest usable SNR (no fading / fading) & -3 / 0 \si{dB} & -5 / -2 \si{dB} \\
+ Frequency offset range & $\pm 50$ \si{Hz} & $\pm 32$ \si{Hz} \\
+ Callsign/Text & Sent at the end of the over & Streamed during the over \\
+ \hline
+\end{tabular}
+\end{table}
+
+\section{Identifying RADE Signals}
+
+RADE signals sound like noise when listened to on SSB, similar to other OFDM digital modes.  They are best identified by their shape on a spectrum or waterfall display.  RADE V1 occupies most of an SSB channel, with a fairly flat top and edges set by the transmitter's SSB filter.  RADE V2 is much narrower, with a rounded shape about 860 \si{Hz} wide, centred about 1500 \si{Hz} from the suppressed carrier.
+Figure \ref{fig:waterfall} shows how RADE V1 and V2 appear on a waterfall display.  Unlike SSB speech, the RADE signals are continuous, with no gaps between words.  On a sensitive display the individual RADE V2 carriers, spaced 62.5 \si{Hz} apart, may be visible as fine vertical lines.
+
+\begin{figure}[htbp]
+\caption{Simulated waterfall display of RADE V1 (left) and RADE V2 (right).}
+\label{fig:waterfall}
+\begin{center}
+\includegraphics[width=\textwidth]{rade_waterfall.png}
+\end{center}
+\end{figure}
+
+
+Figure \ref{fig:obw_w7yc} shows RADE V1 and V2 signals transmitted by an IC-7300 and measured on a spectrum analyser.  Figure \ref{fig:v2_ssb_spectrum} compares RADE V2 to SSB speech transmitted by the same IC-7300 at the same peak power.  RADE V2 concentrates its power in a narrow band, and has lower out of band emissions than SSB.
+
+\begin{figure}[htbp]
+\caption{Measured spectrum of RADE V1 (left) and RADE V2 (right) transmitted by an IC-7300, courtesy of Rick W7YC.}
+\label{fig:obw_w7yc}
+\begin{center}
+\includegraphics[height=0.385\textwidth]{radev1_obw_w7yc.jpg}
+\includegraphics[height=0.385\textwidth]{radev2_obw_w7yc.jpg}
+\end{center}
+\end{figure}
+
+\begin{figure}[htbp]
+\caption{Measured spectrum of RADE V2 and compressed SSB speech from the same IC-7300 at the same 100 \si{W} peak power.}
+\label{fig:v2_ssb_spectrum}
+\begin{center}
+\includegraphics[width=0.85\textwidth]{rade_v2_ssb_spectrum.png}
+\end{center}
+\end{figure}
+
+\section{Operating Tips}
+
+These tips are based on measurements of RADE V2 through IC-7200 and IC-7300 transceivers, and should apply to most SSB transceivers.
+
+\subsection{Setting Drive for Maximum Power}
+
+\begin{enumerate}
+\item Use your radio's data mode (e.g. USB-D or LSB-D), with the audio source set to your computer, and the speech compressor off.
+\item Set the RF power control to maximum first.  On some radios this control also changes the gain of the transmitter, not just the maximum power, so it needs to be set before the audio level.
+\item Increase the audio drive level until the ALC just starts to respond.  Driving harder gives very little extra power: on an IC-7300, driving 6 \si{dB} further into the ALC increased the average power from 54 to 59 \si{W}, less than 0.5 \si{dB}, which is hardly noticeable at the receiver.  However as driving harder does not harm the decoded speech, there is no need to be precise.
+\end{enumerate}
+
+\subsection{What to Expect}
+
+\begin{itemize}
+\item With RADE V2, expect an average power of around 45 to 55\% of your radio's rated peak power, e.g. 45 to 55 \si{W} from a 100 \si{W} radio.  This is between SSB speech and constant envelope modes such as RTTY or FT8.  This is two to four times the average power of compressed SSB speech at the same peak power (Figure \ref{fig:avg_power}).
+\item Your radio's power meter will fluctuate, and some radio meters respond to the peaks rather than the average.  The power and current indicated by the radio may be higher than the true average.
+\item The radio's output power may vary by around 1 \si{dB} during the first second of each over as its gain settles.  This is normal.
+\end{itemize}
+
+
+\subsection{Duty Cycle and Heat}
+
+RADE is a continuous duty mode, like other digital modes.  Your radio will dissipate more heat transmitting RADE than SSB speech, mainly because RADE transmits much more average power.  On an IC-7300 the radio dissipated around 125 \si{W} with RADE V2 at 43 \si{W} average power, compared to 100 \si{W} for compressed SSB at 23 \si{W}, and 139 \si{W} for a full power carrier.  The heat depends mainly on the average power plus a fixed overhead, so reducing the RF power lowers the heat only modestly.  Table \ref{tab:avg_power_modes} compares RADE to modes you may already use.  If your station handles FT8 at 50 \si{W}, it should handle RADE V2.
+
+\begin{table}[H]
+\caption{Approximate average power at 100 \si{W} peak power.}
+\label{tab:avg_power_modes}
+\centering
+\begin{tabular}{ l | l }
+ \hline
+ Mode & Average power while transmitting \\
+ \hline
+ SSB speech (compressed) & 10 - 25 \si{W} \\
+ RADE V2 & 45 - 55 \si{W} \\
+ FT8, RTTY (constant envelope) & 100 \si{W} \\
+ \hline
+\end{tabular}
+\end{table}
+
+Antenna components such as baluns, end fed half wave (EFHW) transformers and small tuners are often rated for the low average power of SSB, and may overheat during long digital mode overs.  Check their continuous power ratings.
+
+\subsection{Tuning}
+
+RADE V2 acquires signals within $\pm 32$ \si{Hz} of the correct frequency.  Signals between 32 and 94 \si{Hz} off frequency are detected but not decoded, and the application may display a mistune indication so you can retune.  Tune carefully, and use a radio with an accurate frequency reference.
+
+\subsection{SNR Display}
+
+RADE V2 provides an SNR estimate (in a 3000 \si{Hz} noise bandwidth).  It is accurate to around 1.5 \si{dB} (RMS) between -5 and +5 \si{dB}, which is the most useful region for judging marginal contacts, and is less accurate on multipath channels.  At high SNRs the displayed value tops out at around 20 \si{dB}, even on very strong signals.
+
+\subsection{Low SNR Operation}
+
+RADE V2 can decode speech at SNRs below 0 \si{dB}, where SSB is very difficult to copy.  As the SNR drops the speech becomes rougher, but usually remains intelligible.  At very low SNRs the receiver may occasionally lose sync and then re-acquire, which takes around 1 second.  Acquisition is faster on strong signals (around 0.2 \si{s}).
+
+\section{Scope and Limitations}
+
+\begin{itemize}
+\item RADE V1 and V2 are designed for HF radio channels, which have low SNRs, multipath and fading.  VHF/UHF, satellite and other uses are outside the scope of the design.  If RADE happens to work for you on these channels that's great, however we cannot investigate problems or make changes for them.
+\item RADE V1 and V2 are fixed waveforms.  Any change that is not compatible with an existing waveform will be released as a new version.
+\item RADE V1 and V2 cannot decode each other; both stations must use the same version.
+\end{itemize}
+
+\subsection{Reporting Problems}
+
+Before reporting a problem, please read the testing and reporting instructions at \url{https://github.com/drowe67/radae\#testing-rade}.
+
+\section{Technical Parameters}
+
+Tables \ref{tab:v1_params} and \ref{tab:v2_params} summarise the RADE V1 and V2 waveforms, for technical readers and regulators.  More technical detail can be found in the V2 test report (FreeDV-060) and the RADE V2 paper (in preparation).
 
 \begin{table}[H]
 \centering
-\begin{tabular}{m{4cm} | m{2cm} | m{5cm} }
+\begin{tabular}{>{\raggedright\arraybackslash}m{4cm} | >{\raggedright\arraybackslash}m{2cm} | >{\raggedright\arraybackslash}m{4.8cm} }
  \hline
  Parameter & Value & Comment \\
  \hline
  Audio Bandwidth & 100-7900 Hz \\
- RF Bandwidth & 1500 Hz & -6 dB from peak \\
+ RF Bandwidth & 2000 Hz & 99\% power bandwidth, set by Tx SSB filter \\
  Modulation & OFDM & Discrete time, continuously valued PSK symbols \\
- Frame size & 120ms & Algorithmic latency \\
- Vocoder & FARGAN & Low CPU complexity ML vocoder \\
- Payload symbol rate & 2000 Hz & Payload data symbols, all subcarriers combined \\
+ Frame size & 120 ms & Algorithmic latency \\
+ Vocoder & FARGAN & High quality ML vocoder \\
  Number of Subcarriers & 30 \\
- Subcarrier Symbol rate & 50 Hz \\
+ Subcarrier Symbol rate & 41.7 Hz & Including cyclic prefix \\
  Subcarrier Spacing & 50 Hz \\
- Cyclic Prefix & 4ms \\
- Tx Peak Average Power Ratio & $<$ 1 dB \\
+ Cyclic Prefix & 4 ms \\
+ Tx Peak Average Power Ratio & 4.5 dB & Peak PAPR through a typical 2000 Hz SSB filter \\
  Threshold SNR (AWGN) & -3 dB & AWGN channel, 3000 Hz noise bandwidth \\
  Threshold C/No (AWGN) & 32 dBHz & AWGN channel \\
  Threshold SNR (MPP) & 0 dB & Multipath Poor (MPP) channel (1Hz Doppler spread, 2ms path delay), two path Watterson model \\
  Threshold C/No (MPP) & 35 dBHz  \\
-  Worst case channel & MPD & Multipath Disturbed (MPD) channel (2Hz Doppler spread, 4ms path delay) \\
- Mean acquisition time & $<$ 1.5s & 0 dB SNR MPP channel \\
- Acquisition frequency range & +/- 50 Hz \\
+ Worst case channel & MPD & Multipath Disturbed (MPD) channel (2Hz Doppler spread, 4ms path delay) \\
+ Mean acquisition time & $<$ 1.5 s & 0 dB SNR MPP channel \\
+ Acquisition frequency range & $\pm 50$ Hz \\
  Acquisition co-channel interference tolerance & -3 dBC & Interfering sine wave level for $<$ 2s mean acquisition time \\
- Auxilary text channel & 25 bits/s & Note all aux bits used for sync on RADE V1, no bits available for text \\
- SNR measurement & No \\
+ Callsign/text & Yes & Sent in the end of over frame, which is also the end of over indication \\
+ SNR measurement & Yes \\
 \hline
 \end{tabular}
 \caption{RADE V1 waveform and performance parameters}
-\label{tab:constant_eb}
+\label{tab:v1_params}
 \end{table}
 
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\raggedright\arraybackslash}m{4cm} | >{\raggedright\arraybackslash}m{2cm} | >{\raggedright\arraybackslash}m{4.8cm} }
+ \hline
+ Parameter & Value & Comment \\
+ \hline
+ Audio Bandwidth & 100-7900 Hz \\
+ RF Bandwidth & 860 Hz & 99\% power bandwidth \\
+ Modulation & OFDM & Discrete time, continuously valued PSK symbols, no pilot symbols \\
+ Frame size & 40 ms & Algorithmic latency \\
+ Vocoder & FARGAN & High quality ML vocoder \\
+ Number of Subcarriers & 14 \\
+ Subcarrier Symbol rate & 50 Hz & Including cyclic prefix \\
+ Subcarrier Spacing & 62.5 Hz \\
+ Cyclic Prefix & 4 ms \\
+ Tx Peak Average Power Ratio & 3.5 dB & Peak PAPR, measured 3.1 to 3.5 dB at the PA output of two SSB radios at full drive \\
+ Threshold SNR (AWGN) & -5 dB & AWGN channel, 3000 Hz noise bandwidth, 30\% word error rate \\
+ Threshold SNR (MPP) & -2 dB & Multipath Poor (MPP) channel, 30\% word error rate \\
+ Worst case channel & MPD & Multipath Disturbed (MPD) channel (2Hz Doppler spread, 4ms path delay), with some additional loss \\
+ Mean acquisition time & 0.2 - 1 s & 0.2 s at high SNR, about 1 s near threshold \\
+ Acquisition frequency range & $\pm 32$ Hz & Offsets of $\pm 32$ to $\pm 94$ Hz are detected and sync is blocked, with a mistune indication \\
+ Sample clock offset & $\pm 125$ ppm & No significant loss; syncs and decodes at $\pm 250$ ppm \\
+ End of over & Yes & Reliable at moderate to high SNRs \\
+ Auxiliary text channel & 25 bits/s & Used for callsign (streaming text) \\
+ SNR measurement & Yes & 1.5 dB RMS error over -5 to +5 dB \\
+\hline
+\end{tabular}
+\caption{RADE V2 waveform and performance parameters}
+\label{tab:v2_params}
+\end{table}
 
 \end{document}
