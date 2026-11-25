@@ -230,6 +230,8 @@ Antenna components such as baluns, end fed half wave (EFHW) transformers and sma
 
 RADE V2 acquires signals within $\pm 32$ \si{Hz} of the correct frequency.  Signals between 32 and 94 \si{Hz} off frequency are detected but not decoded, and the application may display a mistune indication so you can retune.  Tune carefully, and use a radio with an accurate frequency reference.
 
+Just like SSB, RADE will deliver garbled audio if the wrong sideband is selected.  RADE may also occasionally sync on signals more than 94 \si{Hz} off frequency, again giving garbled audio.  If you hear garbled audio, try the opposite sideband, or carefully retune.
+
 \subsection{SNR Display}
 
 RADE V2 provides an SNR estimate (in a 3000 \si{Hz} noise bandwidth).  It is accurate to around 1.5 \si{dB} (RMS) between -5 and +5 \si{dB}, which is the most useful region for judging marginal contacts, and is less accurate on multipath channels.  At high SNRs the displayed value tops out at around 20 \si{dB}, even on very strong signals.
