@@ -98,7 +98,7 @@ The FreeDV Project Leadership Team and many others have helped with support and 
 
 \begin{table} [h]
 \caption{Configuration for test campaign.}
-\label{tab:time_to_acq}
+\label{tab:config}
 \centering
 \begin{tabular}{ l | l }
  \hline
@@ -163,7 +163,7 @@ The target channels for RADE V2 are AWGN and MPP (Doppler 1 \si{Hz}, Delay 2 \si
 
 \subsection{Occupied Bandwidth and PAPR}
 
-Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}).  We measure PAPR using the peak magnitude over an entire sample (100\% CCDF) as even an occasional peak will depress a typical SSB transmitter ALC for several seconds.  The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.
+Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}).  We quote the peak PAPR, the ratio of the maximum instantaneous power over an entire sample to the average power, as even an occasional peak will depress a typical SSB transmitter ALC for several seconds.  Where noted we also quote the PAPR at 0.1\% CCDF, the power level exceeded 0.1\% of the time (the 99.9th percentile of the instantaneous power), a common metric for OFDM signals.  The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.  OTA measurements of OBW in Phase D (Section \ref{sec:obw_measured}) are a close match to these simulated results.
 
 \begin{table} [h]
 \caption{Occupied Bandwidth and PAPR for \emph{all.wav}.}
@@ -171,7 +171,7 @@ Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PA
 \centering
 \begin{tabular}{ c |  r | c }
  \hline
- Waveform & OBW & PAPR (100\% CCDF) \\
+ Waveform & OBW & Peak PAPR \\
  \hline
  RADE V1 & 2109 & 4.20  \\
  RADE V2 & 867 & 3.48 \\
@@ -317,7 +317,7 @@ ML networks tend to operate over a limited dynamic range so an AGC is required. 
 \item AGC enabled with -20 \si{dB} gain (linear gain of 0.1).
 \item AGC enabled with 0 \si{dB} gain (linear gain of 1.0) with three different delays (timing offsets).
 \end{enumerate}
-This section (Figures \ref{fig:260206_inf_loss_SNR3k_models}, \ref{fig:v2_delay_loss} and Table \ref{tab:delay_loss}) was regenerated using \emph{radae} commit \texttt{73f7183} and \emph{rade\_c} commit \texttt{6d89585} on 1 Sep 2026, both later than the campaign configuration in Table \ref{tab:time_to_acq}.
+This section (Figures \ref{fig:260206_inf_loss_SNR3k_models}, \ref{fig:v2_delay_loss} and Table \ref{tab:delay_loss}) was regenerated using \emph{radae} commit \texttt{73f7183} and \emph{rade\_c} commit \texttt{6d89585} on 1 Sep 2026, both later than the campaign configuration in Table \ref{tab:config}.
 
 The AGC curves are coincident with the baseline curve, indicating AGC has a small impact on performance over a range of gains and timing offsets.  Table \ref{tab:delay_loss} presents results for a fine grained sweep of loss against delay for a high SNR, to confirm the loss obtained from the \href{https://github.com/drowe67/radae/#verifying-rade-integration}{verification procedure} will be insensitive to arbitrary timing offsets found in real time systems.
 
@@ -352,11 +352,10 @@ PY_OPTS="--agc" RESULTS=v2_delay_loss.txt PLOT=v2_delay_loss ./test/v2_c_timing.
 
 \subsection{Sample clock and freq drift tests}
 
-A Tx/Rx sample clock offset of $\pm 25$ ppm (e.g. $Fs=8000$ \si{Hz} at the Tx and $Fs=8000.2$ \si{Hz} at the Rx) was tested over the 56 second \emph{all.wav} sample. No significant change in loss was observed and the receiver remained in sync.
+Tx/Rx sample clock offsets were tested with the C receiver over the 56 second \emph{all.wav} sample.  There was no significant loss at $\pm 125$ ppm (e.g. $Fs=8000$ \si{Hz} at the Tx and $Fs=8001$ \si{Hz} at the Rx), with a loss of 0.09 at high SNR and 0.30 on MPP at $E_b/N_0 = 6$ dB.  The receiver synced and decoded at $\pm 250$ ppm (loss 0.10 at high SNR).  Example for $+125$ ppm at high SNR, run from the \emph{radae} directory:
 
 \begin{verbatim}
-./test/v2_spot.sh --sample_clock_offset 7999.8 --write_Ry_smooth Ry_smooth.c64
- --write_delta_hat delta_hat.f32 --pad_samples 120
+~/rade_c/test/v2_c_samclk.sh ~/rade_c/build/src 8001 0.10 125 15
 \end{verbatim}
 
 A Rx frequency offset drifting at -5 \si{Hz} per minute was tested. No significant change in loss was observed and the receiver remained in sync.
@@ -400,7 +399,7 @@ Sample command line:
 
 \subsection{Streaming Text}
 
-The RADE V2 waveform provides a 1 BPSK symbol/frame (25 bit/s) for auxiliary text information such as callsign and grid square.  At the stage of writing this report this feature is incomplete, as no library for framing and error correction exists.  Table \ref{tab:bpsk_ber} presents the uncoded BER performance of the BPSK bit stream.  The 49 second wave file \emph{all.wav} was used for the source speech (1400 bits total).
+The RADE V2 waveform provides a 1 BPSK symbol/frame (25 bit/s) for auxiliary text information such as callsign and grid square.  An external library is required for framing and error correction.  Table \ref{tab:bpsk_ber} presents the uncoded BER performance of the BPSK bit stream.  The 49 second wave file \emph{all.wav} was used for the source speech (1400 bits total).
  
 \begin{table} [h]
 \caption{BPSK bit error rate (BER) for various channels}
@@ -534,30 +533,189 @@ This section describes the test results collected from the crowd sourced PTT OTA
 \item If any issues are encountered from \emph{verified} integrations, explore and fix bugs.
 \item Measurements of PAPR at the PA output and compare to simulation.
 \item If encountered, explore the ``underwater" voice modulation artefact often heard on V1 samples posted on social media.
-\item It is not within the scope of this test phase to evaluate speech quality (e.g. compared to V1 or SSB), as no way of performing a controlled tests is possible.
+\item It is not within the scope of this test phase to evaluate speech quality (e.g. compared to V1 or SSB), as no way of performing controlled tests is possible.
 \end{enumerate}
 
+The procedure for testing is documented \href{https://github.com/drowe67/radae/#testing-rade}{here}.  Any results must be from an application or radio that has RADE V2 integration verified using \href{https://github.com/drowe67/radae/#verifying-rade-integration}{this} procedure.  Any applications contributing to this test campaign must be capable of exporting a received off-air signal sample file, and a decoded V2 speech file.
+
+As real time PTT samples have no reference input, the loss cannot be measured, so the Phase D results are qualitative.  The campaign ran for about three weeks.  Table \ref{tab:phase_d_summary} summarises the samples collected, which fell short of the targets.  Thank you to all the Hams that participated and special thanks to Rick W7YC, Yuichi JH0VEQ and Taku Kudo JK1GPC for their samples.
+
 \begin{table} [h]
-\caption{Phase D Test Summary (TBC).}
+\caption{Phase D Test Summary.}
 \label{tab:phase_d_summary}
 \centering
 \begin{tabular}{ l | c | c }
  \hline
  Goal & Target Samples & Collected Samples \\
  \hline
- Number of OTA samples to collect & 20 &  \\
- Number of languages & 3 &  \\
- PAPR measurements & 3 &  \\
+ Number of OTA samples to collect & 20 & 12 \\
+ Number of languages & 3 & 2 \\
+ PAPR measurements & 3 & 2 \\
  \hline
  \hline
 \end{tabular}
 \end{table}
 
-The procedure for testing is documented \href{https://github.com/drowe67/radae/#testing-rade}{here}.  Any results must be from an application or radio that has RADE V2 integration verified using \href{https://github.com/drowe67/radae/#verifying-rade-integration}{this} procedure.  Any applications contributing to this test campaign must be capable of exporting a received off-air signal sample file, and a decoded V2 speech file.
+The results against each goal were:
+\begin{enumerate}
+\item Functional testing: five testers reported a pass, and no failures were reported, across conversations with many other stations.  Some testers used Thetis, an integration that has not been verified, with similar results to freedv-gui.
+\item 40 \si{ms} delay and PTT turn around: Rick W7YC reported good PTT turn around times, faster than RADE V1, including rapid Tx/Rx exchanges over a 66 \si{km} NVIS path with flat and frequency selective fading.  No issues such as audio clicks were reported.
+\item 3rd party integration: integration and verification of freedv-gui and FreeDV Neo (internal to the FreeDV project) found bugs in V2 and helped tune the verification procedure.  No 3rd party applications were verified.
+\item Off air samples: Rick W7YC provided samples from several radios (Flex, IC-7300, IC-7100) on 20 and 80 m, including 2 to 200 W signals received by remote WebSDR and KiwiSDR receivers, and two way contacts.  Yuichi JH0VEQ and Taku Kudo JK1GPC provided Japanese language samples.  The decoded samples were consistent with the previous test results.
+\item Issues: one issue was found, a false sync when the tuning error exceeds the $\pm 32$ \si{Hz} range of the V2 frequency offset estimator.  In Yuichi's Japan to Australia sample, a $+44$ \si{Hz} tuning error was aliased to $-18.5$ \si{Hz}, and V2 synced confidently on the wrong frequency, producing garbled speech, while V1 decoded the same signal.  After correcting the frequency offset in software, the V2 samples decoded successfully.  This is a corner case affecting a small number of contacts.  It is in the classical DSP, so a fix would not break compatibility (no retraining).
+\item PAPR: Taku JK1GPC and Babis SV1UH provided PAPR measurements after the campaign, see Section \ref{sec:papr_measured}.
+\item ``Underwater" artefact: some of Rick's samples may contain examples of this artefact, however the root cause is still unknown.  Simulations suggest it may be speaker dependent, but the results are not conclusive.  Notably, the operator in question described the RADE speech quality as very good.
+\end{enumerate}
+
+Apart from the frequency offset false sync corner case, we conclude RADE V2 is working for real world PTT OTA conversations.
+
+\subsection{Measured Occupied Bandwidth}
+\label{sec:obw_measured}
+
+Although not one of the Phase D goals, Rick W7YC independently measured the 99\% power occupied bandwidth (OBW) of the transmitted RADE V1 and V2 signals using an Advantest U3641 spectrum analyser (Figure \ref{fig:obw_w7yc}).  The signals were transmitted on 80 m by an IC-7300 with a 2000 \si{Hz} (500-2500 \si{Hz}) transmit SSB filter.  The analyser settings were 10 \si{kHz} span, 100 \si{Hz} resolution and video bandwidth, and a 5 second sweep.  Multiple runs varied slightly, but not significantly.
+
+Table \ref{tab:obw_measured} compares the measurements to the simulated results in Table \ref{tab:obw_papr}.  As expected, the RADE V1 OBW is set by the bandwidth of the transmit SSB filter, which is a little narrower than the simulated SSB filter.  The RADE V2 measurement is a close match to simulation.  The OBW will vary a little with the source material (e.g. different speakers) and the averaging time.
+
+\begin{table} [h]
+\caption{Measured and simulated 99\% Occupied Bandwidth.}
+\label{tab:obw_measured}
+\centering
+\begin{tabular}{ c | c | c }
+ \hline
+ Waveform & Measured OBW (\si{Hz}) & Simulated OBW (\si{Hz}) \\
+ \hline
+ RADE V1 & 1950 & 2109 \\
+ RADE V2 & 857 & 867 \\
+ \hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\caption{Measured 99\% OBW of RADE V1 (left, 1.95 \si{kHz}) and RADE V2 (right, 857 \si{Hz}) transmitted by an IC-7300, courtesy of Rick W7YC.}
+\label{fig:obw_w7yc}
+\begin{center}
+\includegraphics[height=0.385\textwidth]{radev1_obw_w7yc.jpg}
+\includegraphics[height=0.385\textwidth]{radev2_obw_w7yc.jpg}
+\end{center}
+\end{figure}
+
+Helmut DC6NY independently measured an OBW of 806 \si{Hz} for RADE V2 using an R\&S FSE30 spectrum analyser with a 10 \si{Hz} resolution bandwidth (Figure \ref{fig:obw_dc6ny}), in line with the regulatory guidance of an RBW of 1-3\% of the signal bandwidth, and consistent with Rick's measurement and the simulated result.
+
+\begin{figure}[H]
+\caption{Measured 99\% OBW of RADE V2 (805.6 \si{Hz}) with 10 \si{Hz} RBW, measured at 145 \si{MHz}, courtesy of Helmut DC6NY.}
+\label{fig:obw_dc6ny}
+\begin{center}
+\includegraphics[width=0.8\textwidth]{radev2_obw_dc6ny.jpg}
+\end{center}
+\end{figure}
+
+\subsection{Measured PAPR}
+\label{sec:papr_measured}
+
+After the campaign, Taku JK1GPC and Babis SV1UH measured the PAPR of the transmitted V2 signal by sampling the RF with an SDR, which prompted the measurements in this section (thanks also to Take JS1MAV, Helmut DC6NY and Rick W7YC for the discussion).  The goal was to measure the PAPR at the PA output of real SSB radios, and to separate the effects of the radio from the waveform.
+
+Figure \ref{fig:papr_setup} shows the test setup.  The test signal was \emph{david\_vk5dgr.wav} (11.6 seconds) modulated with \texttt{rade\_tx\_wav --v2}, played into the radio's USB audio interface with \texttt{aplay}, with the radio in data mode (LSB-D) on 7.175 \si{MHz}, the radio's speech compressor off, and the RF power control at maximum.  The drive level was set by the audio level.  PTT and the radio's meters (power, ALC, SWR, supply current) were controlled and logged over CAT with Hamlib.  An RF sampler, attenuator and splitter provided $\approx 80$ \si{dB} of coupling to a HackRF One (\texttt{hackrf\_transfer -f 7100000 -s 2500000 -a 0 -l 32 -g 20}), keeping its input below $-25$ \si{dBm} at 100 \si{W}.  The coupling was calibrated with a tracking generator, and the absolute power is accurate to about $\pm 0.5$ \si{dB}.  Two 100 \si{W} radios were tested, an IC-7200 and an IC-7300.
+
+\begin{figure}[h]
+\caption{PAPR test setup.}
+\label{fig:papr_setup}
+\begin{center}
+\begin{tikzpicture}[auto, node distance=2cm,>=triangle 45,x=1.0cm,y=1.0cm,align=center,text width=1.8cm]
+\node [block] (pc) {PC};
+\node [block, right=1.0cm of pc] (radio) {SSB Radio};
+\node [block, right=0.8cm of radio] (sampler) {RF Sampler};
+\node [block, right=0.8cm of sampler] (load) {100 \si{W} Dummy Load};
+\node [block, below=1.0cm of sampler] (atten) {30 \si{dB} Atten \& Splitter};
+\node [block] (hackrf) at (pc |- atten) {HackRF One};
+\draw [->] (pc) -- node[above,text width=1.2cm,font=\footnotesize] {Audio} node[below,text width=1.2cm,font=\footnotesize] {CAT} (radio);
+\draw [->] (radio) -- (sampler);
+\draw [->] (sampler) -- (load);
+\draw [->] (sampler) -- (atten);
+\draw [->] (atten) -- node[above,text width=2.2cm,font=\footnotesize] {$\approx -80$ \si{dB} total} (hackrf);
+\draw [->] (hackrf) -- node[left,text width=1.5cm,font=\footnotesize] {IQ 2.5 \si{MS/s}} (pc);
+\end{tikzpicture}
+\end{center}
+\end{figure}
+
+The IQ samples were mixed to baseband, decimated to 100 \si{kHz}, and band limited to 4 \si{kHz} (zero phase) centred on the signal.  In simulation the PAPR is unchanged for measurement bandwidths above 1.6 \si{kHz}, and the measured SNR in 4 \si{kHz} was 46 to 55 \si{dB}, enough to keep the noise contribution to PAPR below 0.02 \si{dB}.  The first second after PTT was excluded, as the gain of both radios settled by about 1 \si{dB} over this period.  As a check, at full drive a single tone measured 0.06 \si{dB} PAPR (ideal 0 \si{dB}), and a two tone signal was within 0.1 \si{dB} of the ideal 3.01 \si{dB}.  The captures were also time aligned with the transmitted signal, so we could measure the radio's AM-AM and AM-PM response, and decode the captured signals to measure loss.
+
+Table \ref{tab:papr_config} lists the configuration used for these tests.
+
+\begin{table}[h]
+\caption{Configuration for PAPR tests.}
+\label{tab:papr_config}
+\centering
+\begin{tabular}{ l | p{7.5cm} }
+ \hline
+ Date & November 2026 \\
+ RADE Tx & rade\_c \texttt{rade\_tx\_wav --v2}, git 54613bb (signal identical to main 4a31f25) \\
+ Loss measurement & radae \texttt{loss.py}, git e5d4c15 \\
+ ML encoder/decoder & 250725 \\
+ Test signal & \emph{david\_vk5dgr.wav}, 11.6 s \\
+ SDR & HackRF One, \texttt{hackrf\_transfer} git-1408473 \\
+ Radio control & Hamlib 4.3.1 \texttt{rigctl} \\
+ \hline
+\end{tabular}
+\end{table}
+
+Table \ref{tab:papr_measured} summarises the results, with the peak PAPR and the PAPR at 0.1\% CCDF, ranging from low to high power.  Figures \ref{fig:papr_ccdf} and \ref{fig:papr_amam} show the IC-7300 CCDF and AM-AM results at four power levels.
+
+\begin{table}[h]
+\caption{Measured peak PAPR and PAPR at 0.1\% CCDF of RADE V2 (\si{dB}), ranging from low to high average power.}
+\label{tab:papr_measured}
+\centering
+\small
+\begin{tabular}{ l | l | c | c | c }
+ \hline
+ Source & Radio & Power (\si{W}) & Peak & 0.1\% CCDF \\
+ \hline
+ Sim. \emph{all.wav} & - & - & 3.48 & 3.06 \\
+ Sim. \emph{david\_vk5dgr.wav} & - & - & 3.36 & 3.12 \\
+ Taku JK1GPC & IC-7300MK2 & 10 - 80 & 5.5 - 4.5 & - \\
+ Babis SV1UH & - & 0.5 - 60 & 8.4 - 6.5 & 5.3 - 4.6 \\
+ This work & IC-7200 & 7 - 44 & 5.0 - 3.5 & 4.2 - 3.2 \\
+ This work & IC-7300 & 8 - 54 & 5.6 - 3.5 & 4.1 - 3.1 \\
+ \hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\caption{Measured CCDF of the IC-7300 RADE V2 signal at four average power levels, compared to simulation.  The curve ends at the peak PAPR, and crosses $10^{-1}$\% at the PAPR at 0.1\% CCDF.}
+\label{fig:papr_ccdf}
+\begin{center}
+\includegraphics[width=0.9\textwidth]{v2_papr_ccdf.png}
+\end{center}
+\end{figure}
+
+\begin{figure}[h]
+\caption{Measured AM-AM response of the IC-7300 at four average power levels.  The rising curves show gain expansion; at 43 and 54 \si{W} the PA compresses the peaks.}
+\label{fig:papr_amam}
+\begin{center}
+\includegraphics[width=0.9\textwidth]{v2_papr_amam.png}
+\end{center}
+\end{figure}
+
+\noindent Our results were:
+\begin{enumerate}
+\item The measured PAPR falls with increasing power, consistent with Taku's results.  At low to medium power both radios show gain expansion (Figure \ref{fig:papr_amam}), the gain rising by $\approx 2.5$ \si{dB} from low amplitudes to the peaks, which raises the PAPR by $\approx 1$ \si{dB}.  Near full drive the PA compresses the peaks, cancelling the expansion, and the PAPR approaches the simulated value.  The radios' transmit filtering adds 0.2 to 0.5 \si{dB}, and the AM-PM is negligible ($< 2^{\circ}$).  Two tone tests gave 3rd order IMD of -23 to -35 \si{dBc}, typical of HF SSB transmitters.
+\item With 100 \si{W} peaks and no ALC action, both radios delivered 43 to 45 \si{W} average power, i.e. the peak power less the PAPR.  With the drive increased until the ALC just responds the IC-7300 delivered 54 \si{W}, and 59 \si{W} when driven 6 \si{dB} into the ALC, with mild ALC ``pumping" ($\approx 1$ \si{dB} gain variation).
+\item The decoder loss of the captured signals matched the clean simulated signal at all drive levels (including 6 \si{dB} into the ALC) and at all SNRs tested.  On these radios at least, RADE V2 appears insensitive to the drive level.  A simple set up procedure is to set the RF power control to maximum, and increase the audio drive until the ALC just responds.
+\item For comparison we transmitted the same speech as SSB through the IC-7300 at the same peak power.  Uncompressed SSB averaged 2 to 4 \si{W}, the Hilbert compressed SSB used in our simulations (\texttt{ota\_test.sh}) 21 to 27 \si{W}, and the author's voice via the microphone with the Icom speech compressor 12.5 \si{W}.  RADE V2 delivers about 6 \si{dB} more average power than real world compressed SSB.  The SSB peaks also briefly exceeded the ALC set point (117 to 163 \si{W}), a source of splatter.
+\item Babis measured off air with an SDRplay receiver, so his results include noise and HF channel effects that tend to increase the measured PAPR.
+\item PA heating: for a class B (or AB) PA the DC current is proportional to the RF envelope amplitude, plus a bias current.  We measured the IC-7300 supply current with a clamp meter, and from the voltage drop across the DC lead.  The radio's own current meter reads high (by $\approx 35$\%) on signals with a varying envelope, as does its power meter.  The radio dissipated $\approx 54$ \si{W} when keyed with no RF, $\approx 125$ \si{W} with RADE V2 at 43 \si{W} average power, $\approx 124$ \si{W} with a carrier at 39 \si{W}, and $\approx 139$ \si{W} with a carrier at 89 \si{W}.  Compressed SSB (\texttt{ota\_test.sh}) at 23 \si{W} average dissipated $\approx 99$ \si{W} (estimated from its envelope, confirmed by measurement).  The heat therefore depends mainly on the average power, plus a large fixed overhead.  RADE V2 dissipates about the same as a carrier of the same average power, less than a full power carrier, and more than SSB only because it transmits more average power.
+\end{enumerate}
+
+\noindent Recommendations for operating RADE V2 with an SSB radio:
+\begin{enumerate}
+\item Use data mode with the speech compressor off, set the RF power control to maximum, and increase the audio drive until the ALC just responds.  Overdriving a little costs little.
+\item Ensure a low resistance DC supply connection and a good match (e.g. check any internal tuner).  During these tests a high resistance DC lead (11 \si{V} at the radio) and a mistuned internal tuner (SWR 2:1, 2 \si{dB} loss) were found and fixed.
+\item Expect $\approx 45$ to 55 \si{\%} of the rated peak power as average power, and for the radio's power meter to fluctuate.  The first second of each over is not representative, as the radio's gain settles.
+\item RADE V2 is a continuous duty mode, with an average power between compressed SSB and full power FT8 or RTTY.  Reducing the RF power lowers the radio's dissipation only modestly ($\approx 25$\% for a 3 \si{dB} reduction), due to the fixed overhead.  Antenna components such as baluns, EFHW transformers and small tuners are often rated for the low average power of SSB, so check their continuous power ratings.
+\end{enumerate}
 
 \section{Conclusion}
 
-In Table \ref{tab:conclusion} the results from Phase A, B and C are summarised and compared to requirements extracted from FreeDV-038.  Phase D is a work in progress.  Only performance and functional requirements have been extracted (e.g. we don't consider implementation issues like a C port or packaging).
+In Table \ref{tab:conclusion} the results from Phase A, B, C and D are summarised and compared to requirements extracted from FreeDV-038.  Only performance and functional requirements have been extracted (e.g. we don't consider implementation issues like a C port or packaging).
 
 \begin{table} [h]
 \caption{Test results compared to performance requirements}
@@ -569,11 +727,12 @@ Requirement & Met & Comment \\
 \hline
 Speech quality v SNR $\ge$ RADE V1 on AWGN \& MPP. & Pass & $\approx 3$ \si{dB} gain of V2/V1 in simulations, but statistical significance not reached in OTA tests (expected result). \\
 Handles MPD channel without breaking down & Pass & \\
-PAPR $< 1$ \si{dB}| through a typical SSB band pass filter. & Partial & This requirement was found to be in error, real world PAPR of RADE V1 was $>$ 4 \si{dB}.  We have achieved a PAPR of $\approx 3$ \si{dB} with V2, a 1 \si{dB} gain on V1. \\
-OBW $<$ 2000 \si{Hz} & Pass & V2 OBW measured as $\approx 860$ \si{Hz}, much cleaner spectrum. \\ 
-Frequency Offsets $\pm 50$ \si{Hz} & Partial & Current algorithm natively handles $\pm 32$ \si{Hz}, should be possible to extend this with further work. \\
+PAPR $< 1$ \si{dB}| through a typical SSB band pass filter. & Partial & This requirement was found to be in error, real world PAPR of RADE V1 was $>$ 4 \si{dB}.  We have achieved a PAPR of $\approx 3$ \si{dB} with V2, a 1 \si{dB} gain on V1.  Measured 3.1 to 3.5 \si{dB} at the PA output at full drive. \\
+OBW $<$ 2000 \si{Hz} & Pass & V2 OBW measured as $\approx 860$ \si{Hz}, much cleaner spectrum. \\
+Sample clock offsets $\pm 125$ ppm & Pass & No significant loss at $\pm 125$ ppm, syncs and decodes at $\pm 250$ ppm. \\
+Frequency Offsets $\pm 50$ \si{Hz} & Partial & Acquires and tracks offsets within $\pm 32$ \si{Hz}.  Offsets from $\pm 32$ to $\pm 94$ \si{Hz} are detected and sync is blocked (no false sync), with a mistune indication so the operator can retune. \\
 Clean end of over detection within 100 ms & Pass & EOO works well at moderate to high SNRs. \\
-25 bit/s streaming text for callsign & Partial & Waveform can send 1 bit/frame over channel, but streaming text support not implemented yet. \\
+25 bit/s streaming text for callsign & Pass & Waveform can send 1 bit/frame over channel, streaming text supported by external library. \\
 SNR estimation & Pass & Error of 1.5 dB RMS ($\pm 3 \si{dB}$ max) over -5 to +5 \si{dB}. \\
 \hline
 \end{tabular}
@@ -581,12 +740,11 @@ SNR estimation & Pass & Error of 1.5 dB RMS ($\pm 3 \si{dB}$ max) over -5 to +5 
 
 \subsection{Further Work}
 
-Topics for future development. It may be possible to attend to these in parallel with crowd sourced V2 testing, as they have little impact of core requirements such as speech quality and robustness.
+Topics for future development.
 \begin{enumerate}
 \item Reduce acquisition time for benign channels.
 \item Improved EOO performance at lower SNRs.
-\item Completion of streaming text feature by addition of external library for framing and error correction of 25 bits/s BPSK symbol stream.
-\item Extend range of frequency offset estimation to $\pm 50 \si{Hz}$.
+\item Measure the PAPR and PA output of radios with different PA, ALC and transmit filter designs, including radios with digital predistortion (e.g. IC-7760, OpenHPSDR PureSignal).
 \end{enumerate}
 
 \end{document}
