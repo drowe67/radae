@@ -12,6 +12,7 @@
 \usepackage{xstring}
 \usepackage{catchfile}
 \usepackage{graphicx}
+\usepackage{placeins}
 
 \CatchFileDef{\headfull}{../.git/HEAD}{}
 \StrGobbleRight{\headfull}{1}[\head]
@@ -117,9 +118,9 @@ As shown in Figure \ref{fig:psk_scatter} the PSK symbols from RADE are not discr
 
 \section{RADE V1 and V2}
 
-\textbf{RADE V1} (2024) was the first practical RADE waveform.  It uses 30 OFDM carriers, and occupies a minimum of 1.5 \si{kHz} (in practice the transmitter's SSB filter sets the 99\% power occupied bandwidth).
+\textbf{RADE V1} (2024) was the first practical RADE waveform.  It uses 30 OFDM carriers, and has a typical 99\% power bandwidth of 2000 \si{Hz}\footnote{The RADE V1 99\% power bandwidth is set by the transmitter's SSB filter.}.
 
-\textbf{RADE V2} (2026) was developed using lessons learnt from V1.  The machine learning network has been trained to produce a narrow signal (about 860 \si{Hz}) with a low peak to average power ratio (PAPR), so it makes efficient use of your transmitter's power amplifier.  V2 has lower latency (40 \si{ms}) which gives faster PTT turn around.  It performs 3 \si{dB} better than V1 at low SNRs: 2 \si{dB} from better decoding at the receiver, and 1 \si{dB} from its lower PAPR, which puts more average power into the transmitted signal.
+\textbf{RADE V2} (2026) was developed using lessons learnt from V1.  The machine learning network has been trained to produce a narrow signal (860 \si{Hz} typical 99\% power bandwidth) with a low peak to average power ratio (PAPR), so it makes efficient use of your transmitter's power amplifier.  V2 has lower latency (40 \si{ms}) which gives faster PTT turn around.  It performs 3 \si{dB} better than V1 at low SNRs: 2 \si{dB} from better decoding at the receiver, and 1 \si{dB} from its lower PAPR, which puts more average power into the transmitted signal.
 
 Your transmitter is limited by its peak power.  The Peak to Average Power Ratio (PAPR) sets how much average power you get from those peaks.  SSB speech has a high PAPR (7 to 10 \si{dB} even with a compressor), while RADE V2 is designed for just 3.5 \si{dB}.  Figure \ref{fig:avg_power} shows the result: from the same 100 \si{W} radio, RADE V2 delivers around 54 \si{W} average, two to four times that of compressed SSB, which means a stronger signal at the receiver.
 
@@ -141,9 +142,9 @@ Both versions provide an end of over indication, an SNR estimate, and a way to s
  \hline
  & RADE V1 & RADE V2 \\
  \hline
- 99\% power bandwidth & 2 \si{kHz} (set by Tx filter) & 860 \si{Hz} \\
- Peak to Average Power Ratio & 4.5 \si{dB} & 3.5 \si{dB} \\
- Latency & 120 \si{ms} & 40 \si{ms} \\
+ 99\% power bandwidth (typical) & 2000 \si{Hz} & 860 \si{Hz} \\
+ Peak to Average Power Ratio (typical) & 4.5 \si{dB} & 3.5 \si{dB} \\
+ Algorithmic latency & 120 \si{ms} & 40 \si{ms} \\
  Lowest usable SNR (no fading / fading) & -3 / 0 \si{dB} & -5 / -2 \si{dB} \\
  Frequency offset range & $\pm 50$ \si{Hz} & $\pm 32$ \si{Hz} \\
  Callsign/Text & Sent at the end of the over & Streamed during the over \\
@@ -153,7 +154,7 @@ Both versions provide an end of over indication, an SNR estimate, and a way to s
 
 \section{Identifying RADE Signals}
 
-RADE signals sound like noise when listened to on SSB, similar to other OFDM digital modes.  They are best identified by their shape on a spectrum or waterfall display.  RADE V1 occupies most of an SSB channel, with a fairly flat top and edges set by the transmitter's SSB filter.  RADE V2 is much narrower, with a rounded shape about 860 \si{Hz} wide, centred about 1500 \si{Hz} from the suppressed carrier.
+RADE signals sound like modem tones when listened to on SSB.  They are best identified by their shape on a spectrum or waterfall display.  RADE V1 occupies most of an SSB channel, with a fairly flat top.  RADE V2 is much narrower, with a rounded shape 860 \si{Hz} wide, centred about 1500 \si{Hz} from the suppressed carrier.
 Figure \ref{fig:waterfall} shows how RADE V1 and V2 appear on a waterfall display.  Unlike SSB speech, the RADE signals are continuous, with no gaps between words.  On a sensitive display the individual RADE V2 carriers, spaced 62.5 \si{Hz} apart, may be visible as fine vertical lines.
 
 \begin{figure}[htbp]
@@ -184,6 +185,7 @@ Figure \ref{fig:obw_w7yc} shows RADE V1 and V2 signals transmitted by an IC-7300
 \end{center}
 \end{figure}
 
+\FloatBarrier
 \section{Operating Tips}
 
 These tips are based on measurements of RADE V2 through IC-7200 and IC-7300 transceivers, and should apply to most SSB transceivers.
@@ -191,9 +193,9 @@ These tips are based on measurements of RADE V2 through IC-7200 and IC-7300 tran
 \subsection{Setting Drive for Maximum Power}
 
 \begin{enumerate}
-\item Use your radio's data mode (e.g. USB-D or LSB-D), with the audio source set to your computer, and the speech compressor off.
+\item Use your radio's data mode (e.g. USB-D), with the audio source set to your computer, and all audio processing off (e.g. speech compressor, transmit equaliser and noise reduction).
 \item Set the RF power control to maximum first.  On some radios this control also changes the gain of the transmitter, not just the maximum power, so it needs to be set before the audio level.
-\item Increase the audio drive level until the ALC just starts to respond.  Driving harder gives very little extra power: on an IC-7300, driving 6 \si{dB} further into the ALC increased the average power from 54 to 59 \si{W}, less than 0.5 \si{dB}, which is hardly noticeable at the receiver.  However as driving harder does not harm the decoded speech, there is no need to be precise.
+\item Increase the audio drive level until the ALC just starts to respond.  Driving harder gives very little extra power: on an IC-7300, driving 6 \si{dB} further into the ALC increased the average power from 54 to 59 \si{W}, less than 0.5 \si{dB}, which is hardly noticeable at the receiver.  However as driving harder does not harm the decoded speech, there is no need to be precise.  On some radios, overdriving may increase out of band emissions.
 \end{enumerate}
 
 \subsection{What to Expect}
@@ -257,13 +259,15 @@ Before reporting a problem, please read the testing and reporting instructions a
 Tables \ref{tab:v1_params} and \ref{tab:v2_params} summarise the RADE V1 and V2 waveforms, for technical readers and regulators.  More technical detail can be found in the V2 test report (FreeDV-060) and the RADE V2 paper (in preparation).
 
 \begin{table}[H]
+\caption{RADE V1 waveform and performance parameters}
+\label{tab:v1_params}
 \centering
 \begin{tabular}{>{\raggedright\arraybackslash}m{4cm} | >{\raggedright\arraybackslash}m{2cm} | >{\raggedright\arraybackslash}m{4.8cm} }
  \hline
  Parameter & Value & Comment \\
  \hline
  Audio Bandwidth & 100-7900 Hz \\
- RF Bandwidth & 2000 Hz & 99\% power bandwidth, set by Tx SSB filter \\
+ RF Bandwidth & 2000 Hz & 99\% power bandwidth, typical \\
  Modulation & OFDM & Discrete time, continuously valued PSK symbols \\
  Frame size & 120 ms & Algorithmic latency \\
  Vocoder & FARGAN & High quality ML vocoder \\
@@ -271,7 +275,7 @@ Tables \ref{tab:v1_params} and \ref{tab:v2_params} summarise the RADE V1 and V2 
  Subcarrier Symbol rate & 41.7 Hz & Including cyclic prefix \\
  Subcarrier Spacing & 50 Hz \\
  Cyclic Prefix & 4 ms \\
- Tx Peak Average Power Ratio & 4.5 dB & Peak PAPR through a typical 2000 Hz SSB filter \\
+ Tx Peak Average Power Ratio & 4.5 dB & Peak PAPR, typical \\
  Threshold SNR (AWGN) & -3 dB & AWGN channel, 3000 Hz noise bandwidth \\
  Threshold C/No (AWGN) & 32 dBHz & AWGN channel \\
  Threshold SNR (MPP) & 0 dB & Multipath Poor (MPP) channel (1Hz Doppler spread, 2ms path delay), two path Watterson model \\
@@ -284,18 +288,18 @@ Tables \ref{tab:v1_params} and \ref{tab:v2_params} summarise the RADE V1 and V2 
  SNR measurement & Yes \\
 \hline
 \end{tabular}
-\caption{RADE V1 waveform and performance parameters}
-\label{tab:v1_params}
 \end{table}
 
 \begin{table}[H]
+\caption{RADE V2 waveform and performance parameters}
+\label{tab:v2_params}
 \centering
 \begin{tabular}{>{\raggedright\arraybackslash}m{4cm} | >{\raggedright\arraybackslash}m{2cm} | >{\raggedright\arraybackslash}m{4.8cm} }
  \hline
  Parameter & Value & Comment \\
  \hline
  Audio Bandwidth & 100-7900 Hz \\
- RF Bandwidth & 860 Hz & 99\% power bandwidth \\
+ RF Bandwidth & 860 Hz & 99\% power bandwidth, typical \\
  Modulation & OFDM & Discrete time, continuously valued PSK symbols, no pilot symbols \\
  Frame size & 40 ms & Algorithmic latency \\
  Vocoder & FARGAN & High quality ML vocoder \\
@@ -303,7 +307,7 @@ Tables \ref{tab:v1_params} and \ref{tab:v2_params} summarise the RADE V1 and V2 
  Subcarrier Symbol rate & 50 Hz & Including cyclic prefix \\
  Subcarrier Spacing & 62.5 Hz \\
  Cyclic Prefix & 4 ms \\
- Tx Peak Average Power Ratio & 3.5 dB & Peak PAPR, measured 3.1 to 3.5 dB at the PA output of two SSB radios at full drive \\
+ Tx Peak Average Power Ratio & 3.5 dB & Peak PAPR, typical \\
  Threshold SNR (AWGN) & -5 dB & AWGN channel, 3000 Hz noise bandwidth, 30\% word error rate \\
  Threshold SNR (MPP) & -2 dB & Multipath Poor (MPP) channel, 30\% word error rate \\
  Worst case channel & MPD & Multipath Disturbed (MPD) channel (2Hz Doppler spread, 4ms path delay), with some additional loss \\
@@ -315,8 +319,6 @@ Tables \ref{tab:v1_params} and \ref{tab:v2_params} summarise the RADE V1 and V2 
  SNR measurement & Yes & 1.5 dB RMS error over -5 to +5 dB \\
 \hline
 \end{tabular}
-\caption{RADE V2 waveform and performance parameters}
-\label{tab:v2_params}
 \end{table}
 
 \end{document}
