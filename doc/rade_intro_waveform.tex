@@ -120,7 +120,7 @@ As shown in Figure \ref{fig:psk_scatter} the PSK symbols from RADE are not discr
 
 \textbf{RADE V1} (2024) was the first practical RADE waveform.  It uses 30 OFDM carriers, and has a typical 99\% power bandwidth of 2000 \si{Hz}\footnote{The RADE V1 99\% power bandwidth is set by the transmitter's SSB filter.}.
 
-\textbf{RADE V2} (2026) was developed using lessons learnt from V1.  The machine learning network has been trained to produce a narrow signal (860 \si{Hz} typical 99\% power bandwidth) with a low peak to average power ratio (PAPR), so it makes efficient use of your transmitter's power amplifier.  V2 has lower latency (40 \si{ms}) which gives faster PTT turn around.  It performs 3 \si{dB} better than V1 at low SNRs: 2 \si{dB} from better decoding at the receiver, and 1 \si{dB} from its lower PAPR, which puts more average power into the transmitted signal.
+\textbf{RADE V2} (2026) was developed using lessons learnt from V1.  The machine learning network has been trained to produce a narrow signal (820 \si{Hz} typical 99\% power bandwidth) with a low peak to average power ratio (PAPR), so it makes efficient use of your transmitter's power amplifier.  V2 has lower latency (40 \si{ms}) which gives faster PTT turn around.  It performs 3 \si{dB} better than V1 at low SNRs: 2 \si{dB} from better decoding at the receiver, and 1 \si{dB} from its lower PAPR, which puts more average power into the transmitted signal.
 
 Your transmitter is limited by its peak power.  The Peak to Average Power Ratio (PAPR) sets how much average power you get from those peaks.  SSB speech has a high PAPR (7 to 10 \si{dB} even with a compressor), while RADE V2 is designed for just 3.5 \si{dB}.  Figure \ref{fig:avg_power} shows the result: from the same 100 \si{W} radio, RADE V2 delivers around 54 \si{W} average, two to four times that of compressed SSB, which means a stronger signal at the receiver.
 
@@ -142,7 +142,7 @@ Both versions provide an end of over indication, an SNR estimate, and a way to s
  \hline
  & RADE V1 & RADE V2 \\
  \hline
- 99\% power bandwidth (typical) & 2000 \si{Hz} & 860 \si{Hz} \\
+ 99\% power bandwidth (typical) & 2000 \si{Hz} & 820 \si{Hz} \\
  Peak to Average Power Ratio (typical) & 4.5 \si{dB} & 3.5 \si{dB} \\
  Algorithmic latency & 120 \si{ms} & 40 \si{ms} \\
  Lowest usable SNR (no fading / fading) & -3 / 0 \si{dB} & -5 / -2 \si{dB} \\
@@ -154,7 +154,7 @@ Both versions provide an end of over indication, an SNR estimate, and a way to s
 
 \section{Identifying RADE Signals}
 
-RADE signals sound like modem tones when listened to on SSB.  They are best identified by their shape on a spectrum or waterfall display.  RADE V1 occupies most of an SSB channel, with a fairly flat top.  RADE V2 is much narrower, with a rounded shape 860 \si{Hz} wide, centred about 1500 \si{Hz} from the suppressed carrier.
+RADE signals sound like modem tones when listened to on SSB.  They are best identified by their shape on a spectrum or waterfall display.  RADE V1 occupies most of an SSB channel, with a fairly flat top.  RADE V2 is much narrower, with a rounded shape 820 \si{Hz} wide, centred about 1500 \si{Hz} from the suppressed carrier.
 Figure \ref{fig:waterfall} shows how RADE V1 and V2 appear on a waterfall display.  Unlike SSB speech, the RADE signals are continuous, with no gaps between words.  On a sensitive display the individual RADE V2 carriers, spaced 62.5 \si{Hz} apart, may be visible as fine vertical lines.
 
 \begin{figure}[htbp]
@@ -256,7 +256,7 @@ Before reporting a problem, please read the testing and reporting instructions a
 
 \section{Technical Parameters}
 
-Tables \ref{tab:v1_params} and \ref{tab:v2_params} summarise the RADE V1 and V2 waveforms, for technical readers and regulators.  More technical detail can be found in the V2 test report (FreeDV-060) and the RADE V2 paper (in preparation).
+Tables \ref{tab:v1_params} and \ref{tab:v2_params} summarise the RADE V1 and V2 waveforms, for technical readers and regulators.  More technical detail can be found in the RADE V2 Test Report (FreeDV-060) at \url{https://github.com/drowe67/radae/blob/main/doc/v2_test_report.pdf}, and the RADE V2 paper (in preparation).
 
 \begin{table}[H]
 \caption{RADE V1 waveform and performance parameters}
@@ -299,7 +299,7 @@ Tables \ref{tab:v1_params} and \ref{tab:v2_params} summarise the RADE V1 and V2 
  Parameter & Value & Comment \\
  \hline
  Audio Bandwidth & 100-7900 Hz \\
- RF Bandwidth & 860 Hz & 99\% power bandwidth, typical \\
+ RF Bandwidth & 820 Hz & 99\% power bandwidth, typical, 10 Hz RBW (see FreeDV-060) \\
  Modulation & OFDM & Discrete time, continuously valued PSK symbols, no pilot symbols \\
  Frame size & 40 ms & Algorithmic latency \\
  Vocoder & FARGAN & High quality ML vocoder \\
