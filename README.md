@@ -28,13 +28,9 @@ This repo is intended to support experimental work, with just enough information
 
 For deployment and distribution of RADE please use the [C port](https://github.com/freedv/rade_c).
 
-## ⚠️ RADE V2 Status
+## RADE V2 Status
 
-RADE V2 is under active development. The waveform, model weights, and API are subject to change without notice, and future versions will not be backwards compatible with the current implementation.
-
-Known issues are under investigation. On-air use is not recommended at this stage, and the FreeDV team is not able to provide support for pre-release V2 deployments. Any on-air V2 signals should be considered premature use of the development waveform and are not part of official FreeDV development activity.
-
-The official V2 status will be announced on the [FreeDV blog](https://freedv.org/blog/).
+RADE V2 has been extensively beta tested, including on-air tests by radio amateurs around the world. RADE V1 and V2 are now stable waveforms: any change to the waveform or model weights will be released as a new mode, not as an update to an existing one. Official release announcements are made on the [FreeDV blog](https://freedv.org/blog/). RADE is experimental radio, please see the RADE Introduction and Operator Guide ([FreeDV-036](https://github.com/drowe67/radae/blob/main/doc/rade_intro_waveform.pdf)) for operating tips and known limitations.
 
 # Quickstart
 
