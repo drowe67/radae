@@ -56,7 +56,7 @@ Over the course of 2025 and early 2026 David has been developing RADE V2, which 
 \begin{itemize}
 \item Using ML to handle HF channel phase distortion, fine frequency and timing offsets.
 \item No pilot or unique word symbols, saving bandwidth and power.
-\item A $N_c=14$ carrier waveform with a 800 \si{Hz} 99\% power occupied bandwidth (OBW), that is narrower and cleaner than V1.
+\item A $N_c=14$ carrier waveform with a 820 \si{Hz} 99\% power occupied bandwidth (OBW), that is narrower and cleaner than V1.
 \item PAPR defined by training, making it relatively insensitive to transmitter filtering.
 \item Low latency frame of around 40 \si{ms} compared to 180 \si{ms} for comparable (e.g. RADE V1 or classical) waveforms.
 \item ML based frame sync that functions without pilot or unique word symbols.
@@ -163,18 +163,18 @@ The target channels for RADE V2 are AWGN and MPP (Doppler 1 \si{Hz}, Delay 2 \si
 
 \subsection{Occupied Bandwidth and PAPR}
 
-Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}).  We quote the peak PAPR, the ratio of the maximum instantaneous power over an entire sample to the average power, as even an occasional peak will depress a typical SSB transmitter ALC for several seconds.  Where noted we also quote the PAPR at 0.1\% CCDF, the power level exceeded 0.1\% of the time (the 99.9th percentile of the instantaneous power), a common metric for OFDM signals.  The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.  OTA measurements of OBW in Phase D (Section \ref{sec:obw_measured}) are a close match to these simulated results.
+Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PAPR for RADE V1 and RADE V2.  The 56 second test file \emph{all.wav} was used for this test, and both signals were constrained by a simulated SSB filter (roughly 400-2600 \si{Hz}).  The OBW was measured with \emph{obw.py} using a 10 \si{Hz} resolution bandwidth (RBW), about 1\% of the RADE V2 OBW, excluding 0.5\% of the power at each band edge.  We quote the peak PAPR, the ratio of the maximum instantaneous power over an entire sample to the average power, as even an occasional peak will depress a typical SSB transmitter ALC for several seconds.  Where noted we also quote the PAPR at 0.1\% CCDF, the power level exceeded 0.1\% of the time (the 99.9th percentile of the instantaneous power), a common metric for OFDM signals.  The PAPR tends to vary with source material by a fraction of a \si{dB}.  Figure \ref{fig:radev1v2_psd} plots the power spectrum of both waveforms, the RADE V2 signal is considerably cleaner.  The RADE V1 OBW is effectively set by the bandwidth of the SSB filter.  The RADE V2 OBW varies a little with the source material, over 10 other speech samples it ranged from 797 to 839 \si{Hz}.  OTA measurements of OBW in Phase D (Section \ref{sec:obw_measured}) are a close match to these simulated results.
 
 \begin{table} [h]
-\caption{Occupied Bandwidth and PAPR for \emph{all.wav}.}
+\caption{Occupied Bandwidth (10 \si{Hz} RBW) and PAPR for \emph{all.wav}.}
 \label{tab:obw_papr}
 \centering
 \begin{tabular}{ c |  r | c }
  \hline
  Waveform & OBW & Peak PAPR \\
  \hline
- RADE V1 & 2109 & 4.20  \\
- RADE V2 & 867 & 3.48 \\
+ RADE V1 & 2110 & 4.20  \\
+ RADE V2 & 822 & 3.48 \\
  \hline
 \end{tabular}
 \end{table}
@@ -196,13 +196,20 @@ Table \ref{tab:obw_papr} compares the 99\% power occupied bandwidth (OBW) and PA
   --freq_offset 25 --correct_freq_offset --ssb_bpf
 \end{verbatim}
 
+\noindent Cmd lines for OBW and Figure \ref{fig:radev1v2_psd}
+
+\begin{verbatim}
+python3 obw.py rx.f32 --plot doc/radev1_psd.pdf
+python3 obw.py 250725_rx.f32 --plot doc/radev2_psd.pdf
+\end{verbatim}
+
 
 \begin{figure}[H]
-\caption{Power Spectrum of RADE V1 and V2 with SSB filter.}
+\caption{Power Spectrum of RADE V1 (left) and V2 (right) with SSB filter, the red lines mark the 99\% OBW.}
 \label{fig:radev1v2_psd}
 \begin{center}
-\input radev1_psd.tex
-\input radev2_psd.tex
+\includegraphics[width=0.48\textwidth]{radev1_psd.pdf}
+\includegraphics[width=0.48\textwidth]{radev2_psd.pdf}
 \end{center}
 \end{figure}
 
@@ -574,18 +581,19 @@ Apart from the frequency offset false sync corner case, we conclude RADE V2 is w
 
 Although not one of the Phase D goals, Rick W7YC independently measured the 99\% power occupied bandwidth (OBW) of the transmitted RADE V1 and V2 signals using an Advantest U3641 spectrum analyser (Figure \ref{fig:obw_w7yc}).  The signals were transmitted on 80 m by an IC-7300 with a 2000 \si{Hz} (500-2500 \si{Hz}) transmit SSB filter.  The analyser settings were 10 \si{kHz} span, 100 \si{Hz} resolution and video bandwidth, and a 5 second sweep.  Multiple runs varied slightly, but not significantly.
 
-Table \ref{tab:obw_measured} compares the measurements to the simulated results in Table \ref{tab:obw_papr}.  As expected, the RADE V1 OBW is set by the bandwidth of the transmit SSB filter, which is a little narrower than the simulated SSB filter.  The RADE V2 measurement is a close match to simulation.  The OBW will vary a little with the source material (e.g. different speakers) and the averaging time.
+Table \ref{tab:obw_measured} compares the measurements to simulated results calculated with \emph{obw.py} at the same RBW.  As expected, the RADE V1 OBW is set by the bandwidth of the transmit SSB filter, which is a little narrower than the simulated SSB filter.  The RADE V2 measurements are a close match to simulation.  The measured OBW depends on the RBW: a wide RBW smears the steep edges of the RADE V2 spectrum, so a 100 \si{Hz} RBW reads about 40 \si{Hz} wider than a 10 \si{Hz} RBW.  The OBW will also vary a little with the source material (e.g. different speakers) and the averaging time.
 
 \begin{table} [h]
 \caption{Measured and simulated 99\% Occupied Bandwidth.}
 \label{tab:obw_measured}
 \centering
-\begin{tabular}{ c | c | c }
+\begin{tabular}{ c | c | c | c | c }
  \hline
- Waveform & Measured OBW (\si{Hz}) & Simulated OBW (\si{Hz}) \\
+ Waveform & Measured by & RBW (\si{Hz}) & Measured OBW (\si{Hz}) & Simulated OBW (\si{Hz}) \\
  \hline
- RADE V1 & 1950 & 2109 \\
- RADE V2 & 857 & 867 \\
+ RADE V1 & W7YC & 100 & 1950 & 2114 \\
+ RADE V2 & W7YC & 100 & 857 & 863 \\
+ RADE V2 & DC6NY & 10 & 806 & 822 \\
  \hline
 \end{tabular}
 \end{table}
@@ -599,7 +607,7 @@ Table \ref{tab:obw_measured} compares the measurements to the simulated results 
 \end{center}
 \end{figure}
 
-Helmut DC6NY independently measured an OBW of 806 \si{Hz} for RADE V2 using an R\&S FSE30 spectrum analyser with a 10 \si{Hz} resolution bandwidth (Figure \ref{fig:obw_dc6ny}), in line with the regulatory guidance of an RBW of 1-3\% of the signal bandwidth, and consistent with Rick's measurement and the simulated result.
+Helmut DC6NY independently measured an OBW of 806 \si{Hz} for RADE V2 using an R\&S FSE30 spectrum analyser with a 10 \si{Hz} resolution bandwidth (Figure \ref{fig:obw_dc6ny}), in line with the regulatory guidance of an RBW of 1-3\% of the signal bandwidth, and consistent with the simulated result at the same RBW (Table \ref{tab:obw_measured}).
 
 \begin{figure}[H]
 \caption{Measured 99\% OBW of RADE V2 (805.6 \si{Hz}) with 10 \si{Hz} RBW, measured at 145 \si{MHz}, courtesy of Helmut DC6NY.}

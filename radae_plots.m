@@ -73,25 +73,6 @@ function do_plots(z_fn='l.f32',rx_fn='', png_fn='', epslatex='',tx_bpf=0)
         PilotPAPRdB = 10*log10(pilotpeak/pilotav);
         printf("Pav: %f PAPRdB: %5.2f PilotPAPRdB: %5.2f\n", av, PAPRdB, PilotPAPRdB);
  
-        fcentre = 1475;
-        bwHz = bandwidth(rx, fcentre)
-
-        % Spectrum plot with 99% OBW
-        Fs = 8000; y = pwelch(rx,[],[],1024,Fs); y_dB = 10*log10(y);
-        mx = max(y_dB); mx = ceil(mx/10)*10
-        figure(8); clf; 
-        plot((0:length(y)-1)*Fs/length(y),y_dB-mx);
-        hold on;
-        plot([fcentre-bwHz/2 fcentre-bwHz/2 fcentre+bwHz/2 fcentre+bwHz/2 fcentre-bwHz/2 ],[-35 -5 -5 -35 -35],'r-');
-        hold off;
-        axis([0 3000 -40 0]); grid; xlabel('Freq (Hz)'); ylabel('dB');
-        if length(png_fn)
-          print("-dpng",sprintf("%s_psd.png",png_fn));
-        end
-        if length(epslatex)
-          print_eps_restore(sprintf("%s_psd.eps",epslatex),"-S300,200",textfontsize,linewidth);
-        end
-
     end
 endfunction
 
@@ -109,36 +90,6 @@ function do_plots_bbfm(z1_fn, z2_fn="", png_fn='')
     if length(png_fn)
       print("-dpng",sprintf("%s.png",png_fn));
     end
-endfunction
-
-
-function p = spec_power(y, centre, bandwidth)
-  n = length(y);
-  st = round(centre - bandwidth/2); st = max(1,st);
-  en = round(centre + bandwidth/2); 
-  p = sum(y(st:en));
-endfunction
-
-
-function bwHz = bandwidth(rx, fcentre)
-  Nfft = 1024;
-  Fs = 8000; y = pwelch(rx,[],[],Nfft,Fs); y_dB = 10*log10(y);
-  figure(1);
-  % pwelch sometines chooses it's own DFT size
-  Nfft = length(y);
-  plot((0:length(y)-1)*Fs/Nfft,y_dB);
-
-  % 99% power bandwidth
-  total_power = sum(y);
-  centre = round(Nfft*fcentre/Fs);
-  bw = 1;
-  do
-    bw++;
-    p = spec_power(y, centre, bw);
-  until p > 0.99*total_power
-  bwHz =  bw*Fs/Nfft;
-  printf("bandwidth (Hz): %f power/total_power: %f\n", bwHz, p/total_power);
-
 endfunction
 
 
