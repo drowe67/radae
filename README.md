@@ -8,17 +8,17 @@ RADE V2 builds on V1 with several algorithmic improvements:
 | --- | --- | --- |
 | Carriers | 30, includes pilot symbols | 14, data only (no pilots) |
 | Equalisation | Classical DSP, pilot-aided | ML-based, no pilots required |
-| 99% Occupied Bandwidth | ~2100 Hz (SSB filter limited) | ~860 Hz |
+| 99% Occupied Bandwidth | ~2100 Hz (SSB filter limited) | ~820 Hz (10 Hz RBW) |
 | Frame duration | ~120 ms | ~40 ms |
-| PAPR (100% CCDF) | 4.2 dB | 3.5 dB |
+| Peak PAPR | 4.2 dB | 3.5 dB |
 | Frame sync | DSP | Neural network |
 | End-of-over detection | Pilot pend sequence | Channel sparsity metric |
-| Threshold SNR (AWGN) | -2 dB | ~-4.5 dB |
-| Threshold SNR (MPP) | 0 dB | ~-3 dB |
+| Threshold SNR (AWGN) | -3 dB | -5 dB |
+| Threshold SNR (MPP) | 0 dB | -2 dB |
 
 The elimination of pilot symbols in V2 recovers the bandwidth and power they consumed, enabling a narrower, cleaner waveform and improved high and low SNR performance.  Combined with the PAPR improvement, RADE V2 is approximately 3 dB more sensitive than V1 at low SNRs.
 
-*Threshold SNR values are approximate, based on informal listening tests and objective loss metric.*
+*Threshold SNR is the SNR (3000 Hz noise bandwidth) for a 30% word error rate.*
 
 # Scope
 
